@@ -74,5 +74,8 @@ var previewAllowlist = map[string]PreviewEntry{
 // KnowledgeDatabase 知识库实例（KnowledgeDB）
 var KnowledgeDatabase *KnowledgeDB
 
+// ArchiveDatabase 统一资源目录实例（ArchiveDB，句柄 / 元数据 / 段落结构）
+var ArchiveDatabase *ArchiveDB
+
 // MemoryDatabase 记忆库实例（MemoryDB）
 var MemoryDatabase *MemoryDB

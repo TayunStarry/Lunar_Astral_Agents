@@ -43,6 +43,12 @@ type ModelConfig struct {
 		// 视频解读输入模式：file=写媒体目录后以 file:// 引用交 llama-server 抽帧（默认）；
 		// frames=本地抽帧为图片序列帧（base64）后以多个 image_url 提交，供不支持 file:// 的架构使用
 		VideoInput string `json:"video_input"`
+		// 静态图思维链形态：url=视觉读取端点 URL（默认）/ base64=变换管线直出 data URI（云端服务用）
+		ImageInput string `json:"image_input"`
+		// 视觉读取副本最大边长（像素），默认 1080
+		VisionMaxSide int `json:"vision_max_side"`
+		// 视觉副本缓存池容量上限（MB），超限按最久未用淘汰，默认 512
+		VisionCacheCapMB int `json:"vision_cache_cap_mb"`
 	} `json:"agent"`
 	// 记忆库模型路由（独立于 agent，可单独指向其它服务）
 	Memory struct {
@@ -308,6 +314,24 @@ func applyConfig(parameter *ModelConfig) []string {
 		*VideoInputMode = "frames"
 	case "file":
 		*VideoInputMode = "file"
+	}
+	// ==== 静态图思维链形态（agent.image_input / agent.vision_max_side） ====
+	// 仅接受 url / base64，未配置或取值非法时保持默认 url（视觉读取端点）
+	switch parameter.Agent.ImageInput {
+	case "url":
+		*ImageInputMode = "url"
+	case "base64":
+		*ImageInputMode = "base64"
+	case "":
+		// 未配置时保持默认
+	default:
+		log.Printf("[Config][WARN] -> agent.image_input 取值非法: %q（允许 url/base64），保持默认 %s", parameter.Agent.ImageInput, *ImageInputMode)
+	}
+	if parameter.Agent.VisionMaxSide > 0 {
+		*VisionMaxSide = parameter.Agent.VisionMaxSide
+	}
+	if parameter.Agent.VisionCacheCapMB > 0 {
+		*VisionCacheCapMB = parameter.Agent.VisionCacheCapMB
 	}
 	// ==== 月华语音合成（tts） ====
 	// 引擎枚举：仅接受 Qwen / Kokoro / OmniVoice，未配置保持默认 Qwen，非法取值告警并保留默认

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"CorePersonality/engine/LunarLoop"
+	"CorePersonality/engine/lunar_loop"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"LunarSubsystem/TuiSystem"

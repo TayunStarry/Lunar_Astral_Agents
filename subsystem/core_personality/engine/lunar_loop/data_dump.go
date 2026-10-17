@@ -6,7 +6,7 @@ import (
 
 	"github.com/dop251/goja"
 
-	"CorePersonality/engine/LunarLoop/container"
+	"CorePersonality/engine/lunar_loop/container"
 	"LunarSubsystem/LoggerGeneral"
 )
 

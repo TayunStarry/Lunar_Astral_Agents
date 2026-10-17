@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"CorePersonality/engine/LunarLoop"
+	"CorePersonality/engine/lunar_loop"
 )
 
 // MessageBatchHandler 消息批量写入（POST /write/message）。

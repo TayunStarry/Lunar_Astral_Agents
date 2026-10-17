@@ -18,6 +18,7 @@
 		"local_data/models/Qwen3-TTS",
 		"local_data/models/Kokoro-82M-v1.1-zh",
 		"local_data/models/OmniVoice",
+		"local_data/models/4x-AnimeSharp.pth",
 		"local_data/models/Qwen-image-2.1",
 		"local_data/models/live2d",
 		"local_data/models/bedrock"

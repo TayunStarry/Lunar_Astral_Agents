@@ -3,7 +3,7 @@ package lunar
 import (
 	"encoding/json"
 
-	"CorePersonality/engine/LunarLoop"
+	"CorePersonality/engine/lunar_loop"
 )
 
 // MessageBatchRequest 消息批量写入请求（统一时序队列唯一写入口：

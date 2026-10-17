@@ -59,7 +59,7 @@ func GetMarketConfig() *ltpxmarket.Config {
 type DataDumpResult struct {
 	Path    string // 落盘路径（相对程序根目录，供用户查找）
 	Bytes   int    // 文件字节数
-	Records int    // 记录条数（日志行数 / 上下文消息数）
+	Records int    // 记录条数（日志行数 / 轮次数 / 上下文消息数）
 }
 
 var (
@@ -67,20 +67,29 @@ var (
 	dumpHookMu sync.RWMutex
 	// logsDumpHook 原始日志导出（由宿主注入）
 	logsDumpHook func() (DataDumpResult, error)
+	// transcriptDumpHook 核心智能实况（模型调用轮次）导出（由宿主注入）
+	transcriptDumpHook func() (DataDumpResult, error)
 	// contextDumpHook 智能体上下文导出（由宿主注入；target 为 lunar 或子智能体名）
 	contextDumpHook func(target string) (DataDumpResult, error)
 )
 
 // SetDataDumpHooks 注入数据导出能力（宿主在 TUI 启动前调用）：
 //   - logs：导出原始日志缓冲为文件；
+//   - transcript：导出核心智能实况的模型调用轮次为文件；
 //   - context：按目标导出智能体上下文为文件。
 //
-// 两者都由宿主实现：原始日志虽然就在本包内存里，但落盘路径与配置属于宿主；
-// 智能体上下文更只存在于月华 goja 运行时内。TUI 只负责触发与展示回执。
-func SetDataDumpHooks(logs func() (DataDumpResult, error), context func(target string) (DataDumpResult, error)) {
+// 三者都由宿主落盘：数据虽分别来自本包（日志缓冲 / 轮次缓冲）与月华 goja 运行时，
+// 但**落盘路径与配置属于宿主**，且导出格式必须与对外端点共用同一份定义
+// （宿主实现进程内直调端点处理器，避免"控制台导出的文件"与"端点拿到的文件"分叉）。
+func SetDataDumpHooks(
+	logs func() (DataDumpResult, error),
+	transcript func() (DataDumpResult, error),
+	context func(target string) (DataDumpResult, error),
+) {
 	dumpHookMu.Lock()
 	defer dumpHookMu.Unlock()
 	logsDumpHook = logs
+	transcriptDumpHook = transcript
 	contextDumpHook = context
 }
 
@@ -88,6 +97,17 @@ func SetDataDumpHooks(logs func() (DataDumpResult, error), context func(target s
 func DumpLogs() (DataDumpResult, error) {
 	dumpHookMu.RLock()
 	hook := logsDumpHook
+	dumpHookMu.RUnlock()
+	if hook == nil {
+		return DataDumpResult{}, errNotWired
+	}
+	return hook()
+}
+
+// DumpTranscript 导出核心智能实况的模型调用轮次（钩子未注入时返回 errNotWired）
+func DumpTranscript() (DataDumpResult, error) {
+	dumpHookMu.RLock()
+	hook := transcriptDumpHook
 	dumpHookMu.RUnlock()
 	if hook == nil {
 		return DataDumpResult{}, errNotWired

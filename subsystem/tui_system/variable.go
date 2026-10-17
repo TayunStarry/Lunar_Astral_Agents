@@ -56,6 +56,10 @@ var (
 	streamCh chan StreamEvent
 	// streamChMu 保护 streamCh 的注册/读取
 	streamChMu sync.RWMutex
+	// turnCreated 进程启动以来累计完成（归档）的轮数
+	turnCreated int
+	// turnDropped 因 turnHistoryCap 上限被淘汰的轮数（导出时据此如实标注数据完整性）
+	turnDropped int
 )
 
 // ==== 模型调用计量 ====

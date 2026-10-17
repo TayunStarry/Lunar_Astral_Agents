@@ -157,9 +157,13 @@ func ProcessTask(task GenerateTask) {
 		args = append(args, "-b", fmt.Sprintf("%d", task.BatchSize))
 	}
 	// 超分参数
+	//
+	// 说明：`--hires-denoising-strength` 单独传是**无效的** —— sd.cpp 的二次采样需要
+	// `--hires` 才会启用（该 flag 本工程从未传递），因此此前那行参数只是让人误以为
+	// 存在一次「高分辨率再扩散」。超分走的是 RealESRGAN 放大（--upscale-model），
+	// 不做二次去噪，构图与细节不会再变。这里显式删掉误导性参数。
 	if task.AllowSuperResolution {
 		args = append(args, "--upscale-model", *GeneralConfig.RealESRGANModel)
-		args = append(args, "--hires-denoising-strength", "0.55")
 	}
 
 	// 执行显存守卫：可用显存不足时先卸载月华模型, 并记录守卫后的可用显存

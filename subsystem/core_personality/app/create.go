@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"CorePersonality/crystal"
-	"CorePersonality/engine/LunarLoop"
+	"CorePersonality/engine/lunar_loop"
 	"CorePersonality/engine/tts_router"
 	"CorePersonality/server"
 	"CorePersonality/transport/enginebus"

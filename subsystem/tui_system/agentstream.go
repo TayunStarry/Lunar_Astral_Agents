@@ -80,15 +80,52 @@ func StreamEnd(role string) {
 	emitStream(StreamEvent{Role: role, Kind: KindEnd})
 }
 
-// archiveTurnLocked 将已结束的当前轮次归档（需持有 streamMu）
+// archiveTurnLocked 将已结束的当前轮次归档（需持有 streamMu）。
+// 同时记账「累计创建轮数」与「因环形上限被淘汰的轮数」：实况屏是环形缓冲，
+// 数据导出必须能如实告知"这次导出拿到的是全部还是仅最近一段"。
 func archiveTurnLocked() {
 	if currentTurn == nil {
 		return
 	}
+	turnCreated++
 	turnHistory = append(turnHistory, currentTurn)
 	if len(turnHistory) > turnHistoryCap {
+		dropped := len(turnHistory) - turnHistoryCap
+		turnDropped += dropped
 		turnHistory = turnHistory[len(turnHistory)-turnHistoryCap:]
 	}
+}
+
+// TurnStoreInfo 实况轮次缓冲的容量与淘汰情况（数据导出写进元信息用）
+type TurnStoreInfo struct {
+	HistoryCap int // 历史轮次保留上限
+	HistoryLen int // 当前保留的历史轮次条数（不含进行中轮次）
+	Created    int // 进程启动以来累计完成（归档）的轮数
+	Dropped    int // 因上限被淘汰的轮数
+	TextCap    int // 单轮思考/输出文本上限（字符）
+	HasActive  bool
+}
+
+// turnStoreInfoLocked 读取轮次缓冲信息（需持有 streamMu）
+func turnStoreInfoLocked() TurnStoreInfo {
+	return TurnStoreInfo{
+		HistoryCap: turnHistoryCap,
+		HistoryLen: len(turnHistory),
+		Created:    turnCreated,
+		Dropped:    turnDropped,
+		TextCap:    turnTextCap,
+		HasActive:  currentTurn != nil,
+	}
+}
+
+// snapshotTurnsLocked 取「历史轮次 + 进行中轮次」的切片（需持有 streamMu）
+func snapshotTurnsLocked() []*AgentTurn {
+	out := make([]*AgentTurn, 0, len(turnHistory)+1)
+	out = append(out, turnHistory...)
+	if currentTurn != nil {
+		out = append(out, currentTurn)
+	}
+	return out
 }
 
 // appendTurnText 追加轮次文本（超限保留尾部）
@@ -133,12 +170,14 @@ func SubscribeStream() (chan StreamEvent, func()) {
 func GetTurns() []*AgentTurn {
 	streamMu.Lock()
 	defer streamMu.Unlock()
-	out := make([]*AgentTurn, 0, len(turnHistory)+1)
-	out = append(out, turnHistory...)
-	if currentTurn != nil {
-		out = append(out, currentTurn)
-	}
-	return out
+	return snapshotTurnsLocked()
+}
+
+// GetTurnStoreInfo 返回轮次缓冲的容量与淘汰情况
+func GetTurnStoreInfo() TurnStoreInfo {
+	streamMu.Lock()
+	defer streamMu.Unlock()
+	return turnStoreInfoLocked()
 }
 
 // ==== 模型调用计量器（流式桥在每次调用完成时入账） ====

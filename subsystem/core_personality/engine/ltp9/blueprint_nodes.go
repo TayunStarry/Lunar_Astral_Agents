@@ -971,7 +971,7 @@ func (r *bpRunner) runComposite(n *bpNodeRun) bpOutcome {
 }
 
 // removeComposite 清理复合实例：移除派生节点与派生连线（进行中的激活持有节点指针，不受影响）。
-func (r *bpRunner) removeComposite(ownerID string, comp *bpCompState, inst map[string]*bpNodeRun) {
+func (r *bpRunner) removeComposite(ownerID string, _ *bpCompState, inst map[string]*bpNodeRun) {
 	instIDs := map[string]bool{}
 	for _, clone := range inst {
 		instIDs[clone.spec.ID] = true

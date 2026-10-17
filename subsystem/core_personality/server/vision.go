@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"CorePersonality/engine/LunarLoop"
+	"CorePersonality/engine/lunar_loop"
 	"LunarSubsystem/LoggerGeneral"
 )
 

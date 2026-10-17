@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"CorePersonality/clients"
-	"CorePersonality/engine/LunarLoop"
-	"CorePersonality/engine/LunarLoop/container"
+	"CorePersonality/engine/lunar_loop"
+	"CorePersonality/engine/lunar_loop/container"
 	"CorePersonality/engine/model/llama"
 	"CorePersonality/transport/napcat"
 	"LunarSubsystem/GeneralConfig"

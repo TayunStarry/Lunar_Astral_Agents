@@ -143,8 +143,8 @@ function Invoke-TtsLibBuildIfNeeded {
 }
 
 # ---------- 月华智能体 TypeScript 打包 ----------
-# tsc 依据 tsconfig 编译 engine/LunarLoop/TypeScript，rollup 打包为
-# engine/LunarLoop/agentSystem.js（由该包 go:embed 嵌入，与执行它的 goja 引擎同居）。
+# tsc 依据 tsconfig 编译 engine/lunar_loop/TypeScript，rollup 打包为
+# engine/lunar_loop/agentSystem.js（由该包 go:embed 嵌入，与执行它的 goja 引擎同居）。
 function Invoke-AgentBundleBuild {
     if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
         throw "未找到 npm，无法打包智能体脚本（请安装 Node.js）"
@@ -166,7 +166,7 @@ function Invoke-AgentBundleBuild {
         Pop-Location
     }
 
-    $bundle = Join-Path $ScriptDir "engine\LunarLoop\agentSystem.js"
+    $bundle = Join-Path $ScriptDir "engine\lunar_loop\agentSystem.js"
     if (-not (Test-Path $bundle)) {
         throw "智能体脚本未产出: $bundle"
     }

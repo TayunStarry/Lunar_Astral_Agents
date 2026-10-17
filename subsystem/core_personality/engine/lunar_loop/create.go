@@ -1,7 +1,7 @@
 package lunarloop
 
 import (
-	"CorePersonality/engine/LunarLoop/container"
+	"CorePersonality/engine/lunar_loop/container"
 	"LunarSubsystem/LoggerGeneral"
 	"fmt"
 

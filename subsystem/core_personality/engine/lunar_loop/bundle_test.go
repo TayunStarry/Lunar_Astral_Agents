@@ -8,12 +8,11 @@ import (
 // agentSystem.js 必须被内嵌且非空。
 //
 // 该脚本是月华智能体的思考循环本体（TypeScript/ 经 tsc + rollup 产出）。它由
-// go:embed 编进二进制，一旦 embed 模式与实际产物名不符，编译期毫无提示，
 // 直到运行期 RunAgentContext 才发现——而那时程序已在装配流程里，表现为
 // "启动失败"，很难一眼看出只是构建产物没生成或名字不一致。
 func TestAgentSystemBundleIsEmbedded(t *testing.T) {
 	if len(agentSystemJS) == 0 {
-		t.Fatal("内嵌的 agentSystem.js 为空（检查 engine/LunarLoop/variable.go 的 go:embed 与 npm run server.side 产物）")
+		t.Fatal("内嵌的 agentSystem.js 为空（检查 engine/lunar_loop/variable.go 的 go:embed 与 npm run server.side 产物）")
 	}
 	// 兜底核对打包产物确实是智能体脚本而不是被替换成了别的东西
 	for _, marker := range []string{"fileView", "prompts/"} {

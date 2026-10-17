@@ -15,8 +15,8 @@
         "moduleResolution": "node",
         // 输出目录（与 server.side 的 --outDir 保持一致）
         "outDir": "./node_modules/deliverable/",
-        // 源码根目录（月华智能体 TypeScript 源码，随 LunarLoop 引擎同居）
-        "rootDir": "./engine/LunarLoop/TypeScript",
+        // 源码根目录（月华智能体 TypeScript 源码，随 lunar_loop 引擎同居）
+        "rootDir": "./engine/lunar_loop/TypeScript",
         // 启用所有严格类型检查
         "strict": false,
         // 允许 ESModule 互操作
@@ -40,7 +40,7 @@
     },
     // 需要编译的文件列表
     "include": [
-        "./engine/LunarLoop/TypeScript/agent/constructor.ts"
+        "./engine/lunar_loop/TypeScript/agent/constructor.ts"
     ],
     // 排除的目录
     "exclude": [

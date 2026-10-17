@@ -47,6 +47,15 @@ var (
 	// file=写媒体目录后以 file:// 引用交 llama-server 抽帧（默认，行为与历史一致）；
 	// frames=本地抽帧为图片序列帧（base64）后以多个 image_url 提交，供不支持 file:// 的架构使用
 	VideoInputMode = flag.String("video-input", "file", "视频解读输入模式: file(file://) / frames(图片序列帧)")
+	// ImageInputMode 静态图进入思维链的统一形态：
+	// url=视觉读取端点 URL（/file/read-multimodal/，服务端按需缩放并叠印句柄标签，默认）；
+	// base64=经同一变换管线直出 data URI（供无法回取本机 URL 的云端多模态服务使用）
+	ImageInputMode = flag.String("image-input", "url", "静态图思维链形态: url(视觉读取端点) / base64(变换管线直出)")
+	// VisionMaxSide 视觉读取副本的最大边长（像素）：思维链中的静态图统一约束到该尺寸以内
+	VisionMaxSide = flag.Int("vision-max-side", 1080, "视觉读取副本最大边长(像素)")
+	// VisionCacheCapMB 视觉副本缓存池容量上限（MB）：超限按最久未用淘汰副本
+	// （副本为派生数据，淘汰后下次读取自动重建）；0 = 不限制
+	VisionCacheCapMB = flag.Int("vision-cache-cap-mb", 512, "视觉副本缓存池容量上限(MB), 0=不限制")
 )
 
 // ImageVRAMGuardHook 画图前显存守卫钩子，由推理引擎模块（lunar_astral/model/llama）注册实现，

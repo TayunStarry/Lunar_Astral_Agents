@@ -28,6 +28,9 @@
 	"multimodal_url": "多模态模型地址",
 	"multimodal_key": "多模态模型密钥",
 	"video_input": "视频解读输入模式(file/frames)",
+	"image_input": "静态图思维链形态(url/base64)",
+	"vision_max_side": "视觉读取副本最大边长(像素)",
+	"vision_cache_cap_mb": "视觉副本缓存池上限(MB)",
 
 	"chat_vram_guard": "聊天显存守卫",
 	"chat_vram_guard_mib": "聊天显存守卫阈值(MiB)",

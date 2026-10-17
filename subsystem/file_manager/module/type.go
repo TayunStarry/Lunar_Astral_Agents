@@ -144,6 +144,14 @@ type KnowledgeDB struct {
 	fileDBsMu            sync.Mutex         // fileDBs 并发打开互斥锁
 }
 
+// ArchiveDB 统一资源目录结构体（SQLite archive.db，见 docs/adr/0001）
+// 职责：句柄分配与解析、资源元数据、段落结构表、跨资源搜索。
+// 不存正文（在内容仓库）、不存向量（在记忆库）。
+type ArchiveDB struct {
+	db          *sql.DB // 资源目录 SQL 连接
+	initialized bool    // 是否初始化完成
+}
+
 // MemoryDB 记忆库结构体（多集合架构，扁平化存储，v3 文档引用标签 UUID 架构）
 // 职责：嵌入服务连接、LLM 标签生成、集合管理、记忆 CRUD、维度锁定、持久化
 // 模型配置（URL、模型名、API Key）从 config 模块（lunar_config.json）读取
