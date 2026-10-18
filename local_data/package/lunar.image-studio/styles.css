@@ -293,6 +293,11 @@ body {
     min-width: 0;
 }
 
+/* 跨两列的整行参数（模型方案等） */
+.param-item.param-wide {
+    grid-column: 1 / -1;
+}
+
 .param-item.param-check {
     flex-direction: row;
     align-items: center;
@@ -324,6 +329,25 @@ body {
 }
 
 .param-item input[type="number"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(108, 155, 207, 0.15);
+}
+
+.param-item select {
+    width: 100%;
+    padding: 7px 10px;
+    background: var(--input-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    outline: none;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-family: inherit;
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.param-item select:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(108, 155, 207, 0.15);
 }

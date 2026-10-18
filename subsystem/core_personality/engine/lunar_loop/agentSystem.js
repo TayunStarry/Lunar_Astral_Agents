@@ -1877,6 +1877,128 @@ var agentSystem = (function (exports) {
         return {};
     }
 
+    class PromptDocument {
+        file;
+        sections = new Map();
+        constructor(text, file) {
+            this.file = file;
+            let stack = [];
+            let currentPath = '';
+            for (const line of text.split(/\r?\n/)) {
+                const heading = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+                if (heading) {
+                    const level = heading[1].length;
+                    const title = heading[2].trim();
+                    stack = stack.filter(item => item.level < level);
+                    stack.push({ level, title });
+                    currentPath = stack.filter(item => item.level >= 2).map(item => item.title).join('/');
+                    if (currentPath && !this.sections.has(currentPath))
+                        this.sections.set(currentPath, '');
+                    continue;
+                }
+                if (!currentPath)
+                    continue;
+                this.sections.set(currentPath, (this.sections.get(currentPath) || '') + line + '\n');
+            }
+        }
+        text(path) {
+            const body = this.sections.get(path);
+            if (body === undefined) {
+                throw new Error(`提示词文件 ${this.file} 缺少标题节「${path}」`);
+            }
+            const trimmed = body.trim();
+            if (!trimmed) {
+                throw new Error(`提示词文件 ${this.file} 的标题节「${path}」内容为空`);
+            }
+            return trimmed;
+        }
+        list(path) {
+            const body = this.text(path);
+            const items = body
+                .split(/\r?\n/)
+                .map(line => line.trim())
+                .filter(line => /^[-*]\s+/.test(line))
+                .map(line => line.replace(/^[-*]\s+/, '').trim())
+                .filter(item => item.length > 0);
+            if (items.length === 0) {
+                throw new Error(`提示词文件 ${this.file} 的标题节「${path}」没有任何列表项`);
+            }
+            return items;
+        }
+    }
+    function loadPromptDocument(file) {
+        const [content, error] = fileView(file);
+        if (error)
+            throw new Error(`读取提示词 ${file} 失败: ${error.message ?? String(error)}`);
+        if (!content)
+            throw new Error(`提示词 ${file} 内容为空`);
+        return new PromptDocument(content, file);
+    }
+
+    const CHARACTER_TABLE = 'painter_characters';
+    function loadCustomCharacters() {
+        const characters = new Map();
+        try {
+            const [entries, error] = knowledgeLoad(CHARACTER_TABLE);
+            if (error) {
+                console.error(`[角色库] 读取 ${CHARACTER_TABLE} 失败:`, error.message ?? String(error));
+                return characters;
+            }
+            for (const pair of entries ?? []) {
+                if (!Array.isArray(pair) || typeof pair[0] !== 'string' || !pair[0])
+                    continue;
+                const name = pair[0];
+                try {
+                    const raw = JSON.parse(String(pair[1] ?? ''));
+                    const profile = normalizeProfile(raw, name);
+                    if (profile)
+                        characters.set(profile.name, profile);
+                }
+                catch (parseError) {
+                    console.warn(`[角色库] 角色「${name}」的档案不是合法 JSON，已跳过:`, parseError);
+                }
+            }
+        }
+        catch (error) {
+            console.error('[角色库] 读取自定义角色失败:', error);
+        }
+        return characters;
+    }
+    function saveCustomCharacter(profile) {
+        try {
+            const characters = loadCustomCharacters();
+            characters.set(profile.name, profile);
+            const entries = [...characters.entries()]
+                .map(([name, value]) => [name, JSON.stringify(value)]);
+            const [ok, error] = knowledgeSave(CHARACTER_TABLE, entries);
+            if (error) {
+                console.error(`[角色库] 写入 ${CHARACTER_TABLE} 失败:`, error.message ?? String(error));
+                return false;
+            }
+            return !!ok;
+        }
+        catch (error) {
+            console.error('[角色库] 保存自定义角色失败:', error);
+            return false;
+        }
+    }
+    function normalizeProfile(raw, fallbackName) {
+        if (!raw || typeof raw !== 'object')
+            return null;
+        const name = String(raw.name || fallbackName).trim();
+        const appearance = String(raw.appearance || '').trim();
+        if (!name || !appearance)
+            return null;
+        const gender = raw.gender === '男' ? '男' : '女';
+        return {
+            name,
+            gender,
+            appearance,
+            outfitFull: String(raw.outfitFull || '').trim() || undefined,
+            outfitChibi: String(raw.outfitChibi || '').trim() || undefined,
+        };
+    }
+
     const SIDE_BASE = 1024;
     const SIDE_MAX = 2816;
     const SIDE_ALIGN = 32;
@@ -1908,7 +2030,7 @@ var agentSystem = (function (exports) {
     const DEFAULT_RATIO = '1:1';
     const LIST_LIMIT_MAX = 100;
     const DEFAULT_STRENGTH = 0.5;
-    const STEPS_MIN = 30;
+    const STEPS_MIN = 8;
     const STEPS_MAX = 60;
     function planDimensions(reference) {
         if (!reference || reference.width <= 0 || reference.height <= 0) {
@@ -1976,7 +2098,7 @@ var agentSystem = (function (exports) {
     function normalizeSteps(value, label) {
         const num = Number(value);
         if (!Number.isFinite(num) || num <= 0) {
-            console.log(`[绘制者] ${label}未指定步数，按配置 sd_steps 处理`);
+            console.log(`[绘制者] ${label}未指定步数，按当前方案推荐步数处理`);
             return 0;
         }
         const steps = Math.round(Math.min(Math.max(num, STEPS_MIN), STEPS_MAX));
@@ -1986,43 +2108,38 @@ var agentSystem = (function (exports) {
     }
     class PainterRole extends CreativeRoleBase {
         roleTag = "绘制者";
-        defaultExpressionPrompt = [
-            '温柔的表情,开心的笑容,脸颊泛红',
-            '害羞的表情,抿嘴微笑,眼神躲闪',
-            '俏皮的表情,单眼眨眼,嘴角微微上扬,略带调皮的笑容',
-            '平静的表情,眼神略微向下看向一侧,嘴唇轻抿,无笑容,若有所思',
-            '惊讶的表情,双眼睁大,眉毛抬高,嘴巴微张成O形,脸颊泛红',
-            '非常开心的表情,双眼弯成月牙形,张大嘴巴欢笑,脸颊泛红明显',
-            '害羞的表情,眼神向下看,眉毛呈八字形,抿嘴微笑,脸颊大面积泛红',
-            '自信的表情,眼神直视前方,眉毛微微上扬,嘴角带有一抹浅笑,眼神明亮'
-        ];
-        defaultPosturePrompt = [
-            '一条腿轻轻抬起,俏皮姿势',
-            '双手背在身后,身体微微前倾,双脚并拢',
-            '一手插在外套口袋里,另一只手轻抬至脸颊旁比"V"字手势,身体略侧,双脚前后交叉站立',
-            '双手自然垂放于身前,手指轻轻交握,双肩微微内收,双脚并拢,站姿端正',
-            '手抬起至嘴前,十指轻轻触碰"做捂嘴状",身体微微后仰,一条腿向后小半步,重心落在后脚',
-            '双手举过头顶比心或张开五指,一条腿向后踢起,身体微微前倾,脚尖离地呈跳跃瞬间',
-            '双手食指在胸前互点,头部微微低下,双膝内扣,两脚脚尖向内呈内八站姿',
-            '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
-        ];
-        appearanceBasePrompt = fileView('prompts/appearanceBase.md')[0].trim();
-        chibiAppearancePrompt = fileView('prompts/selfAppearanceChibi.md')[0].trim();
-        fullAppearancePrompt = fileView('prompts/selfAppearanceFull.md')[0].trim();
-        groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0].trim();
-        crystalAppearancePrompt = fileView('prompts/crystalAppearance.md')[0].trim();
-        crystalBasePrompt = fileView('prompts/crystalAppearanceBase.md')[0].trim();
-        crystalFullAppearancePrompt = fileView('prompts/crystalAppearanceFull.md')[0].trim();
-        crystalChibiAppearancePrompt = fileView('prompts/crystalAppearanceChibi.md')[0].trim();
-        portraitBaseFemalePrompt = fileView('prompts/portraitBaseFemale.md')[0].trim();
-        portraitBaseMalePrompt = fileView('prompts/portraitBaseMale.md')[0].trim();
-        genericFullAppearancePrompt = fileView('prompts/portraitAppearanceFull.md')[0].trim();
-        genericChibiAppearancePrompt = fileView('prompts/portraitAppearanceChibi.md')[0].trim();
-        defaultOutfitChibiPrompt = '穿着纯黑色洛丽塔风连衣裙，长泡泡袖，袖口缀黑色蕾丝荷叶边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石，裙摆层叠黑色蕾丝花边，无任何白色蕾丝或白色装饰';
-        defaultOutfitFullPrompt = '穿着黑色哥特萝莉风长裙，黑色蕾丝立领，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石饰扣，长泡泡袖收黑色蕾丝袖口，多层黑色蕾丝裙摆，无任何白色蕾丝或白色装饰';
-        crystalDefaultOutfitFullPrompt = '穿着纯白色吊带连衣裙，胸前与裙身点缀淡蓝色星星图案，领口系浅蓝色缎带蝴蝶结并别着星星饰针，外披一件宽松的白色棉服外套且外套自然滑落到手臂上露出肩膀，白色短袜与白色乐福鞋';
-        crystalDefaultOutfitChibiPrompt = '穿着纯白色吊带连衣裙，胸前点缀淡蓝色星星图案与星星饰针，领口系浅蓝色缎带蝴蝶结，外披宽松的白色短款外套，白色短袜与白色小皮鞋';
-        defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
+        commonPrompts = loadPromptDocument('prompts/painterCommon.md');
+        characterPrompts = loadPromptDocument('prompts/painterCharacters.md');
+        defaultExpressionPrompt = this.commonPrompts.list('默认表情');
+        defaultPosturePrompt = this.commonPrompts.list('默认姿势');
+        appearanceBasePrompt = this.characterPrompts.text('月华/基础外观');
+        chibiAppearancePrompt = this.characterPrompts.text('月华/立绘-Q版');
+        fullAppearancePrompt = this.characterPrompts.text('月华/立绘-全尺寸');
+        crystalBasePrompt = this.characterPrompts.text('琉璃/基础外观');
+        crystalFullAppearancePrompt = this.characterPrompts.text('琉璃/立绘-全尺寸');
+        crystalChibiAppearancePrompt = this.characterPrompts.text('琉璃/立绘-Q版');
+        portraitBaseFemalePrompt = this.characterPrompts.text('通用角色/底板-女');
+        portraitBaseMalePrompt = this.characterPrompts.text('通用角色/底板-男');
+        genericFullAppearancePrompt = this.characterPrompts.text('通用角色/立绘-全尺寸');
+        genericChibiAppearancePrompt = this.characterPrompts.text('通用角色/立绘-Q版');
+        defaultOutfitChibiPrompt = this.characterPrompts.text('月华/默认服装-Q版');
+        defaultOutfitFullPrompt = this.characterPrompts.text('月华/默认服装-全尺寸');
+        crystalDefaultOutfitFullPrompt = this.characterPrompts.text('琉璃/默认服装-全尺寸');
+        crystalDefaultOutfitChibiPrompt = this.characterPrompts.text('琉璃/默认服装-Q版');
+        groupPhotoTemplate = this.commonPrompts.text('合照模板');
+        groupEnvironmentPresets = this.commonPrompts.list('合照背景');
+        defaultNegativePrompt = this.commonPrompts.text('默认负面提示词');
+        builtinCharacters = new Map([
+            ['月华', {
+                    name: '月华', gender: '女', appearance: this.appearanceBasePrompt,
+                    outfitFull: this.defaultOutfitFullPrompt, outfitChibi: this.defaultOutfitChibiPrompt, builtin: true,
+                }],
+            ['琉璃', {
+                    name: '琉璃', gender: '女', appearance: this.crystalBasePrompt,
+                    outfitFull: this.crystalDefaultOutfitFullPrompt, outfitChibi: this.crystalDefaultOutfitChibiPrompt, builtin: true,
+                }],
+        ]);
+        customCharacters = loadCustomCharacters();
         referenceImage = '';
         referenceHandle = '';
         referenceVision = '';
@@ -2044,11 +2161,11 @@ var agentSystem = (function (exports) {
                             "ratio": {
                                 type: "string",
                                 enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                                description: "画面比例预设,默认 1:1。按题材选择:人物/物品用 2:3 或 3:4,风景/横构图用 3:2 或 16:9,方形构图用 1:1。短边固定 1024px"
+                                description: "画面比例预设,默认 1:1。按题材选择:人物/物品用 2:3 或 3:4,风景/横构图用 3:2 或 16:9,方形构图用 1:1。"
                             },
                             "steps": {
                                 type: "number",
-                                description: "迭代步数,取值 30~60:快速草图 30,常规 40(省略时用系统默认),精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                                description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
                             },
                             "negative_prompt": {
                                 type: "string",
@@ -2087,7 +2204,7 @@ var agentSystem = (function (exports) {
                             },
                             "steps": {
                                 type: "number",
-                                description: "迭代步数,取值 30~60:快速草图 30,常规 40(省略时用系统默认),精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                                description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
                             },
                             "negative_prompt": {
                                 type: "string",
@@ -2118,8 +2235,7 @@ var agentSystem = (function (exports) {
                         properties: {
                             "character": {
                                 type: "string",
-                                enum: ["月华", "琉璃", "通用-女", "通用-男"],
-                                description: "月华与琉璃有内置人设,只需给出表情/姿势/环境;通用-女 / 通用-男,必须用 appearance 描述其外观"
+                                description: "目标角色:内置角色(月华/琉璃)或已创建的自定义角色名,已内置外观,只需给出表情/姿势/环境;通用-女 / 通用-男 或临时角色必须用 appearance 描述其外观。{characters}"
                             },
                             "chibi": {
                                 type: "boolean",
@@ -2127,7 +2243,7 @@ var agentSystem = (function (exports) {
                             },
                             "appearance": {
                                 type: "string",
-                                description: "character=通用-女 / 通用-男 时填写该人物的外观:性别、年龄感、发型发色、瞳色、服装、配饰、身份。"
+                                description: "character=通用-女 / 通用-男 或临时角色时填写该人物的外观:性别、年龄感、发型发色、瞳色、服装、配饰、身份。内置/自定义角色不需要填写。"
                             },
                             "expression": {
                                 type: "string",
@@ -2148,11 +2264,11 @@ var agentSystem = (function (exports) {
                             "ratio": {
                                 type: "string",
                                 enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                                description: "画面比例预设。缺省:全尺寸 2:3(竖版全身立绘),Q版 1:1。横版场景改 3:2 或 16:9。短边固定 1024px"
+                                description: "画面比例预设。缺省:全尺寸 2:3(竖版全身立绘),Q版 1:1。横版场景改 3:2 或 16:9。"
                             },
                             "steps": {
                                 type: "number",
-                                description: "迭代步数,取值 30~60:快速草图 30,常规 40(省略时用系统默认),精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                                description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
                             },
                             "negative_prompt": {
                                 type: "string",
@@ -2179,30 +2295,67 @@ var agentSystem = (function (exports) {
             {
                 type: "function",
                 function: {
-                    name: "group_photo",
-                    description: "生成月华与其他人的合照。当要求绘制月华和某人（朋友、家人、其他角色等）的合影时调用此函数。合照对象为琉璃时,companion 直接填写\"琉璃\"即可,系统会自动注入琉璃的固定形象。若本次任务附带参考图,将以该参考图为底图进行图生图,尽量保留合照对象的容貌;未附带则按文本描述绘制",
+                    name: "create_character",
+                    description: "创建或更新一个可复用的自定义角色,写入角色库(SQL数据库)。适合会反复出场的原创角色:创建后 portrait 的 character 与 group_photo 的 roles 都能直接用角色名引用,无需每次重写外观。一次性路人不建议创建。内置角色(月华/琉璃)不能重名",
                     parameters: {
                         type: "object",
                         properties: {
-                            "companion": {
+                            "name": {
                                 type: "string",
-                                description: "合照对象描述,描述对方的性别、外貌、发型、服装、身份等特征。合照对象为琉璃时直接填写\"琉璃\""
+                                description: "角色名(唯一键,后续绘制时用这个名字引用)"
                             },
-                            "expression": {
+                            "gender": {
                                 type: "string",
-                                description: "月华的表情提示词,描述想要展现的表情"
+                                enum: ["女", "男"],
+                                description: "性别,决定立绘模板中的性别表述"
                             },
-                            "posture": {
+                            "appearance": {
                                 type: "string",
-                                description: "月华的动作提示词,描述想要展现的姿势或动作"
+                                description: "基础外观:年龄感、发型发色、瞳色、面部特征、配饰、体型。这是角色的身份定义,不写表情/动作/场景"
                             },
-                            "outfit": {
+                            "outfit_full": {
                                 type: "string",
-                                description: "月华的服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+                                description: "默认全尺寸服装。省略则使用简洁得体的日常服装"
+                            },
+                            "outfit_chibi": {
+                                type: "string",
+                                description: "默认Q版服装。省略则复用全尺寸服装"
+                            }
+                        },
+                        required: [
+                            "name",
+                            "gender",
+                            "appearance"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "group_photo",
+                    description: "生成月华与一个或多个角色的合照。roles 按顺序列出参与者:内置角色与已创建的自定义角色直接写名字,自动继承外观与默认服装;临时角色写完整外观描述(性别、年龄感、发型发色、瞳色、服装、配饰、身份)。chibi=true 时所有参与者使用Q版二头身比例。planning 统一规划每人的表情/动作/服饰,例如\"月华:俏皮眨眼,比V手势,黑色哥特长裙;琉璃:安静微笑,双手交叠,白色星纹裙\";省略则每人使用随机默认表情/动作与默认服装。environment 省略时从预设背景中随机挑选。若本次任务附带参考图,将以该参考图为底图进行图生图,尽量保留参与者的容貌;未附带则按文本描述绘制",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "roles": {
+                                type: "array",
+                                items: {
+                                    type: "string"
+                                },
+                                description: "合照参与者列表,至少一位。内置角色与已创建的自定义角色直接写名字(自动继承外观与默认服装);临时角色写完整外观描述。{characters}"
+                            },
+                            "chibi": {
+                                type: "boolean",
+                                description: "是否Q版:true=所有参与者使用Q版二头身比例,false 或不填=全尺寸合照"
+                            },
+                            "planning": {
+                                type: "string",
+                                description: "合照的统一人物规划:逐人写清表情、动作与服饰,用分号分隔。省略则全部使用默认表情/动作与默认服装"
                             },
                             "environment": {
                                 type: "string",
-                                description: "环境提示词,描述背景环境或场景"
+                                description: "环境提示词,描述背景环境或场景。省略时随机使用预设背景"
                             },
                             "ratio": {
                                 type: "string",
@@ -2211,11 +2364,11 @@ var agentSystem = (function (exports) {
                             },
                             "strength": {
                                 type: "number",
-                                description: "已选定参考图时的图生图强度,取值 0 到 1,越大越偏离参考图。保留对方容貌建议 0.3~0.5;缺省按中性值 0.5。未选定参考图时忽略"
+                                description: "已选定参考图时的图生图强度,取值 0 到 1,越大越偏离参考图。保留参与者容貌建议 0.3~0.5;缺省按中性值 0.5。未选定参考图时忽略"
                             },
                             "steps": {
                                 type: "number",
-                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                                description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
                             },
                             "negative_prompt": {
                                 type: "string",
@@ -2231,10 +2384,27 @@ var agentSystem = (function (exports) {
                             }
                         },
                         required: [
-                            "companion",
-                            "expression",
-                            "posture",
-                            "environment"
+                            "roles"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "switch_diffusion_scheme",
+                    description: "切换后续绘图使用的模型方案。quality=质量优先(默认,细节更好、耗时更长);turbo=速度优先(出图更快,适合草图、快速确认与批量尝试,推荐 8~12 步)。切换后省略 steps 即使用该方案的推荐步数。切换状态由宿主记录,对所有后续绘图工具生效;任务本身不需要画得快时不要切换,保持当前方案即可",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "scheme": {
+                                type: "string",
+                                enum: ["turbo", "quality"],
+                                description: "目标方案:turbo=速度优先,quality=质量优先"
+                            }
+                        },
+                        required: [
+                            "scheme"
                         ]
                     }
                 }
@@ -2271,6 +2441,7 @@ var agentSystem = (function (exports) {
             super(fileView('prompts/painterRole.md')[0].trim());
         }
         async createCreativeWork(taskDescription, reference) {
+            this.customCharacters = loadCustomCharacters();
             this.referenceImage = '';
             this.referenceHandle = '';
             this.referenceVision = '';
@@ -2323,7 +2494,11 @@ var agentSystem = (function (exports) {
             this.referenceSize = null;
         }
         get roleName() { return '绘制者'; }
-        getToolDefinitions() { return this.roleTool; }
+        getToolDefinitions() {
+            const catalog = this.characterCatalogText();
+            const definitions = JSON.stringify(this.roleTool).split('{characters}').join(catalog);
+            return JSON.parse(definitions);
+        }
         executeTool(toolCall) {
             const funcName = toolCall.function.name;
             let args = {};
@@ -2338,10 +2513,12 @@ var agentSystem = (function (exports) {
                 case 'diffusion_generation': return this.handleDiffusionGeneration(args);
                 case 'image_to_image': return this.handleImageToImage(args);
                 case 'portrait': return this.handlePortrait(args);
+                case 'create_character': return this.handleCreateCharacter(args);
                 case 'group_photo': return this.handleGroupPhoto(args);
+                case 'switch_diffusion_scheme': return this.handleSwitchDiffusionScheme(args);
                 case 'list_images': return this.handleListImages();
                 case 'upscale_image': return this.handleUpscaleImage(args);
-                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、portrait、group_photo、list_images、upscale_image`;
+                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、portrait、create_character、group_photo、switch_diffusion_scheme、list_images、upscale_image`;
             }
         }
         collectDetail(toolCall, paintings) {
@@ -2363,13 +2540,14 @@ var agentSystem = (function (exports) {
                     });
                 }
                 else if (name === 'group_photo') {
+                    const roles = this.normalizeGroupRoles(args.roles);
                     paintings.push({
                         toolName: name,
-                        promptSummary: `与${args.companion || '他人'}的合照`,
-                        expression: args.expression || '',
-                        posture: args.posture || '',
+                        promptSummary: `${args.chibi === true ? 'Q版' : ''}与${roles.join('、') || '他人'}的合照`,
+                        roles,
+                        chibi: args.chibi === true,
+                        planning: args.planning || '',
                         environment: args.environment || '',
-                        companion: args.companion || '',
                     });
                 }
                 else if (name === 'diffusion_generation' || name === 'image_to_image') {
@@ -2418,9 +2596,9 @@ var agentSystem = (function (exports) {
                     parts.push(desc + '。');
                 }
                 else if (p.toolName === 'group_photo') {
-                    let desc = `月华绘制了一幅与${p.companion || '他人'}的合照`;
-                    if (p.expression)
-                        desc += `，展现了${p.expression}`;
+                    let desc = `月华绘制了一幅${p.chibi ? 'Q版' : ''}与${p.roles && p.roles.length > 0 ? p.roles.join('、') : '他人'}的合照`;
+                    if (p.planning)
+                        desc += `，${p.planning}`;
                     if (p.environment)
                         desc += `，背景是${p.environment}`;
                     parts.push(desc + '。');
@@ -2436,23 +2614,30 @@ var agentSystem = (function (exports) {
             return parts.join('\n');
         }
         renderAppearance(template, parts, defaultOutfit, base, gender) {
-            const expression = parts.expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
-            const posture = parts.posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
+            const expression = parts.expression || this.randomExpression();
+            const posture = parts.posture || this.randomPosture();
             const outfit = parts.outfit || defaultOutfit;
-            const filled = template
-                .replace('{base}', base || this.appearanceBasePrompt)
-                .replace('{gender}', gender || '女孩')
-                .replace('{expression}', expression)
-                .replace('{outfit}', outfit)
-                .replace('{posture}', posture)
-                .replace('{companion}', parts.companion || '')
-                .replace('{environment}', parts.environment || '');
+            return this.renderTemplate(template, {
+                base: base || this.appearanceBasePrompt,
+                gender: gender || '女孩',
+                expression,
+                outfit,
+                posture,
+                environment: parts.environment || '',
+            });
+        }
+        renderTemplate(template, vars) {
+            let filled = template;
+            for (const [key, value] of Object.entries(vars)) {
+                filled = filled.split(`{${key}}`).join(value);
+            }
             return this.tidyPrompt(filled);
         }
         tidyPrompt(text) {
             return text
                 .replace(/[，,]\s*[，,]+/g, '，')
-                .replace(/，\s*。/g, '。')
+                .replace(/[，,]\s*。/g, '。')
+                .replace(/。\s*。/g, '。')
                 .replace(/\s{2,}/g, ' ')
                 .trim();
         }
@@ -2564,13 +2749,33 @@ var agentSystem = (function (exports) {
             }
         }
         characterLabel(character) {
-            switch (String(character ?? '').trim()) {
+            const name = String(character ?? '').trim();
+            switch (name) {
                 case '月华': return '月华';
                 case '琉璃': return '琉璃';
                 case '通用-男': return '男性角色';
                 case '通用-女': return '女性角色';
-                default: return '角色';
+                default: return name || '角色';
             }
+        }
+        characterProfiles() {
+            const profiles = new Map(this.builtinCharacters);
+            for (const [name, profile] of this.customCharacters) {
+                profiles.set(name, { ...profile, builtin: false });
+            }
+            return profiles;
+        }
+        characterCatalogText() {
+            const names = [...this.characterProfiles().keys()];
+            return names.length > 0
+                ? `当前可用角色：${names.join('、')}；也可用 通用-女 / 通用-男 临时描述外观`
+                : '当前可用角色：通用-女 / 通用-男（临时描述外观）';
+        }
+        characterOutfit(profile, chibi) {
+            const outfit = chibi
+                ? (profile.outfitChibi || profile.outfitFull)
+                : profile.outfitFull;
+            return outfit || '穿着简洁得体的日常服装';
         }
         portraitPreset(args) {
             const raw = String(args.character ?? '').trim();
@@ -2592,6 +2797,18 @@ var agentSystem = (function (exports) {
                     base: this.crystalBasePrompt,
                     outfit: chibi ? this.crystalDefaultOutfitChibiPrompt : this.crystalDefaultOutfitFullPrompt,
                     gender: '女孩', defaultRatio,
+                };
+            }
+            const custom = this.customCharacters.get(raw);
+            if (custom) {
+                const profile = { ...custom, builtin: false };
+                return {
+                    kind: raw, chibi, label: `${raw}${chibi ? 'Q版' : '全尺寸'}立绘`,
+                    template: chibi ? this.genericChibiAppearancePrompt : this.genericFullAppearancePrompt,
+                    base: profile.appearance,
+                    outfit: this.characterOutfit(profile, chibi),
+                    gender: profile.gender === '男' ? '男孩' : '女孩',
+                    defaultRatio,
                 };
             }
             const male = raw === '通用-男';
@@ -2637,18 +2854,53 @@ var agentSystem = (function (exports) {
                 return `立绘生成异常: ${error}`;
             }
         }
+        handleCreateCharacter(args) {
+            const name = String(args.name || '').trim();
+            const appearance = String(args.appearance || '').trim();
+            if (!name)
+                return '创建角色失败：角色名不能为空';
+            if (!appearance)
+                return '创建角色失败：appearance 不能为空（写清年龄感、发型发色、瞳色、面部特征、配饰、体型）';
+            if (name === '月华' || name === '琉璃' || name === '通用-女' || name === '通用-男') {
+                return `创建角色失败：「${name}」是内置角色名，请换一个名字`;
+            }
+            const existed = this.customCharacters.has(name);
+            const profile = {
+                name,
+                gender: args.gender === '男' ? '男' : '女',
+                appearance,
+                outfitFull: String(args.outfit_full || '').trim() || undefined,
+                outfitChibi: String(args.outfit_chibi || '').trim() || undefined,
+            };
+            if (!saveCustomCharacter(profile))
+                return '创建角色失败：角色库写入失败，请稍后重试';
+            this.customCharacters.set(name, profile);
+            console.log(`[绘制者] 自定义角色${existed ? '更新' : '创建'}成功: ${name}`);
+            return `${existed ? '已更新' : '已创建'}自定义角色「${name}」（${profile.gender}）。之后绘制立绘或合照时可直接用该名字引用。`;
+        }
         handleGroupPhoto(args) {
             try {
-                console.log(`[绘制者] -> 合照生成`);
-                console.log(`合照对象: "${args.companion}"`);
-                console.log(`表情: "${args.expression}"`);
-                console.log(`姿势: "${args.posture}"`);
-                console.log(`服装: "${args.outfit}"`);
-                console.log(`环境: "${args.environment}"`);
-                let companion = args.companion || '';
-                if (companion.includes('琉璃'))
-                    companion = this.crystalAppearancePrompt;
-                const fullPrompt = this.renderAppearance(this.groupAppearancePrompt, { ...args, companion }, this.defaultOutfitFullPrompt);
+                const roles = this.normalizeGroupRoles(args.roles);
+                if (roles.length === 0)
+                    return '合照生成失败：roles 至少需要一位参与者';
+                const chibi = args.chibi === true;
+                const planningProvided = !!String(args.planning || '').trim();
+                const planning = String(args.planning || '').trim() || this.defaultGroupPlanning(roles, chibi);
+                const environment = String(args.environment || '').trim() || this.randomGroupEnvironment();
+                const members = roles
+                    .map(role => this.groupMemberAppearance(role, chibi, !planningProvided))
+                    .join('；');
+                const fullPrompt = this.renderTemplate(this.groupPhotoTemplate, {
+                    proportion: chibi ? 'Q版二头身，头身比约1:2，' : '',
+                    count: String(roles.length),
+                    members,
+                    planning: planning ? `人物安排：${planning}。` : '',
+                    environment,
+                });
+                console.log(`[绘制者] -> ${chibi ? 'Q版' : '全尺寸'}合照生成（${roles.length}人）`);
+                console.log(`参与者: "${roles.join('、')}"`);
+                console.log(`人物规划: "${planning || '默认'}"`);
+                console.log(`环境: "${environment}"`);
                 const useReference = !!this.referenceImage;
                 const plan = useReference ? this.planFor() : resolveDimensionPlan(args.ratio);
                 const steps = normalizeSteps(args.steps, '合照');
@@ -2671,6 +2923,60 @@ var agentSystem = (function (exports) {
             catch (error) {
                 console.error('[绘制者] 合照生成处理异常:', error);
                 return `合照生成异常: ${error}`;
+            }
+        }
+        normalizeGroupRoles(value) {
+            const list = Array.isArray(value) ? value : [value];
+            const roles = [];
+            for (const item of list) {
+                const role = String(item ?? '').trim();
+                if (!role || roles.includes(role))
+                    continue;
+                roles.push(role);
+            }
+            return roles;
+        }
+        groupMemberAppearance(role, chibi, withOutfit) {
+            const profile = this.characterProfiles().get(role);
+            if (!profile)
+                return role;
+            const outfit = withOutfit ? `，${this.characterOutfit(profile, chibi)}` : '';
+            return `${profile.name}，${profile.appearance}${outfit}`;
+        }
+        defaultGroupPlanning(roles, chibi) {
+            const entries = [];
+            const profiles = this.characterProfiles();
+            for (const role of roles) {
+                const profile = profiles.get(role);
+                if (!profile)
+                    continue;
+                entries.push(`${profile.name}：${this.randomExpression()}，${this.randomPosture()}，${this.characterOutfit(profile, chibi)}`);
+            }
+            return entries.join('；');
+        }
+        randomExpression() {
+            return this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
+        }
+        randomPosture() {
+            return this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
+        }
+        randomGroupEnvironment() {
+            return this.groupEnvironmentPresets[RandomFloor(0, this.groupEnvironmentPresets.length - 1)];
+        }
+        handleSwitchDiffusionScheme(args) {
+            const name = String(args.scheme || '').trim();
+            if (!name)
+                return '切换模型方案失败：请指定 turbo 或 quality';
+            const [current, error] = setDiffusionScheme(name);
+            if (error)
+                return `切换模型方案失败：${error.message ?? String(error)}`;
+            return `已切换到 ${current}（${this.schemeLabel(current)}）模型方案，后续绘图将使用该方案。`;
+        }
+        schemeLabel(name) {
+            switch (name) {
+                case 'turbo': return '速度优先';
+                case 'quality': return '质量优先';
+                default: return name || '默认';
             }
         }
         handleListImages() {

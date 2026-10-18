@@ -26,25 +26,11 @@ const (
 	cyan    = "\033[36m"
 )
 
-// Markdown 渲染色彩（对应 ANSI 色彩码，前端按文本内嵌 HTML 渲染色彩标注）
-const (
-	mdCyan   = "#56b6c2"
-	mdYellow = "#d19a66"
-	mdRed    = "#e06c75"
-)
-
-// logRingSize 日志环形缓冲容量：最多记录最新的 1000 条日志
-const logRingSize = 1000
-
 var (
 	mu      sync.RWMutex // 保护 devMode / stdLog
 	devMode bool
 	stdLog  = log.New(os.Stdout, "", 0)
 
-	logMu    sync.Mutex // 保护日志环形缓冲
-	logRing  [logRingSize]LogRecord
-	logCount int // 已写入日志总数（同时作为环形缓冲写指针）
-
-	hookMu      sync.Mutex     // 保护 logHook 的并发读写
+	hookMu      sync.Mutex                           // 保护 logHook 的并发读写
 	logHookFunc func(level, module, sub, msg string) // 外部流式日志钩子（TUI 管线注册；nil 表示未启用）
 )

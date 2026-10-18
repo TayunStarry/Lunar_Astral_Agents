@@ -200,6 +200,22 @@ declare global {
      */
     function upscaleImage(imgData: Blob | File | string | Uint8Array): [GenerateImageResult, Error | null];
     /**
+     * 查询当前绘图模型方案（状态记录在 Go 层，与图像工坊前端共享）
+     *
+     * @returns {[string, Error | null]} [方案键名（如 turbo / quality；未配置方案时为空串）, 错误信息]
+     */
+    function getDiffusionScheme(): [string, Error | null];
+    /**
+     * 切换绘图模型方案（状态记录在 Go 层，与图像工坊前端共享）
+     *
+     * 只影响此后创建的生成任务；已入队任务按入队时的方案快照执行。
+     *
+     * @param {string} scheme 方案键名（如 turbo / quality）
+     *
+     * @returns {[string, Error | null]} [切换后的方案键名, 错误信息]
+     */
+    function setDiffusionScheme(scheme: string): [string, Error | null];
+    /**
      * 拉取上下文
      * 
      * @returns {MultimodalMessage[]} 上下文消息列表

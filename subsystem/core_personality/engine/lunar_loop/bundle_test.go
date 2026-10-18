@@ -53,15 +53,13 @@ func TestBundlePromptReferencesAreEmbedded(t *testing.T) {
 			t.Fatalf("脚本引用了 prompts/%s，但内嵌内容为空", name)
 		}
 	}
-	// 角色外观模板与两人份的人设都在其中：漏掉说明打包时引用了不存在的文件
+	// 提示词已模块化：公用预设 + 角色合并文档是立绘/合照的唯二依赖，
+	// 漏掉任意一个说明打包时引用了不存在的文件
 	for _, must := range []string{
-		"selfAppearanceFull.md", "selfAppearanceChibi.md",
-		"crystalAppearanceFull.md", "crystalAppearanceChibi.md",
-		"portraitBaseFemale.md", "portraitBaseMale.md",
-		"portraitAppearanceFull.md", "portraitAppearanceChibi.md",
+		"painterCommon.md", "painterCharacters.md",
 	} {
 		if !seen[must] {
-			t.Fatalf("脚本未引用 %s（立绘工具依赖它）", must)
+			t.Fatalf("脚本未引用 %s（绘制者提示词依赖它）", must)
 		}
 	}
 }

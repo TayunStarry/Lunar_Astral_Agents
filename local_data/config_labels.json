@@ -11,9 +11,14 @@
 	"client": "前端显示配置",
 	"release": "Gitee 发布配置",
 
+	"default_scheme": "默认模型方案",
+	"schemes": "绘图模型方案",
+	"label": "方案显示名",
+	"steps": "方案推荐步数",
 	"diffusion_model": "扩散模型",
 	"variational_model": "变分模型",
 	"prompt_analysis_model": "提示词精炼模型",
+	"prompt_mmproj_model": "多模态提示分析模型",
 	"real_esrgan_model": "图像增强模型",
 
 	"developer": "开发者模式",

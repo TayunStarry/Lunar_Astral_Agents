@@ -320,6 +320,31 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{result, nil})
 }
 
+// setDiffusionScheme 切换绘图模型方案（turbo / quality）。
+//
+// 状态保存在 Go 层，与图像工坊前端的 /generate/scheme 读写同一份记录；
+// 只影响此后创建的生成任务，已入队任务按入队时的方案快照执行。
+// 返回值: [string, error] 切换后的方案键名和错误信息
+func (class *Runtime) setDiffusionScheme(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("参数不足")})
+	}
+	name, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("方案名必须是字符串")})
+	}
+	if err := GeneralConfig.SetActiveDiffusionScheme(name); err != nil {
+		return class.runtime.ToValue([]any{"", err})
+	}
+	return class.runtime.ToValue([]any{GeneralConfig.CurrentDiffusionSchemeName(), nil})
+}
+
+// getDiffusionScheme 查询当前绘图模型方案
+// 返回值: [string, error] 当前方案键名和错误信息
+func (class *Runtime) getDiffusionScheme(call goja.FunctionCall) goja.Value {
+	return class.runtime.ToValue([]any{GeneralConfig.CurrentDiffusionSchemeName(), nil})
+}
+
 // asInt 把 goja 导出的数值转换为 int（不支持的形态返回 0）
 //
 // 为什么不能直接断言 float64：goja 的 Export 对不同类型的 JS 数值可能给出

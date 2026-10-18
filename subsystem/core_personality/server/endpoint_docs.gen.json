@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "核心人格 (Core Personality)",
-    "version": "2026.291.0900",
+    "version": "2026.291.1121",
     "x-service": "CorePersonality"
   },
   "servers": [
@@ -505,10 +505,36 @@
     },
     "/generate": {
       "post": {
-        "summary": "图片生成服务",
-        "description": "图片生成服务",
+        "summary": "图片生成服务（请求可带 scheme 指定绘图模型方案）",
+        "description": "图片生成服务（请求可带 scheme 指定绘图模型方案）",
         "operationId": "image.GenerateHandler",
         "x-handler": "image.GenerateHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/generate/scheme": {
+      "get": {
+        "summary": "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）",
+        "description": "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）",
+        "operationId": "image.DiffusionSchemeHandler_get",
+        "x-handler": "image.DiffusionSchemeHandler",
+        "x-method": "GET/POST",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）",
+        "description": "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）",
+        "operationId": "image.DiffusionSchemeHandler_post",
+        "x-handler": "image.DiffusionSchemeHandler",
+        "x-method": "GET/POST",
         "responses": {
           "200": {
             "description": "成功"
@@ -664,19 +690,6 @@
         "description": "加载应用",
         "operationId": "crystal.LoadApplicationHandler",
         "x-handler": "crystal.LoadApplicationHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/logs": {
-      "get": {
-        "summary": "后端最近日志（limit 可限制条数，最多 1000 条）",
-        "description": "后端最近日志（limit 可限制条数，最多 1000 条）",
-        "operationId": "crystal.LogsHandler",
-        "x-handler": "crystal.LogsHandler",
         "responses": {
           "200": {
             "description": "成功"

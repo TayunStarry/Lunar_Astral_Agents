@@ -45,6 +45,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 		req.Seed,
 		req.InitImg,
 		req.AllowSuperResolution,
+		req.Scheme,
 	)
 
 	if task == nil {
@@ -109,6 +110,39 @@ func sendSSEEvent(w http.ResponseWriter, data any) error {
 		flusher.Flush()
 	}
 	return nil
+}
+
+// DiffusionSchemeHandler 查询/切换绘图模型方案。
+//
+// 状态只保存在 Go 层（general_config），智能体工具与图像工坊前端读写的是同一份状态；
+// 不写回 lunar_config.json —— 切换属于运行期偏好，重启后回到配置的默认方案。
+//
+//	GET  /generate/scheme          当前方案 + 全部方案
+//	POST /generate/scheme {"scheme":"turbo"}  切换并返回最新状态
+func DiffusionSchemeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" && r.Method != "POST" {
+		http.Error(w, "Scheme服务 → 不允许的请求方法", http.StatusMethodNotAllowed)
+		return
+	}
+	if r.Method == "POST" {
+		var req struct {
+			Scheme string `json:"scheme"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("Scheme服务 → 解析JSON失败: %v", err), http.StatusBadRequest)
+			return
+		}
+		if err := GeneralConfig.SetActiveDiffusionScheme(req.Scheme); err != nil {
+			http.Error(w, fmt.Sprintf("Scheme服务 → %v", err), http.StatusBadRequest)
+			return
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"current": GeneralConfig.CurrentDiffusionSchemeName(),
+		"default": GeneralConfig.DefaultDiffusionSchemeName(),
+		"schemes": GeneralConfig.DiffusionSchemeInfos(),
+	})
 }
 
 // GenerateWaitHandler 处理WebSocket连接，等待任务完成

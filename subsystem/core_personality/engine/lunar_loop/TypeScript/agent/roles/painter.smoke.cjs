@@ -61,6 +61,20 @@ globalThis.url = () => ['http://127.0.0.1:0'];
 globalThis.resourceAdmit = () => [{ handle: '@I.900', id: 900, blob_path: 'multimedia/stub.png' }, null];
 globalThis.upscaleImage = () => [null, null];
 globalThis.ltpInteractEvent = () => ({ return: undefined });
+// 绘图模型方案桩：记录切换请求，未知方案按 Go 侧行为返回错误
+const schemeCalls = [];
+globalThis.setDiffusionScheme = (name) => {
+	schemeCalls.push(name);
+	return name === 'turbo' || name === 'quality' ? [name, null] : ['', new Error('未知的绘图模型方案')];
+};
+globalThis.getDiffusionScheme = () => ['quality', null];
+// 自定义角色库桩：用内存表模拟 SQLite knowledge.db 的 painter_characters 表
+const knowledgeTables = new Map();
+globalThis.knowledgeLoad = (table) => [Array.from(knowledgeTables.get(table) || []), null];
+globalThis.knowledgeSave = (table, entries) => {
+	knowledgeTables.set(table, entries.map(pair => [pair[0], pair[1]]));
+	return [true, null];
+};
 // 视觉读取桩：记录调用参数，返回固定副本（宽高与原图等比，供比例推导）
 const VISION_URI = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
 const visionCalls = [];
@@ -96,6 +110,8 @@ for (const gone of ['self_portrait', 'chibi_self_portrait', 'crystal_portrait', 
 	check('旧工具已移除: ' + gone, !tools.includes(gone), tools.join(','));
 }
 check('落选工具仍可用（image_to_image）', tools.includes('image_to_image'), tools.join(','));
+check('工具清单含 create_character / group_photo / switch_diffusion_scheme',
+	tools.includes('create_character') && tools.includes('group_photo') && tools.includes('switch_diffusion_scheme'), tools.join(','));
 
 const BASE_ARGS = { expression: '俏皮的表情,单眼眨眼', posture: '一手比V字手势', environment: '淡蓝色天空与星光' };
 
@@ -208,9 +224,74 @@ const BASE_ARGS = { expression: '俏皮的表情,单眼眨眼', posture: '一手
 	painter.resetReference();
 }
 {
-	const { params } = call('group_photo', { companion: '琉璃', expression: '微笑', posture: '并肩站立', environment: '星空下' });
-	if (params) check('合照对象为琉璃时注入内置外观', params.prompt.includes('银白') && params.prompt.includes('星星'), params.prompt);
-	else check('group_photo 产出生成参数', false);
+	const { params } = call('group_photo', {
+		roles: ['月华', '琉璃'],
+		planning: '月华：微笑，比V手势，黑色哥特长裙；琉璃：安静微笑，双手交叠，白色星纹裙',
+		environment: '星空下',
+	});
+	if (params) {
+		check('合照同时注入月华与琉璃的内置外观',
+			params.prompt.includes('绯红') && params.prompt.includes('银白'), params.prompt);
+		check('合照采用 roles 顺序与 planning 规划',
+			params.prompt.includes('共2人') && params.prompt.includes('比V手势') && params.prompt.includes('星空下'), params.prompt);
+		check('合照提示词无换行且无空槽位', !params.prompt.includes('\n') && !params.prompt.includes('{'), params.prompt);
+	} else check('group_photo 产出生成参数', false);
+}
+{
+	const { params } = call('group_photo', { roles: ['月华'] });
+	if (params) {
+		check('未提供 planning 时使用默认服装与随机表情/姿势',
+			params.prompt.includes('黑色哥特') && params.prompt.includes('表情'), params.prompt);
+		check('未提供 environment 时随机选择预设背景并生成完整画面',
+			params.prompt.includes('杰作') && params.prompt.includes('共1人'), params.prompt.substring(0, 160));
+	} else check('group_photo（默认规划）产出生成参数', false);
+}
+{
+	const { params } = call('group_photo', {
+		roles: ['月华', '艾莉：银发精灵少女，尖耳朵，穿深绿色斗篷'],
+	});
+	if (params) {
+		check('未知参与者按原字符串作为外观描述',
+			params.prompt.includes('艾莉') && params.prompt.includes('深绿色斗篷'), params.prompt);
+	} else check('group_photo（自定义角色）产出生成参数', false);
+}
+{
+	const created = call('create_character', {
+		name: '艾莉',
+		gender: '女',
+		appearance: '银发尖耳的精灵少女，翠绿色眼睛，戴银色额饰',
+		outfit_full: '深绿色旅行斗篷与长靴',
+	});
+	check('创建自定义角色成功', String(created.out).includes('已创建'), String(created.out));
+
+	const portrait = call('portrait', {
+		character: '艾莉', expression: '微笑', posture: '站立', environment: '森林',
+	});
+	if (portrait.params) {
+		check('自定义角色可被立绘引用',
+			portrait.params.prompt.includes('银发尖耳') && portrait.params.prompt.includes('深绿色旅行斗篷'), portrait.params.prompt);
+		check('自定义角色使用通用女孩模板', portrait.params.prompt.includes('1女孩'), portrait.params.prompt);
+	} else check('自定义角色立绘产出生成参数', false);
+
+	const group = call('group_photo', { roles: ['月华', '艾莉'], chibi: true });
+	if (group.params) {
+		check('自定义角色可被合照引用', group.params.prompt.includes('银发尖耳'), group.params.prompt);
+		check('合照 chibi=true 使用Q版比例',
+			group.params.prompt.includes('Q版二头身') && group.params.prompt.includes('共2人'), group.params.prompt);
+	} else check('自定义角色合照产出生成参数', false);
+
+	// 重新实例化绘制者：角色应从 SQLite 桩中重新读出，并出现在工具描述的角色目录里
+	const reloaded = new PainterRole();
+	const portraitTool = reloaded.getToolDefinitions().find(tool => tool.function.name === 'portrait');
+	const catalog = portraitTool
+		? portraitTool.function.parameters.properties.character.description
+		: '';
+	check('重建绘制者后自定义角色仍在角色目录中', catalog.includes('艾莉'), catalog);
+}
+{
+	const { out } = call('switch_diffusion_scheme', { scheme: 'turbo' });
+	check('切换模型方案调用 Go 适配器并回报人话',
+		schemeCalls.includes('turbo') && String(out).includes('速度优先'), String(out));
 }
 
 // ==== 10. 参考图只以视觉副本进入任务消息（resizeImage 已从运行时卸载）====

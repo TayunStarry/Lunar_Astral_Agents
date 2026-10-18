@@ -156,16 +156,14 @@ export interface ImageToImageParams {
 
 /** 合照工具 - 参数接口 */
 export interface GroupPhotoParams {
-	/** 合照对象描述（外貌、服装、身份等） */
-	companion: string;
-	/** 月华的表情描述 */
-	expression: string;
-	/** 月华的姿势描述 */
-	posture: string;
-	/** 月华的服装描述，默认为角色默认服装 */
-	outfit?: string;
-	/** 环境描述 */
-	environment: string;
+	/** 参与者列表：内置/自定义角色直接写名字（继承外观），临时角色写完整外观描述 */
+	roles: string[];
+	/** 是否Q版：true=所有参与者使用二头身比例（省略或 false=全尺寸合照） */
+	chibi?: boolean;
+	/** 统一的角色规划：逐人写清表情、动作与服饰（省略则使用默认） */
+	planning?: string;
+	/** 环境描述（省略时随机使用预设背景） */
+	environment?: string;
 	/** 画面比例预设（未选定参考图时生效；已选定参考图时尺寸随参考图），缺省 1:1 */
 	ratio?: string;
 	/** 图生图强度（0~1，已选定参考图时生效）：由绘制者按创作意图指定 */
@@ -178,6 +176,26 @@ export interface GroupPhotoParams {
 	cfg_scale?: number;
 	/** 生成完成后追加超分辨率重建 */
 	super_resolution?: boolean;
+}
+
+/** 绘图模型方案切换 - 参数接口 */
+export interface SchemeSwitchParams {
+	/** 目标方案：turbo=速度优先 / quality=质量优先 */
+	scheme: string;
+}
+
+/** 自定义角色创建/更新 - 参数接口 */
+export interface CreateCharacterParams {
+	/** 角色名（唯一键，后续绘制时引用） */
+	name: string;
+	/** 性别：女 / 男 */
+	gender: string;
+	/** 基础外观：年龄感、发型发色、瞳色、面部特征、配饰、体型 */
+	appearance: string;
+	/** 默认全尺寸服装（可空） */
+	outfit_full?: string;
+	/** 默认Q版服装（可空，空则复用全尺寸） */
+	outfit_chibi?: string;
 }
 
 /** 输出尺寸计划（画面比例 → 实际像素尺寸） */

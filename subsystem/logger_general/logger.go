@@ -2,7 +2,6 @@ package LoggerGeneral
 
 import (
 	"fmt"
-	"html"
 	"log"
 	"os"
 )
@@ -45,9 +44,9 @@ func shouldPrint(level string) bool {
 	return false
 }
 
-// emit 统一输出：消息格式化 → 外部流式钩子（全量） → 级别过滤 → 控制台打印（ANSI 色彩）→ 环形缓冲记录（MD 风格文本）
+// emit 统一输出：消息格式化 → 外部流式钩子（全量） → 级别过滤 → 控制台打印（ANSI 色彩）
 func emit(level, module, sub, format string, v ...any) {
-	msg := fmt.Sprintf(format, v ...)
+	msg := fmt.Sprintf(format, v...)
 
 	// 外部流式钩子在级别过滤前调用：无论 devMode 与级别，TUI 管线都接收全量日志
 	hookMu.Lock()
@@ -64,18 +63,16 @@ func emit(level, module, sub, format string, v ...any) {
 	if sub != "" && sub != notSub {
 		tag = module + "-" + sub
 	}
-	var ansiColor, mdColor string
-	var mdBold bool
-	var levelSuffix string
+	var ansiColor, levelSuffix string
 	switch level {
 	case levelInfo:
-		ansiColor, mdColor, mdBold = cyan, mdCyan, false
+		ansiColor = cyan
 	case levelWarn:
-		ansiColor, mdColor, mdBold, levelSuffix = yellow, mdYellow, true, "[WARN]"
+		ansiColor, levelSuffix = yellow, "[WARN]"
 	case levelError:
-		ansiColor, mdColor, mdBold, levelSuffix = red, mdRed, true, "[ERROR]"
+		ansiColor, levelSuffix = red, "[ERROR]"
 	case levelFatal:
-		ansiColor, mdColor, mdBold, levelSuffix = boldRed, mdRed, true, "[FATAL]"
+		ansiColor, levelSuffix = boldRed, "[FATAL]"
 	}
 
 	// 控制台输出（ANSI 色彩，与历史格式保持一致）
@@ -84,50 +81,6 @@ func emit(level, module, sub, format string, v ...any) {
 	} else {
 		stdLog.Printf("%s[%s%s]%s -> %s%s%s\n", ansiColor, tag, levelSuffix, reset, ansiColor, msg, reset)
 	}
-
-	// 环形缓冲记录（MD 风格：HTML 色彩标注 + 加粗，消息体已做 HTML 转义）
-	mdTag := fmt.Sprintf("<span style=\"color:%s\"><b>[%s%s]</b></span>", mdColor, tag, levelSuffix)
-	mdBody := html.EscapeString(msg)
-	if mdBold {
-		mdBody = fmt.Sprintf("<b><span style=\"color:%s\">%s</span></b>", mdColor, mdBody)
-	}
-	recordLog(level, module, sub, fmt.Sprintf("%s → %s", mdTag, mdBody))
-}
-
-// recordLog 将一条日志写入环形缓冲（仅保留最新 logRingSize 条）
-func recordLog(level, module, sub, text string) {
-	logMu.Lock()
-	defer logMu.Unlock()
-	logRing[logCount%logRingSize] = LogRecord{
-		Level:  level,
-		Module: module,
-		Sub:    sub,
-		Text:   text,
-	}
-	logCount++
-}
-
-// GetRecentLogs 返回最新的最多 n 条日志记录（按时间先后排序）。
-// n <= 0 或超过容量时返回当前全部有效记录（最多 1000 条）。
-func GetRecentLogs(n int) []LogRecord {
-	logMu.Lock()
-	defer logMu.Unlock()
-	size := logCount
-	if size > logRingSize {
-		size = logRingSize
-	}
-	if n > 0 && n < size {
-		size = n
-	}
-	if size <= 0 {
-		return []LogRecord{}
-	}
-	result := make([]LogRecord, 0, size)
-	start := logCount - size
-	for i := 0; i < size; i++ {
-		result = append(result, logRing[(start+i)%logRingSize])
-	}
-	return result
 }
 
 func Info(module, format string, v ...any) {

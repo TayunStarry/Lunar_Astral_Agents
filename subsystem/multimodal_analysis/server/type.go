@@ -13,4 +13,5 @@ type GenerateRequest struct {
 	CfgScale             float64 `json:"cfg_scale"`              // CFG 引导系数，控制对提示词的遵循程度
 	InitImg              string  `json:"init_img"`               // Base64 编码的初始图像（img2img），空则表示文生图
 	AllowSuperResolution bool    `json:"allow_super_resolution"` // 是否启用超分
+	Scheme               string  `json:"scheme"`                 // 绘图模型方案（turbo/quality，空=当前方案）
 }

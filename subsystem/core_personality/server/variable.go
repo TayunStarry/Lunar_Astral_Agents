@@ -2,10 +2,10 @@ package server
 
 import (
 	"CorePersonality/crystal"
-	"CorePersonality/engine/kokoro_tts"
+	KokoroTTS "CorePersonality/engine/kokoro_tts"
 	"CorePersonality/engine/model/llama"
-	"CorePersonality/engine/omnivoice_tts"
-	"CorePersonality/engine/tts_router"
+	OmniVoiceTTS "CorePersonality/engine/omnivoice_tts"
+	ttsrouter "CorePersonality/engine/tts_router"
 	"CorePersonality/lunar"
 	file "LunarSubsystem/FileManager/server"
 	media "LunarSubsystem/MediaTools/server"
@@ -18,9 +18,8 @@ var httpMux *http.ServeMux
 
 // SystemEndpoints 统一路由注册表
 var SystemEndpoints = []SystemEndpoint{
-	// ==================== 宿主平台（自述 / 日志 / 窗口） ====================
+	// ==================== 宿主平台（自述 / 窗口） ====================
 	{Path: "/api-docs", Handler: docsHandler, Method: "GET", Description: "服务自述文档"},
-	{Path: "/logs", Handler: crystal.LogsHandler, Method: "GET", Description: "后端最近日志（limit 可限制条数，最多 1000 条）"},
 	{Path: "/window/focus", Handler: WindowFocusHandler, Method: "POST", Description: "置前指定桌面窗口（id: lunar/crystal）"},
 
 	// ==================== 引擎总线与消息队列 ====================
@@ -78,8 +77,9 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/gguf/metadata", Handler: media.GGUFMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
 
 	// ==================== 图片生成 ====================
-	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务"},
+	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务（请求可带 scheme 指定绘图模型方案）"},
 	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},
+	{Path: "/generate/scheme", Handler: image.DiffusionSchemeHandler, Method: "GET/POST", Description: "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）"},
 
 	// ==================== 模型服务与显存守卫 ====================
 	// llama.cpp 本地代理（同源 /v1，端口随 BasicPort）+ 显存守卫（阈值触发卸载已加载模型）

@@ -128,4 +128,7 @@ type GenerateTask struct {
 	Error string `json:"error"`
 	// AllowSuperResolution 允许超分
 	AllowSuperResolution bool `json:"allow_super_resolution"`
+	// Scheme 本任务使用的绘图模型方案（创建任务时从 Go 层当前方案取值，
+	// 之后即便切换方案也不影响已入队任务）
+	Scheme string `json:"scheme"`
 }

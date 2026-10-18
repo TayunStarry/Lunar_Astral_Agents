@@ -9,6 +9,20 @@ import (
 	"strings"
 )
 
+// ModelScheme 一套绘图模型方案的原始配置（与 DiffusionScheme 一一对应）
+//
+// 扩散模型、VAE、提示词编码模型必须成套匹配，因此按方案整组声明，
+// 避免调用方把不同方案的模型混用成非法组合。
+type ModelScheme struct {
+	Label               string `json:"label"`                 // 界面显示名（空则用方案键名）
+	DiffusionModel      string `json:"diffusion_model"`       // 扩散模型路径
+	VariationalModel    string `json:"variational_model"`     // 变分模型路径
+	PromptAnalysisModel string `json:"prompt_analysis_model"` // 提示分析模型路径
+	PromptMmprojModel   string `json:"prompt_mmproj_model"`   // 多模态提示分析模型路径（可空）
+	RealESRGANModel     string `json:"real_esrgan_model"`     // 4x超分辨率模型路径（可空）
+	Steps               int    `json:"steps"`                 // 方案推荐默认步数（0=沿用 sd_steps）
+}
+
 // ModelConfig 定义模型配置的结构
 //
 // 分组严格按职责边界划分：Models 只放模型文件路径、Server 只管服务运行，
@@ -16,11 +30,15 @@ import (
 type ModelConfig struct {
 	// 模型文件路径（辅助/生成类模型；主模型服务分段在 local_data/models/models.ini）
 	Models struct {
-		DiffusionModel      string `json:"diffusion_model"`       // 扩散模型路径
-		VariationalModel    string `json:"variational_model"`     // 变分模型路径
-		PromptAnalysisModel string `json:"prompt_analysis_model"` // 提示分析模型路径
-		PromptMmprojModel   string `json:"prompt_mmproj_model"`   // 多模态提示分析模型路径
-		RealESRGANModel     string `json:"real_esrgan_model"`     // 4x超分辨率模型路径
+		// 可切换的绘图模型方案：键名（turbo / quality）→ 成套模型路径。
+		// 未配置时回退到下面的扁平模型路径，保持旧配置文件可用。
+		Schemes             map[string]ModelScheme `json:"schemes"`
+		DefaultScheme       string                 `json:"default_scheme"`        // 默认方案键名（缺省取排序后的第一个）
+		DiffusionModel      string                 `json:"diffusion_model"`       // 扩散模型路径
+		VariationalModel    string                 `json:"variational_model"`     // 变分模型路径
+		PromptAnalysisModel string                 `json:"prompt_analysis_model"` // 提示分析模型路径
+		PromptMmprojModel   string                 `json:"prompt_mmproj_model"`   // 多模态提示分析模型路径
+		RealESRGANModel     string                 `json:"real_esrgan_model"`     // 4x超分辨率模型路径
 	} `json:"models"`
 	// 服务运行与调试
 	Server struct {
@@ -269,6 +287,23 @@ func applyConfig(parameter *ModelConfig) []string {
 	// 如果配置文件中 RealESRGANModel 字段非空，则更新全局配置
 	if parameter.Models.RealESRGANModel != "" {
 		*RealESRGANModel = parameter.Models.RealESRGANModel
+	}
+	// 绘图模型方案（models.schemes）：注册后立即启用默认方案。
+	// 未配置方案时保持上面的扁平模型路径，行为与旧配置一致。
+	if len(parameter.Models.Schemes) > 0 {
+		schemes := make(map[string]DiffusionScheme, len(parameter.Models.Schemes))
+		for name, raw := range parameter.Models.Schemes {
+			schemes[name] = DiffusionScheme{
+				Label:               raw.Label,
+				DiffusionModel:      raw.DiffusionModel,
+				VariationalModel:    raw.VariationalModel,
+				PromptAnalysisModel: raw.PromptAnalysisModel,
+				PromptMmprojModel:   raw.PromptMmprojModel,
+				RealESRGANModel:     raw.RealESRGANModel,
+				Steps:               raw.Steps,
+			}
+		}
+		SetDiffusionSchemes(parameter.Models.DefaultScheme, schemes)
 	}
 
 	// ==== 记忆库模型路由（memory） ====

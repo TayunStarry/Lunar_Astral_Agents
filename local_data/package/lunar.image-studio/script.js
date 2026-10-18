@@ -27,6 +27,7 @@ const widthInput = document.getElementById('widthInput');
 const heightInput = document.getElementById('heightInput');
 const batchInput = document.getElementById('batchInput');
 const cfgInput = document.getElementById('cfgInput');
+const schemeSelect = document.getElementById('schemeSelect');
 const seedInput = document.getElementById('seedInput');
 const superResInput = document.getElementById('superResInput');
 const generateBtn = document.getElementById('generateBtn');
@@ -266,6 +267,72 @@ pickRefBtn.addEventListener('click', () => {
     refFileInput.click();
 });
 
+// ===== 模型方案（Go 层记录，与月华绘制者共享） =====
+
+/**
+ * 把方案接口响应写入下拉框
+ * @param {Object} payload - { current, default, schemes: [{name,label,default,current,steps}] }
+ * @param {boolean} syncSteps - 是否同步该方案的推荐步数到步数输入框
+ */
+function applySchemePayload(payload, syncSteps) {
+    const schemes = payload && Array.isArray(payload.schemes) ? payload.schemes : [];
+    if (schemes.length === 0) {
+        schemeSelect.innerHTML = '<option value="">默认配置</option>';
+        schemeSelect.disabled = true;
+        return;
+    }
+    schemeSelect.disabled = false;
+    schemeSelect.innerHTML = '';
+    for (const scheme of schemes) {
+        const option = document.createElement('option');
+        option.value = scheme.name;
+        option.textContent = scheme.label || scheme.name;
+        schemeSelect.appendChild(option);
+    }
+    const current = payload.current || payload.default || schemes[0].name;
+    schemeSelect.value = current;
+    if (syncSteps) {
+        const active = schemes.find(item => item.name === current);
+        if (active && active.steps > 0) stepsInput.value = active.steps;
+    }
+}
+
+/** 读取当前模型方案（页面初始化） */
+async function loadScheme() {
+    try {
+        const resp = await fetch('/generate/scheme', { cache: 'no-store' });
+        if (!resp.ok) throw new Error('读取模型方案失败（HTTP ' + resp.status + '）');
+        applySchemePayload(await resp.json(), true);
+    } catch (e) {
+        console.warn('模型方案读取失败，沿用页面默认值:', e);
+    }
+}
+
+/** 切换模型方案（状态保存在 Go 层，对智能体后续绘图同样生效） */
+async function switchScheme(name) {
+    if (!name) return;
+    try {
+        const resp = await fetch('/generate/scheme', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scheme: name })
+        });
+        if (!resp.ok) {
+            let msg = '切换模型方案失败（HTTP ' + resp.status + '）';
+            try { msg = (await resp.text()) || msg; } catch (e) { }
+            throw new Error(msg);
+        }
+        const payload = await resp.json();
+        applySchemePayload(payload, true);
+        const label = schemeSelect.selectedOptions[0] ? schemeSelect.selectedOptions[0].textContent : name;
+        showToast('已切换到「' + label + '」模型方案', 'success');
+    } catch (e) {
+        showToast(e.message, 'error');
+    }
+}
+
+schemeSelect.addEventListener('change', () => switchScheme(schemeSelect.value));
+
 // ===== 参数收集与校验 =====
 
 /** 取 32 的倍数（限制 256~2816）。依据：Qwen-Image 2.1 为 16× VAE 压缩 + 2×2 patch 的 DiT，
@@ -293,6 +360,7 @@ function collectParams() {
     return {
         prompt: prompt,
         negative_prompt: negative,
+        scheme: schemeSelect.value || undefined,
         batch_size: batch,
         width: snap32(widthInput.value, 1024),
         height: snap32(heightInput.value, 1024),
@@ -412,4 +480,5 @@ async function handleGenerate() {
 generateBtn.addEventListener('click', handleGenerate);
 
 // ===== 初始化 =====
+loadScheme();
 loadGallery(false);

@@ -44,6 +44,9 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("animatedImageToFrames", adapters.animatedImageToFrames)
 	vm.Set("generateImage", adapters.generateImage)
 	vm.Set("upscaleImage", adapters.upscaleImage)
+	// 绘图模型方案：状态记录在 Go 层，与图像工坊前端 /generate/scheme 共享
+	vm.Set("getDiffusionScheme", adapters.getDiffusionScheme)
+	vm.Set("setDiffusionScheme", adapters.setDiffusionScheme)
 	vm.Set("visionRead", adapters.visionRead)
 
 	// 注册统一资源归档层适配器（句柄 / 资源目录 / 内容仓库 / 回收，见 docs/adr/0001）
