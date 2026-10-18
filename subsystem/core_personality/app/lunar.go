@@ -96,6 +96,7 @@ func initNapcatBridge() {
 			lunarloop.EnqueueMessage(lunarloop.PostMessage{
 				Role:    "user",
 				Content: msg["content"],
+				Source:  "qq",
 			})
 		}
 	}
@@ -103,12 +104,12 @@ func initNapcatBridge() {
 	// 视频/音频地址包装为媒体URL内容项，按到达顺序写入统一未读队列
 	napcat.SendVideoToAgent = func(urls []string) {
 		for _, url := range urls {
-			lunarloop.EnqueueMediaURL("video_url", url)
+			lunarloop.EnqueueMediaURL("video_url", url, "qq")
 		}
 	}
 	napcat.SendAudioToAgent = func(urls []string) {
 		for _, url := range urls {
-			lunarloop.EnqueueMediaURL("audio_url", url)
+			lunarloop.EnqueueMediaURL("audio_url", url, "qq")
 		}
 	}
 

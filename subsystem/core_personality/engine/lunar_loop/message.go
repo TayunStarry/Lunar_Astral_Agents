@@ -7,11 +7,23 @@ import (
 	"github.com/dop251/goja"
 )
 
-func (class *Runtime) pushContext(msgType string, content string, audio string) goja.Value {
+func (class *Runtime) pushContext(call goja.FunctionCall) goja.Value {
+	msgType := call.Argument(0).String()
+	content := call.Argument(1).String()
+	audio := ""
+	if arg := call.Argument(2); arg != nil && !goja.IsUndefined(arg) && !goja.IsNull(arg) {
+		audio = arg.String()
+	}
+	// 第四个参数（可选）：是否为快速应答。QQ 桥接据此转发但不占用应答份额。
+	auto := false
+	if arg := call.Argument(3); arg != nil && !goja.IsUndefined(arg) && !goja.IsNull(arg) {
+		auto = arg.ToBoolean()
+	}
 	data := PushContextData{
 		Type:    msgType,
 		Content: content,
 		Audio:   audio,
+		Auto:    auto,
 	}
 	PushMessageFunc("context", data)
 
@@ -67,13 +79,13 @@ func EnqueueMessage(messages ...PostMessage) {
 }
 
 // EnqueueMediaURL 将视频/音频URL包装为媒体内容项，按到达顺序追加到统一未读队列
-// kind 为 "video_url"（视频）或 "audio_url"（音频）
-func EnqueueMediaURL(kind string, url string) {
+// kind 为 "video_url"（视频）或 "audio_url"（音频）；source 标记消息来源（如 qq）
+func EnqueueMediaURL(kind string, url string, source string) {
 	if kind == "video_url" {
-		EnqueueMessage(PostMessage{Role: string(RoleUser), Content: NewVideoUrlContent(url)})
+		EnqueueMessage(PostMessage{Role: string(RoleUser), Content: NewVideoUrlContent(url), Source: source})
 		return
 	}
-	EnqueueMessage(PostMessage{Role: string(RoleUser), Content: NewAudioUrlContent(url)})
+	EnqueueMessage(PostMessage{Role: string(RoleUser), Content: NewAudioUrlContent(url), Source: source})
 }
 
 // TakeUnreadContext 拉取并清空统一未读队列（互斥保护；队列为空时返回 nil）

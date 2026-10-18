@@ -80,6 +80,10 @@ var (
 	statsMu sync.RWMutex
 	// latestStats 最新状态快照
 	latestStats Snapshot
+	// buildVersionMu 保护宿主注入的构建版本号
+	buildVersionMu sync.RWMutex
+	// buildVersion 宿主注入的构建版本号（显示于「运行状态」屏）
+	buildVersion string
 	// lastProcTimes 上次采样的进程 CPU 时间（用户态+内核态，100ns 单位）
 	lastProcTimes int64
 	// lastSampleAt 上次采样时刻

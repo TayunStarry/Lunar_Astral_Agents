@@ -37,6 +37,10 @@ func main() {
 	// 日志管线安装必须最早期：接管 stdout/stderr，启动期日志不逃逸到终端
 	TuiSystem.Install()
 
+	// 构建版本号注入控制台：运行状态屏显示本次编译产物的版本
+	// （取自编译时生成并嵌入的端点自述文档 info.version）
+	TuiSystem.SetBuildVersion(server.DocsVersion())
+
 	// 注入 Gitee Release 发布通道配置（lunar_config.json release 节）。
 	// 更新包与 LTPX 应用市场共用同一仓库：仓库信息只有一套，
 	// 两条通道在仓库内以「描述标记 + 附件名前缀」区分（见 TuiSystem/channel）。

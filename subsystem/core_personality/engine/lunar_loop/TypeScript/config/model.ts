@@ -39,6 +39,8 @@ export interface TextMessage {
 	role: PostMessageRole;
 	/** 消息文本内容 */
 	content: string;
+	/** 消息来源（qq=QQ适配器；空=前端/宿主） */
+	source?: string;
 }
 
 /** 多媒体混合消息） */
@@ -47,6 +49,8 @@ export interface MultimodalMessage {
 	role: PostMessageRole;
 	/** 混合内容数组，可包含音频、图片、文本与待理解媒体URL */
 	content: Array<ImageContent | AudioContent | TextContent | VideoUrlContent | AudioUrlContent>;
+	/** 消息来源（qq=QQ适配器；空=前端/宿主） */
+	source?: string;
 }
 
 /** 工具调用响应消息 */
@@ -57,6 +61,8 @@ export interface ToolResponseMessage {
 	content: string;
 	/** 关联的工具调用 ID，必须与请求中的 ToolCall.id 对应 */
 	tool_call_id: string;
+	/** 消息来源（qq=QQ适配器；空=前端/宿主） */
+	source?: string;
 }
 
 /** 图片内容块 */

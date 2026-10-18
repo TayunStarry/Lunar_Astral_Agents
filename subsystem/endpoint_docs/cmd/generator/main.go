@@ -1,4 +1,4 @@
-﻿// 端点自述文档生成器 —— 在编译时由各项目 build.ps1 调用（go run ./cmd/generator）。
+// 端点自述文档生成器 —— 在编译时由各项目 build.ps1 调用（go run ./cmd/generator）。
 //
 // 解析项目源码中登记全部 HTTP 端点的注册表变量（SystemEndpoints），提取每个端点的
 // Path/Method/Description/Handler，生成 OpenAPI 结构（paths：路径 → 方法 → 操作）的
@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	EndpointDocs "LunarSubsystem/EndpointDocs"
 )
@@ -75,7 +76,7 @@ func main() {
 		OpenAPI: EndpointDocs.OpenAPIVersion,
 		Info: EndpointDocs.Info{
 			Title:    *display,
-			Version:  EndpointDocs.DefaultAPIVersion,
+			Version:  time.Now().Format("2006.002.1504"),
 			XService: *service,
 		},
 		Servers:  []EndpointDocs.Server{{URL: "/"}},
@@ -194,7 +195,7 @@ func containsEndpoint(endpoints []EndpointDocs.Endpoint, path string) bool {
 	return false
 }
 
-// writeJSON 以稳定格式写出文档（禁用 HTML 转义、固定缩进，保证重复构建输出一致、可提交入库）
+// writeJSON 以稳定格式写出文档（禁用 HTML 转义、固定缩进，便于阅读与版本对比）
 func writeJSON(outPath string, doc EndpointDocs.Document) error {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)

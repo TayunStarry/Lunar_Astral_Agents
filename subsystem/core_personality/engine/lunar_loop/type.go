@@ -46,7 +46,8 @@ const (
 // PostMessage 消息结构体
 type PostMessage struct {
 	Role    string `json:"role"`
-	Content any    `json:"content"` // 可以是string、[]MessageContent或MediaUrlContent
+	Content any    `json:"content"`          // 可以是string、[]MessageContent或MediaUrlContent
+	Source  string `json:"source,omitempty"` // 消息来源：qq=QQ适配器；空=前端/宿主
 }
 
 // MediaUrlPayload 媒体URL载荷（与 TS 侧多模态内容项的 URL 包装结构对齐）
@@ -100,6 +101,8 @@ type PushContextData struct {
 	Type    string `json:"type"`
 	Content string `json:"content"`
 	Audio   string `json:"audio,omitempty"`
+	// Auto 标记这条消息是「高耗时任务的快速应答」：QQ 桥接会转发但不占用应答份额
+	Auto bool `json:"auto,omitempty"`
 }
 
 // PushImageData 推送图片数据

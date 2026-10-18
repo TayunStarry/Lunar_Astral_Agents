@@ -11,7 +11,6 @@ import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { interactEvent } from './capabilities/ltp-event';
 import { queryEmotionSticker, extractTextFromMessage, syncActionsToMemory, queryBestAction } from './capabilities/memory';
 import { RandomFloat } from '../tool/math';
-import { processDecrees } from './decrees';
 
 /** 创建聊天消息 */
 async function createChatMessage(): Promise<string> {
@@ -168,12 +167,19 @@ const FAILURE_REPLY = '刚才有点走神，你再说一遍好吗？';
 export async function thoughtLoopTickEvent(): Promise<void> {
     // 如果正在思考中，直接返回
     if (GlobalConfig.reasoningInProgress) return;
+    // 新一轮思考链：快速应答与来源标记都从零开始
+    GlobalConfig.fastAckSent = false;
+    GlobalConfig.turnFromQQ = false;
     // 思考循环开始
     try {
         // 标记为思考中
         GlobalConfig.reasoningInProgress = true;
-        // 拉取外部消息
-        pullContext().forEach(message => writeMessage(message.role, message.content))
+        // 拉取外部消息；QQ 适配器消息带 source=qq，用于快速应答的应答份额判定
+        const incoming = pullContext();
+        for (const message of incoming) {
+            if ((message as { source?: string }).source === 'qq') GlobalConfig.turnFromQQ = true;
+            writeMessage(message.role, message.content);
+        }
         // ASR 资源守卫：本轮待处理消息不含语音时卸载 ASR 模型（拉取后判定，保证刚到达的语音不被误卸）
         guardASRUnload();
         /** 消息长度（统一时序队列：文本与媒体URL混排，一个队列即为全部未读） */
@@ -204,11 +210,6 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         if (feedback && Array.isArray(feedback.messages)) GlobalConfig.unreadContext = feedback.messages;
         // 阅读者智能体：处理文件导入块与引用，将结果置换到未读消息
         await processUnreadFiles();
-        // 律令指令处理：命中已定义的 <指令> 时输出默认应答（含 TTS），剔除携带律令的消息，
-        // 跳过本轮 AI 应答；未读消息中的其他内容等待下个周期再解析
-        if (processDecrees()) {
-            return;
-        }
         // 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
         await createChatMessage();
         // 如果消息响应为空：先分清「模型说没话说」与「模型根本没接通」再决定怎么回应
@@ -283,7 +284,7 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         /**
          * 思考中标记必须在**任何**退出路径上复位。
          *
-         * 历史缺陷：这条赋值写在 try/catch 之后，而 try 里有若干 `return`（空应答、律令命中），
+         * 历史缺陷：这条赋值写在 try/catch 之后，而 try 里有若干 `return`（空应答等），
          * 一旦从那里返回就永远跳过复位 —— 下一轮 tick 在入口处看到 reasoningInProgress 为 true
          * 直接 return，整个思考链就此停摆（用户实测：模型服务崩一次之后月华再也不说话，
          * 且界面上看不出一行错误）。finally 保证「只要进来过就一定退出去」。

@@ -184,6 +184,43 @@ function check(label, cond, detail) {
 	await dialogue.generateDialogue(newCache());
 	check('成功一轮会通知宿主清零失败计数', idleCount >= 1, String(idleCount));
 
+	// ==== 9. 高耗时任务快速应答：一轮一次、走 TTS、QQ 不占应答份额 ====
+	const ackPushed = [];
+	globalThis.tts = () => ['audio-b64', null];
+	globalThis.pushContext = (type, content, audio, auto) => {
+		ackPushed.push({ type, content, audio, auto });
+		return true;
+	};
+	GlobalConfig.LTPfunction.set('dispatch_painter', async () => {
+		executed++;
+		return ['画好了', ''];
+	});
+
+	ackPushed.length = 0;
+	executed = 0;
+	GlobalConfig.fastAckSent = false;
+	GlobalConfig.turnFromQQ = false;
+	GlobalConfig.unreadContext = [];
+	queue = [
+		toolCallResponse('dispatch_painter', 'paint_1'),
+		toolCallResponse('dispatch_painter', 'paint_2'),
+		textResponse('画好了'),
+	];
+	await dialogue.generateDialogue(newCache());
+	check('高耗时工具执行前发送快速应答', ackPushed.length === 1, JSON.stringify(ackPushed));
+	check('快速应答走 TTS', ackPushed[0] && ackPushed[0].audio === 'audio-b64', JSON.stringify(ackPushed[0]));
+	check('前端来源的快速应答 auto=false', ackPushed[0] && ackPushed[0].auto === false, JSON.stringify(ackPushed[0]));
+	check('同一轮多次绘图只触发一次', executed === 2 && ackPushed.length === 1, `executed=${executed}, ack=${ackPushed.length}`);
+
+	ackPushed.length = 0;
+	GlobalConfig.fastAckSent = false;
+	GlobalConfig.turnFromQQ = true;
+	GlobalConfig.unreadContext = [];
+	queue = [toolCallResponse('dispatch_painter', 'paint_3'), textResponse('画好了')];
+	await dialogue.generateDialogue(newCache());
+	check('QQ 来源的快速应答 auto=true（不占应答份额）',
+		ackPushed.length === 1 && ackPushed[0].auto === true, JSON.stringify(ackPushed));
+
 	fs.rmSync(OUT, { recursive: true, force: true });
 	console.log(failures === 0 ? '\n全部通过' : '\n' + failures + ' 项失败');
 	process.exit(failures === 0 ? 0 : 1);

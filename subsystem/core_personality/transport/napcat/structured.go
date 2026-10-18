@@ -29,8 +29,9 @@ func BridgeStructuredMessage(response ws.WSResponse) {
 		}
 		msgType, _ := dataMap["type"].(string)
 		content, _ := dataMap["content"].(string)
+		auto, _ := dataMap["auto"].(bool)
 		if content != "" {
-			go HandleAgentResponse(msgType, content)
+			go HandleAgentResponse(msgType, content, auto)
 		}
 	case "image":
 		// 图片消息：提取 base64 编码的图片列表并转发到QQ

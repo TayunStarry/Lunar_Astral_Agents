@@ -48,10 +48,15 @@ export class ModelBuilder {
 		else this.messages.push(cleaned);
 		return this;
 	}
-	/** 剥离消息中的 reasoning_content 字段，防止回传给模型触发无限推理 */
+	/**
+	 * 剥离消息中的推理内容与来源标记
+	 *
+	 * reasoning_content 回传会触发模型无限推理；source 是宿主侧的路由信息
+	 * （qq=QQ适配器），不属于模型会话内容，不能进入请求体。
+	 */
 	protected stripReasoningContent(message: PostMessage): PostMessage {
-		if ('reasoning_content' in message) {
-			const { reasoning_content, ...rest } = message as any;
+		if ('reasoning_content' in message || 'source' in message) {
+			const { reasoning_content, source, ...rest } = message as any;
 			return rest as PostMessage;
 		}
 		return message;

@@ -5,9 +5,6 @@ import "strings"
 // OpenAPIVersion 生成的文档遵循的 OpenAPI 规范版本
 const OpenAPIVersion = "3.1.0"
 
-// DefaultAPIVersion 写入 info.version 的默认文档版本号
-const DefaultAPIVersion = "1.0.0"
-
 // Endpoint 提取阶段的单个端点条目（源码注册表中的一行）
 type Endpoint struct {
 	Path        string `json:"path"`

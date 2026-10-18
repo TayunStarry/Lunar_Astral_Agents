@@ -9,6 +9,8 @@ var agentSystem = (function (exports) {
         static unreadRecords = [];
         static unreadContext = [];
         static reasoningInProgress = false;
+        static fastAckSent = false;
+        static turnFromQQ = false;
         static finalResponse = "";
         static lastFailure = "";
         static memoryReady = false;
@@ -1151,8 +1153,8 @@ var agentSystem = (function (exports) {
             return this;
         }
         stripReasoningContent(message) {
-            if ('reasoning_content' in message) {
-                const { reasoning_content, ...rest } = message;
+            if ('reasoning_content' in message || 'source' in message) {
+                const { reasoning_content, source, ...rest } = message;
                 return rest;
             }
             return message;
@@ -3340,6 +3342,61 @@ var agentSystem = (function (exports) {
 
     const dialogueBaseTools = [...agentControlTools, ...imageRecallTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
     const MAX_TOOL_ROUNDS = 5;
+    function parseToolArgs(raw) {
+        if (raw && typeof raw === 'object')
+            return raw;
+        try {
+            const parsed = JSON.parse(String(raw ?? '{}'));
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        }
+        catch {
+            return {};
+        }
+    }
+    const ACK_LEADS = ['收到', '好嘞', '交给我吧', '没问题', '这个我来'];
+    const ACK_ENDS = ['～', '，稍等我一下～', '，等我好消息～', '，一会儿就好～'];
+    const DRAW_ACTIONS = ['这就动笔', '这就开画', '马上开工', '先起个稿'];
+    const SEARCH_ACTIONS = ['这就去翻资料', '这就去查', '马上去找', '先去翻一翻'];
+    function pickAckPart(parts) {
+        return parts[RandomFloor(0, parts.length - 1)];
+    }
+    function composeAck(actions) {
+        return `${pickAckPart(ACK_LEADS)}！${pickAckPart(actions)}${pickAckPart(ACK_ENDS)}`;
+    }
+    function slowTaskAckText(functionName, rawArgs) {
+        if (functionName === 'dispatch_painter')
+            return composeAck(DRAW_ACTIONS);
+        if (functionName === 'use_the_program') {
+            const target = String(parseToolArgs(rawArgs).tool || '').trim().toLowerCase();
+            if (target === 'web_search')
+                return composeAck(SEARCH_ACTIONS);
+        }
+        return '';
+    }
+    function maybeSendFastAck(functionName, rawArgs) {
+        if (GlobalConfig.fastAckSent)
+            return;
+        const text = slowTaskAckText(functionName, rawArgs);
+        if (!text)
+            return;
+        GlobalConfig.fastAckSent = true;
+        let audio = '';
+        try {
+            const [voice, error] = tts(text);
+            if (!error && voice)
+                audio = voice;
+        }
+        catch (error) {
+            console.error('[对话者] 快速应答 TTS 失败，仅推送文本:', error);
+        }
+        try {
+            pushContext('text', text, audio, GlobalConfig.turnFromQQ);
+            console.log(`[对话者] 已发送高耗时任务快速应答: ${text}`);
+        }
+        catch (error) {
+            console.error('[对话者] 快速应答推送失败:', error);
+        }
+    }
     function describeError(error) {
         if (!error)
             return '未知错误';
@@ -3542,6 +3599,7 @@ var agentSystem = (function (exports) {
                     this.messages.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
                     continue;
                 }
+                maybeSendFastAck(functionName, functionArgs);
                 try {
                     const toolResult = await lunarToolPackage(functionArgs);
                     const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
@@ -4807,57 +4865,6 @@ var agentSystem = (function (exports) {
         return { thinkingBlocks, codeBlocks, actionBlocks, textChunks };
     }
 
-    function pushDecreeResponse(text) {
-        const [audio, err] = tts(text);
-        pushContext('text', text, (err || !audio) ? '' : audio);
-        console.log(`[律令] 默认应答: ${text}`);
-    }
-    const decreeRegistry = {
-        '全记住': () => {
-            GlobalConfig.unreadRecords.push(...dialogueRole.messages);
-            memorizerRole.persistUnreadRecords();
-            pushDecreeResponse('全部记住啦~');
-        },
-    };
-    function extractDecreeText(message) {
-        if (typeof message.content === 'string')
-            return message.content;
-        return message.content
-            .filter((c) => c.type === 'text')
-            .map((c) => c.text)
-            .join('\n');
-    }
-    function matchKnownDecrees(text) {
-        const found = [];
-        for (const tag of Object.keys(decreeRegistry)) {
-            if (text.includes(`<${tag}>`))
-                found.push(tag);
-        }
-        return found;
-    }
-    function processDecrees() {
-        let hit = false;
-        const remaining = [];
-        for (const message of GlobalConfig.unreadContext) {
-            const decrees = matchKnownDecrees(extractDecreeText(message));
-            if (decrees.length === 0) {
-                remaining.push(message);
-                continue;
-            }
-            hit = true;
-            for (const tag of decrees) {
-                try {
-                    decreeRegistry[tag](message);
-                }
-                catch (error) {
-                    console.error(`[律令] 指令 <${tag}> 执行失败:`, error);
-                }
-            }
-        }
-        GlobalConfig.unreadContext = remaining;
-        return hit;
-    }
-
     async function createChatMessage() {
         const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
         await dialogueRole.generateDialogue(cache);
@@ -4928,9 +4935,16 @@ var agentSystem = (function (exports) {
     async function thoughtLoopTickEvent() {
         if (GlobalConfig.reasoningInProgress)
             return;
+        GlobalConfig.fastAckSent = false;
+        GlobalConfig.turnFromQQ = false;
         try {
             GlobalConfig.reasoningInProgress = true;
-            pullContext().forEach(message => writeMessage(message.role, message.content));
+            const incoming = pullContext();
+            for (const message of incoming) {
+                if (message.source === 'qq')
+                    GlobalConfig.turnFromQQ = true;
+                writeMessage(message.role, message.content);
+            }
             guardASRUnload();
             const messageLength = GlobalConfig.unreadContext.length;
             if (messageLength === 0) {
@@ -4948,9 +4962,6 @@ var agentSystem = (function (exports) {
             if (feedback && Array.isArray(feedback.messages))
                 GlobalConfig.unreadContext = feedback.messages;
             await processUnreadFiles();
-            if (processDecrees()) {
-                return;
-            }
             await createChatMessage();
             if (!GlobalConfig.finalResponse.trim().length) {
                 const failure = GlobalConfig.lastFailure;

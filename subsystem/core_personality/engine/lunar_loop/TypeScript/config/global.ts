@@ -16,6 +16,10 @@ export class GlobalConfig {
 	public static unreadContext: PostMessage[] = [];
 	/** 是否正在思考中 */
 	public static reasoningInProgress: boolean = false;
+	/** 本轮思考链是否已经发过高耗时任务的快速应答（一轮仅一次） */
+	public static fastAckSent: boolean = false;
+	/** 本轮思考链是否由 QQ 适配器的消息触发（决定快速应答是否占用 QQ 应答份额） */
+	public static turnFromQQ: boolean = false;
 	/** 最终响应 */
 	public static finalResponse: string = "";
 	/**

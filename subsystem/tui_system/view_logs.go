@@ -592,9 +592,14 @@ func (m appModel) viewStats() string {
 		rightW = w - colW - 3
 	}
 
+	version := s.BuildVersion
+	if version == "" {
+		version = "未知"
+	}
 	env := []string{
 		sectionRule("运行环境", colW),
 		"",
+		labelValue("构建版本", version, keyW),
 		labelValue("运行时间", formatDuration(s.Uptime), keyW),
 		labelValue("进程 CPU", fmt.Sprintf("%.1f %%", s.CPUPercent), keyW),
 		labelValue("进程内存", fmt.Sprintf("%.1f MB", s.WorkingSetMB), keyW),

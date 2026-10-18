@@ -117,7 +117,10 @@ func NotifyAgentIdle() {
 }
 
 // HandleAgentResponse 处理智能体的文本回应，转发到对应会话目标
-func HandleAgentResponse(msgType string, content string) {
+//
+// auto=true 表示这是高耗时任务的快速应答：照常转发给 QQ 用户，但**不占用应答份额**
+// （不置 responseStarted，也不消费群聊的首次 @ 回执），真正的最终回应随后单独生成。
+func HandleAgentResponse(msgType string, content string, auto bool) {
 	flowMutex.Lock()
 	if !awaitingResponse {
 		// 无活跃QQ请求（如前端对话），不转发
@@ -125,7 +128,9 @@ func HandleAgentResponse(msgType string, content string) {
 		return
 	}
 	target := currentTarget
-	responseStarted = true
+	if !auto {
+		responseStarted = true
+	}
 	flowMutex.Unlock()
 
 	// 乐谱消息不转发
@@ -137,7 +142,7 @@ func HandleAgentResponse(msgType string, content string) {
 		LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器未连接，跳过消息转发")
 		return
 	}
-	dispatchText(target, content)
+	dispatchText(target, content, auto)
 }
 
 // HandleAgentImageResponse 处理智能体的图片回应，转发到对应会话目标
@@ -159,13 +164,18 @@ func HandleAgentImageResponse(images []string) {
 }
 
 // dispatchText 将文本回应转发到目标会话
-func dispatchText(target BridgeTarget, content string) {
+//
+// auto=true 时是快速应答：不消费群聊的首次 @ 回执，把 @ 留给真正的最终回应。
+func dispatchText(target BridgeTarget, content string, auto bool) {
 	if target.IsGroup {
 		// 被 @ 触发的回应在首次发言时自动 @ 回发起者；取出后立即清零，整个回合只附加一次
-		flowMutex.Lock()
-		replyTo := currentTarget.ReplyToUserID
-		currentTarget.ReplyToUserID = 0
-		flowMutex.Unlock()
+		replyTo := int64(0)
+		if !auto {
+			flowMutex.Lock()
+			replyTo = currentTarget.ReplyToUserID
+			currentTarget.ReplyToUserID = 0
+			flowMutex.Unlock()
+		}
 
 		if err := SendGroupTextMessage(target.ID, content, replyTo); err != nil {
 			LoggerGeneral.SubError("LunarCore", "Napcat", "转发消息到群 %d 失败: %v", target.ID, err)

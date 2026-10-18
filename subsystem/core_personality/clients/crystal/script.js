@@ -181,7 +181,7 @@ async function loadSystemPrompt() {
         SYSTEM_PROMPT = processSystemPrompt(raw);
     } catch (error) {
         console.error('Failed to load system prompt:', error);
-        SYSTEM_PROMPT = '你是琉璃，星月智能的领航员。帮助用户定位功能页面，使用 open_page 工具。';
+        SYSTEM_PROMPT = '你是琉璃，16 岁少女，星月智能的领航员，帮用户找到功能页面与应用。你不是 AI、程序或任何非人存在，被误认时立刻否认。回复默认最多 1 句话，不罗列、不反问。需要打开应用、查看或修改配置时，按【结构化操作输出规则】输出 JSON 动作。';
     }
 }
 
@@ -825,6 +825,9 @@ ${JSON.stringify(pageList, null, 2)}
 // ===== 页面打开 =====
 // 打开统一走覆盖层 iframe（与月华调用共用同一 iframe），不再整页跳转
 function openPage(page) {
+    // 手动点击或页面已打开时，取消琉璃自动进入页面的待定计时，避免重复打开
+    cancelPendingPageOpen();
+
     if (page.tags && page.url && page.url.endsWith('.md')) {
         addMessage('system', `已为您打开工具文档【${page.title}】`);
         const viewerUrl = '/file/read/package/tool_viewer/index.html?url='
@@ -890,6 +893,25 @@ function fadeOutChatModal() {
         chatModal.style.opacity = '';
         chatModal.style.transition = '';
     }, 300);
+}
+
+// 琉璃打开应用的节奏：图标高亮定位后停留 1 秒，让用户看清位置，再自动进入页面
+const PAGE_OPEN_DELAY = 1000;
+let pendingPageOpen = null;
+
+function schedulePageOpen(page) {
+    cancelPendingPageOpen();
+    pendingPageOpen = setTimeout(() => {
+        pendingPageOpen = null;
+        openPage(page);
+    }, PAGE_OPEN_DELAY);
+}
+
+function cancelPendingPageOpen() {
+    if (pendingPageOpen !== null) {
+        clearTimeout(pendingPageOpen);
+        pendingPageOpen = null;
+    }
 }
 
 // ===== 消息系统 =====
@@ -1351,8 +1373,9 @@ async function executeStructuredAction(action) {
         case 'open_page': {
             const page = pages.find(p => p.id === action.page_id);
             if (page) {
-                // 选中该应用（持续闪烁），由用户在高亮状态下再次点击进入页面
+                // 先滚动定位并高亮该应用图标，停留 3 秒让用户看清位置，再自动进入页面
                 locateAndHighlightCard(action.page_id);
+                schedulePageOpen(page);
             } else {
                 addMessage('system', '抱歉，没有找到对应的应用页面');
             }

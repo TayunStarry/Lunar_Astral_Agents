@@ -119,6 +119,7 @@ func (s ModelCallStats) SpeedTokensPerSec() float64 {
 
 // Snapshot 运行状态快照（运行状态屏渲染数据源）
 type Snapshot struct {
+	BuildVersion string         `json:"build_version"`  // 构建版本号（宿主注入，取自端点自述文档）
 	Uptime       time.Duration  `json:"uptime"`         // 运行时间
 	CPUPercent   float64        `json:"cpu_percent"`    // 进程 CPU 占用（%）
 	WorkingSetMB float64        `json:"working_set_mb"` // 进程工作集内存（MB）

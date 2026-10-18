@@ -211,8 +211,12 @@ declare global {
      * @param {string} msgType 消息类型（text=文本 / music=乐谱 / action=动作）
      * 
      * @param {string} data 消息内容
+     *
+     * @param {string} audio 语音数据（base64 WAV；空字符串表示不合成）
+     *
+     * @param {boolean} [auto=false] 是否为快速应答（QQ 桥接转发但不占用应答份额）
      */
-    function pushContext(msgType: string, data: string, audio: string): boolean;
+    function pushContext(msgType: string, data: string, audio: string, auto?: boolean): boolean;
     /**
      * 推送图片
      * 
