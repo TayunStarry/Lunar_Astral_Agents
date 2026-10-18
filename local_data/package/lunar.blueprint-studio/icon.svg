@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="蓝图系统">
+	<defs>
+		<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+			<stop offset="0" stop-color="#101a2e" />
+			<stop offset="1" stop-color="#0b1020" />
+		</linearGradient>
+		<linearGradient id="wire" x1="0" y1="0" x2="1" y2="1">
+			<stop offset="0" stop-color="#8ff5e2" />
+			<stop offset="1" stop-color="#6ea8ff" />
+		</linearGradient>
+	</defs>
+	<rect x="2" y="2" width="124" height="124" rx="26" fill="url(#bg)" />
+	<g fill="none" stroke="url(#wire)" stroke-width="4.5" stroke-linecap="round">
+		<path d="M40 38 H64 V92 H88" />
+		<path d="M40 92 H64" />
+		<path d="M64 38 V64 H88" />
+	</g>
+	<rect x="16" y="26" width="26" height="24" rx="7" fill="#2f7fe0" />
+	<rect x="16" y="80" width="26" height="24" rx="7" fill="#1d3557" stroke="#8ff5e2" stroke-width="2" />
+	<rect x="86" y="26" width="26" height="24" rx="7" fill="#1d3557" stroke="#6ea8ff" stroke-width="2" />
+	<rect x="86" y="80" width="26" height="24" rx="7" fill="#2fb59a" />
+	<circle cx="29" cy="38" r="3.4" fill="#ffffff" fill-opacity="0.85" />
+	<circle cx="99" cy="92" r="3.4" fill="#ffffff" fill-opacity="0.85" />
+</svg>

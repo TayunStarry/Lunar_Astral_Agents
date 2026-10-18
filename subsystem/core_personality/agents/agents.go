@@ -1,7 +1,7 @@
 // Package agents 收纳琉璃（Crystal）的全部内部智能体，Go 与 JS 实现同处一层：
 //
 //	agents/AutoLTP/        桌面操作智能体（Go：UIA / 输入 / 进程 / 窗口）
-//	agents/WebLTP/         网页操作智能体（Go：引擎 / 过滤 / 报告 / 缓存）
+//	agents/WebLTP/         网络搜索智能体（Go：引擎 / 过滤 / 文本摘要 / 报告 / 缓存）
 //	agents/*.js            页面注入型智能体（JS：Mini-LTP / Self-LTP / SharedInput）
 //
 // 之所以把 JS 脚本从"前端静态资源"里搬出来：它们不是前端页面的一部分，而是

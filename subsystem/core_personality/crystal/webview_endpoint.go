@@ -1,6 +1,6 @@
 package crystal
 
-// ==== WebView 深读代理（后端驱动的顶层 WebView 会话） ====
+// ==== WebView 网络搜索代理（后端驱动的顶层 WebView 会话） ====
 //
 // 为 AtoA 包提供「真浏览器」能力，突破内嵌 iframe 的三项跨源限制：
 //   - 顶层窗口不受 X-Frame-Options 约束，任意结果页可打开
@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-// deepreadMu 全局深读编排互斥：同一时刻只跑一次深读（会话内的 Eval 不可并发）
+// deepreadMu 全局网络搜索编排互斥：同一时刻只跑一次网络搜索（会话内的 Eval 不可并发）
 var deepreadMu sync.Mutex
 
 // webviewOpenRequest POST /webview/open 请求体
@@ -212,7 +212,7 @@ func WebViewCloseHandler(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, http.StatusOK, map[string]any{"success": err == nil, "error": errString(err)})
 }
 
-// ==== 深读编排 ====
+// ==== 网络搜索编排 ====
 
 // webviewDeepReadRequest POST /webview/deepread 请求体
 type webviewDeepReadRequest struct {
@@ -242,7 +242,7 @@ type webExtract struct {
 	Text    string         `json:"text"`
 }
 
-// WebViewDeepReadHandler 深读编排：导航 → 就绪 → 元素提取（可滚动） → 截图 → 模型摘要
+// WebViewDeepReadHandler 网络搜索编排：导航 → 就绪 → 元素提取（可滚动） → 截图 → 模型摘要
 func WebViewDeepReadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -336,12 +336,12 @@ func WebViewDeepReadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	resp["elapsed_ms"] = time.Since(started).Milliseconds()
-	LoggerGeneral.Info("CrystalAstral", "深读代理完成 url=%s kind=%s results=%d summary=%v elapsed=%s",
+	LoggerGeneral.Info("CrystalAstral", "网络搜索代理完成 url=%s kind=%s results=%d summary=%v elapsed=%s",
 		req.URL, page.Kind, len(page.Results), resp["summary"] != nil, time.Since(started).Truncate(time.Millisecond))
 	jsonOK(w, http.StatusOK, resp)
 }
 
-// ensureWebviewSession 解析/创建深读会话（显式 session_id → 最近会话 → 新开窗口）
+// ensureWebviewSession 解析/创建网络搜索会话（显式 session_id → 最近会话 → 新开窗口）
 func ensureWebviewSession(sessionID string) (*BrowserClient.WebViewSession, error) {
 	if sessionID != "" {
 		if sess, ok := BrowserClient.GetWebViewSession(sessionID); ok && sess.IsAlive() {
@@ -352,7 +352,7 @@ func ensureWebviewSession(sessionID string) (*BrowserClient.WebViewSession, erro
 	if sess, ok := BrowserClient.LatestWebViewSession(); ok {
 		return sess, nil
 	}
-	sess, err := BrowserClient.OpenWebViewSession("", "琉璃 · 深读代理", 1280, 860)
+	sess, err := BrowserClient.OpenWebViewSession("", "琉璃 · 网络搜索代理", 1280, 860)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +472,7 @@ func webviewSessionScreenshot(sess *BrowserClient.WebViewSession, quality int) (
 
 // ==== 模型摘要（元素识别结果 → 中文要点） ====
 
-// webChatMessage /v1 协议对话消息（深读摘要只需文本）
+// webChatMessage /v1 协议对话消息（网络搜索摘要只需文本）
 type webChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`

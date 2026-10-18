@@ -256,7 +256,7 @@ var agentSystem = (function (exports) {
     }
 
     const IMAGE_WINDOW_SIZE = 20;
-    const VISION_READ_PATH = '/file/read-multimodal/';
+    const VISION_READ_PATH$1 = '/file/read-multimodal/';
     const TAG_PATTERN = /^@[A-Z]\.\d{3,}$/;
     function guessImageExt(source) {
         const lower = (source || '').toLowerCase();
@@ -294,7 +294,7 @@ var agentSystem = (function (exports) {
             const lower = source.toLowerCase();
             if (lower.startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(ext => lower.endsWith(ext)))
                 continue;
-            if (lower.includes(VISION_READ_PATH))
+            if (lower.includes(VISION_READ_PATH$1))
                 continue;
             const admitted = admitImageDataURI(source, `image${guessImageExt(source)}`);
             if (!admitted?.handle || !admitted.blob_path) {
@@ -315,7 +315,7 @@ var agentSystem = (function (exports) {
                     return dataURI;
                 console.error('[图片标签] 视觉读取失败，退化为端点 URL:', error?.message ?? String(error));
             }
-            return `${url()[0]}${VISION_READ_PATH}${blobPath}?tag=${encodeURIComponent(handle)}`;
+            return `${url()[0]}${VISION_READ_PATH$1}${blobPath}?tag=${encodeURIComponent(handle)}`;
         }
         catch (error) {
             console.error('[图片标签] 生成视觉引用失败:', error);
@@ -966,6 +966,370 @@ var agentSystem = (function (exports) {
     GlobalConfig.LTPfunction.set('delete_schedule', handleDeleteSchedule);
     GlobalConfig.LTPfunction.set('query_schedule', handleQuerySchedule);
 
+    const VISION_READ_PATH = '/file/read-multimodal/';
+    const FILE_READ_PATH = '/file/read/';
+    function pathPartOf(source) {
+        return String(source || '').split('?')[0].split('#')[0];
+    }
+    function toDisplaySource(source) {
+        const raw = String(source || '');
+        if (!raw)
+            return '';
+        if (raw.startsWith('data:') || raw.startsWith('blob:'))
+            return raw;
+        const path = pathPartOf(raw);
+        const localIndex = path.indexOf(FILE_READ_PATH);
+        if (localIndex >= 0)
+            return path.slice(localIndex);
+        const visionIndex = path.indexOf(VISION_READ_PATH);
+        if (visionIndex >= 0) {
+            return FILE_READ_PATH + path.slice(visionIndex + VISION_READ_PATH.length);
+        }
+        if (path.startsWith('multimedia/'))
+            return FILE_READ_PATH + path;
+        return raw;
+    }
+    function toVisionSource(source) {
+        const raw = String(source || '');
+        if (!raw || raw.startsWith('data:') || raw.startsWith('blob:'))
+            return '';
+        const path = pathPartOf(raw);
+        const visionIndex = path.indexOf(VISION_READ_PATH);
+        if (visionIndex >= 0)
+            return url()[0] + path.slice(visionIndex);
+        const readIndex = path.indexOf(FILE_READ_PATH);
+        if (readIndex >= 0) {
+            const rel = path.slice(readIndex + FILE_READ_PATH.length);
+            if (!rel.startsWith('multimedia/'))
+                return '';
+            return `${url()[0]}${VISION_READ_PATH}${rel}`;
+        }
+        if (path.startsWith('multimedia/'))
+            return `${url()[0]}${VISION_READ_PATH}${path}`;
+        return '';
+    }
+    function localPathToReadURL(source) {
+        if (!source)
+            return '';
+        const normalized = String(source).replace(/\\/g, '/').split('?')[0];
+        const marker = normalized.toLowerCase().lastIndexOf('/multimedia/');
+        const rel = marker >= 0
+            ? normalized.slice(marker + 1)
+            : (normalized.toLowerCase().startsWith('multimedia/') ? normalized : '');
+        return rel ? FILE_READ_PATH + rel : '';
+    }
+    function fileNameOf(source) {
+        const path = pathPartOf(String(source || ''));
+        const name = path.slice(path.lastIndexOf('/') + 1);
+        return name || '文件';
+    }
+    function stripUserPrefix(text) {
+        return String(text || '').replace(/^\[用户: [^\]]*\]:\s*/, '');
+    }
+    function guessImageMime(base64) {
+        const head = String(base64 || '').slice(0, 16);
+        if (head.startsWith('/9j/'))
+            return 'image/jpeg';
+        if (head.startsWith('iVBOR'))
+            return 'image/png';
+        if (head.startsWith('R0lG'))
+            return 'image/gif';
+        if (head.startsWith('UklGR'))
+            return 'image/webp';
+        if (head.startsWith('Qk'))
+            return 'image/bmp';
+        return 'image/png';
+    }
+    function saveBase64Media(base64, mime, kind) {
+        const raw = String(base64 || '');
+        if (!raw)
+            return '';
+        const match = /^data:([^;,]+);base64,(.*)$/s.exec(raw);
+        const data = match ? match[2] : raw;
+        const contentType = match ? match[1] : (kind === 'voice' ? mime : guessImageMime(data));
+        try {
+            const binary = atob(data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++)
+                bytes[i] = binary.charCodeAt(i);
+            const extMap = {
+                'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/bmp': 'bmp',
+                'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/flac': 'flac', 'audio/ogg': 'ogg',
+            };
+            const ext = extMap[contentType] || 'bin';
+            const name = `multimedia/cache/${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+            const [, , error] = saveFile(name, true, bytes);
+            if (error) {
+                console.warn('[对话缓存] 媒体落盘失败:', error);
+                return raw.startsWith('data:') ? raw : '';
+            }
+            return FILE_READ_PATH + name;
+        }
+        catch (error) {
+            console.warn('[对话缓存] 媒体解码失败:', error);
+            return '';
+        }
+    }
+
+    const CACHE_FILE = 'database/messages.json';
+    const MAX_CACHE_MESSAGES = 48;
+    let cachedMessages = [];
+    let lastSnapshot = '';
+    function newId$1() {
+        return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+    function trimCache() {
+        if (cachedMessages.length > MAX_CACHE_MESSAGES)
+            cachedMessages = cachedMessages.slice(-MAX_CACHE_MESSAGES);
+    }
+    function appendCachedMessage(record) {
+        cachedMessages.push(record);
+        trimCache();
+    }
+    function persistConversation() {
+        trimCache();
+        const text = JSON.stringify(cachedMessages);
+        if (text === lastSnapshot)
+            return;
+        try {
+            const [, , error] = saveFile(CACHE_FILE, true, text);
+            if (error) {
+                console.warn('[对话缓存] 写入失败:', error);
+                return;
+            }
+            lastSnapshot = text;
+        }
+        catch (error) {
+            console.warn('[对话缓存] 写入异常:', error);
+        }
+    }
+    function normalizeRecord(raw) {
+        if (!raw || (raw.role !== 'user' && raw.role !== 'assistant'))
+            return null;
+        return {
+            id: typeof raw.id === 'string' && raw.id ? raw.id : newId$1(),
+            role: raw.role,
+            categories: Array.isArray(raw.categories) ? raw.categories.map(String) : ['text'],
+            content: typeof raw.content === 'string' ? raw.content : '',
+            attachments: Array.isArray(raw.attachments) ? raw.attachments : undefined,
+            imageSrc: typeof raw.imageSrc === 'string' ? raw.imageSrc : undefined,
+            imageLabel: typeof raw.imageLabel === 'string' ? raw.imageLabel : undefined,
+            audio: typeof raw.audio === 'string' ? raw.audio : undefined,
+            abcNotation: typeof raw.abcNotation === 'string' ? raw.abcNotation : undefined,
+            actionType: typeof raw.actionType === 'string' ? raw.actionType : undefined,
+            fileRef: typeof raw.fileRef === 'string' ? raw.fileRef : undefined,
+            fileLabel: typeof raw.fileLabel === 'string' ? raw.fileLabel : undefined,
+            timestamp: Number(raw.timestamp) || Date.now(),
+        };
+    }
+    function cachedToContext(record) {
+        if (record.role === 'user') {
+            const text = stripUserPrefix(record.content);
+            const blocks = [];
+            if (text)
+                blocks.push({ type: 'text', text });
+            for (const attachment of record.attachments || []) {
+                if (attachment.type === 'image') {
+                    const vision = toVisionSource(attachment.src);
+                    if (vision)
+                        blocks.push({ type: 'image_url', image_url: { url: vision } });
+                }
+                else if (attachment.type === 'video') {
+                    const display = toDisplaySource(attachment.src);
+                    if (display.startsWith('/file/read/'))
+                        blocks.push({ type: 'video_url', video_url: { url: url()[0] + display } });
+                }
+            }
+            if (!blocks.length)
+                return text ? { role: 'user', content: text } : null;
+            if (blocks.length === 1 && blocks[0].type === 'text')
+                return { role: 'user', content: blocks[0].text };
+            return { role: 'user', content: blocks };
+        }
+        if (record.categories.includes('image') || record.categories.includes('action') || record.abcNotation)
+            return null;
+        const text = String(record.content || '').trim();
+        if (!text)
+            return null;
+        return { role: 'assistant', content: text };
+    }
+    function initConversationCache(loadContext) {
+        try {
+            const [content, error] = readTextFile(CACHE_FILE);
+            if (error || !content)
+                return;
+            const parsed = JSON.parse(content);
+            if (!Array.isArray(parsed))
+                return;
+            cachedMessages = parsed
+                .map(normalizeRecord)
+                .filter((item) => !!item)
+                .slice(-MAX_CACHE_MESSAGES);
+            let migrated = false;
+            for (const record of cachedMessages) {
+                if (record.role === 'assistant' && record.imageSrc && record.imageSrc.startsWith('data:image/')) {
+                    const saved = saveBase64Media(record.imageSrc, 'image/jpeg', 'image');
+                    if (saved) {
+                        record.imageSrc = saved;
+                        migrated = true;
+                    }
+                }
+            }
+            lastSnapshot = migrated ? '' : JSON.stringify(cachedMessages);
+            if (migrated)
+                persistConversation();
+            const context = cachedMessages
+                .map(cachedToContext)
+                .filter((item) => !!item);
+            if (context.length)
+                loadContext(context);
+            console.log(`[对话缓存] 已载入 ${context.length} 条近期记忆`);
+        }
+        catch (error) {
+            console.warn('[对话缓存] 载入失败:', error);
+        }
+    }
+
+    function newId() {
+        return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+    function buildUserRecord(content) {
+        const attachments = [];
+        const texts = [];
+        let hasImage = false;
+        let hasVoice = false;
+        const pushAttachment = (type, source, label) => {
+            const src = toDisplaySource(source);
+            if (!src)
+                return;
+            attachments.push({ type, src, label: label || fileNameOf(src) });
+        };
+        if (typeof content === 'string')
+            texts.push(stripUserPrefix(content));
+        else if (Array.isArray(content)) {
+            for (const item of content) {
+                if (!item)
+                    continue;
+                if (item.type === 'text') {
+                    const text = stripUserPrefix(String(item.text || ''));
+                    if (!text || text === '[视频]' || text === '[语音]')
+                        continue;
+                    texts.push(text);
+                }
+                else if (item.type === 'image_url') {
+                    pushAttachment('image', item.image_url?.url || '');
+                    hasImage = true;
+                }
+                else if (item.type === 'video_url') {
+                    pushAttachment('video', item.video_url?.url || '');
+                    hasImage = true;
+                }
+                else if (item.type === 'input_audio') {
+                    const src = saveBase64Media(item.input_audio?.data || '', `audio/${item.input_audio?.format || 'wav'}`, 'voice');
+                    if (src) {
+                        attachments.push({ type: 'audio', src, label: '语音' });
+                        hasVoice = true;
+                    }
+                }
+                else if (item.type === 'audio_url') {
+                    pushAttachment('audio', item.audio_url?.url || '', '语音');
+                    hasVoice = true;
+                }
+            }
+        }
+        const text = texts.join('\n').trim();
+        if (!text && !attachments.length)
+            return null;
+        const categories = [];
+        if (text)
+            categories.push('text');
+        if (hasImage)
+            categories.push('image');
+        if (hasVoice)
+            categories.push('voice');
+        if (/@[DIVAT]\.\d{3,}/.test(text))
+            categories.push('file');
+        return {
+            id: newId(),
+            role: 'user',
+            categories: categories.length ? categories : ['text'],
+            content: text,
+            attachments: attachments.length ? attachments : undefined,
+            timestamp: Date.now(),
+        };
+    }
+    function appendUserMessage(content) {
+        const record = buildUserRecord(content);
+        if (!record)
+            return;
+        appendCachedMessage(record);
+        persistConversation();
+    }
+    function recordAssistantContext(type, content, audio) {
+        if (type === 'music_audio')
+            return;
+        const base = {
+            id: newId(),
+            role: 'assistant',
+            categories: ['text'],
+            content: String(content || ''),
+            timestamp: Date.now(),
+        };
+        if (type === 'music') {
+            base.categories = ['music'];
+            base.content = '';
+            base.abcNotation = String(content || '');
+        }
+        else if (type === 'action') {
+            base.categories = ['action'];
+            base.actionType = type;
+        }
+        else if (type === 'text') {
+            if (audio) {
+                base.categories = ['text', 'voice'];
+                base.audio = audio;
+            }
+            const notice = /^\[已收录\]\s*(@[DIVAT]\.\d{3,})\s*(.*)$/.exec(base.content.trim());
+            if (notice) {
+                base.categories = ['text', 'file'];
+                base.fileRef = notice[1];
+                base.fileLabel = notice[2] || notice[1];
+            }
+        }
+        else {
+            base.categories = [type];
+        }
+        appendCachedMessage(base);
+    }
+    function pushAssistantContext(type, content, audio, auto) {
+        const ok = pushContext(type, content, audio, auto);
+        recordAssistantContext(type, content, audio);
+        persistConversation();
+        return ok;
+    }
+    function pushAssistantImage(images, isSticker, sourcePaths) {
+        const ok = pushImage(images, isSticker);
+        (images || []).forEach((image, index) => {
+            if (!image)
+                return;
+            const hint = sourcePaths && sourcePaths[index] ? localPathToReadURL(sourcePaths[index]) : '';
+            const src = hint || saveBase64Media(image, 'image/jpeg', isSticker ? 'sticker' : 'image');
+            if (!src)
+                return;
+            appendCachedMessage({
+                id: newId(),
+                role: 'assistant',
+                categories: ['image'],
+                content: '',
+                imageSrc: src,
+                imageLabel: isSticker ? '表情包' : '图片',
+                timestamp: Date.now(),
+            });
+        });
+        persistConversation();
+        return ok;
+    }
+
     const screenshotTools = [
         {
             type: "function",
@@ -1047,7 +1411,7 @@ var agentSystem = (function (exports) {
         const firstFrame = results[0];
         console.log(`截图处理成功: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
         const base64List = results.map((r) => r.base64);
-        pushImage(base64List);
+        pushAssistantImage(base64List);
         console.log(`图片已推送: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
         const sizeInfo = `${firstFrame.width}x${firstFrame.height}`;
         const frameInfo = results.length > 1 ? `（共${results.length}帧）` : '';
@@ -1243,7 +1607,7 @@ var agentSystem = (function (exports) {
     }
     function mediaRoleContext() {
         if (!mediaRoles)
-            throw new Error('媒体角色尚未注入（roles.ts 未初始化）');
+            throw new Error('媒体角色尚未注入（roles/index.ts 未初始化）');
         return mediaRoles;
     }
 
@@ -1848,6 +2212,28 @@ var agentSystem = (function (exports) {
         }
     }
 
+    const RATIO_PARAM = {
+        type: "string",
+        enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
+        description: "画面比例预设。人物/物品用 2:3 或 3:4，风景/横构图用 3:2 或 16:9，方形构图用 1:1"
+    };
+    const STEPS_PARAM = {
+        type: "number",
+        description: "迭代步数，取值 8~60：quality 方案建议 30~60（常规 40，精细 50~60）；turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加，不影响构图"
+    };
+    const NEGATIVE_PROMPT_PARAM = {
+        type: "string",
+        description: "负面提示文本，用于排除不希望出现的元素"
+    };
+    const CFG_SCALE_PARAM = {
+        type: "number",
+        description: "提示词引导系数（0~2），默认 1.0。当前为引导蒸馏模型，保持 1.0；调高会发灰、过曝、出现塑料感"
+    };
+    const SUPER_RESOLUTION_PARAM = {
+        type: "boolean",
+        description: "生成完成后追加 RealESRGAN 超分辨率重建（4x），提升清晰度与细节。用户要求高清、精细画质时开启，耗时增加"
+    };
+
     const generationTools = [
         {
             type: "function",
@@ -1862,26 +2248,13 @@ var agentSystem = (function (exports) {
                             description: "图像生成的正向描述文本"
                         },
                         "ratio": {
-                            type: "string",
-                            enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                            description: "画面比例预设,默认 1:1。按题材选择:人物/物品用 2:3 或 3:4,风景/横构图用 3:2 或 16:9,方形构图用 1:1。"
+                            ...RATIO_PARAM,
+                            description: RATIO_PARAM.description + "；缺省 1:1"
                         },
-                        "steps": {
-                            type: "number",
-                            description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
-                        },
-                        "negative_prompt": {
-                            type: "string",
-                            description: "负面提示文本,用于排除图像中不希望出现的元素"
-                        },
-                        "cfg_scale": {
-                            type: "number",
-                            description: "提示词权重调节参数(0~2),默认值为 1.0"
-                        },
-                        "super_resolution": {
-                            type: "boolean",
-                            description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-                        }
+                        "steps": STEPS_PARAM,
+                        "negative_prompt": NEGATIVE_PROMPT_PARAM,
+                        "cfg_scale": CFG_SCALE_PARAM,
+                        "super_resolution": SUPER_RESOLUTION_PARAM
                     },
                     required: [
                         "prompt"
@@ -1905,22 +2278,16 @@ var agentSystem = (function (exports) {
                             type: "number",
                             description: "图生图强度,取值范围 0 到 1,越大越偏离参考图。必须由你根据创作意图指定:只改画风/光照/质感用 0.2~0.4;换服饰/换配色/微调细节用 0.4~0.6;换背景/换地点/大幅改场景 用 0.8~0.9 推荐 0.85;替换画面里的一个对象(如把北极熊换成熊猫)同样用 0.8~0.9——实测 0.65/0.75 换不掉大物体。注意:强度≥0.8 时提示词主导画面,没写进提示词的东西会消失,因此提示词必须描述整个画面(含所有要保留的主体)。缺省按中性值 0.5"
                         },
-                        "steps": {
-                            type: "number",
-                            description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
-                        },
+                        "steps": STEPS_PARAM,
                         "negative_prompt": {
-                            type: "string",
-                            description: "负面提示文本,用于排除图像中不希望出现的元素(换场景时点名去掉旧场景元素,如 beach, ocean, water, sea)"
+                            ...NEGATIVE_PROMPT_PARAM,
+                            description: NEGATIVE_PROMPT_PARAM.description + "（换场景时点名去掉旧场景元素，如 beach, ocean, water, sea）"
                         },
                         "cfg_scale": {
-                            type: "number",
-                            description: "提示词引导系数(0~2),默认 1.0。当前模型为引导蒸馏模型,图生图同样保持 1.0;调高会发灰、过曝、塑料感。需要改得更多时调 strength,不要调 cfg"
+                            ...CFG_SCALE_PARAM,
+                            description: CFG_SCALE_PARAM.description + "。需要改得更多时调 strength，不要调 cfg"
                         },
-                        "super_resolution": {
-                            type: "boolean",
-                            description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-                        }
+                        "super_resolution": SUPER_RESOLUTION_PARAM
                     },
                     required: [
                         "prompt"
@@ -1941,7 +2308,7 @@ var agentSystem = (function (exports) {
                     properties: {
                         "character": {
                             type: "string",
-                            description: "目标角色:内置角色(月华/琉璃)或已创建的自定义角色名,已内置外观,只需给出表情/姿势/环境;通用-女 / 通用-男 或临时角色必须用 appearance 描述其外观。任务里的「我」「我的自画像」一律填 月华。{characters}"
+                            description: "目标角色:内置角色(月华/琉璃)或已创建的自定义角色名,已内置外观,只需给出表情/姿势/环境;通用-女 / 通用-男 或临时角色必须用 appearance 描述其外观。{characters}"
                         },
                         "chibi": {
                             type: "boolean",
@@ -1968,26 +2335,13 @@ var agentSystem = (function (exports) {
                             description: "环境提示词,描述背景或场景。月华偏暗色与红,琉璃偏淡蓝天空与星光"
                         },
                         "ratio": {
-                            type: "string",
-                            enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                            description: "画面比例预设。缺省:全尺寸 2:3(竖版全身立绘),Q版 1:1。横版场景改 3:2 或 16:9。"
+                            ...RATIO_PARAM,
+                            description: RATIO_PARAM.description + "；缺省：全尺寸 2:3、Q 版 1:1"
                         },
-                        "steps": {
-                            type: "number",
-                            description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
-                        },
-                        "negative_prompt": {
-                            type: "string",
-                            description: "负面提示文本,用于排除图像中不希望出现的元素"
-                        },
-                        "cfg_scale": {
-                            type: "number",
-                            description: "提示词引导系数(0~2),本模型为引导蒸馏,默认 1.0,不要调高"
-                        },
-                        "super_resolution": {
-                            type: "boolean",
-                            description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-                        }
+                        "steps": STEPS_PARAM,
+                        "negative_prompt": NEGATIVE_PROMPT_PARAM,
+                        "cfg_scale": CFG_SCALE_PARAM,
+                        "super_resolution": SUPER_RESOLUTION_PARAM
                     },
                     required: [
                         "character",
@@ -2052,7 +2406,7 @@ var agentSystem = (function (exports) {
                             items: {
                                 type: "string"
                             },
-                            description: "合照参与者列表,至少一位。内置角色与已创建的自定义角色直接写名字(自动继承外观与默认服装);临时角色写完整外观描述。任务里的「我们」「我和妹妹」对应 月华、琉璃。{characters}"
+                            description: "合照参与者列表,至少一位。内置角色与已创建的自定义角色直接写名字(自动继承外观与默认服装);临时角色写完整外观描述。{characters}"
                         },
                         "chibi": {
                             type: "boolean",
@@ -2067,30 +2421,17 @@ var agentSystem = (function (exports) {
                             description: "环境提示词,描述背景环境或场景。省略时随机使用预设背景"
                         },
                         "ratio": {
-                            type: "string",
-                            enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                            description: "画面比例预设,默认 1:1。仅在未选定参考图时生效;已选定参考图时输出尺寸自动随参考图比例"
+                            ...RATIO_PARAM,
+                            description: RATIO_PARAM.description + "；缺省 1:1，已选定参考图时不生效（输出尺寸随参考图比例）"
                         },
                         "strength": {
                             type: "number",
                             description: "已选定参考图时的图生图强度,取值 0 到 1,越大越偏离参考图。保留参与者容貌建议 0.3~0.5;缺省按中性值 0.5。未选定参考图时忽略"
                         },
-                        "steps": {
-                            type: "number",
-                            description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
-                        },
-                        "negative_prompt": {
-                            type: "string",
-                            description: "负面提示文本,用于排除图像中不希望出现的元素"
-                        },
-                        "cfg_scale": {
-                            type: "number",
-                            description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
-                        },
-                        "super_resolution": {
-                            type: "boolean",
-                            description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-                        }
+                        "steps": STEPS_PARAM,
+                        "negative_prompt": NEGATIVE_PROMPT_PARAM,
+                        "cfg_scale": CFG_SCALE_PARAM,
+                        "super_resolution": SUPER_RESOLUTION_PARAM
                     },
                     required: [
                         "roles"
@@ -2222,9 +2563,15 @@ var agentSystem = (function (exports) {
         return new PromptDocument(content, file);
     }
 
+    let characterPromptsDocument = null;
+    function loadCharacterPrompts() {
+        if (!characterPromptsDocument)
+            characterPromptsDocument = loadPromptDocument('prompts/painterCharacters.md');
+        return characterPromptsDocument;
+    }
     class PainterPromptLibrary {
         commonPrompts = loadPromptDocument('prompts/painterCommon.md');
-        characterPrompts = loadPromptDocument('prompts/painterCharacters.md');
+        characterPrompts = loadCharacterPrompts();
         defaultExpressionPrompt = this.commonPrompts.list('默认表情');
         defaultPosturePrompt = this.commonPrompts.list('默认姿势');
         appearanceBasePrompt = this.characterPrompts.text('月华/基础外观');
@@ -2681,18 +3028,6 @@ var agentSystem = (function (exports) {
         return '本次任务尚未附带参考图';
     }
 
-    const FIRST_PERSON = /我|咱|自己|自画像/u;
-    const PRONOUN_NOTE = [
-        '【任务上下文】本任务由月华本人派发，描述里的第一人称指代固定如下：',
-        '「我」「我的」「自己」= 月华；「我的妹妹」「妹妹」= 琉璃；「我们」「我和妹妹」= 月华与琉璃。',
-        '画到人物时必须用 portrait / group_photo 并填写对应角色名，不要因为没听到名字就改用「通用-女」或「通用-男」。'
-    ].join('\n');
-    function decoratePainterTask(taskDescription) {
-        if (!FIRST_PERSON.test(taskDescription))
-            return taskDescription;
-        return `${PRONOUN_NOTE}\n\n${taskDescription}`;
-    }
-
     function handleDiffusionGeneration(host, args) {
         try {
             const prompt = args.prompt || '';
@@ -2923,7 +3258,7 @@ var agentSystem = (function (exports) {
             }
             if (!result || !result.base64)
                 return '超分失败：引擎返回空结果';
-            if (!pushImage([result.base64]))
+            if (!pushAssistantImage([result.base64], false, [result.path]))
                 console.warn('[绘制者] 推送超分结果到前端失败');
             return `超分成功。图片尺寸: ${result.width}x${result.height}，已推送给用户`;
         }
@@ -2933,6 +3268,12 @@ var agentSystem = (function (exports) {
         }
     }
 
+    function composePainterPrompt() {
+        const characters = loadCharacterPrompts();
+        return fileView('prompts/painterRole.md')[0].trim()
+            .split('{lunar-appearance}').join(characters.text('月华/基础外观'))
+            .split('{crystal-appearance}').join(characters.text('琉璃/基础外观'));
+    }
     class PainterRole extends CreativeRoleBase {
         roleTag = "绘制者";
         prompts = new PainterPromptLibrary();
@@ -2940,7 +3281,7 @@ var agentSystem = (function (exports) {
         reference = createReferenceState();
         resultPath = '';
         constructor() {
-            super(fileView('prompts/painterRole.md')[0].trim());
+            super(composePainterPrompt());
         }
         get referenceImage() { return this.reference.image; }
         set referenceImage(value) { this.reference.image = value; }
@@ -2960,7 +3301,7 @@ var agentSystem = (function (exports) {
             return super.createCreativeWork(taskDescription);
         }
         buildTaskContent(taskDescription) {
-            return buildReferenceTaskContent(this.reference, decoratePainterTask(taskDescription));
+            return buildReferenceTaskContent(this.reference, taskDescription);
         }
         planFor(ratio) {
             const reference = this.reference.image ? (this.reference.size || undefined) : undefined;
@@ -3017,7 +3358,7 @@ var agentSystem = (function (exports) {
             this.rememberResult(result.path);
             const stepsNote = imageParams.steps ? `，${imageParams.steps} 步` : '';
             console.log(`[绘制者] ${label}成功，尺寸: ${result.width}x${result.height}${stepsNote}${imageParams.superResolution ? '（含超分重建）' : ''}`);
-            if (!pushImage([result.base64]))
+            if (!pushAssistantImage([result.base64], false, [result.path]))
                 console.warn(`[绘制者] 推送${label}结果到前端失败`);
             return `${label}成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}${stepsNote}${imageParams.superResolution ? '，已附带超分辨率重建' : ''}`;
         }
@@ -3029,6 +3370,9 @@ var agentSystem = (function (exports) {
         }
     }
 
+    const ABC_LINE_RULE = '仅一行音符，用 | 分隔小节，以 |] 结尾';
+    const ABC_NO_HEADER_RULE = '禁止包含 X:/T:/M:/L:/Q:/K: 等头部字段与 [V:N] 声部标记';
+    const ABC_SAME_BARS_RULE = '小节数必须与主旋律完全一致、逐小节对齐';
     const musicTools = [
         {
             type: "function",
@@ -3064,7 +3408,7 @@ var agentSystem = (function (exports) {
                         },
                         "melody": {
                             type: "string",
-                            description: "主旋律ABC片段：仅一行音符，用 | 分隔小节，以 |] 结尾。禁止包含 X:/T:/M:/L:/Q:/K: 等头部字段与 [V:N] 声部标记。应有起伏与乐句呼吸感（每4-8小节一个乐句）"
+                            description: `主旋律ABC片段：${ABC_LINE_RULE}。${ABC_NO_HEADER_RULE}。应有起伏与乐句呼吸感（每4-8小节一个乐句）`
                         }
                     },
                     required: [
@@ -3088,7 +3432,7 @@ var agentSystem = (function (exports) {
                         },
                         "accompaniment": {
                             type: "string",
-                            description: "伴奏ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。和弦用方括号包裹同时发音的音符，如 [C,,E,,G,,]4 或分解和弦 C,,2 E,2 G,2 c2"
+                            description: `伴奏ABC片段：${ABC_LINE_RULE}，${ABC_SAME_BARS_RULE}。${ABC_NO_HEADER_RULE}。和弦用方括号包裹同时发音的音符，如 [C,,E,,G,,]4 或分解和弦 C,,2 E,2 G,2 c2`
                         }
                     },
                     required: [
@@ -3111,7 +3455,7 @@ var agentSystem = (function (exports) {
                         },
                         "chords": {
                             type: "string",
-                            description: "和弦进行ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。使用根音、柱式和弦或分解和弦，明确体现和声进行（如 C-F-G-C）"
+                            description: `和弦进行ABC片段：${ABC_LINE_RULE}，${ABC_SAME_BARS_RULE}。${ABC_NO_HEADER_RULE}。使用根音、柱式和弦或分解和弦，明确体现和声进行（如 C-F-G-C）`
                         }
                     },
                     required: [
@@ -3332,7 +3676,7 @@ var agentSystem = (function (exports) {
         assembleAndPush() {
             const draft = this.draft;
             const { abc, instruments } = assembleScore(draft);
-            if (!pushContext('music', abc, '')) {
+            if (!pushAssistantContext('music', abc, '')) {
                 console.warn('[演奏者] 推送乐谱到前端失败');
             }
             return {
@@ -4103,7 +4447,7 @@ var agentSystem = (function (exports) {
             console.error('[对话者] 快速应答 TTS 失败，仅推送文本:', error);
         }
         try {
-            pushContext('text', text, audio, GlobalConfig.turnFromQQ);
+            pushAssistantContext('text', text, audio, GlobalConfig.turnFromQQ);
             console.log(`[对话者] 已发送高耗时任务快速应答: ${text}`);
         }
         catch (error) {
@@ -4155,6 +4499,11 @@ var agentSystem = (function (exports) {
 
     const dialogueBaseTools = [...agentControlTools, ...imageRecallTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
     const MAX_TOOL_ROUNDS = 5;
+    function composeDialoguePrompt(appearances) {
+        return fileView('prompts/dialogueRole.md')[0]
+            .split('{lunar-appearance}').join(appearances.lunar)
+            .split('{crystal-appearance}').join(appearances.crystal);
+    }
     class DialogueRole extends ModelBuilder {
         descriptionRole;
         roleTag = "对话者";
@@ -4269,8 +4618,8 @@ var agentSystem = (function (exports) {
         async batchExecutionToolCall(state) {
             return executeToolCalls(this.messages, state);
         }
-        constructor(descriptionRole) {
-            super(fileView('prompts/dialogueRole.md')[0]);
+        constructor(descriptionRole, appearances) {
+            super(composeDialoguePrompt(appearances));
             this.descriptionRole = descriptionRole;
         }
     }
@@ -4521,12 +4870,15 @@ var agentSystem = (function (exports) {
         }
     }
 
-    const USE_THE_PROGRAM_PROMPT = '- 当被要求或需要(打开/启动/运行/使用)某个程序或操作时，必须调用工具"use_the_program"（tool 参数填目标工具名、instruction 参数填自然语言指令），不得凭空编造操作结果，必须等待工具真实返回。';
     const descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
     const memorizerRole = new MemorizerRole();
     const painterRole = new PainterRole();
     const musicianRole = new MusicianRole();
-    const dialogueRole = new DialogueRole(descriptionRole);
+    const builtinAppearances = {
+        lunar: painterRole.prompts.builtinCharacters.get('月华')?.appearance || '',
+        crystal: painterRole.prompts.builtinCharacters.get('琉璃')?.appearance || '',
+    };
+    const dialogueRole = new DialogueRole(descriptionRole, builtinAppearances);
     const perceiverRole = new PerceiverRole();
     registerMediaRoles({ perceiverRole, randomDefaultMessage });
     registerAgentTargets({ painterRole, musicianRole });
@@ -4538,7 +4890,6 @@ var agentSystem = (function (exports) {
         perceiver: { role: perceiverRole, label: '感知者' },
         description: { role: descriptionRole, label: '描述者' },
     });
-    dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
     registerRecoveryRoles({ dialogue: dialogueRole });
     const roleInstances = {
         dialogue: dialogueRole,
@@ -4844,7 +5195,7 @@ var agentSystem = (function (exports) {
         const pos = getAgentPosition();
         sendToEngine('movement', JSON.stringify({ position: { x: pos.x + RandomFloat(-0.5, 0.5), y: pos.y, z: pos.z + RandomFloat(-0.5, 0.5), }, resumeTracking: true, }));
         sendToEngine('action', JSON.stringify({ action: bestAction }));
-        pushContext('action', `月华${bestAction}了`, '');
+        pushAssistantContext('action', `月华${bestAction}了`, '');
     }
 
     function writeMessage(role, content) {
@@ -4852,6 +5203,8 @@ var agentSystem = (function (exports) {
             content = [content];
         const incoming = { role, content };
         attachImageTags(incoming);
+        if (role === 'user')
+            appendUserMessage(content);
         GlobalConfig.unreadContext.push(incoming);
         const items = typeof content === 'string' ? [{ type: 'text', text: content }] : Array.isArray(content) ? content : [];
         for (const message of items) {
@@ -4916,11 +5269,11 @@ var agentSystem = (function (exports) {
             if (!GlobalConfig.finalResponse.trim().length) {
                 const failure = GlobalConfig.lastFailure;
                 if (failure) {
-                    pushContext('text', FAILURE_REPLY, '');
+                    pushAssistantContext('text', FAILURE_REPLY, '');
                     console.warn('[思考链] 本轮应答失败:', failure);
                 }
                 else
-                    pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0]);
+                    pushAssistantContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0]);
                 return;
             }
             ;
@@ -4933,36 +5286,38 @@ var agentSystem = (function (exports) {
                 const feedback = interactEvent('take_action_before', { actions: actionBlocks }).return;
                 const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
                 await performMatchedAction(actBlocks.join(' ').trim() || validMessage);
-                pushImage([await queryEmotionSticker(validMessage)], true);
+                pushAssistantImage([await queryEmotionSticker(validMessage)], true);
             }
             else if (validMessage.length <= 36 && Math.random() < 0.15) {
                 const feedback = interactEvent('express_emotions_before', { text: validMessage }).return;
                 const emoText = (feedback && typeof feedback.text === 'string') ? feedback.text : validMessage;
-                pushImage([await queryEmotionSticker(emoText)], true);
+                pushAssistantImage([await queryEmotionSticker(emoText)], true);
             }
-            thinkingBlocks.forEach(thinking => pushContext('text', thinking, ''));
-            codeBlocks.forEach(code => pushContext('text', code, ''));
+            thinkingBlocks.forEach(thinking => pushAssistantContext('text', thinking, ''));
+            codeBlocks.forEach(code => pushAssistantContext('text', code, ''));
             let replyAudio = '';
             const [replyAudioData, replyErr] = tts(cleanTextForTTS(replyText));
             if (!replyErr && replyAudioData)
                 replyAudio = replyAudioData;
-            pushContext('text', replyText, replyAudio);
+            pushAssistantContext('text', replyText, replyAudio);
         }
         catch (error) {
             const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
             if (readErr)
                 console.error('读取提示音失败:', readErr);
             console.error('思考链异常:', `${error?.message ?? error}`, ' || ', error?.stack ?? '');
-            pushContext('text', randomDefaultMessage(), promptSound);
+            pushAssistantContext('text', randomDefaultMessage(), promptSound);
             resetAgentState();
         }
         finally {
             GlobalConfig.reasoningInProgress = false;
+            persistConversation();
         }
     }
 
     fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
     bindDumpBridge();
+    initConversationCache(messages => dialogueRole.coverContext(messages));
     setInterval(() => thoughtLoopTickEvent(), 1000);
 
     exports.LiteImageFile = LiteImageFile;

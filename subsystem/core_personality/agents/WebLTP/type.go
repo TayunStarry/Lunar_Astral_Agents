@@ -7,16 +7,16 @@ import (
 
 // reportInput 报告汇编输入
 type reportInput struct {
-	Instruction string      // 指令
-	Query       string      // 检索词
-	EngineName  string      // 胜出引擎中文名（必应/百度/搜狗，报告叙述用）
-	Engine      PageExtract // 搜索引擎提取结果
-	EngineShot  string      // 结果页首屏截图 dataURL（供视觉印证，可为空）
-	Pages       []PageIntel // 每个结果页的情报
-	Screenshots int         // 总截图张数（包含首屏截图）
-	SaveDir     string      // 保存目录（相对 LocalDir）
-	Interrupted bool        // 是否在中途被关闭
-	Elapsed     string      // 总耗时（秒）
+	Instruction   string      // 指令
+	Query         string      // 检索词
+	EngineName    string      // 胜出引擎中文名（必应/百度/搜狗，报告叙述用）
+	Engine        PageExtract // 搜索引擎提取结果
+	SearchSummary string      // 回访搜索页后的纯文本总结（可为空）
+	Pages         []PageIntel // 每个结果页的情报
+	Screenshots   int         // 总截图张数
+	SaveDir       string      // 保存目录（相对 LocalDir）
+	Interrupted   bool        // 是否在中途被关闭
+	Elapsed       string      // 总耗时（秒）
 }
 
 // pageCacheEntry 缓存条目
@@ -53,16 +53,23 @@ type scrollState struct {
 
 // Config 网络搜索配置（lunar_config.json 的 web_search 字段，缺失字段用默认值）
 type Config struct {
-	SaveScreenshots       bool   `json:"save_screenshots"`        // 是否把滚动截图保存到本地目录（false 时截图仅用于计数，不落盘）
+	SaveScreenshots       bool   `json:"save_screenshots"`        // 是否把滚动截图保存到本地目录（false 时仅按需截图用于视觉理解，不落盘）
 	ScreenshotDir         string `json:"screenshot_dir"`          // 截图保存目录（相对 LocalDir）
 	MaxPages              int    `json:"max_pages"`               // 依次进入的结果页数量上限（硬上限 10）
 	MaxResults            int    `json:"max_results"`             // 结果页元素提取条数上限
-	ResultsScrollCaptures int    `json:"results_scroll_captures"` // 搜索结果页的滚动截图张数上限
-	PageScrollCaptures    int    `json:"page_scroll_captures"`    // 单个结果页的滚动截图张数上限
+	ResultsScrollCaptures int    `json:"results_scroll_captures"` // 搜索结果页滚动截图张数上限（仅页面文本很少时启用）
+	PageScrollCaptures    int    `json:"page_scroll_captures"`    // 单个结果页滚动截图张数上限（仅页面文本很少时启用）
 	SummaryMaxChars       int    `json:"summary_max_chars"`       // 单页情报摘要的硬切断字符数（≤4096）
 	MaxRunSeconds         int    `json:"max_run_seconds"`         // 单次运行的总时长软上限（秒），超时后以已采集信息收尾
 	CacheEnabled          *bool  `json:"cache_enabled"`           // 是否启用页面摘要缓存（SQLite，knowledge.db 的 web_ltp_page_cache 表）。
 	CacheTTLDays          int    `json:"cache_ttl_days"`          // 页面摘要缓存有效期（天），超过后重新访问网页并用新摘要覆写
+
+	VisionMinChars int `json:"vision_min_chars"` // 正文少于该字数时才启用视觉理解（默认 240）
+	TextChunkChars int `json:"text_chunk_chars"` // 文本摘要的单段字符数（默认 5000）
+	TextMaxChars   int `json:"text_max_chars"`   // 单页正文提取的硬上限字符数（默认 24000）
+	TextMaxChunks  int `json:"text_max_chunks"`  // 单页最多参与摘要的文本段数（默认 4）
+	ScrollSettleMS int `json:"scroll_settle_ms"` // 每次滚动后的等待毫秒数（默认 350）
+	ScrollMaxSteps int `json:"scroll_max_steps"` // 单页滚动步数上限（默认 40）
 }
 
 // searchEngine 单个搜索引擎定义
@@ -76,10 +83,10 @@ type searchEngine struct {
 
 // searchOutcome 一次降级链搜索的胜出结果
 type searchOutcome struct {
-	Engine    searchEngine // 胜出引擎
-	URL       string       // 实际使用的检索页 URL（报告收尾回访用）
-	Extract   PageExtract  // 结果页提取（已过滤字典站并去重）
-	FirstShot string       // 结果页首屏截图 dataURL（可为空）
+	Engine     searchEngine // 胜出引擎
+	URL        string       // 实际使用的检索页 URL（报告收尾回访用）
+	Extract    PageExtract  // 结果页提取（已过滤字典站并去重）
+	SearchText string       // 搜索页正文（回访后纯文本总结用）
 }
 
 // PageIntel 单个结果页采集到的情报
@@ -88,10 +95,63 @@ type PageIntel struct {
 	URL        string // 结果页 URL
 	Domain     string // 域名（如 example.com）
 	Summary    string // 已按配置硬切断（≤4096 字符）
-	Captures   int    // 滚动截图张数（≤100）
+	Captures   int    // 滚动截图张数（按需采集）
+	TextChars  int    // 正文总字数（截断前）
+	Chunks     int    // 参与摘要的文本段数
+	Vision     bool   // 是否使用了视觉理解
 	Failed     string // 打开/提取失败原因（空表示成功）
 	SummaryErr string // 模型摘要失败原因（此时摘要为文本前段兜底）
 	Cached     bool   // 摘要来自本地缓存（未重新访问网页，Captures 为 0）
+}
+
+// SearchHit 搜索结果条目
+type SearchHit struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Snippet string `json:"snippet,omitempty"`
+}
+
+// PageExtract 页面元素提取结果
+type PageExtract struct {
+	Kind      string      `json:"kind"`
+	URL       string      `json:"url"`
+	Title     string      `json:"title"`
+	Results   []SearchHit `json:"results"`
+	Links     []SearchHit `json:"links"`
+	Text      string      `json:"text"`
+	TextChars int         `json:"textChars"` // 正文总字数（截断前）
+	Images    int         `json:"images"`    // 图片元素数量
+	Visuals   int         `json:"visuals"`   // canvas/svg/video 等视觉元素数量
+}
+
+// pageProbe 滚动前的页面体量探测（决定是否需要视觉截图）
+type pageProbe struct {
+	TextChars int     `json:"textChars"` // 正文总字数（截断前）
+	Images    int     `json:"images"`    // 图片元素数量
+	Visuals   int     `json:"visuals"`   // canvas/svg/video 等视觉元素数量
+	Height    float64 `json:"height"`    // 页面总高度（像素）
+	Viewport  float64 `json:"viewport"`  // 视口高度（像素）
+}
+
+// shotFrame 一帧滚动截图（JPEG 原始字节）
+type shotFrame struct {
+	JPEG  []byte // JPEG 编码后的截图
+	Label string // 截图标签（写盘文件名用）
+}
+
+// capturePolicy 滚动截图策略：仅在页面正文过少、确实需要视觉信息时启用
+type capturePolicy struct {
+	Enabled bool // 是否允许采集截图
+	Max     int  // 最多采集张数
+}
+
+// walkResult 一次自上而下滚动走查的结果
+type walkResult struct {
+	Steps    int         // 实际滚动步数
+	AtBottom bool        // 是否到达页面底部
+	Height   float64     // 滚动结束时的页面高度
+	Viewport float64     // 视口高度
+	Frames   []shotFrame // 按策略采集的截图（可能为空）
 }
 
 // chatMessage 聊天消息

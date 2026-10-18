@@ -1,17 +1,18 @@
 import { GlobalConfig } from '../config/global';
 import { ChatCache } from '../config/config';
 import { PostMessage } from '../config/model';
-import { checkDueItems } from '../tool/schedule';
-import { SCHEDULE_TRIGGER_PREFIX } from '../tool/schedule-defs';
-import { parseContent, cleanTextForTTS } from '../file/parse/interface';
-import { dialogueRole, randomDefaultMessage } from './roles/roles';
-import { syncLTPXRemoteStatus } from './capabilities/ltpx';
-import { interactEvent } from './capabilities/ltp-event';
-import { queryEmotionSticker } from './capabilities/memory';
-import { guardASRUnload } from './loop/guards';
-import { updatePreviousMemories } from './loop/memory';
-import { performMatchedAction } from './loop/actions';
-import { resetAgentState, writeMessage } from './loop/messages';
+import { checkDueItems } from '../tools/schedule/index';
+import { SCHEDULE_TRIGGER_PREFIX } from '../tools/schedule/defs';
+import { parseContent, cleanTextForTTS } from '../text/index';
+import { dialogueRole, randomDefaultMessage } from '../roles/index';
+import { syncLTPXRemoteStatus } from '../capabilities/ltpx';
+import { interactEvent } from '../capabilities/ltp-event';
+import { queryEmotionSticker } from '../capabilities/memory';
+import { persistConversation, pushAssistantContext, pushAssistantImage } from '../io/conversation';
+import { guardASRUnload } from './turn/guards';
+import { updatePreviousMemories } from './turn/memory';
+import { performMatchedAction } from './turn/actions';
+import { resetAgentState, writeMessage } from './turn/messages';
 
 /** 创建聊天消息 */
 async function createChatMessage(): Promise<string> {
@@ -79,11 +80,11 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             const failure = GlobalConfig.lastFailure;
             if (failure) {
                 // 推送失败回复 （不参与语音合成）
-                pushContext('text', FAILURE_REPLY, '');
+                pushAssistantContext('text', FAILURE_REPLY, '');
                 // 连续失败由宿主计数，达阈值会自动重载引擎；这里只保证本轮不把标记锁死
                 console.warn('[思考链] 本轮应答失败:', failure);
             }
-            else pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0])
+            else pushAssistantContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0])
             return
         };
         /** 解析原始文本：拆分思考区、代码块、行动区，并得到完整正文与切片 */
@@ -102,7 +103,7 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             // 以行动区内容为匹配参考文本（为空时回退正文），与动作库匹配后执行最高匹配度动作
             await performMatchedAction(actBlocks.join(' ').trim() || validMessage);
             // 从记忆库匹配表情包并推送图片数据
-            pushImage([await queryEmotionSticker(validMessage)], true);
+            pushAssistantImage([await queryEmotionSticker(validMessage)], true);
         }
         // 未解析出行动区内容，且正文长度小于等于36字时，按概率基于正文推理表情包
         else if (validMessage.length <= 36 && Math.random() < 0.15) {
@@ -110,12 +111,12 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             const feedback: { text?: string } = interactEvent('express_emotions_before', { text: validMessage }).return;
             const emoText = (feedback && typeof feedback.text === 'string') ? feedback.text : validMessage;
             // 从记忆库匹配表情包并推送图片数据
-            pushImage([await queryEmotionSticker(emoText)], true);
+            pushAssistantImage([await queryEmotionSticker(emoText)], true);
         }
         // 第一步：按顺序逐一发送思考区内容（不参与语音合成）
-        thinkingBlocks.forEach(thinking => pushContext('text', thinking, ''))
+        thinkingBlocks.forEach(thinking => pushAssistantContext('text', thinking, ''))
         // 第二步：按顺序逐一发送代码块内容（不参与语音合成）
-        codeBlocks.forEach(code => pushContext('text', code, ''))
+        codeBlocks.forEach(code => pushAssistantContext('text', code, ''))
         /** 语音合成结果 */
         let replyAudio = '';
         /** 整段正文一次合成语音 */
@@ -123,7 +124,7 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         // 如果语音合成成功，将结果赋值给replyAudio
         if (!replyErr && replyAudioData) replyAudio = replyAudioData;
         // 推送整段正文（包含显示内容和语音数据）
-        pushContext('text', replyText, replyAudio);
+        pushAssistantContext('text', replyText, replyAudio);
         // 思考链业务结束：执行周期性显存守卫（应答计数达到间隔时检查显存并按需卸载模型）
         // guardChatVRAM();
     }
@@ -135,12 +136,14 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         // 打印错误信息（Go 侧 error 需要先转成可读文本，否则只留一句 [object Object]）
         console.error('思考链异常:', `${(error as Error)?.message ?? error}`, ' || ', (error as Error)?.stack ?? '');
         // 推送兜底消息
-        pushContext('text', randomDefaultMessage(), promptSound);
+        pushAssistantContext('text', randomDefaultMessage(), promptSound);
         // 重置智能体状态
         resetAgentState();
     }
     finally {
         // 思考中标记必须在**任何**退出路径上复位。
         GlobalConfig.reasoningInProgress = false;
+        // 本轮结束后把近期记忆同步到缓存文件（推送时已写过一次，这里兜底空应答/异常路径）
+        persistConversation();
     }
 }

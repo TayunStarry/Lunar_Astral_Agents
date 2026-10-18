@@ -1,6 +1,6 @@
 import { GlobalConfig } from '../config/global';
 import { PostMessage } from '../config/model';
-import { ModelBuilder } from './base/builder';
+import { ModelBuilder } from './builder';
 
 // ==== 数据导出（TUI 检修用） ====
 //
@@ -15,7 +15,7 @@ import { ModelBuilder } from './base/builder';
 //     以便排查「模型到底看到了什么」这类问题时信息不丢失；
 //   - 图片 base64 体积巨大（单张可达数百 KB），默认截断为占位摘要，避免导出文件失控；
 //     需要原始数据时用 includeImages 开关；
-//   - 角色注册表由 roles.ts 注入（roles.ts 是本模块的调用方，反向 import 会形成循环）。
+//   - 角色注册表由 roles/index.ts 注入（roles/index.ts 是本模块的调用方，反向 import 会形成循环）。
 
 /** 单张图片 base64 保留的最大字符数（超出截断；0 表示不截断） */
 const IMAGE_KEEP_CHARS = 0;
@@ -26,10 +26,10 @@ const DUMP_MAX_CHARS = 32 * 1024 * 1024;
 /** 可导出角色：agent 名 → 实例与中文标签 */
 export type DumpRoleEntry = { role: ModelBuilder; label: string };
 
-/** 角色注册表（由 roles.ts 在模块初始化时注入，避免 data-dump → roles → data-dump 循环） */
+/** 角色注册表（由 roles/index.ts 在模块初始化时注入，避免 data-dump → roles → data-dump 循环） */
 let roleRegistry: Record<string, DumpRoleEntry> = {};
 
-/** 注入可导出角色注册表（roles.ts 调用一次） */
+/** 注入可导出角色注册表（roles/index.ts 调用一次） */
 export function registerDumpRoles(entries: Record<string, DumpRoleEntry>): void {
     roleRegistry = entries;
 }

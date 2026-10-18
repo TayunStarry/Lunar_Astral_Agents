@@ -1,12 +1,18 @@
 package WebLTP
 
-// Web-LTP 截图与页面元素提取（基于 BrowserClient.WebViewSession）
+// Web-LTP 截图与页面滚动（基于 BrowserClient.WebViewSession）
+//
+// 滚动流程统一为「从页面顶部走到底部」：每步按视口高度的 85% 下移，
+// 留出重叠区避免切断段落；滚动后等待页面稳定与懒加载长高，触底或停滞即止。
+// 截图不是必经步骤：只有页面正文很少（VisionMinChars 以下）时才按策略采集，
+// 其余场合只做文本提取，避免无意义的截图与视觉模型开销。
 
 import (
 	"LunarSubsystem/BrowserClient"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"image/jpeg"
 	"os"
 	"path/filepath"
@@ -72,15 +78,86 @@ func sanitizeFileName(s string) string {
 	return strings.Trim(s, "-")
 }
 
-// scrollByViewport 向下滚动约一屏，返回是否触底（EvalJSON 在页面上下文执行）
+// probePage 滚动前探测页面体量与视觉元素，作为「是否需要视觉截图」的依据。
+// 正文优先取 article/main/[role=main]，缺失时回退 body；
+// 同时识别真正承载滚动的元素（普通文档或 SPA 内部滚动容器），缓存到页面供后续滚动复用。
+func probePage(sess *BrowserClient.WebViewSession) (pageProbe, error) {
+	var probe pageProbe
+	raw, err := sess.EvalJSON(`return (function(){
+        function pickScroller() {
+            var doc = document.scrollingElement || document.documentElement;
+            var best = doc;
+            var bestDiff = doc ? (doc.scrollHeight - doc.clientHeight) : 0;
+            var nodes = document.querySelectorAll('body *');
+            for (var i = 0; i < nodes.length && i < 1500; i++) {
+                var n = nodes[i];
+                var style = window.getComputedStyle(n);
+                if (!style || !/(auto|scroll|overlay)/.test(style.overflowY)) continue;
+                if (n.clientHeight < 200) continue;
+                var diff = n.scrollHeight - n.clientHeight;
+                if (diff > bestDiff) { best = n; bestDiff = diff; }
+            }
+            return best || doc;
+        }
+        var el = pickScroller();
+        window.__lunarScroller = el;
+        var root = document.querySelector('article') || document.querySelector('main') || document.querySelector('[role="main"]') || document.body;
+        var text = root ? (root.innerText || root.textContent || '') : '';
+        text = text.replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+        return {
+            textChars: text.length,
+            images: document.images ? document.images.length : 0,
+            visuals: document.querySelectorAll('canvas,svg,video,figure').length,
+            height: el ? el.scrollHeight : 0,
+            viewport: el ? el.clientHeight : (window.innerHeight || 0)
+        };
+    })();`, 8*time.Second)
+	if err != nil {
+		return probe, err
+	}
+	if err := json.Unmarshal([]byte(raw), &probe); err != nil {
+		return probe, fmt.Errorf("解析页面探测结果失败: %w", err)
+	}
+	return probe, nil
+}
+
+// ensurePageTop 把页面滚动位置复位到顶部（关闭平滑滚动，保证后续偏移可精确计算）
+func ensurePageTop(sess *BrowserClient.WebViewSession) error {
+	_, err := sess.EvalJSON(`return (function(){
+        var el = (window.__lunarScroller && window.__lunarScroller.isConnected)
+            ? window.__lunarScroller
+            : (document.scrollingElement || document.documentElement);
+        try { document.documentElement.style.scrollBehavior = 'auto'; } catch(e) {}
+        try { document.body.style.scrollBehavior = 'auto'; } catch(e) {}
+        if (el) el.scrollTop = 0;
+        window.scrollTo(0, 0);
+        return {y: el ? el.scrollTop : 0};
+    })();`, 4*time.Second)
+	return err
+}
+
+// scrollByViewport 向下滚动约一屏（85% 视口），返回滚动前后位置与是否触底。
+// 优先使用 probePage 识别出的滚动容器，兼容 SPA 内部滚动区域。
 func scrollByViewport(sess *BrowserClient.WebViewSession) (scrollState, error) {
 	var st scrollState
 	raw, err := sess.EvalJSON(`return (function(){
-        var doc = document.documentElement;
-        var before = window.scrollY;
-        window.scrollBy(0, Math.round(window.innerHeight * 0.9));
-        var after = window.scrollY;
-        return {before: before, after: after, atBottom: (window.innerHeight + after) >= (doc.scrollHeight - 4), height: doc.scrollHeight};
+        var el = (window.__lunarScroller && window.__lunarScroller.isConnected)
+            ? window.__lunarScroller
+            : (document.scrollingElement || document.documentElement);
+        if (!el) return {before: 0, after: 0, atBottom: true, height: 0};
+        try { document.documentElement.style.scrollBehavior = 'auto'; } catch(e) {}
+        try { document.body.style.scrollBehavior = 'auto'; } catch(e) {}
+        var before = el.scrollTop;
+        var viewport = el.clientHeight || window.innerHeight;
+        var step = Math.max(200, Math.round(viewport * 0.85));
+        el.scrollTop = Math.min(before + step, el.scrollHeight);
+        var after = el.scrollTop;
+        return {
+            before: before,
+            after: after,
+            atBottom: (after + viewport) >= (el.scrollHeight - 4),
+            height: el.scrollHeight
+        };
     })();`, 4*time.Second)
 	if err != nil {
 		return st, err
@@ -91,91 +168,78 @@ func scrollByViewport(sess *BrowserClient.WebViewSession) (scrollState, error) {
 	return st, nil
 }
 
-// scrollToTop 回到页面顶部
-func scrollToTop(sess *BrowserClient.WebViewSession) error {
-	_, err := sess.EvalJSON(`window.scrollTo(0, 0); return JSON.stringify({y: window.scrollY});`, 4*time.Second)
-	return err
+// walkPage 从页面顶部滚动到底部；按策略顺带采集截图。
+//
+// 截图策略由 capturePolicy 决定：页面正文足够多时 Max=0，只滚动不截图；
+// 正文很少时按 Max 采集，并用 JPEG 指纹跳过完全相同的重复帧（固定悬浮层等）。
+// 每步滚动后等待 settle，让懒加载内容补进文档；页面高度增长会继续走查。
+func walkPage(sess *BrowserClient.WebViewSession, probe pageProbe, maxSteps int, settle time.Duration,
+	policy capturePolicy, label string, saver *shotSaver, deadline time.Time) walkResult {
+	res := walkResult{Height: probe.Height, Viewport: probe.Viewport}
+	if maxSteps <= 0 {
+		maxSteps = 1
+	}
+	if err := ensurePageTop(sess); err != nil {
+		return res
+	}
+
+	lastHash := uint64(0)
+	capture := func() {
+		if !policy.Enabled || len(res.Frames) >= policy.Max {
+			return
+		}
+		jpg, err := shotCapture(sess, 85)
+		if err != nil {
+			return
+		}
+		h := fnv.New64a()
+		_, _ = h.Write(jpg)
+		sum := h.Sum64()
+		if sum == lastHash {
+			return
+		}
+		lastHash = sum
+		frameLabel := fmt.Sprintf("%s-滚动%02d", label, len(res.Frames)+1)
+		saver.save(jpg, frameLabel)
+		res.Frames = append(res.Frames, shotFrame{JPEG: jpg, Label: frameLabel})
+	}
+
+	for i := 0; i < maxSteps; i++ {
+		if !sess.IsAlive() || time.Now().After(deadline) {
+			break
+		}
+		capture()
+		st, err := scrollByViewport(sess)
+		if err != nil {
+			break
+		}
+		res.Steps = i + 1
+		res.Height = st.Height
+		time.Sleep(settle)
+		if st.AtBottom {
+			res.AtBottom = true
+			capture() // 底部最后一屏也纳入视觉理解
+			break
+		}
+		if st.After <= st.Before {
+			// 无法继续下移：多为内部滚动容器或弹窗，按当前已到达位置收尾
+			break
+		}
+	}
+	return res
 }
 
-// SearchHit 搜索结果条目
-type SearchHit struct {
-	Title   string `json:"title"`
-	URL     string `json:"url"`
-	Snippet string `json:"snippet,omitempty"`
-}
-
-// PageExtract 页面元素提取结果
-type PageExtract struct {
-	Kind    string      `json:"kind"`
-	URL     string      `json:"url"`
-	Title   string      `json:"title"`
-	Results []SearchHit `json:"results"`
-	Links   []SearchHit `json:"links"`
-	Text    string      `json:"text"`
-}
-
-// extractPage 元素识别：必应结果页提取 li.b_algo；普通页提取正文与链接
-func extractPage(sess *BrowserClient.WebViewSession, maxResults int) (PageExtract, error) {
-	page := PageExtract{}
-	raw, err := sess.EvalJSON(extractScript(maxResults), 8*time.Second)
-	if err != nil {
-		return page, err
+// decideCapturePolicy 根据页面正文体量决定是否启用滚动截图：
+// 正文达到 VisionMinChars 就完全依赖文本，视觉只在「字很少」时兜底。
+func decideCapturePolicy(probe pageProbe, visionMinChars, maxShots int) capturePolicy {
+	if visionMinChars <= 0 {
+		visionMinChars = 240
 	}
-	if err := json.Unmarshal([]byte(raw), &page); err != nil {
-		return page, fmt.Errorf("解析提取结果失败: %w", err)
+	if probe.TextChars >= visionMinChars {
+		return capturePolicy{Enabled: false}
 	}
-	if page.Kind == "" {
-		page.Kind = "page"
+	if maxShots <= 0 {
+		maxShots = 3
 	}
-	if page.Results == nil {
-		page.Results = []SearchHit{}
-	}
-	if page.Links == nil {
-		page.Links = []SearchHit{}
-	}
-	return page, nil
-}
-
-func extractScript(maxResults int) string {
-	return fmt.Sprintf(`return (function(){
-    var out = { kind: 'page', url: location.href, title: document.title, results: [], links: [], text: '' };
-    var lis = document.querySelectorAll('#b_results > li.b_algo');
-    if (lis.length > 0) { out.kind = 'search'; }
-    var seen = {};
-    lis.forEach(function (li) {
-        if (out.results.length >= %d) return;
-        var a = li.querySelector('h2 a');
-        if (!a || !a.href || seen[a.href]) return;
-        var cap = li.querySelector('.b_caption p') || li.querySelector('.b_caption') || li.querySelector('p');
-        out.results.push({
-            title: (a.textContent || '').trim(),
-            url: a.href,
-            snippet: cap ? (cap.textContent || '').trim().slice(0, 320) : ''
-        });
-        seen[a.href] = 1;
-    });
-    if (out.kind === 'page') {
-        out.text = (document.body ? (document.body.innerText || '') : '').replace(/[\t ]+/g, ' ').replace(/\n{3,}/g, '\n\n').slice(0, 6000);
-        var anchors = document.querySelectorAll('a[href]');
-        for (var i = 0; i < anchors.length && out.links.length < 25; i++) {
-            var a = anchors[i];
-            var h = a.href;
-            if (!/^https?:/.test(h) || seen[h]) continue;
-            var t = (a.textContent || '').trim().replace(/\s+/g, ' ');
-            if (t.length > 8 && t.length < 120) { seen[h] = 1; out.links.push({ title: t, url: h }); }
-        }
-    }
-    return out;
-})()`, maxResults)
-}
-
-// domainOf 提取 URL 的域名（用于报告来源标注）
-func domainOf(raw string) string {
-	u := strings.TrimSpace(raw)
-	u = strings.TrimPrefix(u, "https://")
-	u = strings.TrimPrefix(u, "http://")
-	if i := strings.IndexAny(u, "/?#"); i >= 0 {
-		u = u[:i]
-	}
-	return u
+	return capturePolicy{Enabled: true, Max: maxShots}
 }

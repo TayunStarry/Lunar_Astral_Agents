@@ -63,7 +63,7 @@ func initMemoryDatabase() {
 	LoggerGeneral.Info("CorePersonality", "集合 [%s] 创建成功, 模型: %s", crystal.DefaultMemoryCollection, crystal.DefaultMemoryModelName)
 }
 
-// crystalStaticRoot 琉璃桌面的静态资源根（clients/crystal 子树，含 planning 蓝图、file-runner 编辑运行等内置子页）
+// crystalStaticRoot 琉璃桌面的静态资源根（clients/crystal 子树，含 file-runner 编辑运行等内置子页）
 func crystalStaticRoot() http.FileSystem {
 	return clients.CrystalFS()
 }

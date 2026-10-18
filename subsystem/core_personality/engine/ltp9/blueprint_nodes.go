@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-// bpNodePorts 节点端口表（同步自 assets/planning/js/node-types.js，仅端口名不含表单）。
+// bpNodePorts 节点端口表（同步自 local_data/package/lunar.blueprint-studio/js/node-types.js，仅端口名不含表单）。
 // 每类节点始终额外提供「顺序」gate 端口；数据端口缺失时 gate 即唯一端口。
 // composite 为动态端口（inMap/outMap），见 bpPortExists。
 type bpPortDef struct {

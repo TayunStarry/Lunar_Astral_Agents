@@ -111,7 +111,7 @@ func appendAtoaTools(defs []LTPXRemoteToolDef, pkgMap map[string]string, data []
 
 // appendInternalAtoaTools 扫描内嵌在琉璃前端里的内置包元数据
 //
-// 内置包与蓝图包一样随二进制发布（clients/crystal/<name>），
+// 内置包随二进制发布（clients/crystal/<name>），
 // 因此不能只扫描 local_data/package；这里从 go:embed 的文件系统读取。
 func appendInternalAtoaTools(defs []LTPXRemoteToolDef, pkgMap map[string]string) []LTPXRemoteToolDef {
 	entries, err := fs.ReadDir(clients.EmbeddedFiles, "crystal")
@@ -145,7 +145,7 @@ const operateToolDescription = "操作 Windows 系统来执行任务"
 const searchToolName = "web_search"
 
 // Web-LTP 智能体的工具描述
-const searchToolDescription = "调用(网页浏览器)去获取所需情报"
+const searchToolDescription = "网络搜索：用浏览器检索网页、从上到下阅读页面并汇总情报"
 
 // buildUseTheProgram 将扫描到的全部 AtoA 工具收敛为单一 use_the_program 聚合工具。
 // 其 description 内嵌「工具名：功能简述」清单，供模型在调用时从清单中挑取正确的 tool 参数；

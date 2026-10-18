@@ -1,0 +1,10 @@
+{
+	"id": "lunar.blueprint-studio",
+	"icon": "icon.svg",
+	"title": "蓝图系统",
+	"description": "LTP9 蓝图可视化编排：拖放节点、端口连线、参数编辑、复合节点封装、多画布保存管理，支持运行全部或单节点并实时查看引擎日志与节点状态。",
+	"tags": [
+		"Zero-LTP"
+	],
+	"background_retention": true
+}

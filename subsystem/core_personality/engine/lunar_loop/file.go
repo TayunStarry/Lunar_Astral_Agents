@@ -88,6 +88,31 @@ func (class *Runtime) readFile(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{base64Content, size, mimeType, nil})
 }
 
+// readTextFile 读取 UTF-8 文本文件（对话缓存等直接解析 JSON 的场景）
+// 返回值: [string, error] 文件文本与错误信息
+func (class *Runtime) readTextFile(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("参数不足")})
+	}
+
+	filePath, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("filePath必须是字符串")})
+	}
+
+	file, _, _, err := module.ReadFile(filePath)
+	if err != nil {
+		return class.runtime.ToValue([]any{"", err})
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("读取文件内容失败")})
+	}
+	return class.runtime.ToValue([]any{string(content), nil})
+}
+
 // fileList 适配TypeScript调用的文件列表获取功能，转换为TypeScript可处理的格式
 // 返回值: [Array<{name: string, size: number, isDir: boolean, lastModified: string, path: string}>, error] 文件列表和错误信息
 func (class *Runtime) fileList(call goja.FunctionCall) goja.Value {

@@ -133,8 +133,7 @@ async function handleSend() {
             attachments: attachments.length ? attachments : undefined,
             timestamp: Date.now()
         });
-        // 用户发送消息时触发持久化（AI 消息不再自动写盘）
-        schedulePersist();
+        // 用户发送消息仅做内存展示；聊天记录由思维链统一写入缓存文件
 
         // 推送到后端
         if (backendConnected) {
@@ -175,14 +174,5 @@ function setupInputEvents() {
         const files = e.target.files;
         if (files && files.length) addPendingFiles(Array.from(files));
         fileInput.value = '';
-    });
-    clearBtn.addEventListener('click', () => {
-        if (messages.length === 0) return;
-        messageArea.querySelectorAll('.message').forEach(el => el.remove());
-        messages = [];
-        updateEmptyState();
-        // 立即落盘：清空必须当场写入存储文件，不能等 1 分钟周期判定
-        schedulePersist(true);
-        showToast('已清空消息', 'info');
     });
 }

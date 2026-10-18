@@ -176,10 +176,6 @@
     transform: scale(1.08);
 }
 
-.delete_message_button:hover {
-    background: #dc3545 !important;
-}
-
 /* ========== 行动消息 ========== */
 .action-message .markdown-content {
     border-left: 3px solid var(--badge-action-color);

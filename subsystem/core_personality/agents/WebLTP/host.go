@@ -5,7 +5,6 @@ package WebLTP
 import (
 	"LunarSubsystem/BrowserClient"
 	"LunarSubsystem/LoggerGeneral"
-	"encoding/base64"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -69,7 +68,6 @@ func Run(instruction string) (string, error) {
 		return "", err
 	}
 	engine := outcome.Extract
-	engineShot := outcome.FirstShot
 	LoggerGeneral.Info("CrystalAstral", "Web-LTP 使用引擎 [%s]: %d 条结果", outcome.Engine.name, len(engine.Results))
 
 	// 5. 依次处理前 N 个结果页（指令可覆盖数量，硬上限 10）
@@ -118,26 +116,40 @@ func Run(instruction string) (string, error) {
 			continue
 		}
 
-		// 页面滚动截图（≤ PageScrollCaptures，触底即止）；首屏截图供摘要时视觉印证
+		// 页面阅读：先探测正文体量，再从顶部滚动到底部；
+		// 正文充足时全程只用文本，正文过少时才按需采集滚动截图供视觉理解。
+		probe, perr := probePage(sess)
+		if perr != nil {
+			LoggerGeneral.SubWarn("CrystalAstral", "WebLTP", "页面探测失败（本次按纯文本处理）: %v", perr)
+		}
+		policy := capturePolicy{}
+		if perr == nil {
+			policy = decideCapturePolicy(probe, cfg.VisionMinChars, cfg.PageScrollCaptures)
+		}
 		label := fmt.Sprintf("页面%02d-%s", i+1, intel.Domain)
-		var pageShot string
-		intel.Captures, pageShot = scrollCapture(sess, cfg.PageScrollCaptures, label, saver, deadline)
+		walk := walkPage(sess, probe, cfg.ScrollMaxSteps, time.Duration(cfg.ScrollSettleMS)*time.Millisecond,
+			policy, label, saver, deadline)
+		intel.Captures = len(walk.Frames)
 
-		// 页面内容元素提取（DOM 为主）+ 情报摘要（文本 + 首屏截图互相印证）
-		page, err := extractPage(sess, 0)
+		// 页面内容元素提取（DOM 文本为主）
+		page, err := extractPage(sess, 0, cfg.TextMaxChars)
 		if err != nil {
 			intel.Failed = "内容提取失败: " + err.Error()
 			intels = append(intels, intel)
 			continue
 		}
 		intel.Title = firstNonEmpty(page.Title, intel.Title)
+		intel.TextChars = page.TextChars
 		// 以导航后的最终 URL 为准（百度/搜狗结果为跳转链接，此处还原真实地址）
 		if u := strings.TrimSpace(page.URL); u != "" {
 			intel.URL = u
 			intel.Domain = domainOf(u)
 		}
 
-		summary, sumErr := summarizePage(query, hit, page, pageShot)
+		// 文本拼接/分块摘要；仅低文本页走视觉（附滚动截图）
+		summary, vision, chunks, sumErr := summarizePage(query, hit, page, walk.Frames, cfg)
+		intel.Vision = vision
+		intel.Chunks = chunks
 		if sumErr != nil {
 			// 模型摘要失败：以正文前段兜底（同样硬切断）
 			intel.Summary = hardCutRunes(firstNonEmpty(page.Text, "（页面无可提取文本）"), cfg.SummaryMaxChars)
@@ -154,34 +166,43 @@ func Run(instruction string) (string, error) {
 				cache.put(k2, intel.Title, intel.Domain, intel.Summary, query)
 			}
 		}
-		LoggerGeneral.Info("CrystalAstral", "Web-LTP 页面 %d/%d 完成: %s (摘要 %d 字, 截图 %d 张)",
-			len(intels), n, intel.Domain, len([]rune(intel.Summary)), intel.Captures)
+		LoggerGeneral.Info("CrystalAstral", "Web-LTP 页面 %d/%d 完成: %s (正文 %d 字, 摘要 %d 字, 分段 %d, 视觉 %v, 滚动 %d 步/截图 %d)",
+			len(intels), n, intel.Domain, intel.TextChars, len([]rune(intel.Summary)), intel.Chunks, intel.Vision, walk.Steps, intel.Captures)
 	}
 
-	// 6. 回到搜索引擎页（窗口仍存活时），并补一张引擎页截图
+	// 6. 回访搜索页：不滚动、不截图，仅做纯文本总结
+	searchSummary := ""
 	if sess.IsAlive() && !time.Now().After(deadline) {
 		if err := navTo(sess, outcome.URL, 15*time.Second, 1200*time.Millisecond); err == nil {
-			if jpg, err := shotCapture(sess, 85); err == nil {
-				saver.save(jpg, "搜索引擎页-回访")
-				if engineShot == "" {
-					engineShot = "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(jpg)
+			if sp, err := extractPage(sess, 0, cfg.TextMaxChars); err == nil {
+				if s, err := summarizeSearchPage(query, sp, engine.Results); err == nil {
+					searchSummary = s
+				} else {
+					LoggerGeneral.SubWarn("CrystalAstral", "WebLTP", "搜索页纯文本总结失败: %v", err)
 				}
 			}
 		}
 	}
+	// 回访失败时用首次进入搜索页时留下的正文兜底，保证最终总结不丢
+	if searchSummary == "" && strings.TrimSpace(outcome.SearchText) != "" {
+		fallbackPage := PageExtract{Text: outcome.SearchText, TextChars: len([]rune(outcome.SearchText))}
+		if s, err := summarizeSearchPage(query, fallbackPage, engine.Results); err == nil {
+			searchSummary = s
+		}
+	}
 
-	// 7. 汇编搜索报告（月华操作旅程口吻；附结果页首屏截图供视觉印证）
+	// 7. 汇编搜索报告（网络搜索口吻；不含截图）
 	report := composeReport(reportInput{
-		Instruction: instruction,
-		Query:       query,
-		EngineName:  engineDisplayName(outcome.Engine.name),
-		Engine:      engine,
-		EngineShot:  engineShot,
-		Pages:       intels,
-		Screenshots: saver.count,
-		SaveDir:     captureDirForReport(saver),
-		Interrupted: interrupted,
-		Elapsed:     time.Since(started).Truncate(time.Second).String(),
+		Instruction:   instruction,
+		Query:         query,
+		EngineName:    engineDisplayName(outcome.Engine.name),
+		Engine:        engine,
+		SearchSummary: searchSummary,
+		Pages:         intels,
+		Screenshots:   saver.count,
+		SaveDir:       captureDirForReport(saver),
+		Interrupted:   interrupted,
+		Elapsed:       time.Since(started).Truncate(time.Second).String(),
 	})
 	LoggerGeneral.Info("CrystalAstral", "Web-LTP 网络搜索完成: 引擎=%s, 检索词=%s, 页面=%d/%d, 截图=%d, 中断=%v, 耗时=%s",
 		outcome.Engine.name, query, len(intels), n, saver.count, interrupted, time.Since(started).Truncate(time.Second))
@@ -203,31 +224,6 @@ func navTo(sess *BrowserClient.WebViewSession, target string, readyTimeout, sett
 	}
 	time.Sleep(settle)
 	return nil
-}
-
-// scrollCapture 在当前页面执行「截图 → 下滚一屏」循环（触底或达到上限即止）。
-// 返回截图张数与首屏截图的 dataURL（供多模态模型与 DOM 文本互相印证）。
-func scrollCapture(sess *BrowserClient.WebViewSession, max int, label string, saver *shotSaver, deadline time.Time) (int, string) {
-	count := 0
-	firstDataURL := ""
-	for i := 0; i < max; i++ {
-		if !sess.IsAlive() || time.Now().After(deadline) {
-			break
-		}
-		if jpg, err := shotCapture(sess, 85); err == nil {
-			saver.save(jpg, fmt.Sprintf("%s-视口%02d", label, i+1))
-			count++
-			if firstDataURL == "" {
-				firstDataURL = "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(jpg)
-			}
-		}
-		st, err := scrollByViewport(sess)
-		if err != nil || st.AtBottom || st.After <= st.Before {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return count, firstDataURL
 }
 
 // pageCountFromInstruction 从指令中解析「前N个/页/条」的数量要求（无则 0）

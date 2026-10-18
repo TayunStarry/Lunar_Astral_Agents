@@ -11,10 +11,8 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_BASE_DELAY = 1500;
 const ASSISTANT_NAME = '月华';
 const DEFAULT_USER_NAME = '子幽';   // 配置未定义用户名时的默认用户名（气泡名与发送前缀共用）
-const MESSAGE_FILE_PATH = 'database/messages.json'; // 聊天记录存储文件（单文件，仅保留最新 MAX_PERSISTED_MESSAGES 条）
-const MAX_PERSISTED_MESSAGES = 100;
-// 聊天消息持久化判定周期（毫秒）：每 1 分钟比较一次，消息内容相对上次保存有变化才写盘
-const PERSIST_INTERVAL_MS = 60000;
+const MESSAGE_FILE_PATH = 'database/messages.json'; // 聊天记录缓存文件（由思维链写入，前端仅刷新时读取）
+const MAX_CACHED_MESSAGES = 48; // 与思维链侧 MAX_CACHE_MESSAGES 保持一致
 
 // ---------- DOM 引用 ----------
 const messageArea = document.getElementById('messageArea');
@@ -24,7 +22,6 @@ const sendButton = document.getElementById('sendButton');
 const toastContainer = document.getElementById('toastContainer');
 const dragOverlay = document.getElementById('dragOverlay');
 const themeToggle = document.getElementById('themeToggle');
-const clearBtn = document.getElementById('clearBtn');
 const attachBtn = document.getElementById('attachBtn');
 const fileInput = document.getElementById('fileInput');
 const voiceBtn = document.getElementById('voiceBtn');
@@ -78,13 +75,11 @@ let manualClose = false;
 let backendConnected = false;
 let isDarkMode = false;
 let currentTab = 'all';
-let messages = [];            // 持久化的消息对象列表
+let messages = [];            // 会话内消息对象列表（页面刷新时从思维链缓存文件载入）
 let dragCounter = 0;
 let searchQuery = '';
 let searchMatches = [];
 let currentMatchIndex = -1;
-let saveTimer = null;
-let lastPersistSnapshot = null; // 上次已成功写入磁盘的消息序列化快照，用于 1 分钟周期比对
 let mermaidInitialized = false;
 let pendingFiles = [];        // 待发送附件（悬浮气泡）
 let referencedFiles = [];     // 已加载到输入框的资源句柄（@D.003 等规范句柄）

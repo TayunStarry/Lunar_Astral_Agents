@@ -635,12 +635,6 @@ document.getElementById('addEmptyRowBtn').addEventListener('click', addEmptyRow)
 document.getElementById('removeEmptyRowBtn').addEventListener('click', removeEmptyRow);
 document.getElementById('quickSortBtn').addEventListener('click', quickSortLayout);
 
-// 蓝图系统：内置模块（琉璃 assets/planning），点击后经覆盖层 iframe 嵌入打开
-document.getElementById('planningBtn').addEventListener('click', () => {
-    addMessage('system', '已为您打开【蓝图系统】');
-    openPageInFrame('/desktop/planning/index.html', '蓝图系统');
-});
-
 // 编辑运行：内置模块（琉璃 assets/file-runner），点击后经覆盖层 iframe 嵌入打开
 document.getElementById('fileRunnerBtn').addEventListener('click', () => {
     addMessage('system', '已为您打开【编辑运行】');

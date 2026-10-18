@@ -49,8 +49,7 @@ async function sendDrawboardMessage() {
             timestamp: Date.now()
         };
         addMessage(userMsg);
-        // 用户发送消息时触发持久化（AI 消息不再自动写盘）
-        schedulePersist();
+        // 前端不再落盘：聊天记录由思维链统一写入缓存文件
 
         if (backendConnected) {
             // 发送给月华的文本带用户名前缀（与 QQ 适配器一致），本地展示不带

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "核心人格 (Core Personality)",
-    "version": "2026.291.2023",
+    "version": "2026.292.0740",
     "x-service": "CorePersonality"
   },
   "servers": [
@@ -1157,8 +1157,8 @@
     },
     "/webview/close": {
       "post": {
-        "summary": "关闭深读会话窗口",
-        "description": "关闭深读会话窗口",
+        "summary": "关闭网络搜索会话窗口",
+        "description": "关闭网络搜索会话窗口",
         "operationId": "crystal.WebViewCloseHandler",
         "x-handler": "crystal.WebViewCloseHandler",
         "responses": {
@@ -1170,8 +1170,8 @@
     },
     "/webview/deepread": {
       "post": {
-        "summary": "深读编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
-        "description": "深读编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
+        "summary": "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
+        "description": "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
         "operationId": "crystal.WebViewDeepReadHandler",
         "x-handler": "crystal.WebViewDeepReadHandler",
         "responses": {
@@ -1183,8 +1183,8 @@
     },
     "/webview/eval": {
       "post": {
-        "summary": "深读会话页面上下文执行脚本并取回 JSON 结果",
-        "description": "深读会话页面上下文执行脚本并取回 JSON 结果",
+        "summary": "网络搜索会话页面上下文执行脚本并取回 JSON 结果",
+        "description": "网络搜索会话页面上下文执行脚本并取回 JSON 结果",
         "operationId": "crystal.WebViewEvalHandler",
         "x-handler": "crystal.WebViewEvalHandler",
         "responses": {
@@ -1196,8 +1196,8 @@
     },
     "/webview/navigate": {
       "post": {
-        "summary": "深读会话导航到指定 URL 并等待就绪",
-        "description": "深读会话导航到指定 URL 并等待就绪",
+        "summary": "网络搜索会话导航到指定 URL 并等待就绪",
+        "description": "网络搜索会话导航到指定 URL 并等待就绪",
         "operationId": "crystal.WebViewNavigateHandler",
         "x-handler": "crystal.WebViewNavigateHandler",
         "responses": {
@@ -1209,8 +1209,8 @@
     },
     "/webview/open": {
       "post": {
-        "summary": "创建 WebView 深读会话窗口",
-        "description": "创建 WebView 深读会话窗口",
+        "summary": "创建 WebView 网络搜索会话窗口",
+        "description": "创建 WebView 网络搜索会话窗口",
         "operationId": "crystal.WebViewOpenHandler",
         "x-handler": "crystal.WebViewOpenHandler",
         "responses": {
@@ -1222,8 +1222,8 @@
     },
     "/webview/ready": {
       "post": {
-        "summary": "等待深读会话页面就绪并返回状态",
-        "description": "等待深读会话页面就绪并返回状态",
+        "summary": "等待网络搜索会话页面就绪并返回状态",
+        "description": "等待网络搜索会话页面就绪并返回状态",
         "operationId": "crystal.WebViewReadyHandler",
         "x-handler": "crystal.WebViewReadyHandler",
         "responses": {
@@ -1235,8 +1235,8 @@
     },
     "/webview/screenshot": {
       "post": {
-        "summary": "深读会话窗口区域截图（dataURL 返回）",
-        "description": "深读会话窗口区域截图（dataURL 返回）",
+        "summary": "网络搜索会话窗口区域截图（dataURL 返回）",
+        "description": "网络搜索会话窗口区域截图（dataURL 返回）",
         "operationId": "crystal.WebViewScreenshotHandler",
         "x-handler": "crystal.WebViewScreenshotHandler",
         "responses": {

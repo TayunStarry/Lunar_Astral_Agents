@@ -97,13 +97,7 @@ function buildActionsPanel(msg) {
     copyBtn.title = '复制';
     copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
     copyBtn.addEventListener('click', () => copyMessage(msg));
-    const delBtn = document.createElement('button');
-    delBtn.className = 'chat-action-button delete_message_button';
-    delBtn.title = '删除';
-    delBtn.innerHTML = '<i class="fas fa-trash"></i>';
-    delBtn.addEventListener('click', () => deleteMessage(msg.id));
     panel.appendChild(copyBtn);
-    panel.appendChild(delBtn);
     return panel;
 }
 

@@ -37,6 +37,14 @@ declare global {
      */
     function readFile(filePath: string): [string, number, string, Error | null];
     /**
+     * 以 UTF-8 文本读取文件（不经过 base64，适合直接解析 JSON/文本缓存）
+     *
+     * @param {string} filePath 文件路径
+     *
+     * @returns {[string, Error | null]} 包含读取结果的元组，[文件文本, 错误信息]
+     */
+    function readTextFile(filePath: string): [string, Error | null];
+    /**
      * 获取指定目录下的所有文件列表
      * 
      * @param {string} path 目录路径

@@ -45,10 +45,13 @@ func resolveModel() {
 	})
 }
 
-// textWithImage 构建图文混排的用户消息内容（dataURL 为空时退化为纯文本）
-func textWithImage(text, dataURL string) []contentPart {
+// textWithImages 构建图文混排的用户消息内容（无图片时退化为纯文本）
+func textWithImages(text string, dataURLs []string) []contentPart {
 	parts := []contentPart{{Type: "text", Text: text}}
-	if dataURL != "" {
+	for _, dataURL := range dataURLs {
+		if dataURL == "" {
+			continue
+		}
 		parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: dataURL}})
 	}
 	return parts

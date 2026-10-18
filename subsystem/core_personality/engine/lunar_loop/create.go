@@ -17,6 +17,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册文件操作适配器
 	vm.Set("saveFile", adapters.saveFile)
 	vm.Set("readFile", adapters.readFile)
+	vm.Set("readTextFile", adapters.readTextFile)
 	vm.Set("fileView", adapters.fileView)
 	vm.Set("fileList", adapters.fileList)
 	vm.Set("saveDebugFile", adapters.saveDebugFile)

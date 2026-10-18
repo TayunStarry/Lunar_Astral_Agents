@@ -4,14 +4,15 @@ package WebLTP
 // 琉璃内置的独立 LTPX AtoA 能力（同 AutoLTP 模式）：月华下发自然语言检索要求，
 // 后端独立驱动真浏览器（BrowserClient.WebViewSession）完成：
 //   搜索引擎降级链（bing → baidu → sogou，过滤字典站/工具站兜底并去重）
-//   → 结果页滚动截图 → 回到页顶
+//   → 进入搜索结果页，从上到下完整滚动（触发懒加载、补全结果）
 //   → 依次进入前 N（≤10）个结果页（跨结果页 URL 去重）
 //     → 未过期缓存命中则直接复用 SQL 摘要（knowledge.db 的 web_ltp_page_cache 表，默认 7 天，
 //       超期记录照常访问并用新摘要覆写）
-//     → 未命中则逐页滚动截图（≤10 张/页，触底即止）
-//     → 逐页情报摘要（硬切断 ≤4096 字符）；模型失败以正文前段兜底，成功后写缓存
-//   → 回到搜索引擎页
-//   → 以「月华打开了什么页面、看到了什么内容」的口吻汇编搜索报告 → 回传月华。
+//     → 未命中则从页面顶部滚动到底部，提取正文并按段落分块摘要（文本为主）
+//     → 只有正文少于 vision_min_chars 时才按需截取滚动画面，交给视觉模型补充信息
+//     → 摘要硬切断后写缓存
+//   → 回访搜索页（不滚动、不截图），做纯文本总结
+//   → 以「网络搜索」过程口吻汇编搜索报告 → 回传月华。
 // 不依赖任何前端包；业务完成后关闭浏览器页面；窗口中途被关闭则以已采集信息收尾。
 // 配置沿用主配置文件 lunar_config.json 的 web_search 字段（缺失字段使用默认值）。
 
@@ -81,6 +82,39 @@ func LoadConfig() Config {
 	if w.ScreenshotDir == "" {
 		w.ScreenshotDir = "captures/web_search"
 	}
+	if w.VisionMinChars <= 0 {
+		w.VisionMinChars = 240
+	}
+	if w.TextChunkChars < 800 {
+		w.TextChunkChars = 5000
+	}
+	if w.TextChunkChars > 8000 {
+		w.TextChunkChars = 8000
+	}
+	if w.TextMaxChars < 2000 {
+		w.TextMaxChars = 24000
+	}
+	if w.TextMaxChars > 60000 {
+		w.TextMaxChars = 60000
+	}
+	if w.TextMaxChunks <= 0 {
+		w.TextMaxChunks = 4
+	}
+	if w.TextMaxChunks > 12 {
+		w.TextMaxChunks = 12
+	}
+	if w.ScrollSettleMS < 100 {
+		w.ScrollSettleMS = 350
+	}
+	if w.ScrollSettleMS > 2000 {
+		w.ScrollSettleMS = 2000
+	}
+	if w.ScrollMaxSteps < 5 {
+		w.ScrollMaxSteps = 40
+	}
+	if w.ScrollMaxSteps > 120 {
+		w.ScrollMaxSteps = 120
+	}
 	return w
 }
 
@@ -101,6 +135,12 @@ func defaultConfig() Config {
 		SummaryMaxChars:       4096,
 		MaxRunSeconds:         360,
 		CacheTTLDays:          7,
+		VisionMinChars:        240,
+		TextChunkChars:        5000,
+		TextMaxChars:          24000,
+		TextMaxChunks:         4,
+		ScrollSettleMS:        350,
+		ScrollMaxSteps:        40,
 	}
 }
 

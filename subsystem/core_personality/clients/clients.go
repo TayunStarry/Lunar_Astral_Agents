@@ -4,7 +4,7 @@
 // 不再散落在各自人格包里：
 //
 //	clients/lunar/    月华消息终端（挂载于 /，其 mobile/ 子树即月华移动端）
-//	clients/crystal/  琉璃桌面（挂载于 /desktop/，含 planning/ 蓝图、file-runner/ 编辑运行等内置子页）
+//	clients/crystal/  琉璃桌面（挂载于 /desktop/，含 file-runner/ 编辑运行等内置子页）
 //
 // 归属原则：一个 go:embed 指令只能嵌入**本包目录之下**的文件，所以"资源树"与
 // "内嵌它的包"必须同处一层。clients 包落在 clients/clients.go 正是为此——

@@ -72,7 +72,7 @@ function renderFileRefChips() {
     });
 }
 
-// ---------- 消息增删与持久化 ----------
+// ---------- 消息增删 ----------
 async function copyMessage(msg) {
     let text = msg.content || '';
     if (!text && msg.imageSrc) text = msg.imageSrc;
@@ -81,19 +81,9 @@ async function copyMessage(msg) {
     showToast(ok ? '已复制' : '复制失败', ok ? 'success' : 'error');
 }
 
-function deleteMessage(id) {
-    const el = messageArea.querySelector(`.message[data-id="${id}"]`);
-    if (el) el.remove();
-    messages = messages.filter(m => m.id !== id);
-    updateEmptyState();
-    // 删除消息：立即保存到本地，并刷新 1 分钟持久化判定计时
-    schedulePersist(true);
-    showToast('消息已删除', 'info');
-}
-
 function addMessage(msg) {
     messages.push(msg);
-    if (messages.length > MAX_PERSISTED_MESSAGES) {
+    if (messages.length > MAX_CACHED_MESSAGES) {
         const removed = messages.shift();
         const oldEl = messageArea.querySelector(`.message[data-id="${removed.id}"]`);
         if (oldEl) oldEl.remove();
@@ -102,56 +92,10 @@ function addMessage(msg) {
     updateEmptyState();
     scrollToBottom(true);
     applyFilters();
-    // 不再在每条消息到达时立即写盘：由 1 分钟周期判定器在内容变化时统一落盘，
-    // 避免流式回复期间的高频磁盘写入；删除消息则立即保存（见 deleteMessage）
+    // 前端不再落盘：聊天记录由思维链写入 database/messages.json，页面刷新时统一读取
 }
 
-// ---------- 消息持久化（database/message/messages.json，单文件仅保留最新 MAX_PERSISTED_MESSAGES 条） ----------
-
-// 写入指定存储文件，失败仅记录不抛出，保证持久化流程不被中断
-async function writeMessageFile(path, data) {
-    try {
-        const res = await fetch('/file/write', {
-            method: 'POST',
-            headers: {
-                'X-File-Name': encodeFilePath(path),
-                'X-Overwrite': 'true'
-            },
-            body: data
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return true;
-    } catch (e) {
-        console.warn(`消息记录写入失败: ${path}`, e);
-        return false;
-    }
-}
-
-// 将全部消息写入单个存储文件（超出上限的旧消息已在 addMessage / 加载时裁剪）
-async function persistMessages() {
-    const written = await writeMessageFile(MESSAGE_FILE_PATH, JSON.stringify(messages));
-    // 仅在写入成功时刷新快照，否则保留旧快照让周期判定器重试
-    if (written) lastPersistSnapshot = JSON.stringify(messages);
-}
-
-// 启动 1 分钟周期的持久化判定：循环检查消息内容相对上次保存是否有变化
-function startPersistWatcher() {
-    if (saveTimer) clearInterval(saveTimer);
-    saveTimer = setInterval(checkMessagesAndPersist, PERSIST_INTERVAL_MS);
-}
-
-// 每 1 分钟判定一次：消息内容与上次保存不同则触发保存到磁盘
-function checkMessagesAndPersist() {
-    const data = JSON.stringify(messages);
-    if (data === lastPersistSnapshot) return;
-    persistMessages();
-}
-
-// 改动后的统一入口：刷新 1 分钟判定计时；immediate 为 true 时立即保存到本地（删除消息场景）
-function schedulePersist(immediate) {
-    startPersistWatcher();
-    if (immediate) persistMessages();
-}
+// ---------- 消息读取（仅刷新时从缓存文件同步） ----------
 
 // 读取消息文件并解析为消息数组；缺失或无法读取/解析时返回 null
 async function readMessageFile(path) {
@@ -166,18 +110,12 @@ async function readMessageFile(path) {
     }
 }
 
-// 加载聊天记录：读取单文件存储，超出上限的旧消息不保留
+// 加载聊天记录：读取思维链维护的缓存文件，仅保留最新 MAX_CACHED_MESSAGES 条
 async function loadPersistedMessages() {
-    // 以当前 messages（含无文件时的空态）作为上一次落盘基线
-    lastPersistSnapshot = JSON.stringify(messages);
-    // 启动 1 分钟周期的持久化判定
-    startPersistWatcher();
     const loaded = await readMessageFile(MESSAGE_FILE_PATH);
     if (!loaded || !loaded.length) return;
     // 超出保留上限的历史直接丢弃（仅保留最新消息）
-    messages = loaded.length > MAX_PERSISTED_MESSAGES ? loaded.slice(-MAX_PERSISTED_MESSAGES) : loaded;
-    // 加载后刷新基线，避免首轮周期把旧内容误判为变更而重复写盘
-    lastPersistSnapshot = JSON.stringify(messages);
+    messages = loaded.length > MAX_CACHED_MESSAGES ? loaded.slice(-MAX_CACHED_MESSAGES) : loaded;
     const renders = messages.map(msg => renderMessageElement(msg));
     updateEmptyState();
     // 等待所有消息的 markdown/mermaid 异步渲染完成后再滚动到底部

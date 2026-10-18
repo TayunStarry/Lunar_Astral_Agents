@@ -1,6 +1,6 @@
 package BrowserClient
 
-// WebView 会话管理器：后端可驱动的多实例 webview 窗口（深读代理的基础设施）。
+// WebView 会话管理器：后端可驱动的多实例 webview 窗口（网络搜索代理的基础设施）。
 //
 // 与 StartWebViewBrowser 的「单实例、启动即阻塞」模型不同，每个会话在独立 OS 线程上
 // 创建并运行自己的 webview 实例，注册表持有引用供 HTTP 端点跨线程驱动：
@@ -27,7 +27,7 @@ type WebViewSession struct {
 	ID    string
 	Title string
 
-	wv        webview.WebView
+	wv         webview.WebView
 	navigateMu sync.Mutex // 串行化 EvalJSON / Navigate，避免结果通道串扰
 
 	resultMu   sync.Mutex
@@ -42,7 +42,7 @@ type WebViewSession struct {
 var (
 	sessionRegistryMu  sync.Mutex
 	sessionRegistry    = map[string]*WebViewSession{}
-	sessionRegistryNew string // 最近创建的会话 ID（深读代理默认复用）
+	sessionRegistryNew string // 最近创建的会话 ID（网络搜索代理默认复用）
 )
 
 // PageState 页面就绪状态快照
@@ -62,7 +62,7 @@ func OpenWebViewSession(url string, title string, width int, height int) (*WebVi
 		height = 860
 	}
 	if title == "" {
-		title = "琉璃 · 深读代理"
+		title = "琉璃 · 网络搜索"
 	}
 
 	s := &WebViewSession{

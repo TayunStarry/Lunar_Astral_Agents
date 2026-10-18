@@ -5,7 +5,8 @@ package WebLTP
 // 首个满足「导航成功、识别为搜索结果页、过滤后仍有结果、非工具站兜底」的引擎胜出。
 // 单引擎失败（导航失败/识别失败/无结果/工具站兜底）记日志后尝试下一个；
 // 全部失败时返回错误，由月华侧感知明确失败（可换检索词重新下发），而非空报告。
-// 结果页先做 DOM 识别再滚动截图：无效结果页不浪费截图与时间。
+// 结果页先做 DOM 识别，再从顶部滚动到底部（触发懒加载并补全结果），
+// 正常结果页完全依赖文本，只有正文极少时才按策略截图。
 
 import (
 	"LunarSubsystem/BrowserClient"
@@ -80,11 +81,35 @@ func searchWithFallback(sess *BrowserClient.WebViewSession, query string, cfg Co
 		}
 		page.Results = results
 
-		// 结果有效 → 滚动截图（首屏供报告视觉印证）后回到页顶
-		captures, shot := scrollCapture(sess, cfg.ResultsScrollCaptures, "搜索结果页", saver, deadline)
-		_ = scrollToTop(sess)
-		LoggerGeneral.Info("CrystalAstral", "Web-LTP 结果页识别完成 [%s]: %d 条结果, 截图 %d 张", e.name, len(page.Results), captures)
-		return searchOutcome{Engine: e, URL: searchURL, Extract: page, FirstShot: shot}, nil
+		// 搜索结果页：先从上到下完整滚动（可触发懒加载补全结果），再重新提取结果与正文。
+		// 只有结果页正文极少时才按策略截图，正常结果页完全依赖文本。
+		probe, perr := probePage(sess)
+		if perr != nil {
+			LoggerGeneral.SubWarn("CrystalAstral", "WebLTP", "搜索结果页探测失败（本次按纯文本处理）: %v", perr)
+		}
+		policy := capturePolicy{}
+		if perr == nil {
+			policy = decideCapturePolicy(probe, cfg.VisionMinChars, cfg.ResultsScrollCaptures)
+		}
+		walk := walkPage(sess, probe, cfg.ScrollMaxSteps, time.Duration(cfg.ScrollSettleMS)*time.Millisecond,
+			policy, "搜索结果页", saver, deadline)
+		LoggerGeneral.Info("CrystalAstral", "Web-LTP 搜索结果页滚动完成 [%s]: 步数=%d, 触底=%v, 截图=%d",
+			e.name, walk.Steps, walk.AtBottom, len(walk.Frames))
+
+		// 滚动后再提取一次，覆盖懒加载出来的结果；失败时沿用滚动前的识别结果
+		if refreshed, rerr := extractSerp(sess, e, cfg.MaxResults); rerr == nil && len(refreshed.Results) > 0 {
+			refreshed.Results = dedupeResults(filterDictionarySites(refreshed.Results))
+			if len(refreshed.Results) > 0 && !detectToolFallback(refreshed.Results) {
+				page = refreshed
+			}
+		}
+		searchPage, serr := extractPage(sess, 0, cfg.TextMaxChars)
+		if serr != nil {
+			LoggerGeneral.SubWarn("CrystalAstral", "WebLTP", "搜索结果页正文提取失败: %v", serr)
+		}
+		LoggerGeneral.Info("CrystalAstral", "Web-LTP 结果页识别完成 [%s]: %d 条结果, 正文 %d 字",
+			e.name, len(page.Results), searchPage.TextChars)
+		return searchOutcome{Engine: e, URL: searchURL, Extract: page, SearchText: searchPage.Text}, nil
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("搜索引擎降级链为空")

@@ -270,7 +270,7 @@ async function sendVoiceUtterance(frames, sampleRate) {
             attachments: [{ type: 'audio', src: URL.createObjectURL(file), label: file.name }],
             timestamp: Date.now()
         });
-        schedulePersist();
+        // 前端不再落盘：聊天记录由思维链统一写入缓存文件
 
         if (!backendConnected) {
             showToast('离线模式：语音仅本地渲染', 'info');

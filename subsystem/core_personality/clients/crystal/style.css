@@ -567,14 +567,6 @@ body {
     filter: drop-shadow(0 0 10px rgba(190, 150, 255, 0.85));
 }
 
-.sidebar-btn-planning {
-    color: #8ff5e2;
-}
-
-.sidebar-btn-planning:hover {
-    filter: drop-shadow(0 0 10px rgba(120, 235, 210, 0.85));
-}
-
 .sidebar-btn-file-runner {
     color: #ffd479;
 }

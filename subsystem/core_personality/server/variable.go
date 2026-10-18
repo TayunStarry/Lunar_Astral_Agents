@@ -119,12 +119,12 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/shared-input.js", Handler: crystal.SharedInputHandler, Method: "GET", Description: "统一键鼠操作共享模块"},
 	{Path: "/self-ltp-agent.js", Handler: crystal.SelfLTPAgentHandler, Method: "GET", Description: "自主页面操作智能体脚本（Self-LTP）"},
 
-	// ==================== WebView 深读代理（后端驱动的顶层 WebView 会话） ====================
-	{Path: "/webview/open", Handler: crystal.WebViewOpenHandler, Method: "POST", Description: "创建 WebView 深读会话窗口"},
-	{Path: "/webview/navigate", Handler: crystal.WebViewNavigateHandler, Method: "POST", Description: "深读会话导航到指定 URL 并等待就绪"},
-	{Path: "/webview/eval", Handler: crystal.WebViewEvalHandler, Method: "POST", Description: "深读会话页面上下文执行脚本并取回 JSON 结果"},
-	{Path: "/webview/ready", Handler: crystal.WebViewReadyHandler, Method: "POST", Description: "等待深读会话页面就绪并返回状态"},
-	{Path: "/webview/screenshot", Handler: crystal.WebViewScreenshotHandler, Method: "POST", Description: "深读会话窗口区域截图（dataURL 返回）"},
-	{Path: "/webview/close", Handler: crystal.WebViewCloseHandler, Method: "POST", Description: "关闭深读会话窗口"},
-	{Path: "/webview/deepread", Handler: crystal.WebViewDeepReadHandler, Method: "POST", Description: "深读编排：导航→就绪→元素提取（可滚动）→截图→模型摘要"},
+	// ==================== WebView 网络搜索代理（后端驱动的顶层 WebView 会话） ====================
+	{Path: "/webview/open", Handler: crystal.WebViewOpenHandler, Method: "POST", Description: "创建 WebView 网络搜索会话窗口"},
+	{Path: "/webview/navigate", Handler: crystal.WebViewNavigateHandler, Method: "POST", Description: "网络搜索会话导航到指定 URL 并等待就绪"},
+	{Path: "/webview/eval", Handler: crystal.WebViewEvalHandler, Method: "POST", Description: "网络搜索会话页面上下文执行脚本并取回 JSON 结果"},
+	{Path: "/webview/ready", Handler: crystal.WebViewReadyHandler, Method: "POST", Description: "等待网络搜索会话页面就绪并返回状态"},
+	{Path: "/webview/screenshot", Handler: crystal.WebViewScreenshotHandler, Method: "POST", Description: "网络搜索会话窗口区域截图（dataURL 返回）"},
+	{Path: "/webview/close", Handler: crystal.WebViewCloseHandler, Method: "POST", Description: "关闭网络搜索会话窗口"},
+	{Path: "/webview/deepread", Handler: crystal.WebViewDeepReadHandler, Method: "POST", Description: "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要"},
 }

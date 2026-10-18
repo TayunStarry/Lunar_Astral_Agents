@@ -434,7 +434,7 @@ func ScanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 
 // loadInternalPackages 读取内嵌在琉璃前端里的内置包元数据
 //
-// 内置包与蓝图包同处 clients/crystal/<name>，URL 直接指向 /desktop/<name>/index.html；
+// 内置包随二进制发布在 clients/crystal/<name>，URL 直接指向 /desktop/<name>/index.html；
 // Internal=true 供前端过滤，不把它们放进桌面网格（由常驻侧边栏按钮进入）。
 func loadInternalPackages() []PackageInfo {
 	out := []PackageInfo{}

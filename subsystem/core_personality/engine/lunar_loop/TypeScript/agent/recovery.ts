@@ -1,6 +1,6 @@
 import { GlobalConfig } from '../config/global';
 import { PostMessage } from '../config/model';
-import { ModelBuilder } from './base/builder';
+import { ModelBuilder } from './builder';
 
 // ==== 引擎重载的上下文抢救（TUI 手动重载 / 致命错误自动重载共用）====
 //
@@ -21,7 +21,7 @@ const RECOVERY_VERSION = 1;
 /** 图片项被省略后的占位文本 */
 const IMAGE_PLACEHOLDER = '[图片：引擎重载时已省略]';
 
-/** 参与抢救的智能体角色（由 roles.ts 注入，避免 recovery → roles 的循环依赖） */
+/** 参与抢救的智能体角色（由 roles/index.ts 注入，避免 recovery → roles 的循环依赖） */
 export interface RecoveryRoles {
 	/** 对话者（月华主上下文） */
 	dialogue: ModelBuilder;
@@ -29,7 +29,7 @@ export interface RecoveryRoles {
 
 let recoveryRoles: RecoveryRoles | null = null;
 
-/** 注入参与抢救的角色（roles.ts 在模块初始化时调用一次） */
+/** 注入参与抢救的角色（roles/index.ts 在模块初始化时调用一次） */
 export function registerRecoveryRoles(roles: RecoveryRoles): void {
 	recoveryRoles = roles;
 }

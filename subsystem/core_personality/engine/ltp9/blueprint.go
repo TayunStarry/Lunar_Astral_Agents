@@ -1,7 +1,7 @@
 package StarLTP
 
 // ==== 蓝图执行器（调度循环，自前端 execute.js 迁移） ====
-// 前端 planning 页面仅负责图编辑/状态渲染/参数编辑/持久化与浏览器节点协作执行；
+// 蓝图系统包页面仅负责图编辑/状态渲染/参数编辑/持久化与浏览器节点协作执行；
 // 扁平执行池调度在本文件：ltp9/bp_run 提交图数据 → 逐节点执行 → ltp9/bp_node
 // 逐节点推送状态 → ltp9/bp_done 收尾。浏览器专属节点（microphone/speaker/audio_eq/
 // image_confuse/video_keyframe）经 ltp9/bp_exec 请求前端执行，前端回报 ltp9/bp_exec_result。
