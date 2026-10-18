@@ -3,15 +3,18 @@ package crystal
 import (
 	"CorePersonality/agents/AutoLTP"
 	"CorePersonality/agents/WebLTP"
+	"CorePersonality/clients"
 	"CorePersonality/engine/ltp9"
 	"CorePersonality/transport/ws"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"math/rand"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -67,35 +70,66 @@ func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 		if err != nil {
 			continue
 		}
-
-		var meta struct {
-			ID    string `json:"id"`
-			Tools []struct {
-				Name        string `json:"name"`
-				Description string `json:"description"`
-			} `json:"tools"`
-		}
-		if err := json.Unmarshal(data, &meta); err != nil {
-			LoggerGeneral.Warn("CrystalAstral", "LTPX 解析包元数据失败 %s: %v", metaPath, err)
-			continue
-		}
-		// 包未提供 AtoA 工具（无 tools 数组）则跳过
-		if meta.ID == "" || len(meta.Tools) == 0 {
-			continue
-		}
-
-		for _, t := range meta.Tools {
-			if t.Name == "" {
-				continue
-			}
-			defs = append(defs, LTPXRemoteToolDef{
-				Name:        t.Name,
-				Description: t.Description,
-			})
-			pkgMap[t.Name] = meta.ID
-		}
+		defs = appendAtoaTools(defs, pkgMap, data, metaPath)
 	}
+
+	// 内置包：随二进制发布在 clients/crystal/<name>/metadata.json，不占 local_data/package
+	defs = appendInternalAtoaTools(defs, pkgMap)
+
 	return defs, pkgMap
+}
+
+// appendAtoaTools 解析单个 metadata.json，把带 tools 的包追加到工具链
+func appendAtoaTools(defs []LTPXRemoteToolDef, pkgMap map[string]string, data []byte, source string) []LTPXRemoteToolDef {
+	var meta struct {
+		ID    string `json:"id"`
+		Tools []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		LoggerGeneral.Warn("CrystalAstral", "LTPX 解析包元数据失败 %s: %v", source, err)
+		return defs
+	}
+	// 包未提供 AtoA 工具（无 tools 数组）则跳过
+	if meta.ID == "" || len(meta.Tools) == 0 {
+		return defs
+	}
+	for _, t := range meta.Tools {
+		if t.Name == "" {
+			continue
+		}
+		defs = append(defs, LTPXRemoteToolDef{
+			Name:        t.Name,
+			Description: t.Description,
+		})
+		pkgMap[t.Name] = meta.ID
+	}
+	return defs
+}
+
+// appendInternalAtoaTools 扫描内嵌在琉璃前端里的内置包元数据
+//
+// 内置包与蓝图包一样随二进制发布（clients/crystal/<name>），
+// 因此不能只扫描 local_data/package；这里从 go:embed 的文件系统读取。
+func appendInternalAtoaTools(defs []LTPXRemoteToolDef, pkgMap map[string]string) []LTPXRemoteToolDef {
+	entries, err := fs.ReadDir(clients.EmbeddedFiles, "crystal")
+	if err != nil {
+		return defs
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		metaPath := path.Join("crystal", entry.Name(), "metadata.json")
+		data, err := fs.ReadFile(clients.EmbeddedFiles, metaPath)
+		if err != nil {
+			continue
+		}
+		defs = appendAtoaTools(defs, pkgMap, data, metaPath)
+	}
+	return defs
 }
 
 // Node-LTP 聚合体的工具名（月华侧提示词 use_the_program 必须与此一致）

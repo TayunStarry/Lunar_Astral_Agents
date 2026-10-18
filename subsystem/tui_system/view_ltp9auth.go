@@ -396,7 +396,7 @@ func (m appModel) viewLTP9Auth() string {
 }
 
 // ltp9AuthRunningBody 任务进行中：spinner + 任务名
-func ltp9AuthRunningBody(m appModel, w, h int) []string {
+func ltp9AuthRunningBody(m appModel, _, h int) []string {
 	lines := []string{
 		"",
 		"  " + selectStyle.Render(m.spinner.View()) + " " + valueStyle.Render(m.ltp9Auth.op+"…"),

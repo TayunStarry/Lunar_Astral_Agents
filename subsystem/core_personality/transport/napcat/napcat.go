@@ -120,42 +120,25 @@ func callNapcatAPI(action string, params map[string]any) (*NapcatWSResponse, err
 
 // ==================== 消息发送 ====================
 
-// maxSendTextLen 单条 QQ 消息的文本长度上限（字符数），超过自动分片连续发送
-const maxSendTextLen = 4000
-
 // mentionPattern 出站文本中的提及标记：[对 xxx 说]（与入站 @ 的渲染格式对称）
 var mentionPattern = regexp.MustCompile(`\[对\s*(.+?)\s*说\]`)
 
-// SendPrivateTextMessage 发送私聊文本消息（超长自动分片）
+// SendPrivateTextMessage 发送私聊文本消息（原文整条发送，不做切片）
 func SendPrivateTextMessage(userID int64, content string) error {
 	if strings.TrimSpace(content) == "" {
 		return nil
 	}
-	for _, chunk := range splitTextChunks(content, maxSendTextLen) {
-		if err := postMessage("/send_private_msg", map[string]any{"user_id": userID}, textSegment(chunk)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return postMessage("/send_private_msg", map[string]any{"user_id": userID}, textSegment(content))
 }
 
 // SendGroupTextMessage 发送群文本消息：
 //   - 内容中的 [对 xxx 说] 转换为真实 @ 段（按群成员名称缓存解析，可 @ 成员 / 全体成员）
-//   - replyToUserID 非零时在首条消息最前追加对该成员的 @（被 @ 触发的回应礼节性 @ 回对方）
+//   - replyToUserID 非零时在消息最前追加对该成员的 @（被 @ 触发的回应礼节性 @ 回对方）
 func SendGroupTextMessage(groupID int64, content string, replyToUserID int64) error {
 	if strings.TrimSpace(content) == "" {
 		return nil
 	}
-	for i, chunk := range splitTextChunks(content, maxSendTextLen) {
-		replyTo := int64(0)
-		if i == 0 {
-			replyTo = replyToUserID
-		}
-		if err := postMessage("/send_group_msg", map[string]any{"group_id": groupID}, buildOutboundSegments(groupID, chunk, replyTo)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return postMessage("/send_group_msg", map[string]any{"group_id": groupID}, buildOutboundSegments(groupID, content, replyToUserID))
 }
 
 // SendPrivateImageMessage 发送私聊图片消息（base64 数据或 http 链接）
@@ -294,30 +277,6 @@ func lookupAtTarget(groupID int64, name string) string {
 		}
 	}
 	return ""
-}
-
-// splitTextChunks 按字符将文本切分为不超过 maxLen 的片段，优先在窗口内的换行处断开
-func splitTextChunks(text string, maxLen int) []string {
-	runes := []rune(text)
-	if len(runes) <= maxLen {
-		return []string{text}
-	}
-	var chunks []string
-	for len(runes) > maxLen {
-		cut := maxLen
-		for i := maxLen - 1; i > maxLen/2; i-- {
-			if runes[i] == '\n' {
-				cut = i + 1
-				break
-			}
-		}
-		chunks = append(chunks, string(runes[:cut]))
-		runes = runes[cut:]
-	}
-	if len(runes) > 0 {
-		chunks = append(chunks, string(runes))
-	}
-	return chunks
 }
 
 // normalizeBase64Image 规整图片数据：剥掉 "data:image/xxx;base64," 前缀

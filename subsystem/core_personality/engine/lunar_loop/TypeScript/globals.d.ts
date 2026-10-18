@@ -274,6 +274,14 @@ declare global {
      */
     function memoryInit(collectionName: string): [boolean, Error | null];
     /**
+     * 列出记忆库全部集合名（跨集合检索用）
+     *
+     * 返回的集合名可直接传给 memoryQuery；调用前无需自行 memoryInit。
+     *
+     * @returns {[string[], Error | null]} 包含集合清单的元组，[集合名数组, 错误信息]
+     */
+    function memoryListCollections(): [string[], Error | null];
+    /**
      * 向指定集合添加消息
      *
      * @param {string} collectionName 集合名称
@@ -311,6 +319,21 @@ declare global {
      * @returns {[Array<{id: string, role: string, content?: string, image?: string, similarity: number, timestamp?: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列（text 集合返回 content，image 集合返回 image；timestamp 为入库 Unix 秒时间戳，旧数据无此字段）
      */
     function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content?: string, image?: string, similarity: number, timestamp?: number }>, Error | null];
+    /**
+     * 关键词 / 正则检索指定集合（不调用嵌入服务）
+     *
+     * @param {string} collectionName 集合名称
+     *
+     * @param {string[]} terms 关键词数组（全部命中）或正则片段
+     *
+     * @param {boolean} useRegex 是否按正则匹配（否则为大小写不敏感的子串 AND 匹配）
+     *
+     * @param {number} limit 返回条数上限
+     *
+     * @returns {[Array<{ id: string, role: string, content?: string, similarity: number, timestamp?: number }>, Error | null]}
+     *          命中结果（按入库时间倒序；similarity 固定为 0）与错误信息
+     */
+    function memoryKeywordSearch(collectionName: string, terms: string[], useRegex: boolean, limit: number): [Array<{ id: string, role: string, content?: string, similarity: number, timestamp?: number }>, Error | null];
     /**
      * 从指定集合删除消息
      *
@@ -403,7 +426,7 @@ declare global {
      *
      * @param {string} argsJSON 请求参数 JSON，形如 {"agent":"painter","includeImages":false}；
      *                          agent 取 'lunar'（月华主上下文/未读队列）或子智能体名
-     *                          （dialogue/painter/musician/perceiver/memorizer/description）
+     *                          （dialogue/painter/musician/perceiver/description）
      *
      * @returns {[string, Error | null]} 包含导出结果的元组，[上下文 JSON 文本, 错误信息]
      */
@@ -604,6 +627,19 @@ declare global {
      * @returns {[ResourceAdmitResult | null, Error | null]} 包含入库结果的元组
      */
     function resourceAdmit(input: ResourceAdmitInput): [ResourceAdmitResult | null, Error | null];
+
+    /**
+     * 文档按「documents/原文件名」入库或刷新
+     *
+     * 同一路径复用同一句柄：内容变化时只刷新哈希、体积与段落表，
+     * 避免群聊里反复发送同一份文本文件时不断产生新的 @D 序号。
+     *
+     * @param {string} path 相对 LocalDir 的路径（必须在 documents/ 下）
+     * @param {string} name 原始文件名
+     *
+     * @returns {[ResourceAdmitResult | null, Error | null]} 包含入库结果的元组
+     */
+    function resourceAdmitDocument(path: string, name: string): [ResourceAdmitResult | null, Error | null];
 
     /**
      * 按句柄取回资源内容（带锚点时按锚点整段展开）

@@ -16,6 +16,13 @@ type ExportPackageRequest struct {
 	SavePath    string `json:"save_path,omitempty"`
 }
 
+// resourceAdmitDocumentRequest 文档入库/刷新请求
+// 以「documents/原文件名」为业务身份，同一路径复用同一句柄
+type resourceAdmitDocumentRequest struct {
+	Path string `json:"path"` // 相对 LocalDir 的路径，如 documents/foo.md
+	Name string `json:"name"` // 原始文件名
+}
+
 // memoryAddRequest v5 统一添加请求（文本和图片共用）
 // 若 Base64 字段非空，则视为图片记忆；否则为文本记忆
 type memoryAddRequest struct {

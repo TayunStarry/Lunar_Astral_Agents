@@ -286,7 +286,7 @@ export const resourceTools: ToolCall[] = [
 		type: 'function',
 		function: {
 			name: 'search_resources',
-			description: '跨资源搜索：在全部资源的标题、摘要、标签与段落标题中匹配关键词，返回「哪份资源的哪一节」命中了。本工具只做定位，取正文请随后调用 read_resource。适合用户问「我之前给过你的那份配置里…」这类跨资料检索。',
+			description: '跨资源搜索：在全部资源的标题、摘要、标签与段落标题中匹配关键词，返回「哪份资源的哪一节」命中了。本工具只做文档资源定位，**不检索聊天记忆**——问「谁之前说过什么 / 以前聊过什么」请用 search_memory。取正文请随后调用 read_resource。适合用户问「我之前给过你的那份配置里…」这类跨资料检索。',
 			parameters: {
 				type: 'object',
 				properties: {

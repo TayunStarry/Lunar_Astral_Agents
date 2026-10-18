@@ -26,6 +26,7 @@ type PackageInfo struct {
 	Tags                []string `json:"tags,omitempty"`                 // 包的标签，用于分类应用
 	PackageName         string   `json:"package_name,omitempty"`         // 包的名称
 	BackgroundRetention bool     `json:"background_retention,omitempty"` // 后台保活
+	Internal            bool     `json:"internal,omitempty"`             // 是否为随二进制发布的内置包（不出现在桌面网格）
 }
 
 // ModuleCreateRequest 创建模块请求体（琉璃前端「创建模块」弹窗提交）

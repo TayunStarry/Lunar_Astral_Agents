@@ -23,9 +23,31 @@ type ModelScheme struct {
 	Steps               int    `json:"steps"`                 // 方案推荐默认步数（0=沿用 sd_steps）
 }
 
+// SystemSettings 系统级设置的统一根对象。
+//
+// 把原先分散的 server / logs / chat / client 四节扁平收拢到 system 下：
+// 运行与安全、控制台日志、聊天显存守卫、前端显示共用同一个根对象。
+type SystemSettings struct {
+	Developer bool `json:"developer"` // 是否为开发者模式
+	// 是否允许局域网访问引擎 HTTP/WS 服务：未配置默认仅绑定 127.0.0.1 回环地址，
+	// 显式置 true 时才绑定全部网卡（跨机部署琉璃/月华时开启）
+	AllowLAN *bool `json:"allow_lan,omitempty"`
+	// 插件沙箱网络是否跳过 TLS 证书校验：未配置默认开启校验；置 true 恢复旧的跳过行为
+	InsecureTLS *bool `json:"insecure_tls,omitempty"`
+	// 是否把控制台输出镜像到 local_data/logs/console.log；未配置默认关闭
+	ConsoleLog *bool `json:"console_log,omitempty"`
+	// 聊天（LLM）显存守卫：可用显存不足时卸载本地模型释放 KV 缓存
+	ChatVRAMGuard         *bool `json:"chat_vram_guard,omitempty"`          // 守卫开关
+	ChatVRAMGuardMiB      *int  `json:"chat_vram_guard_mib,omitempty"`      // 触发阈值（MiB）
+	ChatVRAMGuardInterval *int  `json:"chat_vram_guard_interval,omitempty"` // 每 N 次应答检查一次
+	// 月华客户端显示：控制桌面端/移动端角色的渲染方式（bedrock 默认 / live2d）
+	CharacterRenderer string `json:"character_renderer"`
+	Live2DModel       string `json:"live2d_model,omitempty"` // Live2D 模型基址（空则用引擎层默认）
+}
+
 // ModelConfig 定义模型配置的结构
 //
-// 分组严格按职责边界划分：Models 只放模型文件路径、Server 只管服务运行，
+// 分组严格按职责边界划分：Models 只放模型文件路径、System 放运行/日志/聊天守卫/客户端显示，
 // 其余每组对应且仅对应一个功能域，避免出现职责混杂的「杂项组」。
 type ModelConfig struct {
 	// 模型文件路径（辅助/生成类模型；主模型服务分段在 local_data/models/models.ini）
@@ -40,15 +62,8 @@ type ModelConfig struct {
 		PromptMmprojModel   string                 `json:"prompt_mmproj_model"`   // 多模态提示分析模型路径
 		RealESRGANModel     string                 `json:"real_esrgan_model"`     // 4x超分辨率模型路径
 	} `json:"models"`
-	// 服务运行与调试
-	Server struct {
-		Developer bool `json:"developer"` // 是否为开发者模式
-		// 是否允许局域网访问引擎 HTTP/WS 服务：未配置默认仅绑定 127.0.0.1 回环地址，
-		// 显式置 true 时才绑定全部网卡（跨机部署琉璃/月华时开启）
-		AllowLAN *bool `json:"allow_lan,omitempty"`
-		// 插件沙箱网络是否跳过 TLS 证书校验：未配置默认开启校验；置 true 恢复旧的跳过行为
-		InsecureTLS *bool `json:"insecure_tls,omitempty"`
-	} `json:"server"`
+	// 系统级设置：运行/安全、日志、聊天显存守卫、前端显示共用同一个根对象
+	System SystemSettings `json:"system"`
 	// 月华 Agent：用户显示名 + 模型路由 + 多模态输入方式
 	Agent struct {
 		UserName        string `json:"user_name"`        // 用户显示名（前端气泡名与发送前缀）
@@ -81,13 +96,6 @@ type ModelConfig struct {
 		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
 		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
 	} `json:"memory"`
-	// 聊天（LLM）显存守卫：可用显存不足时卸载本地模型释放 KV 缓存。
-	// 仅由月华智能体（TypeScript）读取，此处声明结构以集中呈现配置契约。
-	Chat struct {
-		ChatVRAMGuard         *bool `json:"chat_vram_guard,omitempty"`          // 守卫开关
-		ChatVRAMGuardMiB      *int  `json:"chat_vram_guard_mib,omitempty"`      // 触发阈值（MiB）
-		ChatVRAMGuardInterval *int  `json:"chat_vram_guard_interval,omitempty"` // 每 N 次应答检查一次
-	} `json:"chat"`
 	// 图像生成（sd.cpp）行为与资源策略
 	Diffusion struct {
 		AllowDiffusion bool `json:"allow_diffusion"` // 是否允许运行扩散生成
@@ -145,13 +153,6 @@ type ModelConfig struct {
 		// 引擎闲置卸载阈值（分钟）：无合成调用超过该时长即卸载模型释放占用
 		IdleUnloadMinutes *int `json:"idle_unload_minutes,omitempty"`
 	} `json:"tts"`
-	// 月华客户端显示配置：控制桌面端/移动端角色的渲染方式
-	// （bedrock=基岩版模型引擎，默认；live2d=Live2D 引擎层）。
-	// 仅由前端读取（fetch /file/read/lunar_config.json），此处声明结构以集中呈现配置契约。
-	Client struct {
-		CharacterRenderer string `json:"character_renderer"`     // 角色渲染器：bedrock（默认）/ live2d
-		Live2DModel       string `json:"live2d_model,omitempty"` // Live2D 模型基址（空则用引擎层默认）
-	} `json:"client"`
 	// Gitee Release 发布通道（release）：更新包与 LTPX 应用市场共用同一仓库，
 	// 仓库地址、令牌、打包清单、备份策略统一在此配置。
 	// 两条通道在仓库内以「描述标记 + 附件名前缀」严格区分：
@@ -426,18 +427,18 @@ func applyConfig(parameter *ModelConfig) []string {
 	if parameter.TTS.IdleUnloadMinutes != nil && *parameter.TTS.IdleUnloadMinutes > 0 {
 		*TTSIdleUnloadMinutes = *parameter.TTS.IdleUnloadMinutes
 	}
-	// ==== 月华客户端显示配置（client） ====
+	// ==== 月华客户端显示配置（system.character_renderer） ====
 	// 渲染器枚举：仅接受 bedrock / live2d，未配置保持默认 bedrock，非法取值告警并保留默认
-	switch parameter.Client.CharacterRenderer {
+	switch parameter.System.CharacterRenderer {
 	case "bedrock", "live2d":
-		*CharacterRenderer = parameter.Client.CharacterRenderer
+		*CharacterRenderer = parameter.System.CharacterRenderer
 	case "":
 		// 未配置时保持默认渲染器
 	default:
-		log.Printf("[Config][WARN] -> client.character_renderer 取值非法: %q（允许 bedrock/live2d），保持默认 %s", parameter.Client.CharacterRenderer, *CharacterRenderer)
+		log.Printf("[Config][WARN] -> system.character_renderer 取值非法: %q（允许 bedrock/live2d），保持默认 %s", parameter.System.CharacterRenderer, *CharacterRenderer)
 	}
-	if parameter.Client.Live2DModel != "" {
-		*Live2DModel = parameter.Client.Live2DModel
+	if parameter.System.Live2DModel != "" {
+		*Live2DModel = parameter.System.Live2DModel
 	}
 	// ==== Gitee Release 发布通道（release） ====
 	// 更新包与 LTPX 应用市场共用同一仓库：两条通道在仓库内以「描述标记 + 附件名前缀」
@@ -559,19 +560,24 @@ func applyConfig(parameter *ModelConfig) []string {
 	if parameter.Diffusion.SDImageSize != nil && *parameter.Diffusion.SDImageSize > 0 {
 		*SDImageSize = *parameter.Diffusion.SDImageSize
 	}
-	// ==== 服务运行与调试（server） ====
+	// ==== 服务运行与调试（system） ====
 	// 如果配置文件中 Developer 字段非空，则更新全局配置
-	if parameter.Server.Developer == true {
+	if parameter.System.Developer == true {
 		*Developer = true
 	} else {
 		*Developer = false
 	}
 	// 引擎服务绑定范围与插件 TLS 校验：仅在配置文件中显式给出时才覆盖安全默认值
-	if parameter.Server.AllowLAN != nil {
-		*AllowLAN = *parameter.Server.AllowLAN
+	if parameter.System.AllowLAN != nil {
+		*AllowLAN = *parameter.System.AllowLAN
 	}
-	if parameter.Server.InsecureTLS != nil {
-		*InsecureTLS = *parameter.Server.InsecureTLS
+	if parameter.System.InsecureTLS != nil {
+		*InsecureTLS = *parameter.System.InsecureTLS
+	}
+	// ==== 控制台日志（system.console_log） ====
+	// 控制台日志镜像：仅在配置中显式开启时落盘，未配置保持默认关闭
+	if parameter.System.ConsoleLog != nil {
+		*ConsoleLogEnabled = *parameter.System.ConsoleLog
 	}
 	// ==== 旧 tui 节（已取消） ====
 	// 程序只剩控制台一种形态：前端窗口全部关闭不再退出进程，故该节已无对应功能，
@@ -581,7 +587,7 @@ func applyConfig(parameter *ModelConfig) []string {
 	}
 
 	// ==== 旧配置节迁移提示由调用方（init）输出 ====
-	// chat（聊天显存守卫）与 bridging（QQ 桥接）不落 Go 全局：
+	// chat（system.chat_vram_guard 聊天显存守卫）与 bridging（QQ 桥接）不落 Go 全局：
 	// 前者仅由月华 TypeScript 读取，后者由 lunar_astral/bridging/napcat 自行解析
 	return legacyUsed
 }

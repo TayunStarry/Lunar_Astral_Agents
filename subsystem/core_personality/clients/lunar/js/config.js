@@ -87,10 +87,10 @@ let saveTimer = null;
 let lastPersistSnapshot = null; // 上次已成功写入磁盘的消息序列化快照，用于 1 分钟周期比对
 let mermaidInitialized = false;
 let pendingFiles = [];        // 待发送附件（悬浮气泡）
-let referencedFiles = [];     // 已加载到输入框的文件引用（[#文件名.ext]:）
+let referencedFiles = [];     // 已加载到输入框的资源句柄（@D.003 等规范句柄）
 let isSending = false;        // 是否正在发送
 let autoPlayVoice = true;     // 收到语音消息时是否自动播放
-let characterRenderer = 'bedrock'; // 角色渲染器（bedrock=基岩版模型 / live2d=Live2D 引擎层），由 lunar_config.json 的 client.character_renderer 决定
+let characterRenderer = 'bedrock'; // 角色渲染器（bedrock=基岩版模型 / live2d=Live2D 引擎层），由 lunar_config.json 的 system.character_renderer 决定
 let backendUserName = DEFAULT_USER_NAME; // 用户气泡名与发送给月华的前缀共用的用户名（来自配置）
 let captureFile = null;       // 当前截图的 File 对象
 let capturePreviewUrl = null; // 当前截图预览 blob URL

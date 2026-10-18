@@ -6,6 +6,7 @@ package lunarloop
 // 统一入库入口（ResourceAdmit）与内容取回（ResourceRead）。
 // JS 侧签名（唯一权威定义见 globals.d.ts）：
 //   resourceAdmit(input)              → [result, error]  入参 {sourceKind, source, data, name, kindHint, origin, retain, mime}
+//   resourceAdmitDocument(path, name) → [result, error]  文档按原文件名入库/刷新（同路径复用句柄）
 //   resourceRead(handle, maxBytes)    → [result, error]
 //   resourceOutline(handle)           → [sections, handle, error]
 //   resourceList(kind, limit)         → [resources, error]
@@ -162,6 +163,28 @@ func (class *Runtime) resourceAdmit(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("resourceAdmit 的 bytes 来源缺少 data")})
 	}
 	result, err := module.ResourceAdmit(admit)
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+	return class.runtime.ToValue([]any{toJS(result), nil})
+}
+
+// resourceAdmitDocument 文档按「documents/原文件名」入库或刷新
+// 参数: path 相对 LocalDir 的路径；name 原始文件名
+// 返回值: [result, error]
+//
+// 与 resourceAdmit 的区别：同一路径复用同一句柄，内容变化时只刷新哈希与段落表，
+// 避免群聊里反复发送同一份文本文件时不断产生新的 @D 序号。
+func (class *Runtime) resourceAdmitDocument(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 2 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("resourceAdmitDocument 需提供 path 与 name")})
+	}
+	path, _ := call.Argument(0).Export().(string)
+	name, _ := call.Argument(1).Export().(string)
+	if path == "" || name == "" {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("resourceAdmitDocument 的 path 与 name 不能为空")})
+	}
+	result, err := module.ResourceAdmitDocument(path, name)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}

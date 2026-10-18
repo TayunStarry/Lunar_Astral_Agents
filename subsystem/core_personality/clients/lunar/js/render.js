@@ -13,16 +13,17 @@ const CATEGORY_META = {
 };
 
 /**
- * 从用户消息正文中拆出资源引用标记，返回纯文本与引用条目
+ * 从用户消息正文中拆出资源引用句柄，返回纯文本与引用条目
  *
- * 用户气泡里的 `@D.003`（已规范化的句柄）与 `@文件名.ext`（文件名标记）都应渲染为
- * 可点击的引用按钮 —— 用户需要一眼看出"这句话是对哪份资料说的"，而不是看到一串裸文本。
+ * 前端只下发规范句柄（@D.003 / @I.007 …），用户气泡里的句柄应渲染为
+ * 可点击的引用按钮，并显示句柄对应的文件名 —— 用户需要一眼看出
+ * "这句话是对哪份资料说的"，而不是看到一串裸文本。
  *
  * @param content 用户消息正文
  * @returns plain：去掉引用标记后的正文；refs：按出现顺序的引用条目
  */
 function extractUserRefs(content) {
-    const pattern = /@(?:[DIVAT]\.\d{3,}|[A-Za-z0-9_\-.\u4e00-\u9fff]+\.[A-Za-z0-9]{1,8})(?:\|(?:§\d+|L\d+-\d+))?/g;
+    const pattern = /@[DIVAT]\.\d{3,}(?:\|(?:§\d+|L\d+-\d+))?/g;
     const refs = [];
     const plain = String(content || '').replace(pattern, match => {
         refs.push({ id: match, label: match.slice(1).replace(/\|\S+$/, '') });
@@ -40,7 +41,12 @@ function buildInlineRefPill(ref) {
     const icon = document.createElement('i');
     icon.className = 'fas fa-file-alt';
     const name = document.createElement('span');
-    name.textContent = ref.id;
+    // 展示句柄对应的文件名；解析完成前先显示句柄，避免空白
+    name.textContent = resourceNameCache.get(baseResourceHandle(ref.id)) || ref.id;
+    name.title = ref.id;
+    resolveResourceName(ref.id).then(label => {
+        if (label) name.textContent = label;
+    });
     pill.appendChild(icon);
     pill.appendChild(name);
     pill.addEventListener('click', () => addFileReference(ref.id));

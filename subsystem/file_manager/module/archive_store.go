@@ -527,6 +527,18 @@ func (d *ArchiveDB) UpdateResourceMeta(id int64, width, height int, durationMS i
 	return err
 }
 
+// RefreshResourceContent 刷新资源的正文元数据（文本类按原文件名稳定复用的重复入库）
+//
+// 只更新与文件内容相关的列，保留标题、摘要、标签等人工/模型产物。
+func (d *ArchiveDB) RefreshResourceContent(id int64, name, ext, mime, hash string, size int64) error {
+	archiveMu.Lock()
+	defer archiveMu.Unlock()
+	_, err := d.db.Exec(`UPDATE resources SET name = ?, ext = ?, mime = ?, content_hash = ?,
+		size_bytes = ?, state = ?, used_at = ? WHERE id = ?`,
+		name, ext, mime, hash, size, StateActive, time.Now().Unix(), id)
+	return err
+}
+
 // TouchResource 记录资源最近被取用（GC 的 LRU 依据）
 func (d *ArchiveDB) TouchResource(id int64) {
 	archiveMu.Lock()

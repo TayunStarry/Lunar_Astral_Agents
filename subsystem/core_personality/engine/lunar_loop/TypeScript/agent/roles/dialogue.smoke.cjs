@@ -201,6 +201,7 @@ function check(label, cond, detail) {
 	GlobalConfig.fastAckSent = false;
 	GlobalConfig.turnFromQQ = false;
 	GlobalConfig.unreadContext = [];
+	requests.length = 0;
 	queue = [
 		toolCallResponse('dispatch_painter', 'paint_1'),
 		toolCallResponse('dispatch_painter', 'paint_2'),
@@ -211,6 +212,13 @@ function check(label, cond, detail) {
 	check('快速应答走 TTS', ackPushed[0] && ackPushed[0].audio === 'audio-b64', JSON.stringify(ackPushed[0]));
 	check('前端来源的快速应答 auto=false', ackPushed[0] && ackPushed[0].auto === false, JSON.stringify(ackPushed[0]));
 	check('同一轮多次绘图只触发一次', executed === 2 && ackPushed.length === 1, `executed=${executed}, ack=${ackPushed.length}`);
+	// 回归：工具结果后不得注入「继续」——它会被模型当成新的创作指令，
+	// 实测一次画图请求因此连画 4 张。请求末尾应仍是 tool 结果。
+	{
+		const followUp = requests[1] || { messages: [] };
+		const lastMessage = followUp.messages[followUp.messages.length - 1] || {};
+		check('工具结果后直接请求收尾（不注入「继续」）', lastMessage.role === 'tool', JSON.stringify(lastMessage));
+	}
 
 	ackPushed.length = 0;
 	GlobalConfig.fastAckSent = false;

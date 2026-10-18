@@ -151,7 +151,7 @@ class LunarCoreApp {
 	}
 
 	/**
-	 * 渲染引擎 iframe：按 lunar_config.json 的 client.character_renderer 选择
+	 * 渲染引擎 iframe：按 lunar_config.json 的 system.character_renderer 选择
 	 * 基岩版模型引擎（lunar.rendering_engine）或 Live2D 引擎层（lunar.live2d_engine）。
 	 * WsBridge 连接同源 /ws，与主 WebSocket 连接保持一致（与电脑端 main.js 一致）；
 	 * 配置读取失败或取值非法时回退 bedrock。
@@ -164,7 +164,7 @@ class LunarCoreApp {
 			const res = await fetch('/file/read/lunar_config.json');
 			if (res.ok) {
 				const config = await res.json();
-				const value = config && config.client ? config.client.character_renderer : null;
+				const value = config && config.system ? config.system.character_renderer : null;
 				if (value === 'live2d' || value === 'bedrock') renderer = value;
 			}
 		} catch (e) {

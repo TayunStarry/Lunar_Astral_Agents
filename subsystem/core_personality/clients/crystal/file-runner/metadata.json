@@ -1,0 +1,16 @@
+{
+	"id": "lunar.file-runner",
+	"icon": "icon.webp",
+	"title": "编辑运行",
+	"description": "执行文件编辑与运行JavaScript/HTML代码",
+	"tags": [
+		"Node-LTP"
+	],
+	"tools": [
+		{
+			"name": "file_runner",
+			"description": "执行文件编辑与运行JavaScript/HTML代码"
+		}
+	],
+	"background_retention": true
+}

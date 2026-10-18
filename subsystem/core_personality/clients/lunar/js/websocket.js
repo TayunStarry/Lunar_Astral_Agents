@@ -46,7 +46,7 @@ function handleWebSocketMessage(msg) {
         }
 
         // 资源收录回执：渲染为可点击的资源图标（按钮），点击把该资源句柄载入输入框。
-        // 服务端在文件入库后把围栏块置换为 `[已收录] @D.003 文件名.md`（见 reader.ts）。
+        // 模型可能在回复中回显 `[已收录] @D.003 文件名.md`，按回执渲染以保持可点击。
         const fileNotice = /^\[已收录\]\s*(@[DIVAT]\.\d{3,})\s*(.*)$/.exec(content.trim());
         if (fileNotice) {
             addMessage({

@@ -1,15 +1,18 @@
 package crystal
 
 import (
+	"CorePersonality/clients"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -417,6 +420,9 @@ func ScanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 		packages = append(packages, pkg)
 	}
 
+	// 内置包：随二进制发布在 clients/crystal/<name>/metadata.json，不出现在扩展包目录扫描中
+	packages = append(packages, loadInternalPackages()...)
+
 	// 按标题排序，保证输出稳定
 	sort.Slice(packages, func(i, j int) bool {
 		return packages[i].ID < packages[j].ID
@@ -424,6 +430,44 @@ func ScanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(packages)
+}
+
+// loadInternalPackages 读取内嵌在琉璃前端里的内置包元数据
+//
+// 内置包与蓝图包同处 clients/crystal/<name>，URL 直接指向 /desktop/<name>/index.html；
+// Internal=true 供前端过滤，不把它们放进桌面网格（由常驻侧边栏按钮进入）。
+func loadInternalPackages() []PackageInfo {
+	out := []PackageInfo{}
+	entries, err := fs.ReadDir(clients.EmbeddedFiles, "crystal")
+	if err != nil {
+		return out
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		dir := entry.Name()
+		metaPath := path.Join("crystal", dir, "metadata.json")
+		data, err := fs.ReadFile(clients.EmbeddedFiles, metaPath)
+		if err != nil {
+			continue
+		}
+		var pkg PackageInfo
+		if err := json.Unmarshal(data, &pkg); err != nil {
+			LoggerGeneral.Warn("CrystalAstral", "解析内置包配置失败 %s: %v", metaPath, err)
+			continue
+		}
+		pkg.PackageName = dir
+		pkg.Internal = true
+		if pkg.Icon != "" && !strings.HasPrefix(pkg.Icon, "http") && !strings.HasPrefix(pkg.Icon, "/") {
+			pkg.Icon = "/desktop/" + dir + "/" + pkg.Icon
+		}
+		if pkg.URL == "" && pkg.Path == "" {
+			pkg.URL = "/desktop/" + dir + "/index.html"
+		}
+		out = append(out, pkg)
+	}
+	return out
 }
 
 // writeJSON 写入JSON响应

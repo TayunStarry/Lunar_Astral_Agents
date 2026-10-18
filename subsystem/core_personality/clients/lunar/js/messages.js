@@ -12,9 +12,14 @@ function buildFileRefBlock(refId, label) {
     icon.className = 'fas fa-file-alt';
     const name = document.createElement('span');
     name.className = 'file-ref-name';
-    // 展示优先用回执里的文件名，悬停显示规范句柄
-    name.textContent = label ? `${label}（${refId}）` : refId;
+    // 展示句柄对应的文件名，悬停显示规范句柄
+    name.textContent = label || resourceNameCache.get(baseResourceHandle(refId)) || refId;
     name.title = refId;
+    if (!label) {
+        resolveResourceName(refId).then(resolved => {
+            if (resolved) name.textContent = resolved;
+        });
+    }
     pill.appendChild(icon);
     pill.appendChild(name);
     pill.addEventListener('click', () => addFileReference(refId));
@@ -49,8 +54,12 @@ function renderFileRefChips() {
         icon.className = 'fas fa-file-alt';
         const name = document.createElement('span');
         name.className = 'file-ref-chip-name';
-        name.textContent = refId;
+        // 展示句柄对应的文件名，悬停显示规范句柄
+        name.textContent = resourceNameCache.get(baseResourceHandle(refId)) || refId;
         name.title = refId;
+        resolveResourceName(refId).then(resolved => {
+            if (resolved) name.textContent = resolved;
+        });
         const removeBtn = document.createElement('button');
         removeBtn.className = 'pending-attachment-remove';
         removeBtn.title = '移除引用';

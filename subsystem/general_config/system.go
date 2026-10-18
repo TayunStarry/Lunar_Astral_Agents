@@ -20,6 +20,11 @@ var AllowLAN = flag.Bool("allow-lan", false, "允许局域网访问引擎服务�
 // 默认 false：fetch/http/download 校验服务端证书；置 true（lunar_config.json 的 server.insecure_tls）恢复旧的跳过行为。
 var InsecureTLS = flag.Bool("insecure-tls", false, "插件网络请求跳过 TLS 证书校验（不推荐）")
 
+// ConsoleLogEnabled 是否把控制台输出镜像落盘到 local_data/logs/console.log。
+// 默认 false：日志只进 TUI 内存视图与「数据导出」，不再启动即写文件；
+// 置 true（lunar_config.json 的 system.console_log）才额外保留一份可滚动的控制台日志。
+var ConsoleLogEnabled = flag.Bool("console-log", false, "将控制台输出镜像到 local_data/logs/console.log（默认关闭）")
+
 // 系统运行状态变量
 var (
 	// ModelReady 表示模型是否准备就绪的状态标识，0 可表示未准备就绪。

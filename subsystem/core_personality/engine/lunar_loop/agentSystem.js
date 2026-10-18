@@ -2,7 +2,7 @@ var agentSystem = (function (exports) {
     'use strict';
 
     class GlobalConfig {
-        static customConfig = { agent: {}, server: {} };
+        static customConfig = { agent: {} };
         static imageFormatsExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
         static videoFormatsExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv'];
         static LTPfunction = new Map();
@@ -36,7 +36,7 @@ var agentSystem = (function (exports) {
         }
         ;
         static get debugMode() {
-            return GlobalConfig.customConfig?.server?.developer ?? false;
+            return GlobalConfig.customConfig?.system?.developer ?? false;
         }
         ;
         static get VideoInputMode() {
@@ -52,6 +52,48 @@ var agentSystem = (function (exports) {
             return Number.isFinite(side) && side > 0 ? side : 1080;
         }
         ;
+    }
+
+    const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    function bytesToBase64(bytes) {
+        let out = '';
+        for (let i = 0; i < bytes.length; i += 3) {
+            const b0 = bytes[i];
+            const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+            const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+            out += BASE64_ALPHABET[b0 >> 2];
+            out += BASE64_ALPHABET[((b0 & 0x03) << 4) | (b1 >> 4)];
+            out += i + 1 < bytes.length ? BASE64_ALPHABET[((b1 & 0x0f) << 2) | (b2 >> 6)] : '=';
+            out += i + 2 < bytes.length ? BASE64_ALPHABET[b2 & 0x3f] : '=';
+        }
+        return out;
+    }
+
+    function admitResource(input) {
+        try {
+            const payload = input.data instanceof Uint8Array
+                ? { ...input, data: bytesToBase64(input.data) }
+                : input;
+            const [result, error] = resourceAdmit(payload);
+            if (error || !result) {
+                console.error('[资源] 入库失败:', error?.message || '返回为空', input.sourceKind, input.name || input.source || '');
+                return null;
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[资源] 入库抛异常:', error);
+            return null;
+        }
+    }
+    function admitImageDataURI(imageData, name, origin = 'client-upload') {
+        if (!imageData)
+            return null;
+        if (imageData.startsWith('data:')) {
+            return admitResource({ sourceKind: 'data', source: imageData, name, origin, kindHint: 'I', dedup: true });
+        }
+        const sourceKind = /^https?:\/\//i.test(imageData) ? 'url' : 'path';
+        return admitResource({ sourceKind, source: imageData, name, origin, kindHint: 'I', dedup: true });
     }
 
     const FALLBACK_PATTERN = '@([DIVAT])\\.(\\d{3,})(?:\\|(?:§(\\d+)|L(\\d+)-(\\d+)))?';
@@ -127,40 +169,6 @@ var agentSystem = (function (exports) {
             + '段落锚点可写 @D.003|§4（第 4 节）或 @D.003|L120-168（第 120-168 行）';
     }
 
-    const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    function bytesToBase64(bytes) {
-        let out = '';
-        for (let i = 0; i < bytes.length; i += 3) {
-            const b0 = bytes[i];
-            const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
-            const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
-            out += BASE64_ALPHABET[b0 >> 2];
-            out += BASE64_ALPHABET[((b0 & 0x03) << 4) | (b1 >> 4)];
-            out += i + 1 < bytes.length ? BASE64_ALPHABET[((b1 & 0x0f) << 2) | (b2 >> 6)] : '=';
-            out += i + 2 < bytes.length ? BASE64_ALPHABET[b2 & 0x3f] : '=';
-        }
-        return out;
-    }
-    function admitResource(input) {
-        try {
-            const payload = input.data instanceof Uint8Array
-                ? { ...input, data: bytesToBase64(input.data) }
-                : input;
-            const [result, error] = resourceAdmit(payload);
-            if (error || !result) {
-                console.error('[资源] 入库失败:', error?.message || '返回为空', input.sourceKind, input.name || input.source || '');
-                return null;
-            }
-            return result;
-        }
-        catch (error) {
-            console.error('[资源] 入库抛异常:', error);
-            return null;
-        }
-    }
-    function admitBytes(data, name, origin = 'tool-output', retain) {
-        return admitResource({ sourceKind: 'bytes', data, name, origin, retain });
-    }
     function readResource(handle, maxBytes) {
         const parsed = parseHandle(handle);
         if (!parsed) {
@@ -178,23 +186,6 @@ var agentSystem = (function (exports) {
         catch (error) {
             console.error('[资源] 取回抛异常:', error);
             return null;
-        }
-    }
-    function outlineResource(handle) {
-        const parsed = parseHandle(handle);
-        if (!parsed)
-            return [];
-        try {
-            const [sections, , error] = resourceOutline(formatHandle(parsed));
-            if (error || !sections) {
-                console.error('[资源] 读大纲失败:', error?.message || '返回为空', handle);
-                return [];
-            }
-            return sections;
-        }
-        catch (error) {
-            console.error('[资源] 读大纲抛异常:', error);
-            return [];
         }
     }
     function listResources(kind = '', limit = 50) {
@@ -237,30 +228,6 @@ var agentSystem = (function (exports) {
             return null;
         }
     }
-    function setResourceSummary(id, summary, tags) {
-        try {
-            const [ok, error] = resourceSetSummary(id, summary, tags ?? []);
-            if (error || !ok)
-                console.error('[资源] 写摘要失败:', error?.message || '返回失败');
-        }
-        catch (error) {
-            console.error('[资源] 写摘要抛异常:', error);
-        }
-    }
-    function setResourceSections(id, sections) {
-        try {
-            const [ok, error] = resourceSetSections(id, sections);
-            if (error || !ok) {
-                console.error('[资源] 写段落表失败:', error?.message || '返回失败');
-                return false;
-            }
-            return true;
-        }
-        catch (error) {
-            console.error('[资源] 写段落表抛异常:', error);
-            return false;
-        }
-    }
     function getResourceEntry(handle) {
         const parsed = parseHandle(handle);
         if (!parsed)
@@ -276,46 +243,16 @@ var agentSystem = (function (exports) {
             return null;
         }
     }
-    function deleteResource(handle) {
-        const parsed = parseHandle(handle);
-        if (!parsed)
-            return false;
+
+    function setResourceSummary(id, summary, tags) {
         try {
-            const [ok, error] = resourceDelete(formatHandle(parsed));
-            if (error || !ok) {
-                console.error('[资源] 删除失败:', error?.message || '返回失败', handle);
-                return false;
-            }
-            return true;
+            const [ok, error] = resourceSetSummary(id, summary, tags ?? []);
+            if (error || !ok)
+                console.error('[资源] 写摘要失败:', error?.message || '返回失败');
         }
         catch (error) {
-            console.error('[资源] 删除抛异常:', error);
-            return false;
+            console.error('[资源] 写摘要抛异常:', error);
         }
-    }
-    function admitImageDataURI(imageData, name, origin = 'client-upload') {
-        if (!imageData)
-            return null;
-        if (imageData.startsWith('data:')) {
-            return admitResource({ sourceKind: 'data', source: imageData, name, origin, kindHint: 'I', dedup: true });
-        }
-        const sourceKind = /^https?:\/\//i.test(imageData) ? 'url' : 'path';
-        return admitResource({ sourceKind, source: imageData, name, origin, kindHint: 'I', dedup: true });
-    }
-    function admitDocumentByName(fileName) {
-        const target = String(fileName || '').trim().replace(/^[#@]/, '');
-        if (!target)
-            return null;
-        const name = target.replace(/^\.\//, '');
-        const fromWorkspace = admitResource({ sourceKind: 'workspace', source: target, name, origin: 'client-upload', retain: 'normal' });
-        if (fromWorkspace)
-            return fromWorkspace;
-        return admitResource({ sourceKind: 'path', source: target, name, origin: 'client-upload', retain: 'normal' });
-    }
-    function degradeNotice(handle, reason) {
-        const parsed = parseHandle(handle);
-        const label = parsed ? formatHandle(parsed) : handle;
-        return `${label}（${reason}）`;
     }
 
     const IMAGE_WINDOW_SIZE = 20;
@@ -434,7 +371,7 @@ var agentSystem = (function (exports) {
                     properties: {
                         description: {
                             type: 'string',
-                            description: "绘画需求描述，如'画一只在樱花树下的白猫'、'把 @I.003 画成雪景'。描述越详细，绘画效果越好。"
+                            description: "绘画需求描述，如'画一只在樱花树下的白猫'、'把 @I.003 画成雪景'。描述越详细，绘画效果越好。以第一人称书写时，「我」「我的」指月华本人（自画像），「我的妹妹」指琉璃。"
                         },
                         reference_tag: {
                             type: 'string',
@@ -614,8 +551,8 @@ var agentSystem = (function (exports) {
         const described = describeResource(tag, question);
         return described || sanitizeImageDesc(entry?.summary || '', 200);
     }
-    async function handleListImages(args) {
-        const parsed = typeof args === 'string' ? safeParse$1(args) : (args || {});
+    async function handleListImages$1(args) {
+        const parsed = typeof args === 'string' ? safeParse$2(args) : (args || {});
         const limit = Math.min(Math.max(Number(parsed.limit) || 30, 1), LIST_LIMIT_MAX$1);
         const lines = [];
         for (const entry of listResources('I', limit)) {
@@ -631,7 +568,7 @@ var agentSystem = (function (exports) {
         return [text, ''];
     }
     async function handleDescribeImages(args) {
-        const parsed = typeof args === 'string' ? safeParse$1(args) : (args || {});
+        const parsed = typeof args === 'string' ? safeParse$2(args) : (args || {});
         const rawTags = Array.isArray(parsed.tags) ? parsed.tags : (parsed.tag ? [parsed.tag] : []);
         const resolved = rawTags
             .map(item => resolveImageRef(String(item || '')))
@@ -652,7 +589,7 @@ var agentSystem = (function (exports) {
         console.log(`[图片描述] 已取回 ${lines.length} 张图片描述`);
         return [text, ''];
     }
-    function safeParse$1(text) {
+    function safeParse$2(text) {
         try {
             const parsed = JSON.parse(text);
             return parsed && typeof parsed === 'object' ? parsed : {};
@@ -661,7 +598,7 @@ var agentSystem = (function (exports) {
             return {};
         }
     }
-    GlobalConfig.LTPfunction.set('list_images', handleListImages);
+    GlobalConfig.LTPfunction.set('list_images', handleListImages$1);
     GlobalConfig.LTPfunction.set('describe_images', handleDescribeImages);
 
     const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
@@ -1266,61 +1203,7 @@ var agentSystem = (function (exports) {
             return false;
         }
     }
-    function getFileIndexFromKnowledge(key) {
-        try {
-            return loadKnowledge('file_mapping').get(key) ?? null;
-        }
-        catch (error) {
-            console.error('[知识库] 读取文件映射失败:', error);
-            return null;
-        }
-    }
-    function saveFileIndexToKnowledge(key, value) {
-        try {
-            return saveKnowledge('file_mapping', loadKnowledge('file_mapping').set(key, value));
-        }
-        catch (error) {
-            console.error('[知识库] 写入文件映射失败:', error);
-            return false;
-        }
-    }
 
-    let mediaRoles = null;
-    function registerMediaRoles(roles) {
-        mediaRoles = roles;
-    }
-    const VIDEO_FALLBACK_TEXT = '月华看不了这个视频呢';
-    const AUDIO_FALLBACK_TEXT = '月华听不懂这段语音呢';
-    function useFrameSequence() {
-        return GlobalConfig.VideoInputMode === 'frames';
-    }
-    async function understandVideo(videoUrl) {
-        const cachedPrompt = getPromptFromKnowledge(videoUrl);
-        if (cachedPrompt) {
-            console.log('[感知者] 命中视频缓存，直接返回');
-            return cachedPrompt;
-        }
-        if (useFrameSequence()) {
-            console.log('[感知者] 开始将视频抽取为图片序列帧...');
-            const [groups, framesError] = videoFrames(videoUrl);
-            if (!groups || groups.length === 0 || framesError) {
-                console.error('[感知者] 视频抽帧失败:', framesError);
-                throw new Error('视频抽帧失败');
-            }
-            const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
-            console.log(`[感知者] 视频抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
-            return understandMediaSegments(() => mediaRoles.perceiverRole.watchFrames(groups), videoUrl);
-        }
-        console.log('[感知者] 开始将视频写入媒体目录...');
-        const [segments, mediaError] = videoMedia(videoUrl);
-        if (!segments || segments.length === 0 || mediaError) {
-            console.error('[感知者] 视频媒体化失败:', mediaError);
-            throw new Error('视频媒体化失败');
-        }
-        const mediaUrls = segments.map(segment => `file://${segment.file}`);
-        console.log(`[感知者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
-        return understandMediaSegments(() => mediaRoles.perceiverRole.watchVideo(mediaUrls), videoUrl);
-    }
     function admitMedia(source, name, origin, kindHint) {
         if (!source)
             return null;
@@ -1338,42 +1221,6 @@ var agentSystem = (function (exports) {
         const entry = getResourceEntry(media.handle);
         return entry?.summary || '';
     }
-    async function resourceVideo(originalSource, name, origin, admitSource) {
-        const media = admitMedia(originalSource, name, origin, 'V');
-        if (!media)
-            return '';
-        const cached = existingSummary(media);
-        if (cached)
-            return `${media.handle}【视频理解】${cached}`;
-        try {
-            const summary = await understandVideo(originalSource);
-            if (!summary || !summary.trim())
-                return `${media.handle}`;
-            storeMediaSummary(media, summary);
-            return `${media.handle}【视频理解】${summary}`;
-        }
-        catch (error) {
-            console.error('[感知者] 视频理解失败（句柄已保留）:', error);
-            return `${media.handle}${VIDEO_FALLBACK_TEXT}`;
-        }
-    }
-    async function resourceAudio(originalSource, name, origin) {
-        const media = admitMedia(originalSource, name, origin, 'A');
-        if (!media)
-            return '';
-        const cached = existingSummary(media);
-        if (cached)
-            return `${media.handle}${cached}`;
-        try {
-            const transcript = await understandAudio(originalSource);
-            storeMediaSummary(media, transcript);
-            return `${media.handle}${transcript}`;
-        }
-        catch (error) {
-            console.error('[感知者] 音频理解失败（句柄已保留）:', error);
-            return `${media.handle}${AUDIO_FALLBACK_TEXT}`;
-        }
-    }
     function mediaName(source, fallbackExt) {
         const lower = (source || '').toLowerCase();
         const dataMatch = /^data:(image|video|audio)\/(\w+)[;,]/.exec(lower);
@@ -1385,16 +1232,35 @@ var agentSystem = (function (exports) {
             return base;
         return `media${fallbackExt}`;
     }
+    function resolveAdmittedMedia(handle) {
+        const entry = getResourceEntry(handle);
+        return entry ? { handle: entry.handle, id: entry.id } : null;
+    }
+
+    let mediaRoles = null;
+    function registerMediaRoles(roles) {
+        mediaRoles = roles;
+    }
+    function mediaRoleContext() {
+        if (!mediaRoles)
+            throw new Error('媒体角色尚未注入（roles.ts 未初始化）');
+        return mediaRoles;
+    }
+
+    function useFrameSequence() {
+        return GlobalConfig.VideoInputMode === 'frames';
+    }
     async function understandMediaSegments(watch, cacheKey) {
         console.log('[感知者] 开始观看...');
-        const videoSummary = await watch();
+        const summary = await watch();
         console.log('[感知者] 观看完成');
-        if (videoSummary && videoSummary.trim().length > 0 && cacheKey) {
-            savePromptToKnowledge(cacheKey, videoSummary);
+        if (summary && summary.trim().length > 0 && cacheKey) {
+            savePromptToKnowledge(cacheKey, summary);
             console.log('[感知者] 理解文本已缓存');
         }
-        return videoSummary;
+        return summary;
     }
+
     async function understandAnimatedImage(imageSource, cacheKey) {
         const cachedPrompt = cacheKey ? getPromptFromKnowledge(cacheKey) : '';
         if (cachedPrompt) {
@@ -1410,7 +1276,7 @@ var agentSystem = (function (exports) {
             }
             const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
             console.log(`[感知者] 动态图抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
-            return understandMediaSegments(() => mediaRoles.perceiverRole.watchFrames(groups), cacheKey);
+            return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchFrames(groups), cacheKey);
         }
         const [segments, mediaError] = animatedImageToVideo(imageSource);
         if (!segments || segments.length === 0 || mediaError) {
@@ -1419,54 +1285,7 @@ var agentSystem = (function (exports) {
         }
         const mediaUrls = segments.map(segment => `file://${segment.file}`);
         console.log(`[感知者] 动态图转视频完成，共 ${mediaUrls.length} 个片段`);
-        return understandMediaSegments(() => mediaRoles.perceiverRole.watchVideo(mediaUrls), cacheKey);
-    }
-    async function LiteImageFile() {
-        for (let message of GlobalConfig.unreadContext) {
-            if (typeof message.content === 'string')
-                continue;
-            const newContent = [];
-            for (let item of message.content) {
-                if (item.type == 'text') {
-                    newContent.push(item);
-                    continue;
-                }
-                if (item.type === 'video_url') {
-                    newContent.push({ type: 'text', text: await resourceVideoOrFallback(item.video_url.url) });
-                    continue;
-                }
-                if (item.type === 'audio_url') {
-                    newContent.push({ type: 'text', text: await resourceAudioOrFallback(item.audio_url.url) });
-                    continue;
-                }
-                if ('input_audio' in item) {
-                    const format = item.input_audio.format || 'wav';
-                    newContent.push({ type: 'text', text: await resourceAudioOrFallback(`data:audio/${format};base64,${item.input_audio.data}`) });
-                    continue;
-                }
-                if (!item.image_url)
-                    continue;
-                const imageSource = item.image_url.url;
-                if (imageSource.toLowerCase().startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(format => imageSource.toLowerCase().endsWith(format))) {
-                    newContent.push({ type: 'text', text: await resourceVideoOrFallback(imageSource) });
-                    continue;
-                }
-                const [isAnimated, animatedError] = isAnimatedImage(imageSource);
-                if (animatedError)
-                    console.error('[动态图判定失败]:', animatedError.message);
-                if (!animatedError && isAnimated) {
-                    let handle = handleFromVisionURL(imageSource);
-                    if (!handle) {
-                        const admitted = admitImageDataURI(imageSource, `image${guessImageExt(imageSource)}`);
-                        handle = admitted?.handle || '';
-                    }
-                    newContent.push({ type: 'text', text: await replaceAnimatedImage(imageSource, handle) });
-                    continue;
-                }
-                newContent.push(item);
-            }
-            message.content = newContent;
-        }
+        return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchVideo(mediaUrls), cacheKey);
     }
     async function replaceAnimatedImage(imageSource, handle) {
         const media = resolveAdmittedMedia(handle);
@@ -1479,56 +1298,11 @@ var agentSystem = (function (exports) {
         }
         if (media && summary.trim().length > 0)
             storeMediaSummary(media, summary);
-        const body = summary.trim().length > 0 ? `【动态图理解】${summary}` : mediaRoles.randomDefaultMessage();
+        const body = summary.trim().length > 0 ? `【动态图理解】${summary}` : mediaRoleContext().randomDefaultMessage();
         return media ? `${media.handle}${body}` : body;
     }
-    function resolveAdmittedMedia(handle) {
-        const entry = getResourceEntry(handle);
-        return entry ? { handle: entry.handle, id: entry.id } : null;
-    }
-    async function understandVideoOrFallback(videoUrl) {
-        try {
-            const summary = await understandVideo(videoUrl);
-            if (summary.trim().length > 0)
-                return summary;
-            return mediaRoles.randomDefaultMessage();
-        }
-        catch (error) {
-            console.error('[感知者] 视频理解失败，以兜底文本置换:', error);
-            return VIDEO_FALLBACK_TEXT;
-        }
-    }
-    async function resourceVideoOrFallback(videoSource) {
-        try {
-            const text = await resourceVideo(videoSource, mediaName(videoSource, '.mp4'), videoSource.startsWith('data:') ? 'client-upload' : 'channel');
-            if (text)
-                return text;
-        }
-        catch (error) {
-            console.error('[感知者] 视频资源化失败，退化为纯理解文本:', error);
-        }
-        return understandVideoOrFallback(videoSource);
-    }
-    async function resourceAudioOrFallback(audioSource) {
-        try {
-            const text = await resourceAudio(audioSource, mediaName(audioSource, '.wav'), audioSource.startsWith('data:') ? 'client-upload' : 'channel');
-            if (text)
-                return text;
-        }
-        catch (error) {
-            console.error('[感知者] 音频资源化失败，退化为纯转写文本:', error);
-        }
-        return understandAudioOrFallback(audioSource);
-    }
-    async function understandAudioOrFallback(audioSource) {
-        try {
-            return await understandAudio(audioSource);
-        }
-        catch (error) {
-            console.error('[感知者] 音频理解失败，以兜底文本置换:', error);
-            return AUDIO_FALLBACK_TEXT;
-        }
-    }
+
+    const AUDIO_FALLBACK_TEXT = '月华听不懂这段语音呢';
     async function understandAudio(audioSource) {
         const cacheable = !audioSource.startsWith('data:');
         const cachedPrompt = cacheable ? getPromptFromKnowledge(audioSource) : '';
@@ -1583,6 +1357,162 @@ var agentSystem = (function (exports) {
         const raw = result?.body?.choices?.[0]?.message?.content || '';
         const marker = '<asr_text>';
         return raw.includes(marker) ? raw.substring(raw.indexOf(marker) + marker.length).trim() : raw.trim();
+    }
+    async function resourceAudio(originalSource, name, origin) {
+        const media = admitMedia(originalSource, name, origin, 'A');
+        if (!media)
+            return '';
+        const cached = existingSummary(media);
+        if (cached)
+            return `${media.handle}${cached}`;
+        try {
+            const transcript = await understandAudio(originalSource);
+            storeMediaSummary(media, transcript);
+            return `${media.handle}${transcript}`;
+        }
+        catch (error) {
+            console.error('[感知者] 音频理解失败（句柄已保留）:', error);
+            return `${media.handle}${AUDIO_FALLBACK_TEXT}`;
+        }
+    }
+    async function understandAudioOrFallback(audioSource) {
+        try {
+            return await understandAudio(audioSource);
+        }
+        catch (error) {
+            console.error('[感知者] 音频理解失败，以兜底文本置换:', error);
+            return AUDIO_FALLBACK_TEXT;
+        }
+    }
+    async function resourceAudioOrFallback(audioSource) {
+        try {
+            const text = await resourceAudio(audioSource, mediaName(audioSource, '.wav'), audioSource.startsWith('data:') ? 'client-upload' : 'channel');
+            if (text)
+                return text;
+        }
+        catch (error) {
+            console.error('[感知者] 音频资源化失败，退化为纯转写文本:', error);
+        }
+        return understandAudioOrFallback(audioSource);
+    }
+
+    const VIDEO_FALLBACK_TEXT = '月华看不了这个视频呢';
+    async function understandVideo(videoUrl) {
+        const cachedPrompt = getPromptFromKnowledge(videoUrl);
+        if (cachedPrompt) {
+            console.log('[感知者] 命中视频缓存，直接返回');
+            return cachedPrompt;
+        }
+        if (useFrameSequence()) {
+            console.log('[感知者] 开始将视频抽取为图片序列帧...');
+            const [groups, framesError] = videoFrames(videoUrl);
+            if (!groups || groups.length === 0 || framesError) {
+                console.error('[感知者] 视频抽帧失败:', framesError);
+                throw new Error('视频抽帧失败');
+            }
+            const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
+            console.log(`[感知者] 视频抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
+            return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchFrames(groups), videoUrl);
+        }
+        console.log('[感知者] 开始将视频写入媒体目录...');
+        const [segments, mediaError] = videoMedia(videoUrl);
+        if (!segments || segments.length === 0 || mediaError) {
+            console.error('[感知者] 视频媒体化失败:', mediaError);
+            throw new Error('视频媒体化失败');
+        }
+        const mediaUrls = segments.map(segment => `file://${segment.file}`);
+        console.log(`[感知者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
+        return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchVideo(mediaUrls), videoUrl);
+    }
+    async function resourceVideo(originalSource, name, origin, admitSource) {
+        const media = admitMedia(originalSource, name, origin, 'V');
+        if (!media)
+            return '';
+        const cached = existingSummary(media);
+        if (cached)
+            return `${media.handle}【视频理解】${cached}`;
+        try {
+            const summary = await understandVideo(originalSource);
+            if (!summary || !summary.trim())
+                return `${media.handle}`;
+            storeMediaSummary(media, summary);
+            return `${media.handle}【视频理解】${summary}`;
+        }
+        catch (error) {
+            console.error('[感知者] 视频理解失败（句柄已保留）:', error);
+            return `${media.handle}${VIDEO_FALLBACK_TEXT}`;
+        }
+    }
+    async function understandVideoOrFallback(videoUrl) {
+        try {
+            const summary = await understandVideo(videoUrl);
+            if (summary.trim().length > 0)
+                return summary;
+            return mediaRoleContext().randomDefaultMessage();
+        }
+        catch (error) {
+            console.error('[感知者] 视频理解失败，以兜底文本置换:', error);
+            return VIDEO_FALLBACK_TEXT;
+        }
+    }
+    async function resourceVideoOrFallback(videoSource) {
+        try {
+            const text = await resourceVideo(videoSource, mediaName(videoSource, '.mp4'), videoSource.startsWith('data:') ? 'client-upload' : 'channel');
+            if (text)
+                return text;
+        }
+        catch (error) {
+            console.error('[感知者] 视频资源化失败，退化为纯理解文本:', error);
+        }
+        return understandVideoOrFallback(videoSource);
+    }
+
+    async function LiteImageFile() {
+        for (let message of GlobalConfig.unreadContext) {
+            if (typeof message.content === 'string')
+                continue;
+            const newContent = [];
+            for (let item of message.content) {
+                if (item.type == 'text') {
+                    newContent.push(item);
+                    continue;
+                }
+                if (item.type === 'video_url') {
+                    newContent.push({ type: 'text', text: await resourceVideoOrFallback(item.video_url.url) });
+                    continue;
+                }
+                if (item.type === 'audio_url') {
+                    newContent.push({ type: 'text', text: await resourceAudioOrFallback(item.audio_url.url) });
+                    continue;
+                }
+                if ('input_audio' in item) {
+                    const format = item.input_audio.format || 'wav';
+                    newContent.push({ type: 'text', text: await resourceAudioOrFallback(`data:audio/${format};base64,${item.input_audio.data}`) });
+                    continue;
+                }
+                if (!item.image_url)
+                    continue;
+                const imageSource = item.image_url.url;
+                if (imageSource.toLowerCase().startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(format => imageSource.toLowerCase().endsWith(format))) {
+                    newContent.push({ type: 'text', text: await resourceVideoOrFallback(imageSource) });
+                    continue;
+                }
+                const [isAnimated, animatedError] = isAnimatedImage(imageSource);
+                if (animatedError)
+                    console.error('[动态图判定失败]:', animatedError.message);
+                if (!animatedError && isAnimated) {
+                    let handle = handleFromVisionURL(imageSource);
+                    if (!handle) {
+                        const admitted = admitImageDataURI(imageSource, `image${guessImageExt(imageSource)}`);
+                        handle = admitted?.handle || '';
+                    }
+                    newContent.push({ type: 'text', text: await replaceAnimatedImage(imageSource, handle) });
+                    continue;
+                }
+                newContent.push(item);
+            }
+            message.content = newContent;
+        }
     }
 
     const IMAGE_KEEP_CHARS = 0;
@@ -1781,11 +1711,68 @@ var agentSystem = (function (exports) {
         return `已恢复 ${dialogue.length} 条对话上下文、${unread.length} 条未读消息`;
     }
 
-    function RandomFloor(min, max) {
-        return Math.floor(Math.random() * (max - min + 1) + min);
+    const CHARACTER_TABLE = 'painter_characters';
+    function loadCustomCharacters() {
+        const characters = new Map();
+        try {
+            const [entries, error] = knowledgeLoad(CHARACTER_TABLE);
+            if (error) {
+                console.error(`[角色库] 读取 ${CHARACTER_TABLE} 失败:`, error.message ?? String(error));
+                return characters;
+            }
+            for (const pair of entries ?? []) {
+                if (!Array.isArray(pair) || typeof pair[0] !== 'string' || !pair[0])
+                    continue;
+                const name = pair[0];
+                try {
+                    const raw = JSON.parse(String(pair[1] ?? ''));
+                    const profile = normalizeProfile(raw, name);
+                    if (profile)
+                        characters.set(profile.name, profile);
+                }
+                catch (parseError) {
+                    console.warn(`[角色库] 角色「${name}」的档案不是合法 JSON，已跳过:`, parseError);
+                }
+            }
+        }
+        catch (error) {
+            console.error('[角色库] 读取自定义角色失败:', error);
+        }
+        return characters;
     }
-    function RandomFloat(min, max, length = 2) {
-        return Number((Math.random() * (max - min) + min).toFixed(length));
+    function saveCustomCharacter(profile) {
+        try {
+            const characters = loadCustomCharacters();
+            characters.set(profile.name, profile);
+            const entries = [...characters.entries()]
+                .map(([name, value]) => [name, JSON.stringify(value)]);
+            const [ok, error] = knowledgeSave(CHARACTER_TABLE, entries);
+            if (error) {
+                console.error(`[角色库] 写入 ${CHARACTER_TABLE} 失败:`, error.message ?? String(error));
+                return false;
+            }
+            return !!ok;
+        }
+        catch (error) {
+            console.error('[角色库] 保存自定义角色失败:', error);
+            return false;
+        }
+    }
+    function normalizeProfile(raw, fallbackName) {
+        if (!raw || typeof raw !== 'object')
+            return null;
+        const name = String(raw.name || fallbackName).trim();
+        const appearance = String(raw.appearance || '').trim();
+        if (!name || !appearance)
+            return null;
+        const gender = raw.gender === '男' ? '男' : '女';
+        return {
+            name,
+            gender,
+            appearance,
+            outfitFull: String(raw.outfitFull || '').trim() || undefined,
+            outfitChibi: String(raw.outfitChibi || '').trim() || undefined,
+        };
     }
 
     class CreativeRoleBase extends ModelBuilder {
@@ -1861,20 +1848,320 @@ var agentSystem = (function (exports) {
         }
     }
 
-    function interactEvent(topic, payload) {
-        try {
-            const resultJSON = ltpInteractEvent(topic, JSON.stringify(payload ?? {}));
-            if (!resultJSON)
-                return {};
-            const res = JSON.parse(resultJSON);
-            if (res && res.returned && res.return !== null && res.return !== undefined) {
-                return { return: res.return };
+    const generationTools = [
+        {
+            type: "function",
+            function: {
+                name: "diffusion_generation",
+                description: "根据文本描述进行文生图。仅适用于风景、物品、场景、氛围图等与人物形象无关的创作；严禁用于绘制任何人物形象(月华、琉璃或其他人物都必须调用 portrait)。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "prompt": {
+                            type: "string",
+                            description: "图像生成的正向描述文本"
+                        },
+                        "ratio": {
+                            type: "string",
+                            enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
+                            description: "画面比例预设,默认 1:1。按题材选择:人物/物品用 2:3 或 3:4,风景/横构图用 3:2 或 16:9,方形构图用 1:1。"
+                        },
+                        "steps": {
+                            type: "number",
+                            description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
+                        },
+                        "negative_prompt": {
+                            type: "string",
+                            description: "负面提示文本,用于排除图像中不希望出现的元素"
+                        },
+                        "cfg_scale": {
+                            type: "number",
+                            description: "提示词权重调节参数(0~2),默认值为 1.0"
+                        },
+                        "super_resolution": {
+                            type: "boolean",
+                            description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+                        }
+                    },
+                    required: [
+                        "prompt"
+                    ]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "image_to_image",
+                description: "基于参考图进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。无参考图时不可调用:人物形象改用 portrait,非人物改用 diffusion_generation,或说明需要用户提供参考图片。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "prompt": {
+                            type: "string",
+                            description: "图像生成的正向描述文本,描述希望参考图变成什么样子"
+                        },
+                        "strength": {
+                            type: "number",
+                            description: "图生图强度,取值范围 0 到 1,越大越偏离参考图。必须由你根据创作意图指定:只改画风/光照/质感用 0.2~0.4;换服饰/换配色/微调细节用 0.4~0.6;换背景/换地点/大幅改场景 用 0.8~0.9 推荐 0.85;替换画面里的一个对象(如把北极熊换成熊猫)同样用 0.8~0.9——实测 0.65/0.75 换不掉大物体。注意:强度≥0.8 时提示词主导画面,没写进提示词的东西会消失,因此提示词必须描述整个画面(含所有要保留的主体)。缺省按中性值 0.5"
+                        },
+                        "steps": {
+                            type: "number",
+                            description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
+                        },
+                        "negative_prompt": {
+                            type: "string",
+                            description: "负面提示文本,用于排除图像中不希望出现的元素(换场景时点名去掉旧场景元素,如 beach, ocean, water, sea)"
+                        },
+                        "cfg_scale": {
+                            type: "number",
+                            description: "提示词引导系数(0~2),默认 1.0。当前模型为引导蒸馏模型,图生图同样保持 1.0;调高会发灰、过曝、塑料感。需要改得更多时调 strength,不要调 cfg"
+                        },
+                        "super_resolution": {
+                            type: "boolean",
+                            description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+                        }
+                    },
+                    required: [
+                        "prompt"
+                    ]
+                }
             }
         }
-        catch (e) {
-            console.error('LTPX 事件交互失败:', e);
+    ];
+
+    const portraitTools = [
+        {
+            type: "function",
+            function: {
+                name: "portrait",
+                description: "生成指定角色的立绘。凡是要求绘制月华、琉璃或其他人物的形象时,都必须且只能调用本函数,禁止用 diffusion_generation 或 image_to_image 代替",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "character": {
+                            type: "string",
+                            description: "目标角色:内置角色(月华/琉璃)或已创建的自定义角色名,已内置外观,只需给出表情/姿势/环境;通用-女 / 通用-男 或临时角色必须用 appearance 描述其外观。任务里的「我」「我的自画像」一律填 月华。{characters}"
+                        },
+                        "chibi": {
+                            type: "boolean",
+                            description: "是否Q版:true=二头身萌系比例(贴纸/表情包/头像),false 或不填=标准头身比的全身立绘"
+                        },
+                        "appearance": {
+                            type: "string",
+                            description: "character=通用-女 / 通用-男 或临时角色时填写该人物的外观:性别、年龄感、发型发色、瞳色、服装、配饰、身份。内置/自定义角色不需要填写。"
+                        },
+                        "expression": {
+                            type: "string",
+                            description: "表情提示词,描述想要展现的表情"
+                        },
+                        "posture": {
+                            type: "string",
+                            description: "动作提示词,描述想要展现的姿势或动作"
+                        },
+                        "outfit": {
+                            type: "string",
+                            description: "服装提示词。不提供则用该角色的默认服装（通用角色仅在 appearance 未写服装时兜底）"
+                        },
+                        "environment": {
+                            type: "string",
+                            description: "环境提示词,描述背景或场景。月华偏暗色与红,琉璃偏淡蓝天空与星光"
+                        },
+                        "ratio": {
+                            type: "string",
+                            enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
+                            description: "画面比例预设。缺省:全尺寸 2:3(竖版全身立绘),Q版 1:1。横版场景改 3:2 或 16:9。"
+                        },
+                        "steps": {
+                            type: "number",
+                            description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
+                        },
+                        "negative_prompt": {
+                            type: "string",
+                            description: "负面提示文本,用于排除图像中不希望出现的元素"
+                        },
+                        "cfg_scale": {
+                            type: "number",
+                            description: "提示词引导系数(0~2),本模型为引导蒸馏,默认 1.0,不要调高"
+                        },
+                        "super_resolution": {
+                            type: "boolean",
+                            description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+                        }
+                    },
+                    required: [
+                        "character",
+                        "expression",
+                        "posture",
+                        "environment"
+                    ]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "create_character",
+                description: "创建或更新一个可复用的自定义角色,写入角色库(SQL数据库)。适合会反复出场的原创角色:创建后 portrait 的 character 与 group_photo 的 roles 都能直接用角色名引用,无需每次重写外观。一次性路人不建议创建。内置角色(月华/琉璃)不能重名",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "name": {
+                            type: "string",
+                            description: "角色名(唯一键,后续绘制时用这个名字引用)"
+                        },
+                        "gender": {
+                            type: "string",
+                            enum: ["女", "男"],
+                            description: "性别,决定立绘模板中的性别表述"
+                        },
+                        "appearance": {
+                            type: "string",
+                            description: "基础外观:年龄感、发型发色、瞳色、面部特征、配饰、体型。这是角色的身份定义,不写表情/动作/场景"
+                        },
+                        "outfit_full": {
+                            type: "string",
+                            description: "默认全尺寸服装。省略则使用简洁得体的日常服装"
+                        },
+                        "outfit_chibi": {
+                            type: "string",
+                            description: "默认Q版服装。省略则复用全尺寸服装"
+                        }
+                    },
+                    required: [
+                        "name",
+                        "gender",
+                        "appearance"
+                    ]
+                }
+            }
         }
-        return {};
+    ];
+
+    const groupTools = [
+        {
+            type: "function",
+            function: {
+                name: "group_photo",
+                description: "生成月华与一个或多个角色的合照。roles 按顺序列出参与者:内置角色与已创建的自定义角色直接写名字,自动继承外观与默认服装;临时角色写完整外观描述(性别、年龄感、发型发色、瞳色、服装、配饰、身份)。chibi=true 时所有参与者使用Q版二头身比例。planning 统一规划每人的表情/动作/服饰,例如\"月华:俏皮眨眼,比V手势,黑色哥特长裙;琉璃:安静微笑,双手交叠,白色星纹裙\";省略则每人使用随机默认表情/动作与默认服装。environment 省略时从预设背景中随机挑选。若本次任务附带参考图,将以该参考图为底图进行图生图,尽量保留参与者的容貌;未附带则按文本描述绘制",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "roles": {
+                            type: "array",
+                            items: {
+                                type: "string"
+                            },
+                            description: "合照参与者列表,至少一位。内置角色与已创建的自定义角色直接写名字(自动继承外观与默认服装);临时角色写完整外观描述。任务里的「我们」「我和妹妹」对应 月华、琉璃。{characters}"
+                        },
+                        "chibi": {
+                            type: "boolean",
+                            description: "是否Q版:true=所有参与者使用Q版二头身比例,false 或不填=全尺寸合照"
+                        },
+                        "planning": {
+                            type: "string",
+                            description: "合照的统一人物规划:逐人写清表情、动作与服饰,用分号分隔。省略则全部使用默认表情/动作与默认服装"
+                        },
+                        "environment": {
+                            type: "string",
+                            description: "环境提示词,描述背景环境或场景。省略时随机使用预设背景"
+                        },
+                        "ratio": {
+                            type: "string",
+                            enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
+                            description: "画面比例预设,默认 1:1。仅在未选定参考图时生效;已选定参考图时输出尺寸自动随参考图比例"
+                        },
+                        "strength": {
+                            type: "number",
+                            description: "已选定参考图时的图生图强度,取值 0 到 1,越大越偏离参考图。保留参与者容貌建议 0.3~0.5;缺省按中性值 0.5。未选定参考图时忽略"
+                        },
+                        "steps": {
+                            type: "number",
+                            description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
+                        },
+                        "negative_prompt": {
+                            type: "string",
+                            description: "负面提示文本,用于排除图像中不希望出现的元素"
+                        },
+                        "cfg_scale": {
+                            type: "number",
+                            description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                        },
+                        "super_resolution": {
+                            type: "boolean",
+                            description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+                        }
+                    },
+                    required: [
+                        "roles"
+                    ]
+                }
+            }
+        }
+    ];
+
+    const runtimeTools = [
+        {
+            type: "function",
+            function: {
+                name: "switch_diffusion_scheme",
+                description: "切换后续绘图使用的模型方案。quality=质量优先(默认,细节更好、耗时更长);turbo=速度优先(出图更快,适合草图、快速确认与批量尝试,推荐 8~12 步)。切换后省略 steps 即使用该方案的推荐步数。切换状态由宿主记录,对所有后续绘图工具生效;任务本身不需要画得快时不要切换,保持当前方案即可",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "scheme": {
+                            type: "string",
+                            enum: ["turbo", "quality"],
+                            description: "目标方案:turbo=速度优先,quality=质量优先"
+                        }
+                    },
+                    required: [
+                        "scheme"
+                    ]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "list_images",
+                description: "查看资源目录中最近的图片句柄与内容描述（按登记时间倒序，越靠前越新）。清单只含文字信息，可用于了解历史图片、确认句柄或为超分定位目标。需要图生图基座时由对话者经 dispatch_painter 的 reference_tag 指定，任务消息会直接附上图片本体",
+                parameters: {
+                    type: "object",
+                    properties: {}
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "upscale_image",
+                description: "对已有图片执行 RealESRGAN 超分辨率放大（4x）,提升清晰度与细节。用户要求把某张图片变清晰、放大或提升画质时调用;不指定句柄时对最近一次生成的作品超分。与生成工具的 super_resolution 参数不同,本工具不重新生成图像,只做纯超分",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "image_tag": {
+                            type: "string",
+                            description: "图片句柄（如 @I.003），对目录中指定图片超分。不填时对最近一次生成的作品超分"
+                        }
+                    }
+                }
+            }
+        }
+    ];
+
+    const painterTools = [
+        ...generationTools,
+        ...portraitTools,
+        ...groupTools,
+        ...runtimeTools,
+    ];
+
+    function RandomFloor(min, max) {
+        return Math.floor(Math.random() * (max - min + 1) + min);
+    }
+    function RandomFloat(min, max, length = 2) {
+        return Number((Math.random() * (max - min) + min).toFixed(length));
     }
 
     class PromptDocument {
@@ -1935,68 +2222,93 @@ var agentSystem = (function (exports) {
         return new PromptDocument(content, file);
     }
 
-    const CHARACTER_TABLE = 'painter_characters';
-    function loadCustomCharacters() {
-        const characters = new Map();
-        try {
-            const [entries, error] = knowledgeLoad(CHARACTER_TABLE);
-            if (error) {
-                console.error(`[角色库] 读取 ${CHARACTER_TABLE} 失败:`, error.message ?? String(error));
-                return characters;
+    class PainterPromptLibrary {
+        commonPrompts = loadPromptDocument('prompts/painterCommon.md');
+        characterPrompts = loadPromptDocument('prompts/painterCharacters.md');
+        defaultExpressionPrompt = this.commonPrompts.list('默认表情');
+        defaultPosturePrompt = this.commonPrompts.list('默认姿势');
+        appearanceBasePrompt = this.characterPrompts.text('月华/基础外观');
+        chibiAppearancePrompt = this.characterPrompts.text('月华/立绘-Q版');
+        fullAppearancePrompt = this.characterPrompts.text('月华/立绘-全尺寸');
+        crystalBasePrompt = this.characterPrompts.text('琉璃/基础外观');
+        crystalFullAppearancePrompt = this.characterPrompts.text('琉璃/立绘-全尺寸');
+        crystalChibiAppearancePrompt = this.characterPrompts.text('琉璃/立绘-Q版');
+        portraitBaseFemalePrompt = this.characterPrompts.text('通用角色/底板-女');
+        portraitBaseMalePrompt = this.characterPrompts.text('通用角色/底板-男');
+        genericFullAppearancePrompt = this.characterPrompts.text('通用角色/立绘-全尺寸');
+        genericChibiAppearancePrompt = this.characterPrompts.text('通用角色/立绘-Q版');
+        defaultOutfitChibiPrompt = this.characterPrompts.text('月华/默认服装-Q版');
+        defaultOutfitFullPrompt = this.characterPrompts.text('月华/默认服装-全尺寸');
+        crystalDefaultOutfitFullPrompt = this.characterPrompts.text('琉璃/默认服装-全尺寸');
+        crystalDefaultOutfitChibiPrompt = this.characterPrompts.text('琉璃/默认服装-Q版');
+        groupPhotoTemplate = this.commonPrompts.text('合照模板');
+        groupEnvironmentPresets = this.commonPrompts.list('合照背景');
+        defaultNegativePrompt = this.commonPrompts.text('默认负面提示词');
+        builtinCharacters = new Map([
+            ['月华', {
+                    name: '月华', gender: '女', appearance: this.appearanceBasePrompt,
+                    outfitFull: this.defaultOutfitFullPrompt, outfitChibi: this.defaultOutfitChibiPrompt, builtin: true,
+                }],
+            ['琉璃', {
+                    name: '琉璃', gender: '女', appearance: this.crystalBasePrompt,
+                    outfitFull: this.crystalDefaultOutfitFullPrompt, outfitChibi: this.crystalDefaultOutfitChibiPrompt, builtin: true,
+                }],
+        ]);
+        get templates() {
+            return {
+                chibiSelf: this.chibiAppearancePrompt,
+                fullSelf: this.fullAppearancePrompt,
+                crystalFull: this.crystalFullAppearancePrompt,
+                crystalChibi: this.crystalChibiAppearancePrompt,
+                genericFull: this.genericFullAppearancePrompt,
+                genericChibi: this.genericChibiAppearancePrompt,
+                femaleBase: this.portraitBaseFemalePrompt,
+                maleBase: this.portraitBaseMalePrompt,
+                defaultOutfitChibi: this.defaultOutfitChibiPrompt,
+                defaultOutfitFull: this.defaultOutfitFullPrompt,
+                crystalOutfitFull: this.crystalDefaultOutfitFullPrompt,
+                crystalOutfitChibi: this.crystalDefaultOutfitChibiPrompt,
+                defaultNegative: this.defaultNegativePrompt,
+                groupPhoto: this.groupPhotoTemplate,
+            };
+        }
+        renderAppearance(template, parts, defaultOutfit, base, gender) {
+            const expression = parts.expression || this.randomExpression();
+            const posture = parts.posture || this.randomPosture();
+            const outfit = parts.outfit || defaultOutfit;
+            return this.renderTemplate(template, {
+                base: base || this.appearanceBasePrompt,
+                gender: gender || '女孩',
+                expression,
+                outfit,
+                posture,
+                environment: parts.environment || '',
+            });
+        }
+        renderTemplate(template, vars) {
+            let filled = template;
+            for (const [key, value] of Object.entries(vars)) {
+                filled = filled.split(`{${key}}`).join(value);
             }
-            for (const pair of entries ?? []) {
-                if (!Array.isArray(pair) || typeof pair[0] !== 'string' || !pair[0])
-                    continue;
-                const name = pair[0];
-                try {
-                    const raw = JSON.parse(String(pair[1] ?? ''));
-                    const profile = normalizeProfile(raw, name);
-                    if (profile)
-                        characters.set(profile.name, profile);
-                }
-                catch (parseError) {
-                    console.warn(`[角色库] 角色「${name}」的档案不是合法 JSON，已跳过:`, parseError);
-                }
-            }
+            return this.tidyPrompt(filled);
         }
-        catch (error) {
-            console.error('[角色库] 读取自定义角色失败:', error);
+        tidyPrompt(text) {
+            return text
+                .replace(/[，,]\s*[，,]+/g, '，')
+                .replace(/[，,]\s*。/g, '。')
+                .replace(/。\s*。/g, '。')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
         }
-        return characters;
-    }
-    function saveCustomCharacter(profile) {
-        try {
-            const characters = loadCustomCharacters();
-            characters.set(profile.name, profile);
-            const entries = [...characters.entries()]
-                .map(([name, value]) => [name, JSON.stringify(value)]);
-            const [ok, error] = knowledgeSave(CHARACTER_TABLE, entries);
-            if (error) {
-                console.error(`[角色库] 写入 ${CHARACTER_TABLE} 失败:`, error.message ?? String(error));
-                return false;
-            }
-            return !!ok;
+        randomExpression() {
+            return this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
         }
-        catch (error) {
-            console.error('[角色库] 保存自定义角色失败:', error);
-            return false;
+        randomPosture() {
+            return this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
         }
-    }
-    function normalizeProfile(raw, fallbackName) {
-        if (!raw || typeof raw !== 'object')
-            return null;
-        const name = String(raw.name || fallbackName).trim();
-        const appearance = String(raw.appearance || '').trim();
-        if (!name || !appearance)
-            return null;
-        const gender = raw.gender === '男' ? '男' : '女';
-        return {
-            name,
-            gender,
-            appearance,
-            outfitFull: String(raw.outfitFull || '').trim() || undefined,
-            outfitChibi: String(raw.outfitChibi || '').trim() || undefined,
-        };
+        randomGroupEnvironment() {
+            return this.groupEnvironmentPresets[RandomFloor(0, this.groupEnvironmentPresets.length - 1)];
+        }
     }
 
     const SIDE_BASE = 1024;
@@ -2005,6 +2317,11 @@ var agentSystem = (function (exports) {
     const REF_SIDE_MIN = 512;
     const DEFAULT_PIXEL_BUDGET_MP = 1.6;
     const PIXEL_BUDGET_SLACK = 1.15;
+    const DEFAULT_RATIO = '1:1';
+    const LIST_LIMIT_MAX = 100;
+    const DEFAULT_STRENGTH = 0.5;
+    const STEPS_MIN = 8;
+    const STEPS_MAX = 60;
     function pixelBudget() {
         const configured = Number(GlobalConfig.customConfig?.diffusion?.pixel_budget_mp);
         const budgetMp = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_PIXEL_BUDGET_MP;
@@ -2027,11 +2344,6 @@ var agentSystem = (function (exports) {
         const long = alignSide(SIDE_BASE * item.ratio);
         return [key, item.horizontal ? { w: long, h: SIDE_BASE } : { w: SIDE_BASE, h: long }];
     }));
-    const DEFAULT_RATIO = '1:1';
-    const LIST_LIMIT_MAX = 100;
-    const DEFAULT_STRENGTH = 0.5;
-    const STEPS_MIN = 8;
-    const STEPS_MAX = 60;
     function planDimensions(reference) {
         if (!reference || reference.width <= 0 || reference.height <= 0) {
             const preset = RATIO_PRESETS[DEFAULT_RATIO];
@@ -2106,397 +2418,564 @@ var agentSystem = (function (exports) {
             console.log(`[绘制者] ${label}步数 ${num} 越界，已收进 ${steps}`);
         return steps;
     }
+
+    function mergeProfiles(builtin, custom) {
+        const profiles = new Map(builtin);
+        for (const [name, profile] of custom) {
+            profiles.set(name, { ...profile, builtin: false });
+        }
+        return profiles;
+    }
+    function characterLabel(character) {
+        const name = String(character ?? '').trim();
+        switch (name) {
+            case '月华': return '月华';
+            case '琉璃': return '琉璃';
+            case '通用-男': return '男性角色';
+            case '通用-女': return '女性角色';
+            default: return name || '角色';
+        }
+    }
+    function characterCatalogText(profiles) {
+        const names = [...profiles.keys()];
+        return names.length > 0
+            ? `当前可用角色：${names.join('、')}；也可用 通用-女 / 通用-男 临时描述外观`
+            : '当前可用角色：通用-女 / 通用-男（临时描述外观）';
+    }
+    function characterOutfit(profile, chibi) {
+        const outfit = chibi
+            ? (profile.outfitChibi || profile.outfitFull)
+            : profile.outfitFull;
+        return outfit || '穿着简洁得体的日常服装';
+    }
+    function portraitPreset(args, prompts, customCharacters) {
+        const templates = prompts.templates;
+        const raw = String(args.character ?? '').trim();
+        const chibi = args.chibi === true;
+        const defaultRatio = chibi ? DEFAULT_RATIO : '2:3';
+        if (raw === '月华') {
+            return {
+                kind: '月华', chibi, label: `月华${chibi ? 'Q版' : '全尺寸'}自画像`,
+                template: chibi ? templates.chibiSelf : templates.fullSelf,
+                base: prompts.builtinCharacters.get('月华').appearance,
+                outfit: chibi ? templates.defaultOutfitChibi : templates.defaultOutfitFull,
+                gender: '女孩', defaultRatio,
+            };
+        }
+        if (raw === '琉璃') {
+            return {
+                kind: '琉璃', chibi, label: `琉璃${chibi ? 'Q版' : '全尺寸'}立绘`,
+                template: chibi ? templates.crystalChibi : templates.crystalFull,
+                base: prompts.builtinCharacters.get('琉璃').appearance,
+                outfit: chibi ? templates.crystalOutfitChibi : templates.crystalOutfitFull,
+                gender: '女孩', defaultRatio,
+            };
+        }
+        const custom = customCharacters.get(raw);
+        if (custom) {
+            const profile = { ...custom};
+            return {
+                kind: raw, chibi, label: `${raw}${chibi ? 'Q版' : '全尺寸'}立绘`,
+                template: chibi ? templates.genericChibi : templates.genericFull,
+                base: profile.appearance,
+                outfit: characterOutfit(profile, chibi),
+                gender: profile.gender === '男' ? '男孩' : '女孩',
+                defaultRatio,
+            };
+        }
+        const male = raw === '通用-男';
+        const named = raw && raw !== '通用-女' && raw !== '通用-男' && raw !== '其他' ? `名为「${raw}」的角色` : '';
+        const desc = [named, String(args.appearance ?? '').trim()].filter(t => t).join('，');
+        const base = (male ? templates.maleBase : templates.femaleBase) + (desc ? `，${desc}` : '');
+        if (!desc)
+            console.log('[绘制者] 通用角色未提供 appearance：仅按通用底板绘制，人物特征会很泛');
+        return {
+            kind: male ? '通用-男' : '通用-女', chibi, label: `${chibi ? 'Q版' : '全尺寸'}${male ? '男性' : '女性'}角色立绘`,
+            template: chibi ? templates.genericChibi : templates.genericFull,
+            base,
+            outfit: desc ? '' : '穿着简洁得体的日常服装',
+            gender: male ? '男孩' : '女孩', defaultRatio,
+        };
+    }
+    function normalizeGroupRoles(value) {
+        const list = Array.isArray(value) ? value : [value];
+        const roles = [];
+        for (const item of list) {
+            const role = String(item ?? '').trim();
+            if (!role || roles.includes(role))
+                continue;
+            roles.push(role);
+        }
+        return roles;
+    }
+    function groupMemberAppearance(profiles, role, chibi, withOutfit) {
+        const profile = profiles.get(role);
+        if (!profile)
+            return role;
+        const outfit = withOutfit ? `，${characterOutfit(profile, chibi)}` : '';
+        return `${profile.name}，${profile.appearance}${outfit}`;
+    }
+    function defaultGroupPlanning(roles, chibi, profiles, prompts) {
+        const entries = [];
+        for (const role of roles) {
+            const profile = profiles.get(role);
+            if (!profile)
+                continue;
+            entries.push(`${profile.name}：${prompts.randomExpression()}，${prompts.randomPosture()}，${characterOutfit(profile, chibi)}`);
+        }
+        return entries.join('；');
+    }
+
+    function interactEvent(topic, payload) {
+        try {
+            const resultJSON = ltpInteractEvent(topic, JSON.stringify(payload ?? {}));
+            if (!resultJSON)
+                return {};
+            const res = JSON.parse(resultJSON);
+            if (res && res.returned && res.return !== null && res.return !== undefined) {
+                return { return: res.return };
+            }
+        }
+        catch (e) {
+            console.error('LTPX 事件交互失败:', e);
+        }
+        return {};
+    }
+
+    function collectPaintingDetail(toolCall, paintings) {
+        try {
+            const args = typeof toolCall.function.arguments === 'string'
+                ? JSON.parse(toolCall.function.arguments)
+                : toolCall.function.arguments;
+            const name = toolCall.function.name;
+            if (name === 'portrait') {
+                const character = String(args.character || '通用-女');
+                paintings.push({
+                    toolName: name,
+                    promptSummary: `${characterLabel(character)}${args.chibi === true ? 'Q版' : '全尺寸'}立绘`,
+                    character: character,
+                    chibi: args.chibi === true,
+                    expression: args.expression || '',
+                    posture: args.posture || '',
+                    environment: args.environment || '',
+                });
+            }
+            else if (name === 'group_photo') {
+                const roles = normalizeGroupRoles(args.roles);
+                paintings.push({
+                    toolName: name,
+                    promptSummary: `${args.chibi === true ? 'Q版' : ''}与${roles.join('、') || '他人'}的合照`,
+                    roles,
+                    chibi: args.chibi === true,
+                    planning: args.planning || '',
+                    environment: args.environment || '',
+                });
+            }
+            else if (name === 'diffusion_generation' || name === 'image_to_image') {
+                const prompt = args.prompt || '';
+                const strengthNote = name === 'image_to_image' && args.strength !== undefined
+                    ? `（强度 ${normalizeStrength(args.strength, '图生图')}）`
+                    : '';
+                paintings.push({
+                    toolName: name,
+                    promptSummary: (prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt) + strengthNote,
+                });
+            }
+            else if (name === 'upscale_image') {
+                const resolved = args.image_tag ? resolveImageRef(String(args.image_tag)) : null;
+                paintings.push({
+                    toolName: name,
+                    promptSummary: resolved ? `${resolved.handle} 超分重建` : '最近作品超分重建',
+                });
+            }
+        }
+        catch {
+        }
+    }
+    function buildPaintingSummary(paintings) {
+        if (paintings.length === 0)
+            return '月华没有绘制任何作品';
+        const feedback = interactEvent('draw_painting_before', { paintings }).return;
+        if (feedback && Array.isArray(feedback) && feedback.every(p => p.toolName && p.promptSummary)) {
+            paintings = feedback;
+        }
+        const parts = [];
+        for (const p of paintings) {
+            if (p.toolName === 'portrait') {
+                let desc;
+                if (p.character === '月华')
+                    desc = p.chibi ? '月华绘制了一幅Q版自画像' : '月华绘制了一幅全尺寸自画像';
+                else if (p.character === '琉璃')
+                    desc = `月华为琉璃绘制了一幅${p.chibi ? 'Q版' : '全尺寸'}立绘`;
+                else
+                    desc = `月华绘制了一幅${p.chibi ? 'Q版' : '全尺寸'}${characterLabel(p.character)}立绘`;
+                if (p.expression)
+                    desc += `，展现了${p.expression}`;
+                if (p.environment)
+                    desc += `，背景是${p.environment}`;
+                parts.push(desc + '。');
+            }
+            else if (p.toolName === 'group_photo') {
+                let desc = `月华绘制了一幅${p.chibi ? 'Q版' : ''}与${p.roles && p.roles.length > 0 ? p.roles.join('、') : '他人'}的合照`;
+                if (p.planning)
+                    desc += `，${p.planning}`;
+                if (p.environment)
+                    desc += `，背景是${p.environment}`;
+                parts.push(desc + '。');
+            }
+            else if (p.toolName === 'image_to_image')
+                parts.push(`月华参照参考图绘制了一幅图像：${p.promptSummary}。`);
+            else if (p.toolName === 'upscale_image')
+                parts.push(`月华为${p.promptSummary}提升了清晰度，图像已变得更精细。`);
+            else
+                parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
+        }
+        parts.push('图像已通过前端推送给用户。');
+        return parts.join('\n');
+    }
+
+    function createReferenceState() {
+        return { image: '', handle: '', vision: '', size: null };
+    }
+    function clearReference(state) {
+        state.image = '';
+        state.handle = '';
+        state.vision = '';
+        state.size = null;
+    }
+    function bindReference(state, reference) {
+        clearReference(state);
+        if (!reference?.source)
+            return;
+        state.handle = reference.handle || '';
+        state.image = reference.source;
+        const [, visionError, visionWidth, visionHeight] = visionRead(reference.source, state.handle);
+        const visionURL = visionReference(state.handle, reference.source);
+        if (visionError || !visionURL) {
+            console.error('[绘制者] 参考图视觉副本生成失败，本次任务模型将看不到参考图:', visionError?.message ?? String(visionError ?? '无法构造视觉副本'));
+        }
+        else {
+            state.vision = visionURL;
+            if (visionWidth > 0 && visionHeight > 0)
+                state.size = { width: visionWidth, height: visionHeight };
+        }
+        console.log(`[绘制者] 本次任务参考图: ${state.handle || '(无句柄)'} → ${reference.source}${state.size ? `（视觉副本 ${state.size.width}x${state.size.height}）` : '（视觉副本生成失败）'}`);
+    }
+    function buildReferenceTaskContent(state, taskDescription) {
+        if (!state.vision) {
+            if (state.image)
+                console.log('[绘制者] 参考图无可用视觉副本，退回纯文本任务描述');
+            return taskDescription;
+        }
+        console.log(`[绘制者] 参考图视觉副本已附入任务上下文（${Math.round(state.vision.length / 1024)}KB）`);
+        return [
+            { type: 'text', text: taskDescription },
+            { type: 'image_url', image_url: { url: state.vision } }
+        ];
+    }
+    function describeReference(state, plan) {
+        if (state.image) {
+            const size = state.size ? `（${state.size.width}x${state.size.height}）` : '';
+            return `本次任务参考图：${state.handle || state.image}${size}，输出尺寸将按参考图比例取 ${plan.width}x${plan.height}`;
+        }
+        return '本次任务尚未附带参考图';
+    }
+
+    const FIRST_PERSON = /我|咱|自己|自画像/u;
+    const PRONOUN_NOTE = [
+        '【任务上下文】本任务由月华本人派发，描述里的第一人称指代固定如下：',
+        '「我」「我的」「自己」= 月华；「我的妹妹」「妹妹」= 琉璃；「我们」「我和妹妹」= 月华与琉璃。',
+        '画到人物时必须用 portrait / group_photo 并填写对应角色名，不要因为没听到名字就改用「通用-女」或「通用-男」。'
+    ].join('\n');
+    function decoratePainterTask(taskDescription) {
+        if (!FIRST_PERSON.test(taskDescription))
+            return taskDescription;
+        return `${PRONOUN_NOTE}\n\n${taskDescription}`;
+    }
+
+    function handleDiffusionGeneration(host, args) {
+        try {
+            const prompt = args.prompt || '';
+            if (!prompt.trim())
+                return '扩散生成失败：正向提示词不能为空';
+            const plan = resolveDimensionPlan(args.ratio);
+            const steps = normalizeSteps(args.steps, '扩散生成');
+            console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...，画面比例: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
+            return host.paint({
+                prompt: prompt,
+                negativePrompt: args.negative_prompt || '',
+                width: plan.width,
+                height: plan.height,
+                steps: steps,
+                cfgScale: args.cfg_scale ?? 1.0,
+                superResolution: args.super_resolution === true,
+            }, '扩散图像生成');
+        }
+        catch (error) {
+            console.error('[绘制者] 扩散生成处理异常:', error);
+            return `扩散图像生成异常: ${error}`;
+        }
+    }
+    function resolveImg2ImgCfg(value) {
+        const CFG_MIN = 0.5;
+        const CFG_MAX = 4;
+        const clampCfg = (v) => Math.min(Math.max(v, CFG_MIN), CFG_MAX);
+        const configured = Number(GlobalConfig.customConfig?.diffusion?.img2img_cfg);
+        if (Number.isFinite(configured) && configured > 0) {
+            const cfg = clampCfg(configured);
+            if (Math.abs(cfg - configured) > 1e-6)
+                console.log(`[绘制者] 配置 img2img_cfg=${configured} 越界，已收进 ${cfg}`);
+            return cfg;
+        }
+        if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+            const cfg = clampCfg(value);
+            if (cfg > 1.05)
+                console.log(`[绘制者] 图生图 cfg=${value}：本模型为引导蒸馏，建议 1.0（过高会发灰/过曝/塑料感）`);
+            return cfg;
+        }
+        return 1.0;
+    }
+    function handleImageToImage(host, args) {
+        try {
+            const prompt = args.prompt || '';
+            if (!prompt.trim())
+                return '图生图失败：正向提示词不能为空';
+            if (!host.referenceImage) {
+                return `图生图失败：${host.referenceStatus()}。图生图基座由对话者经 dispatch_painter 的 reference_tag 指定；当前任务无参考图时请改用 diffusion_generation 进行文生图`;
+            }
+            const strength = normalizeStrength(args.strength, '图生图');
+            const steps = normalizeSteps(args.steps, '图生图');
+            const cfgScale = resolveImg2ImgCfg(args.cfg_scale);
+            const plan = host.planFor();
+            console.log(`[绘制者] 图生图 - 正向提示词: ${prompt.slice(0, 100)}...，参考图: ${host.referenceImage}，强度: ${strength}，cfg: ${cfgScale}，尺寸: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
+            return host.paint({
+                prompt: prompt,
+                negativePrompt: args.negative_prompt || '',
+                width: plan.width,
+                height: plan.height,
+                steps: steps,
+                cfgScale: cfgScale,
+                initImg: host.referenceImage,
+                strength: strength,
+                superResolution: args.super_resolution === true,
+            }, '图生图生成');
+        }
+        catch (error) {
+            console.error('[绘制者] 图生图处理异常:', error);
+            return `图生图生成异常: ${error}`;
+        }
+    }
+
+    function handlePortrait(host, args) {
+        try {
+            const preset = portraitPreset(args, host.prompts, host.customCharacters);
+            console.log(`[绘制者] -> ${preset.label}生成`);
+            console.log(`角色: "${args.character}" chibi=${preset.chibi}`);
+            console.log(`表情: "${args.expression}"`);
+            console.log(`姿势: "${args.posture}"`);
+            console.log(`服装: "${args.outfit}"`);
+            console.log(`环境: "${args.environment}"`);
+            console.log(`负面提示词: "${args.negative_prompt}"`);
+            console.log(`提示词引导系数: "${args.cfg_scale}"`);
+            const plan = resolveDimensionPlan(args.ratio || preset.defaultRatio);
+            const steps = normalizeSteps(args.steps, preset.label);
+            const fullPrompt = host.prompts.renderAppearance(preset.template, args, preset.outfit, preset.base, preset.gender);
+            return host.paint({
+                prompt: fullPrompt,
+                negativePrompt: args.negative_prompt || host.prompts.templates.defaultNegative,
+                width: plan.width,
+                height: plan.height,
+                steps: steps,
+                cfgScale: args.cfg_scale ?? 1.0,
+                superResolution: args.super_resolution === true,
+            }, `${preset.label}生成`);
+        }
+        catch (error) {
+            console.error('[绘制者] 立绘处理异常:', error);
+            return `立绘生成异常: ${error}`;
+        }
+    }
+
+    function handleGroupPhoto(host, args) {
+        try {
+            const roles = normalizeGroupRoles(args.roles);
+            if (roles.length === 0)
+                return '合照生成失败：roles 至少需要一位参与者';
+            const chibi = args.chibi === true;
+            const profiles = mergeProfiles(host.prompts.builtinCharacters, host.customCharacters);
+            const planningProvided = !!String(args.planning || '').trim();
+            const planning = String(args.planning || '').trim() || defaultGroupPlanning(roles, chibi, profiles, host.prompts);
+            const environment = String(args.environment || '').trim() || host.prompts.randomGroupEnvironment();
+            const members = roles
+                .map(role => groupMemberAppearance(profiles, role, chibi, !planningProvided))
+                .join('；');
+            const fullPrompt = host.prompts.renderTemplate(host.prompts.templates.groupPhoto, {
+                proportion: chibi ? 'Q版二头身，头身比约1:2，' : '',
+                count: String(roles.length),
+                members,
+                planning: planning ? `人物安排：${planning}。` : '',
+                environment,
+            });
+            console.log(`[绘制者] -> ${chibi ? 'Q版' : '全尺寸'}合照生成（${roles.length}人）`);
+            console.log(`参与者: "${roles.join('、')}"`);
+            console.log(`人物规划: "${planning || '默认'}"`);
+            console.log(`环境: "${environment}"`);
+            const useReference = !!host.referenceImage;
+            const plan = useReference ? host.planFor() : resolveDimensionPlan(args.ratio);
+            const steps = normalizeSteps(args.steps, '合照');
+            const imageParams = {
+                prompt: fullPrompt,
+                negativePrompt: args.negative_prompt || host.prompts.templates.defaultNegative,
+                width: plan.width,
+                height: plan.height,
+                steps: steps,
+                cfgScale: args.cfg_scale ?? 1.0,
+                superResolution: args.super_resolution === true,
+            };
+            if (useReference) {
+                imageParams.initImg = host.referenceImage;
+                imageParams.strength = normalizeStrength(args.strength, '合照');
+                console.log(`[绘制者] 合照图生图模式，参考图: ${host.referenceImage}，强度: ${imageParams.strength}，尺寸: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
+            }
+            return host.paint(imageParams, '合照生成');
+        }
+        catch (error) {
+            console.error('[绘制者] 合照生成处理异常:', error);
+            return `合照生成异常: ${error}`;
+        }
+    }
+
+    function handleCreateCharacter(host, args) {
+        const name = String(args.name || '').trim();
+        const appearance = String(args.appearance || '').trim();
+        if (!name)
+            return '创建角色失败：角色名不能为空';
+        if (!appearance)
+            return '创建角色失败：appearance 不能为空（写清年龄感、发型发色、瞳色、面部特征、配饰、体型）';
+        if (name === '月华' || name === '琉璃' || name === '通用-女' || name === '通用-男') {
+            return `创建角色失败：「${name}」是内置角色名，请换一个名字`;
+        }
+        const existed = host.customCharacters.has(name);
+        const profile = {
+            name,
+            gender: args.gender === '男' ? '男' : '女',
+            appearance,
+            outfitFull: String(args.outfit_full || '').trim() || undefined,
+            outfitChibi: String(args.outfit_chibi || '').trim() || undefined,
+        };
+        if (!saveCustomCharacter(profile))
+            return '创建角色失败：角色库写入失败，请稍后重试';
+        host.customCharacters.set(name, profile);
+        console.log(`[绘制者] 自定义角色${existed ? '更新' : '创建'}成功: ${name}`);
+        return `${existed ? '已更新' : '已创建'}自定义角色「${name}」（${profile.gender}）。之后绘制立绘或合照时可直接用该名字引用。`;
+    }
+    function handleSwitchDiffusionScheme(args) {
+        const name = String(args.scheme || '').trim();
+        if (!name)
+            return '切换模型方案失败：请指定 turbo 或 quality';
+        const [current, error] = setDiffusionScheme(name);
+        if (error)
+            return `切换模型方案失败：${error.message ?? String(error)}`;
+        return `已切换到 ${current}（${schemeLabel(current)}）模型方案，后续绘图将使用该方案。`;
+    }
+    function schemeLabel(name) {
+        switch (name) {
+            case 'turbo': return '速度优先';
+            case 'quality': return '质量优先';
+            default: return name || '默认';
+        }
+    }
+    function handleListImages(host) {
+        const entries = listResources('I', LIST_LIMIT_MAX);
+        if (entries.length === 0)
+            return '资源目录中还没有任何图片：当前没有可引用的图片句柄';
+        const lines = entries.map(entry => {
+            const desc = entry.summary ? sanitizeImageDesc(entry.summary, 40) : '（暂无描述）';
+            const lost = entry.state === 'active' ? '' : ' [本体已回收]';
+            return `${entry.handle} ${desc}${lost}`;
+        });
+        return `资源目录中最近的 ${entries.length} 张图片（句柄越新越靠前）：\n${lines.join('\n')}\n可调用 upscale_image 对指定图片超分；图生图基座由对话者经 reference_tag 指定。${host.referenceStatus()}。`;
+    }
+    function handleUpscaleImage(host, args) {
+        try {
+            const resolved = args.image_tag ? resolveImageRef(String(args.image_tag)) : null;
+            let source = '';
+            let handleLabel = '';
+            if (args.image_tag) {
+                if (!resolved)
+                    return '超分失败：句柄不存在或已失效，请先调用 list_images 或 list_resources 查看可用图片';
+                if (!resolved.source)
+                    return `超分失败：${resolved.handle} 的本体已从内容仓库回收，无法超分`;
+                source = resolved.source;
+                handleLabel = resolved.handle;
+            }
+            else {
+                if (!host.lastResultPath)
+                    return '超分失败：还没有生成过作品，请通过 image_tag 指定图片句柄，或先完成一次图像生成';
+                source = host.lastResultPath;
+                handleLabel = '最近作品';
+            }
+            console.log(`[绘制者] 超分重建 - 来源: ${handleLabel} ${source.substring(0, 60)}...`);
+            const [result, error] = upscaleImage(source);
+            if (error) {
+                console.error('[绘制者] 超分失败:', error);
+                return `超分失败: ${error}`;
+            }
+            if (!result || !result.base64)
+                return '超分失败：引擎返回空结果';
+            if (!pushImage([result.base64]))
+                console.warn('[绘制者] 推送超分结果到前端失败');
+            return `超分成功。图片尺寸: ${result.width}x${result.height}，已推送给用户`;
+        }
+        catch (error) {
+            console.error('[绘制者] 超分处理异常:', error);
+            return `超分处理异常: ${error}`;
+        }
+    }
+
     class PainterRole extends CreativeRoleBase {
         roleTag = "绘制者";
-        commonPrompts = loadPromptDocument('prompts/painterCommon.md');
-        characterPrompts = loadPromptDocument('prompts/painterCharacters.md');
-        defaultExpressionPrompt = this.commonPrompts.list('默认表情');
-        defaultPosturePrompt = this.commonPrompts.list('默认姿势');
-        appearanceBasePrompt = this.characterPrompts.text('月华/基础外观');
-        chibiAppearancePrompt = this.characterPrompts.text('月华/立绘-Q版');
-        fullAppearancePrompt = this.characterPrompts.text('月华/立绘-全尺寸');
-        crystalBasePrompt = this.characterPrompts.text('琉璃/基础外观');
-        crystalFullAppearancePrompt = this.characterPrompts.text('琉璃/立绘-全尺寸');
-        crystalChibiAppearancePrompt = this.characterPrompts.text('琉璃/立绘-Q版');
-        portraitBaseFemalePrompt = this.characterPrompts.text('通用角色/底板-女');
-        portraitBaseMalePrompt = this.characterPrompts.text('通用角色/底板-男');
-        genericFullAppearancePrompt = this.characterPrompts.text('通用角色/立绘-全尺寸');
-        genericChibiAppearancePrompt = this.characterPrompts.text('通用角色/立绘-Q版');
-        defaultOutfitChibiPrompt = this.characterPrompts.text('月华/默认服装-Q版');
-        defaultOutfitFullPrompt = this.characterPrompts.text('月华/默认服装-全尺寸');
-        crystalDefaultOutfitFullPrompt = this.characterPrompts.text('琉璃/默认服装-全尺寸');
-        crystalDefaultOutfitChibiPrompt = this.characterPrompts.text('琉璃/默认服装-Q版');
-        groupPhotoTemplate = this.commonPrompts.text('合照模板');
-        groupEnvironmentPresets = this.commonPrompts.list('合照背景');
-        defaultNegativePrompt = this.commonPrompts.text('默认负面提示词');
-        builtinCharacters = new Map([
-            ['月华', {
-                    name: '月华', gender: '女', appearance: this.appearanceBasePrompt,
-                    outfitFull: this.defaultOutfitFullPrompt, outfitChibi: this.defaultOutfitChibiPrompt, builtin: true,
-                }],
-            ['琉璃', {
-                    name: '琉璃', gender: '女', appearance: this.crystalBasePrompt,
-                    outfitFull: this.crystalDefaultOutfitFullPrompt, outfitChibi: this.crystalDefaultOutfitChibiPrompt, builtin: true,
-                }],
-        ]);
+        prompts = new PainterPromptLibrary();
         customCharacters = loadCustomCharacters();
-        referenceImage = '';
-        referenceHandle = '';
-        referenceVision = '';
-        referenceSize = null;
-        lastResultPath = '';
-        roleTool = [
-            {
-                type: "function",
-                function: {
-                    name: "diffusion_generation",
-                    description: "根据文本描述进行文生图。仅适用于风景、物品、场景、氛围图等与人物形象无关的创作；严禁用于绘制任何人物形象(月华、琉璃或其他人物都必须调用 portrait)。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "prompt": {
-                                type: "string",
-                                description: "图像生成的正向描述文本"
-                            },
-                            "ratio": {
-                                type: "string",
-                                enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                                description: "画面比例预设,默认 1:1。按题材选择:人物/物品用 2:3 或 3:4,风景/横构图用 3:2 或 16:9,方形构图用 1:1。"
-                            },
-                            "steps": {
-                                type: "number",
-                                description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
-                            },
-                            "negative_prompt": {
-                                type: "string",
-                                description: "负面提示文本,用于排除图像中不希望出现的元素"
-                            },
-                            "cfg_scale": {
-                                type: "number",
-                                description: "提示词权重调节参数(0~2),默认值为 1.0"
-                            },
-                            "super_resolution": {
-                                type: "boolean",
-                                description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-                            }
-                        },
-                        required: [
-                            "prompt"
-                        ]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "image_to_image",
-                    description: "基于参考图进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。无参考图时不可调用:人物形象改用 portrait,非人物改用 diffusion_generation,或说明需要用户提供参考图片。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "prompt": {
-                                type: "string",
-                                description: "图像生成的正向描述文本,描述希望参考图变成什么样子"
-                            },
-                            "strength": {
-                                type: "number",
-                                description: "图生图强度,取值范围 0 到 1,越大越偏离参考图。必须由你根据创作意图指定:只改画风/光照/质感用 0.2~0.4;换服饰/换配色/微调细节用 0.4~0.6;换背景/换地点/大幅改场景 用 0.8~0.9 推荐 0.85;替换画面里的一个对象(如把北极熊换成熊猫)同样用 0.8~0.9——实测 0.65/0.75 换不掉大物体。注意:强度≥0.8 时提示词主导画面,没写进提示词的东西会消失,因此提示词必须描述整个画面(含所有要保留的主体)。缺省按中性值 0.5"
-                            },
-                            "steps": {
-                                type: "number",
-                                description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
-                            },
-                            "negative_prompt": {
-                                type: "string",
-                                description: "负面提示文本,用于排除图像中不希望出现的元素(换场景时点名去掉旧场景元素,如 beach, ocean, water, sea)"
-                            },
-                            "cfg_scale": {
-                                type: "number",
-                                description: "提示词引导系数(0~2),默认 1.0。当前模型为引导蒸馏模型,图生图同样保持 1.0;调高会发灰、过曝、塑料感。需要改得更多时调 strength,不要调 cfg"
-                            },
-                            "super_resolution": {
-                                type: "boolean",
-                                description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-                            }
-                        },
-                        required: [
-                            "prompt"
-                        ]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "portrait",
-                    description: "生成指定角色的立绘。凡是要求绘制月华、琉璃或其他人物的形象时,都必须且只能调用本函数,禁止用 diffusion_generation 或 image_to_image 代替",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "character": {
-                                type: "string",
-                                description: "目标角色:内置角色(月华/琉璃)或已创建的自定义角色名,已内置外观,只需给出表情/姿势/环境;通用-女 / 通用-男 或临时角色必须用 appearance 描述其外观。{characters}"
-                            },
-                            "chibi": {
-                                type: "boolean",
-                                description: "是否Q版:true=二头身萌系比例(贴纸/表情包/头像),false 或不填=标准头身比的全身立绘"
-                            },
-                            "appearance": {
-                                type: "string",
-                                description: "character=通用-女 / 通用-男 或临时角色时填写该人物的外观:性别、年龄感、发型发色、瞳色、服装、配饰、身份。内置/自定义角色不需要填写。"
-                            },
-                            "expression": {
-                                type: "string",
-                                description: "表情提示词,描述想要展现的表情"
-                            },
-                            "posture": {
-                                type: "string",
-                                description: "动作提示词,描述想要展现的姿势或动作"
-                            },
-                            "outfit": {
-                                type: "string",
-                                description: "服装提示词。不提供则用该角色的默认服装（通用角色仅在 appearance 未写服装时兜底）"
-                            },
-                            "environment": {
-                                type: "string",
-                                description: "环境提示词,描述背景或场景。月华偏暗色与红,琉璃偏淡蓝天空与星光"
-                            },
-                            "ratio": {
-                                type: "string",
-                                enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                                description: "画面比例预设。缺省:全尺寸 2:3(竖版全身立绘),Q版 1:1。横版场景改 3:2 或 16:9。"
-                            },
-                            "steps": {
-                                type: "number",
-                                description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
-                            },
-                            "negative_prompt": {
-                                type: "string",
-                                description: "负面提示文本,用于排除图像中不希望出现的元素"
-                            },
-                            "cfg_scale": {
-                                type: "number",
-                                description: "提示词引导系数(0~2),本模型为引导蒸馏,默认 1.0,不要调高"
-                            },
-                            "super_resolution": {
-                                type: "boolean",
-                                description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-                            }
-                        },
-                        required: [
-                            "character",
-                            "expression",
-                            "posture",
-                            "environment"
-                        ]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "create_character",
-                    description: "创建或更新一个可复用的自定义角色,写入角色库(SQL数据库)。适合会反复出场的原创角色:创建后 portrait 的 character 与 group_photo 的 roles 都能直接用角色名引用,无需每次重写外观。一次性路人不建议创建。内置角色(月华/琉璃)不能重名",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "name": {
-                                type: "string",
-                                description: "角色名(唯一键,后续绘制时用这个名字引用)"
-                            },
-                            "gender": {
-                                type: "string",
-                                enum: ["女", "男"],
-                                description: "性别,决定立绘模板中的性别表述"
-                            },
-                            "appearance": {
-                                type: "string",
-                                description: "基础外观:年龄感、发型发色、瞳色、面部特征、配饰、体型。这是角色的身份定义,不写表情/动作/场景"
-                            },
-                            "outfit_full": {
-                                type: "string",
-                                description: "默认全尺寸服装。省略则使用简洁得体的日常服装"
-                            },
-                            "outfit_chibi": {
-                                type: "string",
-                                description: "默认Q版服装。省略则复用全尺寸服装"
-                            }
-                        },
-                        required: [
-                            "name",
-                            "gender",
-                            "appearance"
-                        ]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "group_photo",
-                    description: "生成月华与一个或多个角色的合照。roles 按顺序列出参与者:内置角色与已创建的自定义角色直接写名字,自动继承外观与默认服装;临时角色写完整外观描述(性别、年龄感、发型发色、瞳色、服装、配饰、身份)。chibi=true 时所有参与者使用Q版二头身比例。planning 统一规划每人的表情/动作/服饰,例如\"月华:俏皮眨眼,比V手势,黑色哥特长裙;琉璃:安静微笑,双手交叠,白色星纹裙\";省略则每人使用随机默认表情/动作与默认服装。environment 省略时从预设背景中随机挑选。若本次任务附带参考图,将以该参考图为底图进行图生图,尽量保留参与者的容貌;未附带则按文本描述绘制",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "roles": {
-                                type: "array",
-                                items: {
-                                    type: "string"
-                                },
-                                description: "合照参与者列表,至少一位。内置角色与已创建的自定义角色直接写名字(自动继承外观与默认服装);临时角色写完整外观描述。{characters}"
-                            },
-                            "chibi": {
-                                type: "boolean",
-                                description: "是否Q版:true=所有参与者使用Q版二头身比例,false 或不填=全尺寸合照"
-                            },
-                            "planning": {
-                                type: "string",
-                                description: "合照的统一人物规划:逐人写清表情、动作与服饰,用分号分隔。省略则全部使用默认表情/动作与默认服装"
-                            },
-                            "environment": {
-                                type: "string",
-                                description: "环境提示词,描述背景环境或场景。省略时随机使用预设背景"
-                            },
-                            "ratio": {
-                                type: "string",
-                                enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                                description: "画面比例预设,默认 1:1。仅在未选定参考图时生效;已选定参考图时输出尺寸自动随参考图比例"
-                            },
-                            "strength": {
-                                type: "number",
-                                description: "已选定参考图时的图生图强度,取值 0 到 1,越大越偏离参考图。保留参与者容貌建议 0.3~0.5;缺省按中性值 0.5。未选定参考图时忽略"
-                            },
-                            "steps": {
-                                type: "number",
-                                description: "迭代步数,取值 8~60:quality 方案建议 30~60(常规 40,精细 50~60);turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数。越高细节越好但耗时线性增加,不影响构图"
-                            },
-                            "negative_prompt": {
-                                type: "string",
-                                description: "负面提示文本,用于排除图像中不希望出现的元素"
-                            },
-                            "cfg_scale": {
-                                type: "number",
-                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
-                            },
-                            "super_resolution": {
-                                type: "boolean",
-                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-                            }
-                        },
-                        required: [
-                            "roles"
-                        ]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "switch_diffusion_scheme",
-                    description: "切换后续绘图使用的模型方案。quality=质量优先(默认,细节更好、耗时更长);turbo=速度优先(出图更快,适合草图、快速确认与批量尝试,推荐 8~12 步)。切换后省略 steps 即使用该方案的推荐步数。切换状态由宿主记录,对所有后续绘图工具生效;任务本身不需要画得快时不要切换,保持当前方案即可",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "scheme": {
-                                type: "string",
-                                enum: ["turbo", "quality"],
-                                description: "目标方案:turbo=速度优先,quality=质量优先"
-                            }
-                        },
-                        required: [
-                            "scheme"
-                        ]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "list_images",
-                    description: "查看资源目录中最近的图片句柄与内容描述（按登记时间倒序，越靠前越新）。清单只含文字信息，可用于了解历史图片、确认句柄或为超分定位目标。需要图生图基座时由对话者经 dispatch_painter 的 reference_tag 指定，任务消息会直接附上图片本体",
-                    parameters: {
-                        type: "object",
-                        properties: {}
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "upscale_image",
-                    description: "对已有图片执行 RealESRGAN 超分辨率放大（4x）,提升清晰度与细节。用户要求把某张图片变清晰、放大或提升画质时调用;不指定句柄时对最近一次生成的作品超分。与生成工具的 super_resolution 参数不同,本工具不重新生成图像,只做纯超分",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "image_tag": {
-                                type: "string",
-                                description: "图片句柄（如 @I.003），对目录中指定图片超分。不填时对最近一次生成的作品超分"
-                            }
-                        }
-                    }
-                }
-            }
-        ];
+        reference = createReferenceState();
+        resultPath = '';
         constructor() {
             super(fileView('prompts/painterRole.md')[0].trim());
         }
+        get referenceImage() { return this.reference.image; }
+        set referenceImage(value) { this.reference.image = value; }
+        get referenceHandle() { return this.reference.handle; }
+        set referenceHandle(value) { this.reference.handle = value; }
+        get referenceVision() { return this.reference.vision; }
+        set referenceVision(value) { this.reference.vision = value; }
+        get referenceSize() { return this.reference.size; }
+        set referenceSize(value) { this.reference.size = value; }
+        get lastResultPath() { return this.resultPath; }
+        rememberResult(path) {
+            this.resultPath = path;
+        }
         async createCreativeWork(taskDescription, reference) {
             this.customCharacters = loadCustomCharacters();
-            this.referenceImage = '';
-            this.referenceHandle = '';
-            this.referenceVision = '';
-            this.referenceSize = null;
-            if (reference?.source) {
-                this.referenceHandle = reference.handle || '';
-                this.referenceImage = reference.source;
-                const [, visionError, visionWidth, visionHeight] = visionRead(reference.source, this.referenceHandle);
-                const visionURL = visionReference(this.referenceHandle, reference.source);
-                if (visionError || !visionURL) {
-                    console.error('[绘制者] 参考图视觉副本生成失败，本次任务模型将看不到参考图:', visionError?.message ?? String(visionError ?? '无法构造视觉副本'));
-                }
-                else {
-                    this.referenceVision = visionURL;
-                    if (visionWidth > 0 && visionHeight > 0)
-                        this.referenceSize = { width: visionWidth, height: visionHeight };
-                }
-                console.log(`[绘制者] 本次任务参考图: ${this.referenceHandle || '(无句柄)'} → ${reference.source}${this.referenceSize ? `（视觉副本 ${this.referenceSize.width}x${this.referenceSize.height}）` : '（视觉副本生成失败）'}`);
-            }
+            bindReference(this.reference, reference);
             return super.createCreativeWork(taskDescription);
         }
         buildTaskContent(taskDescription) {
-            if (!this.referenceVision) {
-                if (this.referenceImage)
-                    console.log('[绘制者] 参考图无可用视觉副本，退回纯文本任务描述');
-                return taskDescription;
-            }
-            console.log(`[绘制者] 参考图视觉副本已附入任务上下文（${Math.round(this.referenceVision.length / 1024)}KB）`);
-            return [
-                { type: 'text', text: taskDescription },
-                { type: 'image_url', image_url: { url: this.referenceVision } }
-            ];
+            return buildReferenceTaskContent(this.reference, decoratePainterTask(taskDescription));
         }
         planFor(ratio) {
-            const reference = this.referenceImage ? (this.referenceSize || undefined) : undefined;
+            const reference = this.reference.image ? (this.reference.size || undefined) : undefined;
             return resolveDimensionPlan(ratio, reference);
         }
         referenceStatus() {
-            if (this.referenceImage) {
-                const size = this.referenceSize ? `（${this.referenceSize.width}x${this.referenceSize.height}）` : '';
-                const plan = this.planFor();
-                return `本次任务参考图：${this.referenceHandle || this.referenceImage}${size}，输出尺寸将按参考图比例取 ${plan.width}x${plan.height}`;
-            }
-            return '本次任务尚未附带参考图';
+            return describeReference(this.reference, this.planFor());
         }
         resetReference() {
-            this.referenceImage = '';
-            this.referenceHandle = '';
-            this.referenceVision = '';
-            this.referenceSize = null;
+            clearReference(this.reference);
         }
         get roleName() { return '绘制者'; }
         getToolDefinitions() {
-            const catalog = this.characterCatalogText();
-            const definitions = JSON.stringify(this.roleTool).split('{characters}').join(catalog);
+            const catalog = this.characterCatalog();
+            const definitions = JSON.stringify(painterTools).split('{characters}').join(catalog);
             return JSON.parse(definitions);
         }
         executeTool(toolCall) {
@@ -2510,136 +2989,22 @@ var agentSystem = (function (exports) {
                 return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
             }
             switch (funcName) {
-                case 'diffusion_generation': return this.handleDiffusionGeneration(args);
-                case 'image_to_image': return this.handleImageToImage(args);
-                case 'portrait': return this.handlePortrait(args);
-                case 'create_character': return this.handleCreateCharacter(args);
-                case 'group_photo': return this.handleGroupPhoto(args);
-                case 'switch_diffusion_scheme': return this.handleSwitchDiffusionScheme(args);
-                case 'list_images': return this.handleListImages();
-                case 'upscale_image': return this.handleUpscaleImage(args);
+                case 'diffusion_generation': return handleDiffusionGeneration(this, args);
+                case 'image_to_image': return handleImageToImage(this, args);
+                case 'portrait': return handlePortrait(this, args);
+                case 'create_character': return handleCreateCharacter(this, args);
+                case 'group_photo': return handleGroupPhoto(this, args);
+                case 'switch_diffusion_scheme': return handleSwitchDiffusionScheme(args);
+                case 'list_images': return handleListImages(this);
+                case 'upscale_image': return handleUpscaleImage(this, args);
                 default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、portrait、create_character、group_photo、switch_diffusion_scheme、list_images、upscale_image`;
             }
         }
         collectDetail(toolCall, paintings) {
-            try {
-                const args = typeof toolCall.function.arguments === 'string'
-                    ? JSON.parse(toolCall.function.arguments)
-                    : toolCall.function.arguments;
-                const name = toolCall.function.name;
-                if (name === 'portrait') {
-                    const character = String(args.character || '通用-女');
-                    paintings.push({
-                        toolName: name,
-                        promptSummary: `${this.characterLabel(character)}${args.chibi === true ? 'Q版' : '全尺寸'}立绘`,
-                        character: character,
-                        chibi: args.chibi === true,
-                        expression: args.expression || '',
-                        posture: args.posture || '',
-                        environment: args.environment || '',
-                    });
-                }
-                else if (name === 'group_photo') {
-                    const roles = this.normalizeGroupRoles(args.roles);
-                    paintings.push({
-                        toolName: name,
-                        promptSummary: `${args.chibi === true ? 'Q版' : ''}与${roles.join('、') || '他人'}的合照`,
-                        roles,
-                        chibi: args.chibi === true,
-                        planning: args.planning || '',
-                        environment: args.environment || '',
-                    });
-                }
-                else if (name === 'diffusion_generation' || name === 'image_to_image') {
-                    const prompt = args.prompt || '';
-                    const strengthNote = name === 'image_to_image' && args.strength !== undefined
-                        ? `（强度 ${normalizeStrength(args.strength, '图生图')}）`
-                        : '';
-                    paintings.push({
-                        toolName: name,
-                        promptSummary: (prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt) + strengthNote,
-                    });
-                }
-                else if (name === 'upscale_image') {
-                    const resolved = args.image_tag ? resolveImageRef(String(args.image_tag)) : null;
-                    paintings.push({
-                        toolName: name,
-                        promptSummary: resolved ? `${resolved.handle} 超分重建` : '最近作品超分重建',
-                    });
-                }
-            }
-            catch {
-            }
+            collectPaintingDetail(toolCall, paintings);
         }
         buildSummary(paintings) {
-            if (paintings.length === 0)
-                return '月华没有绘制任何作品';
-            const feedback = interactEvent('draw_painting_before', { paintings }).return;
-            if (feedback && Array.isArray(feedback) && feedback.every(p => p.toolName && p.promptSummary)) {
-                paintings = feedback;
-            }
-            const parts = [];
-            for (let i = 0; i < paintings.length; i++) {
-                const p = paintings[i];
-                if (p.toolName === 'portrait') {
-                    let desc;
-                    if (p.character === '月华')
-                        desc = p.chibi ? '月华绘制了一幅Q版自画像' : '月华绘制了一幅全尺寸自画像';
-                    else if (p.character === '琉璃')
-                        desc = `月华为琉璃绘制了一幅${p.chibi ? 'Q版' : '全尺寸'}立绘`;
-                    else
-                        desc = `月华绘制了一幅${p.chibi ? 'Q版' : '全尺寸'}${this.characterLabel(p.character)}立绘`;
-                    if (p.expression)
-                        desc += `，展现了${p.expression}`;
-                    if (p.environment)
-                        desc += `，背景是${p.environment}`;
-                    parts.push(desc + '。');
-                }
-                else if (p.toolName === 'group_photo') {
-                    let desc = `月华绘制了一幅${p.chibi ? 'Q版' : ''}与${p.roles && p.roles.length > 0 ? p.roles.join('、') : '他人'}的合照`;
-                    if (p.planning)
-                        desc += `，${p.planning}`;
-                    if (p.environment)
-                        desc += `，背景是${p.environment}`;
-                    parts.push(desc + '。');
-                }
-                else if (p.toolName === 'image_to_image')
-                    parts.push(`月华参照参考图绘制了一幅图像：${p.promptSummary}。`);
-                else if (p.toolName === 'upscale_image')
-                    parts.push(`月华为${p.promptSummary}提升了清晰度，图像已变得更精细。`);
-                else
-                    parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
-            }
-            parts.push('图像已通过前端推送给用户。');
-            return parts.join('\n');
-        }
-        renderAppearance(template, parts, defaultOutfit, base, gender) {
-            const expression = parts.expression || this.randomExpression();
-            const posture = parts.posture || this.randomPosture();
-            const outfit = parts.outfit || defaultOutfit;
-            return this.renderTemplate(template, {
-                base: base || this.appearanceBasePrompt,
-                gender: gender || '女孩',
-                expression,
-                outfit,
-                posture,
-                environment: parts.environment || '',
-            });
-        }
-        renderTemplate(template, vars) {
-            let filled = template;
-            for (const [key, value] of Object.entries(vars)) {
-                filled = filled.split(`{${key}}`).join(value);
-            }
-            return this.tidyPrompt(filled);
-        }
-        tidyPrompt(text) {
-            return text
-                .replace(/[，,]\s*[，,]+/g, '，')
-                .replace(/[，,]\s*。/g, '。')
-                .replace(/。\s*。/g, '。')
-                .replace(/\s{2,}/g, ' ')
-                .trim();
+            return buildPaintingSummary(paintings);
         }
         paint(imageParams, label) {
             const [result, error] = generateImage(imageParams);
@@ -2649,384 +3014,196 @@ var agentSystem = (function (exports) {
             }
             if (!result || !result.base64)
                 return `${label}失败：引擎返回空结果`;
-            this.lastResultPath = result.path;
-            this.recordPainting(label, result.base64);
+            this.rememberResult(result.path);
             const stepsNote = imageParams.steps ? `，${imageParams.steps} 步` : '';
             console.log(`[绘制者] ${label}成功，尺寸: ${result.width}x${result.height}${stepsNote}${imageParams.superResolution ? '（含超分重建）' : ''}`);
             if (!pushImage([result.base64]))
                 console.warn(`[绘制者] 推送${label}结果到前端失败`);
             return `${label}成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}${stepsNote}${imageParams.superResolution ? '，已附带超分辨率重建' : ''}`;
         }
-        recordPainting(label, base64) {
-            if (!base64)
-                return;
-            try {
-                const uri = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
-                const message = {
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: `【${label}】这是你刚完成的作品` },
-                        { type: 'image_url', image_url: { url: uri } }
-                    ]
-                };
-                attachImageTags(message);
-                this.writeContext(message);
-            }
-            catch (error) {
-                console.error('[绘制者] 画作写入历史失败:', error);
-            }
-        }
-        handleDiffusionGeneration(args) {
-            try {
-                const prompt = args.prompt || '';
-                if (!prompt.trim())
-                    return '扩散生成失败：正向提示词不能为空';
-                const plan = resolveDimensionPlan(args.ratio);
-                const steps = normalizeSteps(args.steps, '扩散生成');
-                console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...，画面比例: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
-                return this.paint({
-                    prompt: prompt,
-                    negativePrompt: args.negative_prompt || '',
-                    width: plan.width,
-                    height: plan.height,
-                    steps: steps,
-                    cfgScale: args.cfg_scale ?? 1.0,
-                    superResolution: args.super_resolution === true,
-                }, '扩散图像生成');
-            }
-            catch (error) {
-                console.error('[绘制者] 扩散生成处理异常:', error);
-                return `扩散图像生成异常: ${error}`;
-            }
-        }
-        resolveImg2ImgCfg(value) {
-            const CFG_MIN = 0.5;
-            const CFG_MAX = 4;
-            const clampCfg = (v) => Math.min(Math.max(v, CFG_MIN), CFG_MAX);
-            const configured = Number(GlobalConfig.customConfig?.diffusion?.img2img_cfg);
-            if (Number.isFinite(configured) && configured > 0) {
-                const cfg = clampCfg(configured);
-                if (Math.abs(cfg - configured) > 1e-6)
-                    console.log(`[绘制者] 配置 img2img_cfg=${configured} 越界，已收进 ${cfg}`);
-                return cfg;
-            }
-            if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-                const cfg = clampCfg(value);
-                if (cfg > 1.05)
-                    console.log(`[绘制者] 图生图 cfg=${value}：本模型为引导蒸馏，建议 1.0（过高会发灰/过曝/塑料感）`);
-                return cfg;
-            }
-            return 1.0;
-        }
-        handleImageToImage(args) {
-            try {
-                const prompt = args.prompt || '';
-                if (!prompt.trim())
-                    return '图生图失败：正向提示词不能为空';
-                if (!this.referenceImage) {
-                    return `图生图失败：${this.referenceStatus()}。图生图基座由对话者经 dispatch_painter 的 reference_tag 指定；当前任务无参考图时请改用 diffusion_generation 进行文生图`;
-                }
-                const strength = normalizeStrength(args.strength, '图生图');
-                const steps = normalizeSteps(args.steps, '图生图');
-                const cfgScale = this.resolveImg2ImgCfg(args.cfg_scale);
-                const plan = this.planFor();
-                console.log(`[绘制者] 图生图 - 正向提示词: ${prompt.slice(0, 100)}...，参考图: ${this.referenceImage}，强度: ${strength}，cfg: ${cfgScale}，尺寸: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
-                return this.paint({
-                    prompt: prompt,
-                    negativePrompt: args.negative_prompt || '',
-                    width: plan.width,
-                    height: plan.height,
-                    steps: steps,
-                    cfgScale: cfgScale,
-                    initImg: this.referenceImage,
-                    strength: strength,
-                    superResolution: args.super_resolution === true,
-                }, '图生图生成');
-            }
-            catch (error) {
-                console.error('[绘制者] 图生图处理异常:', error);
-                return `图生图生成异常: ${error}`;
-            }
-        }
-        characterLabel(character) {
-            const name = String(character ?? '').trim();
-            switch (name) {
-                case '月华': return '月华';
-                case '琉璃': return '琉璃';
-                case '通用-男': return '男性角色';
-                case '通用-女': return '女性角色';
-                default: return name || '角色';
-            }
+        characterCatalog() {
+            return characterCatalogText(this.characterProfiles());
         }
         characterProfiles() {
-            const profiles = new Map(this.builtinCharacters);
-            for (const [name, profile] of this.customCharacters) {
-                profiles.set(name, { ...profile, builtin: false });
-            }
-            return profiles;
+            return mergeProfiles(this.prompts.builtinCharacters, this.customCharacters);
         }
-        characterCatalogText() {
-            const names = [...this.characterProfiles().keys()];
-            return names.length > 0
-                ? `当前可用角色：${names.join('、')}；也可用 通用-女 / 通用-男 临时描述外观`
-                : '当前可用角色：通用-女 / 通用-男（临时描述外观）';
-        }
-        characterOutfit(profile, chibi) {
-            const outfit = chibi
-                ? (profile.outfitChibi || profile.outfitFull)
-                : profile.outfitFull;
-            return outfit || '穿着简洁得体的日常服装';
-        }
-        portraitPreset(args) {
-            const raw = String(args.character ?? '').trim();
-            const chibi = args.chibi === true;
-            const defaultRatio = chibi ? DEFAULT_RATIO : '2:3';
-            if (raw === '月华') {
-                return {
-                    kind: '月华', chibi, label: `月华${chibi ? 'Q版' : '全尺寸'}自画像`,
-                    template: chibi ? this.chibiAppearancePrompt : this.fullAppearancePrompt,
-                    base: this.appearanceBasePrompt,
-                    outfit: chibi ? this.defaultOutfitChibiPrompt : this.defaultOutfitFullPrompt,
-                    gender: '女孩', defaultRatio,
-                };
-            }
-            if (raw === '琉璃') {
-                return {
-                    kind: '琉璃', chibi, label: `琉璃${chibi ? 'Q版' : '全尺寸'}立绘`,
-                    template: chibi ? this.crystalChibiAppearancePrompt : this.crystalFullAppearancePrompt,
-                    base: this.crystalBasePrompt,
-                    outfit: chibi ? this.crystalDefaultOutfitChibiPrompt : this.crystalDefaultOutfitFullPrompt,
-                    gender: '女孩', defaultRatio,
-                };
-            }
-            const custom = this.customCharacters.get(raw);
-            if (custom) {
-                const profile = { ...custom, builtin: false };
-                return {
-                    kind: raw, chibi, label: `${raw}${chibi ? 'Q版' : '全尺寸'}立绘`,
-                    template: chibi ? this.genericChibiAppearancePrompt : this.genericFullAppearancePrompt,
-                    base: profile.appearance,
-                    outfit: this.characterOutfit(profile, chibi),
-                    gender: profile.gender === '男' ? '男孩' : '女孩',
-                    defaultRatio,
-                };
-            }
-            const male = raw === '通用-男';
-            const named = raw && raw !== '通用-女' && raw !== '通用-男' && raw !== '其他' ? `名为「${raw}」的角色` : '';
-            const desc = [named, String(args.appearance ?? '').trim()].filter(t => t).join('，');
-            const base = (male ? this.portraitBaseMalePrompt : this.portraitBaseFemalePrompt) + (desc ? `，${desc}` : '');
-            if (!desc)
-                console.log('[绘制者] 通用角色未提供 appearance：仅按通用底板绘制，人物特征会很泛');
-            return {
-                kind: male ? '通用-男' : '通用-女', chibi, label: `${chibi ? 'Q版' : '全尺寸'}${male ? '男性' : '女性'}角色立绘`,
-                template: chibi ? this.genericChibiAppearancePrompt : this.genericFullAppearancePrompt,
-                base,
-                outfit: desc ? '' : '穿着简洁得体的日常服装',
-                gender: male ? '男孩' : '女孩', defaultRatio,
-            };
-        }
-        handlePortrait(args) {
-            try {
-                const preset = this.portraitPreset(args);
-                console.log(`[绘制者] -> ${preset.label}生成`);
-                console.log(`角色: "${args.character}" chibi=${preset.chibi}`);
-                console.log(`表情: "${args.expression}"`);
-                console.log(`姿势: "${args.posture}"`);
-                console.log(`服装: "${args.outfit}"`);
-                console.log(`环境: "${args.environment}"`);
-                console.log(`负面提示词: "${args.negative_prompt}"`);
-                console.log(`提示词引导系数: "${args.cfg_scale}"`);
-                const plan = resolveDimensionPlan(args.ratio || preset.defaultRatio);
-                const steps = normalizeSteps(args.steps, preset.label);
-                const fullPrompt = this.renderAppearance(preset.template, args, preset.outfit, preset.base, preset.gender);
-                return this.paint({
-                    prompt: fullPrompt,
-                    negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
-                    width: plan.width,
-                    height: plan.height,
-                    steps: steps,
-                    cfgScale: args.cfg_scale ?? 1.0,
-                    superResolution: args.super_resolution === true,
-                }, `${preset.label}生成`);
-            }
-            catch (error) {
-                console.error('[绘制者] 立绘处理异常:', error);
-                return `立绘生成异常: ${error}`;
-            }
-        }
-        handleCreateCharacter(args) {
-            const name = String(args.name || '').trim();
-            const appearance = String(args.appearance || '').trim();
-            if (!name)
-                return '创建角色失败：角色名不能为空';
-            if (!appearance)
-                return '创建角色失败：appearance 不能为空（写清年龄感、发型发色、瞳色、面部特征、配饰、体型）';
-            if (name === '月华' || name === '琉璃' || name === '通用-女' || name === '通用-男') {
-                return `创建角色失败：「${name}」是内置角色名，请换一个名字`;
-            }
-            const existed = this.customCharacters.has(name);
-            const profile = {
-                name,
-                gender: args.gender === '男' ? '男' : '女',
-                appearance,
-                outfitFull: String(args.outfit_full || '').trim() || undefined,
-                outfitChibi: String(args.outfit_chibi || '').trim() || undefined,
-            };
-            if (!saveCustomCharacter(profile))
-                return '创建角色失败：角色库写入失败，请稍后重试';
-            this.customCharacters.set(name, profile);
-            console.log(`[绘制者] 自定义角色${existed ? '更新' : '创建'}成功: ${name}`);
-            return `${existed ? '已更新' : '已创建'}自定义角色「${name}」（${profile.gender}）。之后绘制立绘或合照时可直接用该名字引用。`;
-        }
-        handleGroupPhoto(args) {
-            try {
-                const roles = this.normalizeGroupRoles(args.roles);
-                if (roles.length === 0)
-                    return '合照生成失败：roles 至少需要一位参与者';
-                const chibi = args.chibi === true;
-                const planningProvided = !!String(args.planning || '').trim();
-                const planning = String(args.planning || '').trim() || this.defaultGroupPlanning(roles, chibi);
-                const environment = String(args.environment || '').trim() || this.randomGroupEnvironment();
-                const members = roles
-                    .map(role => this.groupMemberAppearance(role, chibi, !planningProvided))
-                    .join('；');
-                const fullPrompt = this.renderTemplate(this.groupPhotoTemplate, {
-                    proportion: chibi ? 'Q版二头身，头身比约1:2，' : '',
-                    count: String(roles.length),
-                    members,
-                    planning: planning ? `人物安排：${planning}。` : '',
-                    environment,
-                });
-                console.log(`[绘制者] -> ${chibi ? 'Q版' : '全尺寸'}合照生成（${roles.length}人）`);
-                console.log(`参与者: "${roles.join('、')}"`);
-                console.log(`人物规划: "${planning || '默认'}"`);
-                console.log(`环境: "${environment}"`);
-                const useReference = !!this.referenceImage;
-                const plan = useReference ? this.planFor() : resolveDimensionPlan(args.ratio);
-                const steps = normalizeSteps(args.steps, '合照');
-                const imageParams = {
-                    prompt: fullPrompt,
-                    negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
-                    width: plan.width,
-                    height: plan.height,
-                    steps: steps,
-                    cfgScale: args.cfg_scale ?? 1.0,
-                    superResolution: args.super_resolution === true,
-                };
-                if (useReference) {
-                    imageParams.initImg = this.referenceImage;
-                    imageParams.strength = normalizeStrength(args.strength, '合照');
-                    console.log(`[绘制者] 合照图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}，尺寸: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
+    }
+
+    const musicTools = [
+        {
+            type: "function",
+            function: {
+                name: "submit_melody",
+                description: "创作流程第一步：提交完整的主旋律声部。先规划风格、调式、节拍与段落结构，再写出贯穿全曲的主旋律。主旋律是全曲的根基，伴奏与和弦将在其基础上依次生成",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "title": {
+                            type: "string",
+                            description: "音乐作品标题，应具有诗意与美感，与音乐风格匹配"
+                        },
+                        "instrument": {
+                            type: "string",
+                            description: "主旋律乐器，单个乐器名，如：钢琴(piano)、小提琴(violin)、长笛(flute)、萨克斯(sax)、竖琴(harp)、大提琴(cello)、8bit"
+                        },
+                        "tempo": {
+                            type: "number",
+                            description: "演奏速度（BPM）。抒情曲建议60-80，轻快曲建议90-120，激昂曲建议130-150。默认100"
+                        },
+                        "key": {
+                            type: "string",
+                            description: "调式，如 C、G、D、F、a、e、d"
+                        },
+                        "meter": {
+                            type: "string",
+                            description: "拍号，如 4/4、3/4、6/8。默认 4/4"
+                        },
+                        "structure": {
+                            type: "string",
+                            description: "段落结构，如：'前奏(4小节)-A段主旋律(8小节)-B段展开(8小节)-A'再现(8小节)-尾声(4小节)'"
+                        },
+                        "melody": {
+                            type: "string",
+                            description: "主旋律ABC片段：仅一行音符，用 | 分隔小节，以 |] 结尾。禁止包含 X:/T:/M:/L:/Q:/K: 等头部字段与 [V:N] 声部标记。应有起伏与乐句呼吸感（每4-8小节一个乐句）"
+                        }
+                    },
+                    required: [
+                        "title",
+                        "melody"
+                    ]
                 }
-                return this.paint(imageParams, '合照生成');
             }
-            catch (error) {
-                console.error('[绘制者] 合照生成处理异常:', error);
-                return `合照生成异常: ${error}`;
-            }
-        }
-        normalizeGroupRoles(value) {
-            const list = Array.isArray(value) ? value : [value];
-            const roles = [];
-            for (const item of list) {
-                const role = String(item ?? '').trim();
-                if (!role || roles.includes(role))
-                    continue;
-                roles.push(role);
-            }
-            return roles;
-        }
-        groupMemberAppearance(role, chibi, withOutfit) {
-            const profile = this.characterProfiles().get(role);
-            if (!profile)
-                return role;
-            const outfit = withOutfit ? `，${this.characterOutfit(profile, chibi)}` : '';
-            return `${profile.name}，${profile.appearance}${outfit}`;
-        }
-        defaultGroupPlanning(roles, chibi) {
-            const entries = [];
-            const profiles = this.characterProfiles();
-            for (const role of roles) {
-                const profile = profiles.get(role);
-                if (!profile)
-                    continue;
-                entries.push(`${profile.name}：${this.randomExpression()}，${this.randomPosture()}，${this.characterOutfit(profile, chibi)}`);
-            }
-            return entries.join('；');
-        }
-        randomExpression() {
-            return this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
-        }
-        randomPosture() {
-            return this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
-        }
-        randomGroupEnvironment() {
-            return this.groupEnvironmentPresets[RandomFloor(0, this.groupEnvironmentPresets.length - 1)];
-        }
-        handleSwitchDiffusionScheme(args) {
-            const name = String(args.scheme || '').trim();
-            if (!name)
-                return '切换模型方案失败：请指定 turbo 或 quality';
-            const [current, error] = setDiffusionScheme(name);
-            if (error)
-                return `切换模型方案失败：${error.message ?? String(error)}`;
-            return `已切换到 ${current}（${this.schemeLabel(current)}）模型方案，后续绘图将使用该方案。`;
-        }
-        schemeLabel(name) {
-            switch (name) {
-                case 'turbo': return '速度优先';
-                case 'quality': return '质量优先';
-                default: return name || '默认';
-            }
-        }
-        handleListImages() {
-            const entries = listResources('I', LIST_LIMIT_MAX);
-            if (entries.length === 0)
-                return '资源目录中还没有任何图片：当前没有可引用的图片句柄';
-            const lines = entries.map(entry => {
-                const desc = entry.summary ? sanitizeImageDesc(entry.summary, 40) : '（暂无描述）';
-                const lost = entry.state === 'active' ? '' : ' [本体已回收]';
-                return `${entry.handle} ${desc}${lost}`;
-            });
-            return `资源目录中最近的 ${entries.length} 张图片（句柄越新越靠前）：\n${lines.join('\n')}\n可调用 upscale_image 对指定图片超分；图生图基座由对话者经 reference_tag 指定。${this.referenceStatus()}。`;
-        }
-        handleUpscaleImage(args) {
-            try {
-                const resolved = args.image_tag ? resolveImageRef(String(args.image_tag)) : null;
-                let source = '';
-                let handleLabel = '';
-                if (args.image_tag) {
-                    if (!resolved)
-                        return '超分失败：句柄不存在或已失效，请先调用 list_images 或 list_resources 查看可用图片';
-                    if (!resolved.source)
-                        return `超分失败：${resolved.handle} 的本体已从内容仓库回收，无法超分`;
-                    source = resolved.source;
-                    handleLabel = resolved.handle;
+        },
+        {
+            type: "function",
+            function: {
+                name: "submit_accompaniment",
+                description: "创作流程第二步：在已提交的主旋律基础上生成伴奏声部。使用柱式和弦、分解和弦或阿尔贝蒂低音为旋律提供和声织体，小节数必须与主旋律完全一致",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "instrument": {
+                            type: "string",
+                            description: "伴奏乐器，单个乐器名，如：钢琴(piano)、竖琴(harp)、吉他(guitar)、贝斯(bass)、氛围铺底(弦乐群)"
+                        },
+                        "accompaniment": {
+                            type: "string",
+                            description: "伴奏ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。和弦用方括号包裹同时发音的音符，如 [C,,E,,G,,]4 或分解和弦 C,,2 E,2 G,2 c2"
+                        }
+                    },
+                    required: [
+                        "accompaniment"
+                    ]
                 }
-                else {
-                    if (!this.lastResultPath)
-                        return '超分失败：还没有生成过作品，请通过 image_tag 指定图片句柄，或先完成一次图像生成';
-                    source = this.lastResultPath;
-                    handleLabel = '最近作品';
-                }
-                console.log(`[绘制者] 超分重建 - 来源: ${handleLabel} ${source.substring(0, 60)}...`);
-                const [result, error] = upscaleImage(source);
-                if (error) {
-                    console.error('[绘制者] 超分失败:', error);
-                    return `超分失败: ${error}`;
-                }
-                if (!result || !result.base64)
-                    return '超分失败：引擎返回空结果';
-                this.recordPainting('超分重建', result.base64);
-                if (!pushImage([result.base64]))
-                    console.warn('[绘制者] 推送超分结果到前端失败');
-                return `超分成功。图片尺寸: ${result.width}x${result.height}，已推送给用户`;
             }
-            catch (error) {
-                console.error('[绘制者] 超分处理异常:', error);
-                return `超分处理异常: ${error}`;
+        },
+        {
+            type: "function",
+            function: {
+                name: "submit_chords",
+                description: "创作流程第三步（最后一步）：在主旋律与伴奏基础上生成和弦进行声部，提供低音支撑与和声骨架，完成整部作品。小节数必须与主旋律完全一致",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "instrument": {
+                            type: "string",
+                            description: "和弦声部乐器，单个乐器名，如：贝斯(bass)、大提琴(cello)、钢琴(piano)、鼓组(打击乐)"
+                        },
+                        "chords": {
+                            type: "string",
+                            description: "和弦进行ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。使用根音、柱式和弦或分解和弦，明确体现和声进行（如 C-F-G-C）"
+                        }
+                    },
+                    required: [
+                        "chords"
+                    ]
+                }
             }
         }
+    ];
+
+    function sanitizeFragment(fragment) {
+        return fragment
+            .replace(/^[A-Za-z]:.*$/gm, '')
+            .replace(/\[[Vv]:\d+\]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+    function countBars(fragment) {
+        const body = fragment
+            .replace(/^[A-Za-z]:.*$/gm, '')
+            .replace(/\[[Vv]:\d+\]/g, '')
+            .replace(/![^!|]*!/g, '')
+            .replace(/\|\]|:\||\|\|/g, '|');
+        return body.split('|').filter(segment => /[A-Ga-gz]/.test(segment)).length;
+    }
+    function assembleScore(draft) {
+        const instruments = [draft.melodyInstrument, draft.accompanimentInstrument, draft.chordInstrument]
+            .map(inst => inst.trim())
+            .filter(Boolean)
+            .join(',');
+        const abc = [
+            `X:1`,
+            `T:${draft.title}`,
+            `M:${draft.meter}`,
+            `L:1/8`,
+            `Q:1/4=${draft.tempo}`,
+            `K:${draft.key}`,
+            `[V:1] ${draft.melody}`,
+            `[V:2] ${draft.accompaniment}`,
+            `[V:3] ${draft.chords}`,
+            ''
+        ].join('\n');
+        return { abc: injectInstrumentDirective(abc, instruments), instruments };
+    }
+    function injectInstrumentDirective(abcNotation, instruments) {
+        if (!instruments)
+            return abcNotation;
+        const list = instruments
+            .replace(/，/g, ',')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+        if (list.length === 0)
+            return abcNotation;
+        if (/^%%voice\s+/m.test(abcNotation))
+            return abcNotation;
+        const directives = list.map((inst, index) => `%%voice ${index + 1} ${inst}`);
+        const directive = directives.join('\n') + '\n';
+        const xMatch = abcNotation.match(/^X:\s*\d+/m);
+        if (xMatch && xMatch.index !== undefined) {
+            const before = abcNotation.substring(0, xMatch.index);
+            const after = abcNotation.substring(xMatch.index);
+            return before + directive + after;
+        }
+        return directive + abcNotation;
+    }
+
+    function buildMusicSummary(pieces) {
+        if (pieces.length === 0)
+            return '月华没有演奏任何作品';
+        const feedback = interactEvent('play_music_before', { pieces }).return;
+        if (feedback && Array.isArray(feedback) && feedback.every(p => p.title && p.instruments && p.tempo && p.structure && p.key && p.meter && p.abcLength !== undefined)) {
+            pieces = feedback;
+        }
+        const parts = [];
+        for (const p of pieces) {
+            let desc = `月华演奏了《${p.title}》`;
+            const details = [];
+            if (p.instruments)
+                details.push(`使用${p.instruments}`);
+            if (p.key)
+                details.push(`${p.key}${p.key === p.key.toLowerCase() ? '小调' : '大调'}`);
+            if (p.tempo > 0)
+                details.push(`${p.tempo}BPM`);
+            if (p.structure)
+                details.push(`结构为${p.structure}`);
+            if (details.length > 0)
+                desc += `（${details.join('，')}）`;
+            parts.push(desc + '。');
+        }
+        parts.push('乐谱已通过音乐播放器推送给用户，可以查看和播放。');
+        return parts.join('\n');
     }
 
     class MusicianRole extends CreativeRoleBase {
@@ -3036,103 +3213,11 @@ var agentSystem = (function (exports) {
         DEFAULT_TEMPO = 100;
         draft = null;
         assembledDetail = null;
-        musicTool = [
-            {
-                type: "function",
-                function: {
-                    name: "submit_melody",
-                    description: "创作流程第一步：提交完整的主旋律声部。先规划风格、调式、节拍与段落结构，再写出贯穿全曲的主旋律。主旋律是全曲的根基，伴奏与和弦将在其基础上依次生成",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "title": {
-                                type: "string",
-                                description: "音乐作品标题，应具有诗意与美感，与音乐风格匹配"
-                            },
-                            "instrument": {
-                                type: "string",
-                                description: "主旋律乐器，单个乐器名，如：钢琴(piano)、小提琴(violin)、长笛(flute)、萨克斯(sax)、竖琴(harp)、大提琴(cello)、8bit"
-                            },
-                            "tempo": {
-                                type: "number",
-                                description: "演奏速度（BPM）。抒情曲建议60-80，轻快曲建议90-120，激昂曲建议130-150。默认100"
-                            },
-                            "key": {
-                                type: "string",
-                                description: "调式，如 C、G、D、F、a、e、d"
-                            },
-                            "meter": {
-                                type: "string",
-                                description: "拍号，如 4/4、3/4、6/8。默认 4/4"
-                            },
-                            "structure": {
-                                type: "string",
-                                description: "段落结构，如：'前奏(4小节)-A段主旋律(8小节)-B段展开(8小节)-A'再现(8小节)-尾声(4小节)'"
-                            },
-                            "melody": {
-                                type: "string",
-                                description: "主旋律ABC片段：仅一行音符，用 | 分隔小节，以 |] 结尾。禁止包含 X:/T:/M:/L:/Q:/K: 等头部字段与 [V:N] 声部标记。应有起伏与乐句呼吸感（每4-8小节一个乐句）"
-                            }
-                        },
-                        required: [
-                            "title",
-                            "melody"
-                        ]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "submit_accompaniment",
-                    description: "创作流程第二步：在已提交的主旋律基础上生成伴奏声部。使用柱式和弦、分解和弦或阿尔贝蒂低音为旋律提供和声织体，小节数必须与主旋律完全一致",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "instrument": {
-                                type: "string",
-                                description: "伴奏乐器，单个乐器名，如：钢琴(piano)、竖琴(harp)、吉他(guitar)、贝斯(bass)、氛围铺底(弦乐群)"
-                            },
-                            "accompaniment": {
-                                type: "string",
-                                description: "伴奏ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。和弦用方括号包裹同时发音的音符，如 [C,,E,,G,,]4 或分解和弦 C,,2 E,2 G,2 c2"
-                            }
-                        },
-                        required: [
-                            "accompaniment"
-                        ]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "submit_chords",
-                    description: "创作流程第三步（最后一步）：在主旋律与伴奏基础上生成和弦进行声部，提供低音支撑与和声骨架，完成整部作品。小节数必须与主旋律完全一致",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "instrument": {
-                                type: "string",
-                                description: "和弦声部乐器，单个乐器名，如：贝斯(bass)、大提琴(cello)、钢琴(piano)、鼓组(打击乐)"
-                            },
-                            "chords": {
-                                type: "string",
-                                description: "和弦进行ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。使用根音、柱式和弦或分解和弦，明确体现和声进行（如 C-F-G-C）"
-                            }
-                        },
-                        required: [
-                            "chords"
-                        ]
-                    }
-                }
-            }
-        ];
         constructor() {
             super(fileView('prompts/musicianRole.md')[0]);
         }
         get roleName() { return '演奏者'; }
-        getToolDefinitions() { return this.musicTool; }
+        getToolDefinitions() { return musicTools; }
         executeTool(toolCall) {
             const funcName = toolCall.function.name;
             let args = {};
@@ -3161,56 +3246,17 @@ var agentSystem = (function (exports) {
             this.assembledDetail = null;
         }
         buildSummary(pieces) {
-            if (pieces.length === 0)
-                return '月华没有演奏任何作品';
-            const feedback = interactEvent('play_music_before', { pieces }).return;
-            if (feedback && Array.isArray(feedback) && feedback.every(p => p.title && p.instruments && p.tempo && p.structure && p.key && p.meter && p.abcLength !== undefined)) {
-                pieces = feedback;
-            }
-            const parts = [];
-            for (let i = 0; i < pieces.length; i++) {
-                const p = pieces[i];
-                let desc = `月华演奏了《${p.title}》`;
-                const details = [];
-                if (p.instruments)
-                    details.push(`使用${p.instruments}`);
-                if (p.key)
-                    details.push(`${p.key}${p.key === p.key.toLowerCase() ? '小调' : '大调'}`);
-                if (p.tempo > 0)
-                    details.push(`${p.tempo}BPM`);
-                if (p.structure)
-                    details.push(`结构为${p.structure}`);
-                if (details.length > 0)
-                    desc += `（${details.join('，')}）`;
-                parts.push(desc + '。');
-            }
-            parts.push('乐谱已通过音乐播放器推送给用户，可以查看和播放。');
-            return parts.join('\n');
-        }
-        sanitizeFragment(fragment) {
-            return fragment
-                .replace(/^[A-Za-z]:.*$/gm, '')
-                .replace(/\[[Vv]:\d+\]/g, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-        }
-        countBars(fragment) {
-            const body = fragment
-                .replace(/^[A-Za-z]:.*$/gm, '')
-                .replace(/\[[Vv]:\d+\]/g, '')
-                .replace(/![^!|]*!/g, '')
-                .replace(/\|\]|:\||\|\|/g, '|');
-            return body.split('|').filter(segment => /[A-Ga-gz]/.test(segment)).length;
+            return buildMusicSummary(pieces);
         }
         handleSubmitMelody(args) {
             try {
                 const title = (args.title || '').trim();
-                const melody = this.sanitizeFragment(args.melody || '');
+                const melody = sanitizeFragment(args.melody || '');
                 if (!title)
                     return '主旋律提交失败：作品标题不能为空';
                 if (!melody)
                     return '主旋律提交失败：旋律内容不能为空';
-                const bars = this.countBars(melody);
+                const bars = countBars(melody);
                 if (bars < this.MIN_MELODY_BARS) {
                     return `主旋律提交失败：当前仅 ${bars} 小节，音乐展开不足。请扩展至至少 ${this.MIN_MELODY_BARS} 小节（建议 16 小节以上），保持完整的段落结构后重新提交`;
                 }
@@ -3240,10 +3286,10 @@ var agentSystem = (function (exports) {
             try {
                 if (!this.draft)
                     return '伴奏提交失败：尚未提交主旋律，请先调用 submit_melody';
-                const accompaniment = this.sanitizeFragment(args.accompaniment || '');
+                const accompaniment = sanitizeFragment(args.accompaniment || '');
                 if (!accompaniment)
                     return '伴奏提交失败：伴奏内容不能为空';
-                const bars = this.countBars(accompaniment);
+                const bars = countBars(accompaniment);
                 if (bars !== this.draft.melodyBars) {
                     return `伴奏提交失败：伴奏为 ${bars} 小节，与主旋律 ${this.draft.melodyBars} 小节不一致。请逐小节对齐主旋律后重新提交完整的伴奏声部`;
                 }
@@ -3263,10 +3309,10 @@ var agentSystem = (function (exports) {
                     return '和弦提交失败：尚未提交主旋律，请先调用 submit_melody';
                 if (!this.draft.accompaniment)
                     return '和弦提交失败：尚未提交伴奏声部，请先调用 submit_accompaniment';
-                const chords = this.sanitizeFragment(args.chords || '');
+                const chords = sanitizeFragment(args.chords || '');
                 if (!chords)
                     return '和弦提交失败：和弦进行内容不能为空';
-                const bars = this.countBars(chords);
+                const bars = countBars(chords);
                 if (bars !== this.draft.melodyBars) {
                     return `和弦提交失败：和弦进行为 ${bars} 小节，与主旋律 ${this.draft.melodyBars} 小节不一致。请逐小节对齐后重新提交完整的和弦声部`;
                 }
@@ -3284,64 +3330,20 @@ var agentSystem = (function (exports) {
             }
         }
         assembleAndPush() {
-            const d = this.draft;
-            const instruments = [d.melodyInstrument, d.accompanimentInstrument, d.chordInstrument]
-                .map(inst => inst.trim())
-                .filter(Boolean)
-                .join(',');
-            let enrichedAbc = [
-                `X:1`,
-                `T:${d.title}`,
-                `M:${d.meter}`,
-                `L:1/8`,
-                `Q:1/4=${d.tempo}`,
-                `K:${d.key}`,
-                `[V:1] ${d.melody}`,
-                `[V:2] ${d.accompaniment}`,
-                `[V:3] ${d.chords}`,
-                ''
-            ].join('\n');
-            enrichedAbc = this.injectInstrumentDirective(enrichedAbc, instruments);
-            const pushSuccess = pushContext('music', enrichedAbc, '');
-            if (!pushSuccess) {
+            const draft = this.draft;
+            const { abc, instruments } = assembleScore(draft);
+            if (!pushContext('music', abc, '')) {
                 console.warn('[演奏者] 推送乐谱到前端失败');
             }
             return {
-                title: d.title,
+                title: draft.title,
                 instruments: instruments,
-                tempo: d.tempo,
-                structure: d.structure,
-                key: d.key,
-                meter: d.meter,
-                abcLength: d.melodyBars,
+                tempo: draft.tempo,
+                structure: draft.structure,
+                key: draft.key,
+                meter: draft.meter,
+                abcLength: draft.melodyBars,
             };
-        }
-        injectInstrumentDirective(abcNotation, instruments) {
-            if (!instruments)
-                return abcNotation;
-            const list = instruments
-                .replace(/，/g, ',')
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean);
-            if (list.length === 0)
-                return abcNotation;
-            if (/^%%voice\s+/m.test(abcNotation))
-                return abcNotation;
-            const directives = [];
-            for (let i = 0; i < list.length; i++) {
-                const inst = list[i];
-                const voiceNum = i + 1;
-                directives.push(`%%voice ${voiceNum} ${inst}`);
-            }
-            const directive = directives.join('\n') + '\n';
-            const xMatch = abcNotation.match(/^X:\s*\d+/m);
-            if (xMatch && xMatch.index !== undefined) {
-                const before = abcNotation.substring(0, xMatch.index);
-                const after = abcNotation.substring(xMatch.index);
-                return before + directive + after;
-            }
-            return directive + abcNotation;
         }
     }
 
@@ -3383,6 +3385,320 @@ var agentSystem = (function (exports) {
             console.error('LTPX 工具链同步失败:', e);
         }
     }
+
+    const STICKER_COLLECTION = 'stickers';
+    let stickerCollectionReady = false;
+    const ACTION_COLLECTION = 'actions';
+    let actionCollectionReady = false;
+    const LUNAR_MESSAGES_COLLECTION = 'lunar_messages';
+    const NON_CONVERSATION_COLLECTIONS = new Set([STICKER_COLLECTION, ACTION_COLLECTION]);
+    function listMemoryCollections() {
+        try {
+            if (!ensureMemoryReady())
+                return [];
+            const [names, error] = memoryListCollections();
+            if (error || !names) {
+                console.error('[记忆检索] 列出集合失败:', error?.message ?? String(error ?? '返回为空'));
+                return [];
+            }
+            return names.filter(name => !!name
+                && !NON_CONVERSATION_COLLECTIONS.has(name));
+        }
+        catch (error) {
+            console.error('[记忆检索] 列出集合抛异常:', error);
+            return [];
+        }
+    }
+    function normalizeTerms(terms) {
+        return [...new Set((terms || []).map(term => String(term || '').trim().toLowerCase()).filter(Boolean))];
+    }
+    function containsAll(content, terms) {
+        if (terms.length === 0)
+            return true;
+        const lower = content.toLowerCase();
+        return terms.every(term => lower.includes(term));
+    }
+    function containsAny(content, terms) {
+        if (terms.length === 0)
+            return false;
+        const lower = content.toLowerCase();
+        return terms.some(term => lower.includes(term));
+    }
+    function searchMemoryGlobal(query, limit = 8, options = {}) {
+        const text = String(query || '').trim();
+        if (!text)
+            return [];
+        const mode = options.mode || 'vector';
+        const safeLimit = Math.min(Math.max(Math.trunc(limit) || 8, 1), 30);
+        const collections = listMemoryCollections();
+        if (collections.length === 0)
+            return [];
+        const filters = normalizeTerms(options.filters);
+        const exclude = normalizeTerms(options.exclude);
+        const perCollection = Math.min(Math.max(safeLimit, 4), 30);
+        const terms = mode === 'regex' ? [text] : text.split(/\s+/).filter(Boolean);
+        if (terms.length === 0)
+            return [];
+        const hits = [];
+        for (const collection of collections) {
+            try {
+                const [results, error] = mode === 'vector'
+                    ? memoryQuery(collection, text, perCollection)
+                    : memoryKeywordSearch(collection, terms, mode === 'regex', perCollection);
+                if (error || !results)
+                    continue;
+                for (const item of results) {
+                    const content = String(item.content || '').trim();
+                    if (!content)
+                        continue;
+                    if (!containsAll(content, filters))
+                        continue;
+                    if (containsAny(content, exclude))
+                        continue;
+                    hits.push({
+                        id: String(item.id || ''),
+                        collection,
+                        role: String(item.role || 'unknown'),
+                        content,
+                        similarity: Number(item.similarity) || 0,
+                        timestamp: item.timestamp,
+                    });
+                }
+            }
+            catch (error) {
+                console.error(`[记忆检索] 集合 ${collection} 查询异常:`, error);
+            }
+        }
+        if (mode === 'vector')
+            hits.sort((a, b) => b.similarity - a.similarity);
+        else
+            hits.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        const seen = new Set();
+        const unique = hits.filter(hit => {
+            if (seen.has(hit.content))
+                return false;
+            seen.add(hit.content);
+            return true;
+        });
+        const top = unique.slice(0, safeLimit);
+        if (top.length > 0) {
+            console.log(`[记忆检索] 方式=${mode}，检索「${text.slice(0, 30)}」，返回 ${top.length} 条`);
+        }
+        return top;
+    }
+    function syncActionsToMemory(actionNames) {
+        if (!actionNames || actionNames.length === 0)
+            return false;
+        try {
+            if (!actionCollectionReady) {
+                const [ready] = memoryInit(ACTION_COLLECTION);
+                if (!ready)
+                    return false;
+                actionCollectionReady = true;
+            }
+            for (const name of actionNames) {
+                const trimmed = (name || '').trim();
+                if (!trimmed)
+                    continue;
+                memoryAddWithTags(ACTION_COLLECTION, 'assistant', trimmed, [trimmed]);
+            }
+            return true;
+        }
+        catch (error) {
+            console.error('[动作库] 动作组入库失败:', error);
+            return false;
+        }
+    }
+    function queryBestAction(text) {
+        if (!text || !text.trim())
+            return null;
+        try {
+            const [results, error] = memoryQuery(ACTION_COLLECTION, text.trim(), 1);
+            if (error || !results || results.length === 0)
+                return null;
+            return results[0].content || null;
+        }
+        catch (error) {
+            console.error('[动作库] 匹配失败:', error);
+            return null;
+        }
+    }
+    async function queryEmotionSticker(query) {
+        if (!query || !query.trim())
+            return null;
+        try {
+            if (!stickerCollectionReady) {
+                const [ready] = memoryInit(STICKER_COLLECTION);
+                if (!ready)
+                    return null;
+                stickerCollectionReady = true;
+            }
+            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
+            if (error || !results || results.length === 0)
+                return null;
+            const image = results[RandomFloor(0, results.length - 1)].base64;
+            return image || null;
+        }
+        catch (error) {
+            console.error('[表情包] 检索失败:', error);
+            return null;
+        }
+    }
+    function extractTextFromMessage(message) {
+        if (typeof message.content === 'string')
+            return message.content;
+        if (Array.isArray(message.content)) {
+            return message.content.filter(item => item.type === 'text').map(item => item.text).join(' ');
+        }
+        return '';
+    }
+    function extractMemoryText(message) {
+        return extractTextFromMessage(message);
+    }
+    function initMemory() {
+        if (GlobalConfig.memoryReady)
+            return;
+        const [_, err] = memoryInit('lunar_messages');
+        if (err)
+            console.error('记忆库初始化失败:', err);
+        else
+            GlobalConfig.memoryReady = true;
+    }
+    function ensureMemoryReady() {
+        if (!GlobalConfig.memoryReady)
+            initMemory();
+        return GlobalConfig.memoryReady;
+    }
+
+    const DEFAULT_LIMIT = 8;
+    const MAX_LIMIT = 30;
+    const CONTENT_PREVIEW_CHARS = 400;
+    const MODE_LABELS = {
+        vector: '语义检索',
+        keyword: '关键词检索',
+        regex: '正则检索'
+    };
+    const memoryTools = [
+        {
+            type: 'function',
+            function: {
+                name: 'search_memory',
+                description: '从长期记忆库检索历史对话与知识片段。用于回答「某用户之前说过什么」「以前聊过什么」「你还记不记得」这类问题。三种方式：vector（默认，语义检索，适合模糊描述）、keyword（关键词精确匹配，空格分词且全部命中，适合人名/原话/专有名词）、regex（正则匹配，RE2 语法）。filter 为必须包含的词（如说话人昵称），exclude 为必须排除的词。注意：这是聊天记忆检索，不是文档资源检索——查文件/资料请用 search_resources。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        query: {
+                            type: 'string',
+                            description: '正向检索词：vector 模式写自然语言描述；keyword 模式写空格分隔的关键词（全部命中）；regex 模式写正则表达式'
+                        },
+                        mode: {
+                            type: 'string',
+                            enum: ['vector', 'keyword', 'regex'],
+                            description: '检索方式，默认 vector。精确找人名/原话用 keyword；需要模式匹配时才用 regex'
+                        },
+                        filter: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: '可选：结果正文必须全部包含这些词（如 ["钛宇星光阁"]），用于锁定说话人或主题'
+                        },
+                        exclude: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            description: '可选：结果正文命中任意一个词就丢弃（如 ["表情包", "图片"]），用于排除噪音'
+                        },
+                        limit: {
+                            type: 'number',
+                            description: `返回条数上限，默认 ${DEFAULT_LIMIT}，最大 ${MAX_LIMIT}`
+                        }
+                    },
+                    required: ['query']
+                }
+            }
+        }
+    ];
+    function safeParse$1(text) {
+        try {
+            const parsed = JSON.parse(text);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        }
+        catch {
+            return {};
+        }
+    }
+    function roleLabel(role) {
+        switch (role) {
+            case 'user': return '用户';
+            case 'assistant': return '月华';
+            case 'system': return '系统';
+            case 'tool': return '工具';
+            case 'image': return '图片';
+            default: return role || '未知';
+        }
+    }
+    function formatTime(timestamp) {
+        if (!timestamp)
+            return '时间未知';
+        try {
+            return new Date(timestamp * 1000).toLocaleString('zh-CN', { hour12: false });
+        }
+        catch {
+            return '时间未知';
+        }
+    }
+    function preview(content) {
+        return content.length > CONTENT_PREVIEW_CHARS
+            ? content.slice(0, CONTENT_PREVIEW_CHARS) + '…'
+            : content;
+    }
+    function parseTerms(value) {
+        const list = Array.isArray(value) ? value : (typeof value === 'string' ? [value] : []);
+        return list.map(item => String(item || '').trim()).filter(Boolean);
+    }
+    function parseMode(value) {
+        const mode = String(value || '').trim().toLowerCase();
+        return mode === 'keyword' || mode === 'regex' ? mode : 'vector';
+    }
+    async function handleSearchMemory(args) {
+        const parsed = typeof args === 'string' ? safeParse$1(args) : (args || {});
+        const query = String(parsed.query || '').trim();
+        if (!query)
+            return ['记忆检索失败：query 不能为空', ''];
+        const mode = parseMode(parsed.mode);
+        if (mode === 'regex') {
+            try {
+                new RegExp(query, 'i');
+            }
+            catch (error) {
+                return [`记忆检索失败：正则表达式无效（${String(error)}）。可改用 keyword 模式或修正表达式`, ''];
+            }
+        }
+        const rawLimit = Number(parsed.limit);
+        const limit = Number.isFinite(rawLimit)
+            ? Math.min(Math.max(Math.trunc(rawLimit), 1), MAX_LIMIT)
+            : DEFAULT_LIMIT;
+        const filters = parseTerms(parsed.filter);
+        const exclude = parseTerms(parsed.exclude);
+        const hits = searchMemoryGlobal(query, limit, { mode, filters, exclude });
+        if (hits.length === 0) {
+            const hint = mode === 'vector'
+                ? '可以改用 mode=keyword 并只保留人名/主题词再试一次'
+                : '可以放宽 filter/exclude，或改用默认的 vector 模式再试一次';
+            return [`记忆库中没有检索到相关记录。${hint}；不要编造记忆内容。`, ''];
+        }
+        const lines = hits.map((hit, index) => {
+            const meta = [
+                `角色=${roleLabel(hit.role)}`,
+                `时间=${formatTime(hit.timestamp)}`,
+                mode === 'vector' ? `相关度=${hit.similarity.toFixed(3)}` : `方式=${MODE_LABELS[mode]}`
+            ].join('｜');
+            return `[${index + 1}] ${meta}\n${preview(hit.content)}`;
+        });
+        const text = `以${MODE_LABELS[mode]}检索到 ${hits.length} 条相关记忆：`
+            + `\n${lines.join('\n\n')}`
+            + '\n\n只依据以上原文回答；原文不足以回答用户问题时，直接说明没有找到相关信息，不要编造或把无关内容当答案。';
+        return [text, ''];
+    }
+    GlobalConfig.LTPfunction.set('search_memory', handleSearchMemory);
 
     const READ_CHAR_BUDGET = 12000;
     const OUTLINE_PREVIEW_LIMIT = 60;
@@ -3619,7 +3935,7 @@ var agentSystem = (function (exports) {
             type: 'function',
             function: {
                 name: 'search_resources',
-                description: '跨资源搜索：在全部资源的标题、摘要、标签与段落标题中匹配关键词，返回「哪份资源的哪一节」命中了。本工具只做定位，取正文请随后调用 read_resource。适合用户问「我之前给过你的那份配置里…」这类跨资料检索。',
+                description: '跨资源搜索：在全部资源的标题、摘要、标签与段落标题中匹配关键词，返回「哪份资源的哪一节」命中了。本工具只做文档资源定位，**不检索聊天记忆**——问「谁之前说过什么 / 以前聊过什么」请用 search_memory。取正文请随后调用 read_resource。适合用户问「我之前给过你的那份配置里…」这类跨资料检索。',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -3646,8 +3962,6 @@ var agentSystem = (function (exports) {
     GlobalConfig.LTPfunction.set('outline_resource', handleOutlineResource);
     GlobalConfig.LTPfunction.set('search_resources', handleSearchResources);
 
-    const dialogueBaseTools = [...agentControlTools, ...imageRecallTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
-    const MAX_TOOL_ROUNDS = 5;
     function parseToolArgs(raw) {
         if (raw && typeof raw === 'object')
             return raw;
@@ -3659,6 +3973,99 @@ var agentSystem = (function (exports) {
             return {};
         }
     }
+    function describeError(error) {
+        if (!error)
+            return '未知错误';
+        if (typeof error === 'string')
+            return error;
+        const anyError = error;
+        if (typeof anyError.message === 'string' && anyError.message)
+            return anyError.message;
+        const text = String(error);
+        return text && text !== '[object Object]' ? text : '模型调用失败（宿主未提供错误详情）';
+    }
+    function notifyAgentSuccess() {
+        try {
+            if (typeof notifyAgentIdle === 'function')
+                notifyAgentIdle();
+        }
+        catch {
+        }
+    }
+    function reportAgentFailure(reason) {
+        try {
+            if (typeof notifyAgentFailure === 'function')
+                notifyAgentFailure(reason);
+        }
+        catch {
+        }
+    }
+
+    function applyModelResponse(message, cache) {
+        try {
+            if (message.choices?.[0]?.message?.reasoning_content) {
+                cache.thinkingContent = message.choices[0].message.reasoning_content;
+            }
+            if (message.timings?.predicted_per_second) {
+                console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
+            }
+            if (message.timings?.cache_n !== undefined) {
+                console.log(`缓存命中数量: ${message.timings.cache_n}`);
+            }
+            if (message.choices?.[0]?.message?.tool_calls) {
+                for (const toolCall of message.choices[0].message.tool_calls) {
+                    try {
+                        toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+                        cache.toolCalls.push(toolCall);
+                    }
+                    catch (parseError) {
+                        console.error('工具调用参数解析错误:', parseError);
+                    }
+                }
+            }
+            if (message.choices?.[0]?.message?.content) {
+                cache.descriptionContent = message.choices[0].message.content;
+            }
+        }
+        catch (error) {
+            console.error('聊天消息响应处理错误:', error);
+        }
+    }
+
+    function demoteOverflowImagesIn(messages, window, describe) {
+        const countImages = () => messages.reduce((sum, message) => typeof message.content === 'string'
+            ? sum
+            : sum + message.content.filter((c) => c.type === 'image_url').length, 0);
+        for (let i = 0; i < messages.length && countImages() > window; i++) {
+            const message = messages[i];
+            if (typeof message.content === 'string')
+                continue;
+            if (!message.content.some((c) => c.type === 'image_url'))
+                continue;
+            demoteMessageImagesIn(message, describe);
+        }
+    }
+    function demoteMessageImagesIn(message, describe) {
+        if (typeof message.content === 'string')
+            return;
+        const items = message.content;
+        const rebuilt = [];
+        for (const item of items) {
+            const content = item;
+            if (content.type !== 'image_url') {
+                rebuilt.push(item);
+                continue;
+            }
+            const tag = handleFromVisionURL(content.image_url?.url);
+            rebuilt.push({
+                type: 'text', text: tag
+                    ? composeImagePlaceholder(tag, describe(tag, content.image_url?.url || ''))
+                    : '（一张未能登记句柄的图片，已超出窗口）'
+            });
+        }
+        message.content = rebuilt;
+    }
+
     const ACK_LEADS = ['收到', '好嘞', '交给我吧', '没问题', '这个我来'];
     const ACK_ENDS = ['～', '，稍等我一下～', '，等我好消息～', '，一会儿就好～'];
     const DRAW_ACTIONS = ['这就动笔', '这就开画', '马上开工', '先起个稿'];
@@ -3703,33 +4110,51 @@ var agentSystem = (function (exports) {
             console.error('[对话者] 快速应答推送失败:', error);
         }
     }
-    function describeError(error) {
-        if (!error)
-            return '未知错误';
-        if (typeof error === 'string')
-            return error;
-        const anyError = error;
-        if (typeof anyError.message === 'string' && anyError.message)
-            return anyError.message;
-        const text = String(error);
-        return text && text !== '[object Object]' ? text : '模型调用失败（宿主未提供错误详情）';
+
+    async function executeToolCalls(messages, state) {
+        let hasToolCalls = false;
+        for (const toolCall of state.toolCalls) {
+            const functionName = toolCall.function.name;
+            const functionArgs = toolCall.function.arguments;
+            const lunarToolPackage = GlobalConfig.LTPfunction.get(functionName);
+            if (!lunarToolPackage) {
+                messages.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
+                continue;
+            }
+            maybeSendFastAck(functionName, functionArgs);
+            try {
+                const toolResult = await lunarToolPackage(functionArgs);
+                const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
+                const base64Image = Array.isArray(toolResult) ? toolResult[1] : '';
+                messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
+                if (base64Image && typeof base64Image === 'string' && base64Image.length > 0) {
+                    const message = {
+                        role: "user",
+                        content: [
+                            { type: "text", text: `【工具返回的图片】${textContent}` },
+                            { type: "image_url", image_url: { url: base64Image } }
+                        ]
+                    };
+                    attachImageTags(message);
+                    messages.push(message);
+                    console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节`);
+                }
+                hasToolCalls = true;
+            }
+            catch (error) {
+                messages.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
+            }
+        }
+        state.currentToolCallIndex = -1;
+        state.currentFunctionArgs = "";
+        state.currentFunctionName = "";
+        state.currentToolCall = null;
+        state.toolCalls = [];
+        return hasToolCalls;
     }
-    function notifyAgentSuccess() {
-        try {
-            if (typeof notifyAgentIdle === 'function')
-                notifyAgentIdle();
-        }
-        catch {
-        }
-    }
-    function reportAgentFailure(reason) {
-        try {
-            if (typeof notifyAgentFailure === 'function')
-                notifyAgentFailure(reason);
-        }
-        catch {
-        }
-    }
+
+    const dialogueBaseTools = [...agentControlTools, ...imageRecallTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
+    const MAX_TOOL_ROUNDS = 5;
     class DialogueRole extends ModelBuilder {
         descriptionRole;
         roleTag = "对话者";
@@ -3802,40 +4227,13 @@ var agentSystem = (function (exports) {
             this.demoteOverflowImages();
             if (this.messages.length === 0)
                 return;
-            if (this.messages.slice(-1)[0].role === 'user')
+            const lastRole = this.messages.slice(-1)[0].role;
+            if (lastRole === 'user' || lastRole === 'tool')
                 return;
             this.writeContext({ role: 'user', content: "继续" });
         }
         demoteOverflowImages() {
-            const countImages = () => this.messages.reduce((sum, message) => typeof message.content === 'string'
-                ? sum
-                : sum + message.content.filter((c) => c.type === 'image_url').length, 0);
-            for (let i = 0; i < this.messages.length && countImages() > this.IMAGE_WINDOW; i++) {
-                const message = this.messages[i];
-                if (typeof message.content === 'string')
-                    continue;
-                if (!message.content.some((c) => c.type === 'image_url'))
-                    continue;
-                this.demoteMessageImages(message);
-            }
-        }
-        demoteMessageImages(message) {
-            if (typeof message.content === 'string')
-                return;
-            const items = message.content;
-            const rebuilt = [];
-            for (const item of items) {
-                const content = item;
-                if (content.type !== 'image_url') {
-                    rebuilt.push(item);
-                    continue;
-                }
-                const tag = handleFromVisionURL(content.image_url?.url);
-                rebuilt.push({ type: 'text', text: tag
-                        ? composeImagePlaceholder(tag, this.describeImage(tag, content.image_url?.url || ''))
-                        : '（一张未能登记句柄的图片，已超出窗口）' });
-            }
-            message.content = rebuilt;
+            demoteOverflowImagesIn(this.messages, this.IMAGE_WINDOW, (tag, source) => this.describeImage(tag, source));
         }
         describeImage(tag, source) {
             const entry = getResourceEntry(tag);
@@ -3866,77 +4264,11 @@ var agentSystem = (function (exports) {
             }
         }
         analyzeMessageResponse(message, cache) {
-            try {
-                if (message.choices?.[0]?.message?.reasoning_content) {
-                    cache.thinkingContent = message.choices[0].message.reasoning_content;
-                }
-                if (message.timings?.predicted_per_second) {
-                    console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
-                }
-                if (message.timings?.cache_n !== undefined) {
-                    console.log(`缓存命中数量: ${message.timings.cache_n}`);
-                }
-                if (message.choices?.[0]?.message?.tool_calls) {
-                    for (const toolCall of message.choices[0].message.tool_calls) {
-                        try {
-                            toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
-                            cache.toolCalls.push(toolCall);
-                        }
-                        catch (parseError) {
-                            console.error('工具调用参数解析错误:', parseError);
-                        }
-                    }
-                }
-                if (message.choices?.[0]?.message?.content) {
-                    cache.descriptionContent = message.choices[0].message.content;
-                }
-            }
-            catch (error) {
-                console.error('聊天消息响应处理错误:', error);
-            }
+            applyModelResponse(message, cache);
         }
         async batchExecutionToolCall(state) {
-            let hasToolCalls = false;
-            for (const toolCall of state.toolCalls) {
-                const functionName = toolCall.function.name;
-                const functionArgs = toolCall.function.arguments;
-                const lunarToolPackage = GlobalConfig.LTPfunction.get(functionName);
-                if (!lunarToolPackage) {
-                    this.messages.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
-                    continue;
-                }
-                maybeSendFastAck(functionName, functionArgs);
-                try {
-                    const toolResult = await lunarToolPackage(functionArgs);
-                    const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
-                    const base64Image = Array.isArray(toolResult) ? toolResult[1] : '';
-                    this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
-                    if (base64Image && typeof base64Image === 'string' && base64Image.length > 0) {
-                        const message = {
-                            role: "user",
-                            content: [
-                                { type: "text", text: `【工具返回的图片】${textContent}` },
-                                { type: "image_url", image_url: { url: base64Image } }
-                            ]
-                        };
-                        attachImageTags(message);
-                        this.messages.push(message);
-                        console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节`);
-                    }
-                    hasToolCalls = true;
-                }
-                catch (error) {
-                    this.messages.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
-                }
-            }
-            state.currentToolCallIndex = -1;
-            state.currentFunctionArgs = "";
-            state.currentFunctionName = "";
-            state.currentToolCall = null;
-            state.toolCalls = [];
-            return hasToolCalls;
+            return executeToolCalls(this.messages, state);
         }
-        ;
         constructor(descriptionRole) {
             super(fileView('prompts/dialogueRole.md')[0]);
             this.descriptionRole = descriptionRole;
@@ -4098,104 +4430,17 @@ var agentSystem = (function (exports) {
         }
     }
 
-    const STICKER_COLLECTION = 'stickers';
-    let stickerCollectionReady = false;
-    const ACTION_COLLECTION = 'actions';
-    let actionCollectionReady = false;
-    function syncActionsToMemory(actionNames) {
-        if (!actionNames || actionNames.length === 0)
-            return false;
-        try {
-            if (!actionCollectionReady) {
-                const [ready] = memoryInit(ACTION_COLLECTION);
-                if (!ready)
-                    return false;
-                actionCollectionReady = true;
-            }
-            for (const name of actionNames) {
-                const trimmed = (name || '').trim();
-                if (!trimmed)
-                    continue;
-                memoryAddWithTags(ACTION_COLLECTION, 'assistant', trimmed, [trimmed]);
-            }
-            return true;
-        }
-        catch (error) {
-            console.error('[动作库] 动作组入库失败:', error);
-            return false;
-        }
-    }
-    function queryBestAction(text) {
-        if (!text || !text.trim())
-            return null;
-        try {
-            const [results, error] = memoryQuery(ACTION_COLLECTION, text.trim(), 1);
-            if (error || !results || results.length === 0)
-                return null;
-            return results[0].content || null;
-        }
-        catch (error) {
-            console.error('[动作库] 匹配失败:', error);
-            return null;
-        }
-    }
-    async function queryEmotionSticker(query) {
-        if (!query || !query.trim())
-            return null;
-        try {
-            if (!stickerCollectionReady) {
-                const [ready] = memoryInit(STICKER_COLLECTION);
-                if (!ready)
-                    return null;
-                stickerCollectionReady = true;
-            }
-            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
-            if (error || !results || results.length === 0)
-                return null;
-            const image = results[RandomFloor(0, results.length - 1)].base64;
-            return image || null;
-        }
-        catch (error) {
-            console.error('[表情包] 检索失败:', error);
-            return null;
-        }
-    }
-    function extractTextFromMessage(message) {
-        if (typeof message.content === 'string')
-            return message.content;
-        if (Array.isArray(message.content)) {
-            return message.content.filter(item => item.type === 'text').map(item => item.text).join(' ');
-        }
-        return '';
-    }
-    function extractMemoryText(message) {
-        return extractTextFromMessage(message);
-    }
-    function initMemory() {
-        if (GlobalConfig.memoryReady)
-            return;
-        const [_, err] = memoryInit('lunar_messages');
-        if (err)
-            console.error('记忆库初始化失败:', err);
-        else
-            GlobalConfig.memoryReady = true;
-    }
-    function ensureMemoryReady() {
-        if (!GlobalConfig.memoryReady)
-            initMemory();
-        return GlobalConfig.memoryReady;
-    }
-
-    const MEMORY_COLLECTION = 'lunar_messages';
-    const RAG_SUMMARY_HARD_LIMIT = 4096;
+    const MEMORY_COLLECTION = LUNAR_MESSAGES_COLLECTION;
     const RAG_TIMELINE_HARD_LIMIT = 2048;
     const RAG_PER_QUERY_TOP_K = 10;
     const RAG_MAX_RECORDS = 24;
-    class MemorizerRole extends ModelBuilder {
-        roleTag = "记忆者";
-        constructor() {
-            super(fileView('prompts/memorizerRole.md')[0]);
-        }
+    const RAG_MIN_SIMILARITY = 0.40;
+    function memoryQueryText(message) {
+        const text = String(message || '').trim();
+        const stripped = text.replace(/^(?:\s*\[[^\]]*\])+\s*[:：]?\s*/u, '').trim();
+        return stripped || text;
+    }
+    class MemorizerRole {
         persistUnreadRecords() {
             if (GlobalConfig.unreadRecords.length === 0)
                 return;
@@ -4221,7 +4466,7 @@ var agentSystem = (function (exports) {
             console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
             GlobalConfig.unreadRecords = [];
         }
-        queryRagDigest(userMessages, summarize) {
+        queryRagDigest(userMessages) {
             if (!userMessages || userMessages.length === 0 || !ensureMemoryReady())
                 return '';
             let records = this.retrieveRagRecords(userMessages);
@@ -4231,7 +4476,7 @@ var agentSystem = (function (exports) {
             if (feedback && Array.isArray(feedback) && feedback.length > 0 && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
                 records = feedback;
             }
-            return summarize ? this.summarizeRecords(records) : this.buildTimeline(records);
+            return this.buildTimeline(records);
         }
         buildTimeline(records) {
             const sorted = [...records].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
@@ -4247,15 +4492,21 @@ var agentSystem = (function (exports) {
             return timeline;
         }
         retrieveRagRecords(userMessages) {
+            const queries = [...new Set(userMessages.map(text => memoryQueryText(text)).filter(text => text.length > 0))].slice(-4);
             const allResults = [];
-            for (const userMessage of userMessages) {
-                const [results, error] = memoryQuery(MEMORY_COLLECTION, userMessage, RAG_PER_QUERY_TOP_K);
-                if (error) {
-                    console.error('记忆库查询失败:', error);
-                    continue;
+            for (const query of queries) {
+                for (const hit of searchMemoryGlobal(query, RAG_PER_QUERY_TOP_K)) {
+                    if (hit.similarity < RAG_MIN_SIMILARITY)
+                        continue;
+                    allResults.push({
+                        id: hit.id,
+                        role: hit.role,
+                        content: hit.content,
+                        similarity: hit.similarity,
+                        timestamp: hit.timestamp,
+                        collection: hit.collection
+                    });
                 }
-                if (results && results.length > 0)
-                    allResults.push(...results);
             }
             const seen = new Map();
             for (const r of allResults) {
@@ -4265,35 +4516,8 @@ var agentSystem = (function (exports) {
                     seen.set(content, r);
             }
             const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
-            console.log(`[记忆] 检索到 ${uniqueResults.length} 条相关记录，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
+            console.log(`[记忆] 跨集合检索到 ${uniqueResults.length} 条相关记录，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
             return uniqueResults.slice(0, RAG_MAX_RECORDS);
-        }
-        summaryTaskTemplate = fileView('prompts/memorizerSummaryTask.md')[0];
-        summarizeRecords(records) {
-            const fragments = records
-                .map((r, i) => {
-                let header = `--- 片段 ${i + 1}（${r.role}`;
-                if (r.timestamp)
-                    header += `，${new Date(r.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })}`;
-                header += `）---`;
-                return `${header}\n${r.content || '(空)'}`;
-            })
-                .join('\n\n');
-            this.coverContext({ role: 'user', content: this.summaryTaskTemplate.replace('{fragments}', fragments) });
-            this.runtimeMessages = [];
-            let response;
-            try {
-                response = this.run([], []);
-            }
-            catch (error) {
-                console.error('[记忆] 摘要推理失败:', error);
-                return '';
-            }
-            let digest = (response.body?.choices?.[0]?.message?.content || '').trim();
-            if (digest.length > RAG_SUMMARY_HARD_LIMIT)
-                digest = digest.slice(0, RAG_SUMMARY_HARD_LIMIT);
-            console.log(`[记忆] 已生成摘要（${digest.length}/${RAG_SUMMARY_HARD_LIMIT} 字）`);
-            return digest;
         }
     }
 
@@ -4312,7 +4536,6 @@ var agentSystem = (function (exports) {
         painter: { role: painterRole, label: '绘制者' },
         musician: { role: musicianRole, label: '演奏者' },
         perceiver: { role: perceiverRole, label: '感知者' },
-        memorizer: { role: memorizerRole, label: '记忆者' },
         description: { role: descriptionRole, label: '描述者' },
     });
     dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
@@ -4322,7 +4545,6 @@ var agentSystem = (function (exports) {
         painter: painterRole,
         musician: musicianRole,
         perceiver: perceiverRole,
-        memorizer: memorizerRole,
         description: descriptionRole,
     };
     try {
@@ -4367,614 +4589,6 @@ var agentSystem = (function (exports) {
             if (error instanceof Error)
                 return await fallback();
         }
-    }
-
-    const SECTION_BLOCK_LINES = 60;
-    function parseDocumentSections(text) {
-        const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n');
-        if (lines.length === 0)
-            return [];
-        const headings = [];
-        for (let i = 0; i < lines.length; i++) {
-            const parsed = parseHeadingLine(lines[i]);
-            if (parsed)
-                headings.push({ index: i, level: parsed.level, title: parsed.title });
-        }
-        if (headings.length === 0)
-            return fallbackSections(lines);
-        const drafts = [];
-        const pathStack = [];
-        for (let ordinal = 0; ordinal < headings.length; ordinal++) {
-            const heading = headings[ordinal];
-            while (pathStack.length > 0 && pathStack[pathStack.length - 1].level >= heading.level)
-                pathStack.pop();
-            pathStack.push(heading);
-            const endIndex = ordinal + 1 < headings.length ? headings[ordinal + 1].index : lines.length;
-            drafts.push({
-                ordinal: ordinal + 1,
-                level: heading.level,
-                title: heading.title,
-                path: pathStack.map(item => item.title).join(' / '),
-                lineStart: heading.index + 1,
-                lineEnd: endIndex,
-                chars: countChars(lines.slice(heading.index, endIndex))
-            });
-        }
-        return drafts;
-    }
-    function fallbackSections(lines) {
-        const drafts = [];
-        const total = lines.length;
-        for (let start = 0; start < total; start += SECTION_BLOCK_LINES) {
-            const end = Math.min(start + SECTION_BLOCK_LINES, total);
-            drafts.push({
-                ordinal: drafts.length + 1,
-                level: 0,
-                title: '',
-                path: '',
-                lineStart: start + 1,
-                lineEnd: end,
-                chars: countChars(lines.slice(start, end))
-            });
-        }
-        return drafts;
-    }
-    function parseHeadingLine(line) {
-        const trimmed = (line ?? '').replace(/^[ \t]+/, '');
-        let level = 0;
-        while (level < trimmed.length && trimmed[level] === '#')
-            level++;
-        if (level === 0 || level > 6)
-            return null;
-        const rest = trimmed.slice(level);
-        if (rest === '')
-            return { level, title: '' };
-        if (rest[0] !== ' ' && rest[0] !== '\t')
-            return null;
-        return { level, title: rest.trim() };
-    }
-    function countChars(lines) {
-        let total = 0;
-        for (const line of lines)
-            total += Array.from(line).length;
-        return total;
-    }
-
-    const FILE_WHITELIST = [
-        'ts', 'js', 'tsx', 'jsx', 'go', 'py', 'java', 'c', 'h', 'cpp', 'cxx', 'hpp', 'cs',
-        'md', 'markdown', 'txt', 'json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'log',
-        'csv', 'rs', 'rb', 'sh', 'ps1', 'bat', 'sql', 'html', 'htm', 'css', 'vue'
-    ];
-    const BINARY_EXTENSIONS = [
-        'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tiff', 'tif', 'ico', 'svg',
-        'mp4', 'webm', 'avi', 'mov', 'mkv', 'flv', 'm4v', 'mp3', 'wav', 'flac', 'ogg', 'm4a',
-        'zip', '7z', 'rar', 'gz', 'exe', 'dll', 'pdf', 'docx', 'xlsx', 'pptx'
-    ];
-    const FENCE = '```';
-    const QUERY_TOP_K = 8;
-    const QUERY_CHAR_BUDGET = 12000;
-    const SCORE_BODY_CHARS = 4000;
-    const FULLTEXT_CHAR_LIMIT = 6000;
-    function extOf(fileName) {
-        const parts = (fileName || '').split('.');
-        return parts.length > 1 ? parts.pop().toLowerCase() : '';
-    }
-    function looksLikeFileHeader(firstLine) {
-        return /^[A-Za-z0-9_\-.\u4e00-\u9fff]+\.\w+$/.test((firstLine || '').trim());
-    }
-    function toUTF8Bytes(text) {
-        const bytes = new Uint8Array(text.length * 3);
-        let offset = 0;
-        for (let i = 0; i < text.length; i++) {
-            let code = text.charCodeAt(i);
-            if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
-                const next = text.charCodeAt(i + 1);
-                if (next >= 0xdc00 && next <= 0xdfff) {
-                    code = ((code - 0xd800) << 10) + (next - 0xdc00) + 0x10000;
-                    i++;
-                }
-            }
-            if (code < 0x80)
-                bytes[offset++] = code;
-            else if (code < 0x800) {
-                bytes[offset++] = 0xc0 | (code >> 6);
-                bytes[offset++] = 0x80 | (code & 0x3f);
-            }
-            else if (code < 0x10000) {
-                bytes[offset++] = 0xe0 | (code >> 12);
-                bytes[offset++] = 0x80 | ((code >> 6) & 0x3f);
-                bytes[offset++] = 0x80 | (code & 0x3f);
-            }
-            else {
-                bytes[offset++] = 0xf0 | (code >> 18);
-                bytes[offset++] = 0x80 | ((code >> 12) & 0x3f);
-                bytes[offset++] = 0x80 | ((code >> 6) & 0x3f);
-                bytes[offset++] = 0x80 | (code & 0x3f);
-            }
-        }
-        return bytes.subarray(0, offset);
-    }
-    const CODE_LANGS = {
-        ts: 'TypeScript', tsx: 'TypeScript', js: 'JavaScript', jsx: 'JavaScript',
-        go: 'Go', py: 'Python', java: 'Java', c: 'C', h: 'C', cpp: 'C++', cxx: 'C++',
-        hpp: 'C++', cs: 'C#', rs: 'Rust', rb: 'Ruby', sh: 'Shell', ps1: 'PowerShell',
-        bat: 'Batch', sql: 'SQL', html: 'HTML', htm: 'HTML', css: 'CSS', vue: 'Vue'
-    };
-    function loadFileIndex(handle, fileName, sourcePath) {
-        const keys = [handle];
-        if (sourcePath)
-            keys.push(`@path:${sourcePath}`);
-        for (const key of keys) {
-            const cached = getFileIndexFromKnowledge(key);
-            if (!cached)
-                continue;
-            try {
-                return JSON.parse(cached);
-            }
-            catch {
-                continue;
-            }
-        }
-        return null;
-    }
-    function storeFileIndex(handle, fileName, index) {
-        saveFileIndexToKnowledge(handle, JSON.stringify(index));
-        if (index.path)
-            saveFileIndexToKnowledge(`@path:${index.path}`, JSON.stringify(index));
-        if (fileName && `#${fileName}` !== handle)
-            saveFileIndexToKnowledge(`#${fileName}`, JSON.stringify(index));
-    }
-    function admitDocumentContent(fileName, content) {
-        const admitted = admitBytes(toUTF8Bytes(content), fileName, 'client-upload', 'normal');
-        if (!admitted)
-            return null;
-        if (!admitted.deduped)
-            return admitted;
-        const existing = listResources(admitted.kind, 500).find(entry => entry.name === fileName && entry.content_hash === admitted.content_hash);
-        if (!existing || existing.id === admitted.id)
-            return admitted;
-        deleteResource(admitted.handle);
-        return {
-            ...admitted,
-            id: existing.id,
-            handle: existing.handle,
-            seq: existing.seq,
-            deduped: true
-        };
-    }
-    async function importDocumentBlock(fileName, content) {
-        const ext = extOf(fileName);
-        if (BINARY_EXTENSIONS.includes(ext))
-            return { handle: '', skipped: true };
-        if (!FILE_WHITELIST.includes(ext))
-            return { handle: '', skipped: true };
-        const admitted = admitDocumentContent(fileName, content);
-        if (!admitted)
-            return { handle: '', skipped: true };
-        if (!admitted.deduped) {
-            const drafts = parseDocumentSections(content);
-            if (drafts.length > 0)
-                setResourceSections(admitted.id, drafts);
-            const firstLine = content.replace(/^\uFEFF/, '')
-                .split('\n')
-                .map(line => line.replace(/^#+\s*/, '').trim())
-                .find(line => line.length > 0) || '';
-            if (firstLine)
-                setResourceSummary(admitted.id, firstLine.slice(0, 200));
-            console.log(`[阅读者] 已收录 ${admitted.handle}（${fileName}，${drafts.length} 段，${admitted.size_bytes} 字节）`);
-        }
-        const index = {
-            collection: '',
-            name: fileName,
-            path: fileName,
-            contentHash: admitted.content_hash,
-            ext,
-            lang: CODE_LANGS[ext] ?? null,
-            chunkCount: 0,
-            processedAt: Date.now(),
-            version: 2,
-            resourceId: admitted.id,
-            handle: admitted.handle
-        };
-        storeFileIndex(admitted.handle, fileName, index);
-        return { handle: admitted.handle, skipped: false };
-    }
-    function migrateLegacyFileIndex(fileName) {
-        const cached = getFileIndexFromKnowledge(`#${fileName}`);
-        if (!cached)
-            return '';
-        let legacy = null;
-        try {
-            legacy = JSON.parse(cached);
-        }
-        catch {
-            return '';
-        }
-        if (!legacy)
-            return '';
-        if (legacy.version === 2 && legacy.handle)
-            return legacy.handle;
-        if (!legacy.collection)
-            return '';
-        try {
-            const [ready] = memoryInit(legacy.collection);
-            if (!ready) {
-                console.error(`[阅读者] 迁移失败：记忆库集合不可用 ${legacy.collection}`);
-                return '';
-            }
-            const [results, queryError] = memoryQuery(legacy.collection, '文件内容 结构 概览 摘要', Math.max(legacy.chunkCount || 0, 64));
-            if (queryError || !results || results.length === 0) {
-                console.error(`[阅读者] 迁移失败：旧集合无可用切片 ${legacy.collection}`);
-                return '';
-            }
-            const chunks = results
-                .map(item => item.content || '')
-                .filter(text => text.length > 0);
-            if (chunks.length === 0)
-                return '';
-            const rebuilt = rebuildFromChunks(chunks);
-            const admitted = admitBytes(toUTF8Bytes(rebuilt), fileName, 'client-upload', 'normal');
-            if (!admitted)
-                return '';
-            const drafts = parseDocumentSections(rebuilt);
-            if (drafts.length > 0)
-                setResourceSections(admitted.id, drafts);
-            setResourceSummary(admitted.id, `（由历史切片重建，${chunks.length} 片 → ${drafts.length} 段）`);
-            const index = {
-                collection: legacy.collection,
-                name: fileName,
-                path: fileName,
-                contentHash: admitted.content_hash,
-                ext: extOf(fileName),
-                lang: legacy.lang ?? null,
-                chunkCount: drafts.length,
-                processedAt: Date.now(),
-                version: 2,
-                resourceId: admitted.id,
-                handle: admitted.handle
-            };
-            storeFileIndex(admitted.handle, fileName, index);
-            console.log(`[阅读者] 历史索引已迁移：${fileName} → ${admitted.handle}（${chunks.length} 片 → ${drafts.length} 段）`);
-            return admitted.handle;
-        }
-        catch (error) {
-            console.error(`[阅读者] 迁移历史索引异常 ${fileName}:`, error);
-            return '';
-        }
-    }
-    const CHUNK_PATH_PREFIX = /^\*[^*]*>\s*([\s\S]*?)\*(?:\n|$)/;
-    function rebuildFromChunks(chunks) {
-        const lines = [];
-        let previousSegments = [];
-        for (const chunk of chunks) {
-            const match = CHUNK_PATH_PREFIX.exec(chunk);
-            const body = match ? chunk.slice(match[0].length) : chunk;
-            const path = match ? match[1].trim() : '';
-            const segments = path ? path.split('/').map(segment => segment.split('(')[0].trim()).filter(Boolean) : [];
-            if (segments.length > 0) {
-                let common = 0;
-                while (common < segments.length && common < previousSegments.length && segments[common] === previousSegments[common])
-                    common++;
-                for (let i = common; i < segments.length; i++) {
-                    lines.push('#'.repeat(Math.min(i + 1, 6)) + ' ' + segments[i]);
-                }
-                previousSegments = segments;
-            }
-            const trimmed = body.replace(/\s+$/, '');
-            if (trimmed)
-                lines.push(trimmed);
-        }
-        return lines.join('\n') + '\n';
-    }
-    async function processImportBlocksInText(raw) {
-        if (!raw.includes(FENCE))
-            return { text: raw, imported: [] };
-        let out = '';
-        let i = 0;
-        const imported = [];
-        while (true) {
-            const start = raw.indexOf(FENCE, i);
-            if (start < 0) {
-                out += raw.slice(i);
-                break;
-            }
-            out += raw.slice(i, start);
-            const rest = raw.slice(start + FENCE.length);
-            const nl = rest.indexOf('\n');
-            const eol = nl < 0 ? rest.length : nl;
-            const firstLine = rest.slice(0, eol).trim();
-            if (!looksLikeFileHeader(firstLine)) {
-                out += FENCE;
-                i = start + FENCE.length;
-                continue;
-            }
-            const closeIdx = rest.lastIndexOf(FENCE);
-            if (closeIdx <= eol) {
-                out += raw.slice(start, start + FENCE.length);
-                i = start + FENCE.length;
-                continue;
-            }
-            const content = rest.slice(eol + 1, closeIdx);
-            const result = await importDocumentBlock(firstLine, content);
-            if (result.skipped) {
-                out += raw.slice(start, start + FENCE.length + closeIdx + FENCE.length);
-            }
-            else {
-                out += `[已收录] ${result.handle} ${firstLine}`;
-                if (!imported.includes(result.handle))
-                    imported.push(result.handle);
-            }
-            i = start + FENCE.length + closeIdx + FENCE.length;
-        }
-        return { text: out, imported };
-    }
-    function ensureSections(handle) {
-        const sections = outlineResource(handle);
-        return sections && sections.length > 0 ? sections : [];
-    }
-    function lexicalScore(handle, section, query) {
-        if (!query)
-            return 0;
-        const head = query.trim().toLowerCase();
-        if (!head)
-            return 0;
-        let score = 0;
-        const headText = `${section.title} ${section.path}`.toLowerCase();
-        if (headText.includes(head))
-            score += 10;
-        const body = readResource(`${handle}|L${section.line_start}-${section.line_end}`, SCORE_BODY_CHARS);
-        const bodyText = (body?.content || '').toLowerCase();
-        if (bodyText) {
-            if (bodyText.includes(head))
-                score += 5;
-            for (let i = 0; i + 1 < head.length; i++) {
-                const bigram = head.slice(i, i + 2);
-                if (bigram.trim().length < 2)
-                    continue;
-                let from = 0;
-                while (true) {
-                    const found = bodyText.indexOf(bigram, from);
-                    if (found < 0)
-                        break;
-                    score += 1;
-                    from = found + bigram.length;
-                }
-            }
-        }
-        return score;
-    }
-    function selectSections(handle, query) {
-        const sections = ensureSections(handle);
-        if (sections.length === 0)
-            return [];
-        if (!query || !query.trim()) {
-            return sections.slice(0, 3);
-        }
-        const scored = sections.map(section => ({ section, score: lexicalScore(handle, section, query) }));
-        scored.sort((a, b) => b.score - a.score || a.section.ordinal - b.section.ordinal);
-        const picked = scored.filter(item => item.score > 0).slice(0, QUERY_TOP_K).map(item => item.section);
-        return picked.length > 0 ? picked : sections.slice(0, 3);
-    }
-    function expandReference(ref, query) {
-        const parsed = parseHandle(ref.handle);
-        if (!parsed)
-            return ref.raw;
-        if (parsed.anchor === 'line') {
-            const result = readResource(ref.handle);
-            if (!result)
-                return ref.raw;
-            if (result.lost)
-                return `${ref.handle}\n${degradeNotice(ref.handle, '内容已不可取，仅保留目录条目')}`;
-            return `【${ref.handle}｜${result.title}｜第 ${result.line_start}-${result.line_end} 行】\n${result.content || ''}`;
-        }
-        const exists = listResources(parsed.kind, 500).some(entry => entry.handle === ref.handle.replace(/\|.*$/, ''));
-        if (!exists && parsed.kind !== 'D' && parsed.kind !== 'T') {
-            const described = describeResource(ref.handle, query);
-            return described ? `【${ref.handle}】${described}` : ref.raw;
-        }
-        if (!exists)
-            return ref.raw;
-        if (parsed.anchor === 'section') {
-            const result = readResource(ref.handle);
-            if (!result)
-                return ref.raw;
-            if (result.lost)
-                return `${ref.handle}\n${degradeNotice(ref.handle, '内容已不可取，仅保留目录条目')}`;
-            const label = result.section_title ? `｜${result.section_title}` : '';
-            return `【${ref.handle}${label}｜第 ${result.line_start}-${result.line_end} 行】\n${result.content || ''}`;
-        }
-        const sections = selectSections(ref.handle, query);
-        if (sections.length === 0) {
-            return expandFlatResource(ref, query);
-        }
-        const parts = [];
-        let budget = QUERY_CHAR_BUDGET;
-        for (const section of sections) {
-            if (budget <= 0)
-                break;
-            const slice = readResource(`${ref.handle.replace(/\|.*$/, '')}|L${section.line_start}-${section.line_end}`, budget);
-            const body = slice?.content || '';
-            if (!body)
-                continue;
-            budget -= body.length;
-            const label = section.path || section.title || `第 ${section.ordinal} 节`;
-            parts.push(`【${ref.handle.replace(/\|.*$/, '')}|§${section.ordinal}｜${label}｜第 ${section.line_start}-${section.line_end} 行】\n${body}`);
-        }
-        if (parts.length === 0)
-            return ref.raw;
-        return parts.join('\n---\n');
-    }
-    function expandFlatResource(ref, query) {
-        const handle = ref.handle.replace(/\|.*$/, '');
-        const entry = listResources('', 500).find(item => item.handle === handle);
-        const result = readResource(handle, FULLTEXT_CHAR_LIMIT + 1);
-        if (!result)
-            return ref.raw;
-        if (result.lost)
-            return `${handle}\n${degradeNotice(handle, '内容已不可取，仅保留目录条目')}`;
-        const content = result.content || '';
-        if (!content) {
-            const described = describeResource(handle, query);
-            return described ? `【${handle}】${described}` : ref.raw;
-        }
-        if (content.length <= FULLTEXT_CHAR_LIMIT && !result.truncated) {
-            return `【${handle}｜${result.title}｜共 ${result.total_lines || 0} 行】\n${content}`;
-        }
-        const sizeNote = `约 ${content.length} 字符 / ${result.total_lines || 0} 行`;
-        const sectionNote = entry?.section_count ? `，${entry.section_count} 节` : '';
-        const summary = entry?.summary ? `\n摘要：${entry.summary}` : '';
-        return `【${handle}｜${result.title}｜${sizeNote}${sectionNote}】体积较大，未自动注入正文。`
-            + `${summary}\n需要时请用 read_resource 按句柄读取（可带 |§n 章节锚点或 |L<起>-<止> 行区间）`
-            + `${entry?.section_count ? '，先用 outline_resource 查看结构再定向读取' : ''}。`;
-    }
-    const HANDLE_REF = /@[DIVAT]\.\d{3,}(?:\|(?:§\d+|L\d+-\d+))?/g;
-    function resolveFreeTextReference(fileName) {
-        const target = String(fileName || '').replace(/^#/, '').trim();
-        if (!target)
-            return '';
-        const indexed = loadFileIndex('', undefined, target);
-        if (indexed?.handle && indexed.version === 2)
-            return indexed.handle;
-        const candidates = listResources('', 500).filter(item => item.name === target);
-        if (candidates.length > 0) {
-            const samePath = indexed?.contentHash
-                ? candidates.find(item => item.content_hash === indexed.contentHash)
-                : undefined;
-            if (samePath)
-                return samePath.handle;
-            if (!indexed && candidates.length === 1) {
-                storeFileIndex(candidates[0].handle, target, {
-                    collection: '',
-                    name: target,
-                    path: target,
-                    contentHash: candidates[0].content_hash,
-                    ext: extOf(target),
-                    lang: CODE_LANGS[extOf(target)] ?? null,
-                    chunkCount: candidates[0].section_count,
-                    processedAt: Date.now(),
-                    version: 2,
-                    resourceId: candidates[0].id,
-                    handle: candidates[0].handle
-                });
-                return candidates[0].handle;
-            }
-        }
-        const admitted = admitDocumentByName(target);
-        if (admitted) {
-            const content = readResource(admitted.handle, 4 * 1024 * 1024)?.content || '';
-            const drafts = parseDocumentSections(content);
-            if (drafts.length > 0)
-                setResourceSections(admitted.id, drafts);
-            storeFileIndex(admitted.handle, target, {
-                collection: '',
-                name: target,
-                path: target,
-                contentHash: admitted.content_hash,
-                ext: extOf(target),
-                lang: CODE_LANGS[extOf(target)] ?? null,
-                chunkCount: drafts.length,
-                processedAt: Date.now(),
-                version: 2,
-                resourceId: admitted.id,
-                handle: admitted.handle
-            });
-            console.log(`[阅读者] 按需收录 ${admitted.handle}（${target}，${drafts.length} 段）`);
-            return admitted.handle;
-        }
-        return migrateLegacyFileIndex(target);
-    }
-    const FILE_REF = /(?<![\w.@])@([A-Za-z0-9_\-.]+\.\w{1,8})/g;
-    function processReferencesInText(raw) {
-        if (!raw || (!raw.includes('@') && !raw.includes('(#')))
-            return { text: raw, changed: false };
-        const feedback = interactEvent('read_file_before', { text: raw }).return;
-        if (feedback && typeof feedback.text === 'string' && feedback.text !== raw)
-            raw = feedback.text;
-        const refs = [];
-        HANDLE_REF.lastIndex = 0;
-        let match;
-        while ((match = HANDLE_REF.exec(raw)) !== null) {
-            const normalized = formatHandle(parseHandle(match[0]));
-            refs.push({ raw: match[0], start: match.index, end: match.index + match[0].length, handle: normalized });
-        }
-        FILE_REF.lastIndex = 0;
-        while ((match = FILE_REF.exec(raw)) !== null) {
-            const start = match.index;
-            const end = start + match[0].length;
-            if (refs.some(ref => start < ref.end && end > ref.start))
-                continue;
-            const handle = resolveFreeTextReference(match[1]);
-            if (!handle)
-                continue;
-            refs.push({ raw: match[0], start, end, handle });
-        }
-        const LEGACY_REF = /\(#([\w.\-]+)\)/g;
-        while ((match = LEGACY_REF.exec(raw)) !== null) {
-            const start = match.index;
-            const end = start + match[0].length;
-            if (refs.some(ref => start < ref.end && end > ref.start))
-                continue;
-            const handle = resolveFreeTextReference(match[1]);
-            if (!handle)
-                continue;
-            refs.push({ raw: match[0], start, end, handle });
-        }
-        if (refs.length === 0)
-            return { text: raw, changed: false };
-        refs.sort((a, b) => a.start - b.start);
-        const parts = [];
-        const lead = raw.slice(0, refs[0].start).trim();
-        if (lead)
-            parts.push(lead + '\n');
-        let changed = false;
-        for (let i = 0; i < refs.length; i++) {
-            const ref = refs[i];
-            const gapStart = ref.end;
-            const gapEnd = i + 1 < refs.length ? refs[i + 1].start : raw.length;
-            let query = raw.slice(gapStart, gapEnd).trim();
-            query = query.replace(/^[：:]/, '').trim();
-            const expanded = expandReference(ref, query);
-            if (expanded !== ref.raw)
-                changed = true;
-            parts.push(expanded);
-            if (query)
-                parts.push('\n' + query + '\n');
-        }
-        return { text: parts.join('').trimEnd(), changed };
-    }
-    async function processMessage(message) {
-        if (typeof message.content === 'string') {
-            const original = message.content;
-            const imported = await processImportBlocksInText(original);
-            const ref = processReferencesInText(imported.text);
-            message.content = ref.text;
-            return { changed: message.content !== original, imported: imported.imported };
-        }
-        if (Array.isArray(message.content)) {
-            const textParts = message.content.filter(it => it.type === 'text').map(it => it.text);
-            const others = message.content.filter(it => it.type !== 'text');
-            if (textParts.length === 0)
-                return { changed: false, imported: [] };
-            const raw = textParts.join('\n');
-            const imported = await processImportBlocksInText(raw);
-            const ref = processReferencesInText(imported.text);
-            message.content = [...others, { type: 'text', text: ref.text }];
-            return { changed: true, imported: imported.imported };
-        }
-        return { changed: false, imported: [] };
-    }
-    async function processUnreadFiles() {
-        for (const message of GlobalUnreadContext()) {
-            try {
-                await processMessage(message);
-            }
-            catch (error) {
-                console.error('[阅读者] 处理消息失败:', error);
-            }
-        }
-    }
-    function GlobalUnreadContext() {
-        return GlobalConfig.unreadContext;
     }
 
     function cleanTextForTTS(text) {
@@ -5159,7 +4773,7 @@ var agentSystem = (function (exports) {
 
     function parseContent(rawText) {
         if (!rawText)
-            return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], textChunks: [] };
+            return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], textChunks: [], displayText: '' };
         const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
         const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
         const [emotionBlocks, textAfterEmotion] = extractEmotionBlocks(textAfterCode);
@@ -5168,14 +4782,9 @@ var agentSystem = (function (exports) {
         const displayText = removeEmojiSymbols(textAfterAction);
         const displayChunks = splitSentences(displayText);
         const textChunks = displayChunks.map(chunk => ({ display: chunk, tts: cleanTextForTTS(chunk), }));
-        return { thinkingBlocks, codeBlocks, actionBlocks, textChunks };
+        return { thinkingBlocks, codeBlocks, actionBlocks, textChunks, displayText };
     }
 
-    async function createChatMessage() {
-        const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
-        await dialogueRole.generateDialogue(cache);
-        return GlobalConfig.finalResponse;
-    }
     let asrUnloaded = false;
     function guardASRUnload() {
         asrUnloaded = GlobalConfig.unreadContext.some(message => {
@@ -5196,7 +4805,7 @@ var agentSystem = (function (exports) {
         if (error)
             console.error('ASR 卸载执行失败:', error.message ?? String(error));
     }
-    const DEEP_RECALL_PATTERN = /(回忆|记忆|记得|回想|想起来)/;
+
     function updatePreviousMemories() {
         if (GlobalConfig.unreadRecords.length >= 1)
             memorizerRole.persistUnreadRecords();
@@ -5204,12 +4813,12 @@ var agentSystem = (function (exports) {
         const clear = () => { dialogueRole.ragMessages = []; };
         if (userMessages.length === 0)
             return clear();
-        const deepRecall = userMessages.some(text => DEEP_RECALL_PATTERN.test(text));
-        const digest = memorizerRole.queryRagDigest(userMessages, deepRecall);
+        const digest = memorizerRole.queryRagDigest(userMessages);
         if (!digest)
             return clear();
         dialogueRole.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
     }
+
     const FALLBACK_ACTIONS = ['荡秋千', '翻花绳'];
     function getAvailableActionNames() {
         try {
@@ -5236,6 +4845,42 @@ var agentSystem = (function (exports) {
         sendToEngine('movement', JSON.stringify({ position: { x: pos.x + RandomFloat(-0.5, 0.5), y: pos.y, z: pos.z + RandomFloat(-0.5, 0.5), }, resumeTracking: true, }));
         sendToEngine('action', JSON.stringify({ action: bestAction }));
         pushContext('action', `月华${bestAction}了`, '');
+    }
+
+    function writeMessage(role, content) {
+        if (content && typeof content === 'object' && !Array.isArray(content) && (content.type === 'video_url' || content.type === 'audio_url'))
+            content = [content];
+        const incoming = { role, content };
+        attachImageTags(incoming);
+        GlobalConfig.unreadContext.push(incoming);
+        const items = typeof content === 'string' ? [{ type: 'text', text: content }] : Array.isArray(content) ? content : [];
+        for (const message of items) {
+            if (message.type === 'text')
+                console.log('收到文本: ' + message.text);
+            else if (message.type === 'image_url')
+                console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
+            else if (message.type === 'input_audio')
+                console.log('收到音频: ' + message.input_audio?.data?.substring(0, 30));
+            else if (message.type === 'video_url')
+                console.log('收到视频: ' + message.video_url?.url);
+            else if (message.type === 'audio_url')
+                console.log('收到音频: ' + message.audio_url?.url);
+        }
+    }
+    function resetAgentState() {
+        descriptionRole.coverContext([]);
+        dialogueRole.coverContext([]);
+        painterRole.coverContext([]);
+        musicianRole.coverContext([]);
+        perceiverRole.coverContext([]);
+        painterRole.resetReference();
+        GlobalConfig.unreadContext = [];
+    }
+
+    async function createChatMessage() {
+        const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
+        await dialogueRole.generateDialogue(cache);
+        return GlobalConfig.finalResponse;
     }
     const FAILURE_REPLY = '刚才有点走神，你再说一遍好吗？';
     async function thoughtLoopTickEvent() {
@@ -5267,24 +4912,23 @@ var agentSystem = (function (exports) {
             const feedback = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext }).return;
             if (feedback && Array.isArray(feedback.messages))
                 GlobalConfig.unreadContext = feedback.messages;
-            await processUnreadFiles();
             await createChatMessage();
             if (!GlobalConfig.finalResponse.trim().length) {
                 const failure = GlobalConfig.lastFailure;
                 if (failure) {
-                    console.warn('[思考链] 本轮应答失败:', failure);
                     pushContext('text', FAILURE_REPLY, '');
+                    console.warn('[思考链] 本轮应答失败:', failure);
                 }
-                else {
+                else
                     pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0]);
-                }
                 return;
             }
             ;
-            const { thinkingBlocks, codeBlocks, actionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
+            const { thinkingBlocks, codeBlocks, actionBlocks, textChunks, displayText } = parseContent(GlobalConfig.finalResponse);
             const validMessage = textChunks.map(chunk => chunk.display).join('\n').trim();
             if (!validMessage.length)
                 throw new Error('清洗后的文本为空');
+            const replyText = displayText.trim() || validMessage;
             if (actionBlocks.length) {
                 const feedback = interactEvent('take_action_before', { actions: actionBlocks }).return;
                 const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
@@ -5298,13 +4942,11 @@ var agentSystem = (function (exports) {
             }
             thinkingBlocks.forEach(thinking => pushContext('text', thinking, ''));
             codeBlocks.forEach(code => pushContext('text', code, ''));
-            for (const chunk of textChunks) {
-                let audio = '';
-                const [audioData, err] = tts(chunk.tts);
-                if (!err && audioData)
-                    audio = audioData;
-                pushContext('text', chunk.display, audio);
-            }
+            let replyAudio = '';
+            const [replyAudioData, replyErr] = tts(cleanTextForTTS(replyText));
+            if (!replyErr && replyAudioData)
+                replyAudio = replyAudioData;
+            pushContext('text', replyText, replyAudio);
         }
         catch (error) {
             const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
@@ -5317,36 +4959,6 @@ var agentSystem = (function (exports) {
         finally {
             GlobalConfig.reasoningInProgress = false;
         }
-    }
-    function writeMessage(role, content) {
-        if (content && typeof content === 'object' && !Array.isArray(content) && (content.type === 'video_url' || content.type === 'audio_url'))
-            content = [content];
-        const incoming = { role, content };
-        attachImageTags(incoming);
-        GlobalConfig.unreadContext.push(incoming);
-        const items = typeof content === 'string' ? [{ type: 'text', text: content }] : Array.isArray(content) ? content : [];
-        for (const message of items) {
-            if (message.type === 'text')
-                console.log('收到文本: ' + message.text);
-            else if (message.type === 'image_url')
-                console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
-            else if (message.type === 'input_audio')
-                console.log('收到音频: ' + message.input_audio?.data?.substring(0, 30));
-            else if (message.type === 'video_url')
-                console.log('收到视频: ' + message.video_url?.url);
-            else if (message.type === 'audio_url')
-                console.log('收到音频: ' + message.audio_url?.url);
-        }
-    }
-    function resetAgentState() {
-        descriptionRole.coverContext([]);
-        dialogueRole.coverContext([]);
-        painterRole.coverContext([]);
-        musicianRole.coverContext([]);
-        perceiverRole.coverContext([]);
-        memorizerRole.coverContext([]);
-        painterRole.resetReference();
-        GlobalConfig.unreadContext = [];
     }
 
     fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);

@@ -5,11 +5,13 @@ package module
 // 设计依据：docs/adr/0001「统一入库入口」。
 // 三类来源归一：
 //   1. path  已是本地文件（前端上传已落盘）→ 只登记不复制，零拷贝
-//   2. url   远程地址（QQ 等渠道仅给 URL）→ 下载后按内容哈希落盘
+//   2. url   远程地址（QQ 等渠道仅给 URL）→ 下载后按下方命名规则落盘
 //   3. data  字节流 / data URI（工具产出、转发内联）→ 落盘后登记
 //
-// 哈希定义：SHA-256 前 16 位十六进制（与前端 calculateFileHash 既有约定一致），
-// 定义域是内容字节，不是来源地址 —— 同一内容无论来自哪个渠道只存一份。
+// 哈希定义：SHA-256 前 16 位十六进制（与前端 calculateFileHash 既有约定一致）。
+// 落盘命名分两类：
+//   - 媒体（图片/视频/音频）：multimedia/<hash><ext>，内容寻址，同内容只存一份
+//   - 文本类：documents/<原文件名>，同名即同一份文档，便于人机两端按名称传递与讨论
 
 import (
 	"LunarSubsystem/GeneralConfig"
@@ -144,9 +146,9 @@ func ResourceAdmit(in AdmitInput) (AdmitResult, error) {
 		kind = KindDocument
 	}
 
-	// 3.5 按内容去重（调用方显式要求时）：命中既有资源则直接复用句柄，不落盘、不新增目录行。
-	//     放在 placeBlob 之前，避免为了一条重复记录去动内容仓库。
-	if in.Dedup {
+	// 3.5 媒体按内容去重（调用方显式要求时）：命中既有资源则直接复用句柄，不落盘、不新增目录行。
+	//     文本类不参与内容去重 —— 它们以原文件名为业务身份，由步骤 5.5 按路径复用。
+	if in.Dedup && IsMediaExtension(ext) {
 		if existing, ok := ArchiveDatabase.FindResourceByHash(kind, hash); ok {
 			return AdmitResult{
 				Handle:      existing.Handle,
@@ -164,13 +166,13 @@ func ResourceAdmit(in AdmitInput) (AdmitResult, error) {
 		}
 	}
 
-	// 4. 落盘：分类进两棵树（媒体类 → multimedia/，其余 → documents/），命名沿用 sha16
+	// 4. 落盘：媒体按内容哈希进 multimedia/；文本类按原文件名进 documents/
 	//    源文件一律原地保留，只有系统自建的临时文件会被清理（见 placeBlob）
-	blobRel, moved, blobOwned, err := placeBlob(localPath, hash, ext, in.SourceKind)
+	blobRel, moved, blobOwned, err := placeBlob(localPath, hash, ext, in.Name, in.SourceKind)
 	if err != nil {
 		return AdmitResult{}, err
 	}
-	// 去重命中（未新写实体）时，沿用**既有目录行**的归属：同一份内容若早已由前端上传
+	// 未新写实体时，沿用**既有目录行**的归属：同一份内容若早已由前端上传
 	// 到两棵树内，它就是受保护实体，不能因为这次是归档写入就把它标成可回收
 	if !moved {
 		if existing, ok := ArchiveDatabase.FindResourceByBlobPath(blobRel); ok {
@@ -178,7 +180,7 @@ func ResourceAdmit(in AdmitInput) (AdmitResult, error) {
 		}
 	}
 
-	// 5. 登记资源目录（每次入库一行，句柄序号永不复用；blob 已去重）
+	// 5. 构造目录元数据
 	res := &ArchiveResource{
 		Kind:        kind,
 		Name:        in.Name,
@@ -199,11 +201,49 @@ func ResourceAdmit(in AdmitInput) (AdmitResult, error) {
 	if res.Title == "" {
 		res.Title = res.Name
 	}
+	blobAbs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(blobRel))
+
+	// 5.5 文本类按「原文件名」稳定复用：同一 blob_path 已有目录行时只刷新内容元数据，
+	//     不新增句柄。媒体仍按内容寻址（相同内容复用 blob，但每次入库各占一行）。
+	if !IsMediaExtension(ext) {
+		if existing, ok := ArchiveDatabase.FindResourceByBlobPath(blobRel); ok && existing.Kind == kind {
+			if err := ArchiveDatabase.RefreshResourceContent(existing.ID, res.Name, res.Ext, res.MIME, res.ContentHash, res.SizeBytes); err != nil {
+				return AdmitResult{}, err
+			}
+			existing.Name = res.Name
+			existing.Ext = res.Ext
+			existing.MIME = res.MIME
+			existing.ContentHash = res.ContentHash
+			existing.SizeBytes = res.SizeBytes
+			existing.State = StateActive
+			if kind == KindDocument {
+				refreshDocumentSections(existing, blobAbs)
+			}
+			return AdmitResult{
+				Handle:      existing.Handle,
+				Kind:        existing.Kind,
+				Seq:         existing.Seq,
+				ID:          existing.ID,
+				ContentHash: res.ContentHash,
+				BlobPath:    existing.BlobPath,
+				MIME:        res.MIME,
+				SizeBytes:   res.SizeBytes,
+				Name:        res.Name,
+				Deduped:     true,
+				State:       existing.State,
+			}, nil
+		}
+	}
+
+	// 6. 登记资源目录（每次入库一行，句柄序号永不复用；blob 已去重）
 	if err := ArchiveDatabase.InsertResource(res); err != nil {
 		return AdmitResult{}, err
 	}
+	if kind == KindDocument {
+		refreshDocumentSections(*res, blobAbs)
+	}
 
-	// 6. 探测元数据（图片尺寸 / 视频时长），失败不阻断入库
+	// 7. 探测元数据（图片尺寸 / 视频时长），失败不阻断入库
 	probeResourceMeta(res, blobRel)
 
 	return AdmitResult{
@@ -219,6 +259,42 @@ func ResourceAdmit(in AdmitInput) (AdmitResult, error) {
 		Deduped:     !moved,
 		State:       res.State,
 	}, nil
+}
+
+// ResourceAdmitDocument 以「documents/原文件名」为业务身份入库或刷新文档
+//
+// 通用 ResourceAdmit 已对文本类执行「同名路径复用句柄」；本函数只额外约束
+// 来源必须位于 documents/，供前端保存与阅读者导入使用。
+func ResourceAdmitDocument(relPath, name string) (AdmitResult, error) {
+	if err := EnsureArchiveInitialized(); err != nil {
+		return AdmitResult{}, err
+	}
+	relPath = strings.TrimPrefix(strings.ReplaceAll(strings.TrimSpace(relPath), "\\", "/"), "/")
+	if !strings.HasPrefix(relPath, "documents/") {
+		return AdmitResult{}, fmt.Errorf("仅支持 documents 目录下的文件: %s", relPath)
+	}
+	return ResourceAdmit(AdmitInput{
+		SourceKind: SourceKindPath,
+		Source:     relPath,
+		Name:       name,
+		Origin:     OriginClientUpload,
+		Retain:     RetainNormal,
+	})
+}
+
+// refreshDocumentSections 重新解析文档段落并写回段落表（失败不阻断保存）
+func refreshDocumentSections(res ArchiveResource, abs string) {
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		return
+	}
+	drafts := ParseMarkdownSections(stripBOM(string(data)))
+	if len(drafts) == 0 {
+		return
+	}
+	if err := ResourceReplaceSections(res.ID, drafts); err != nil {
+		LoggerGeneral.Warn("FileManager", "刷新段落表失败(%s): %v", res.Handle, err)
+	}
 }
 
 // normalizeAdmitSource 将来源归一为本地文件路径；cleanup 非空时由调用方负责清理
@@ -415,15 +491,52 @@ func IsMediaExtension(ext string) bool {
 	return mediaExtensions[strings.ToLower(ext)]
 }
 
-// snapshotRel 生成归档副本的相对路径（分类沿用仓库既有的两棵树）
+// snapshotRel 生成内容仓库的相对路径
 //
 // 媒体类：图片/视频/音频必须在 llama-server 的 media-path（multimedia 根）之内才能被
-// file:// 取用；同卷才能硬链接。其余进 documents 根 —— 与前端保存件同一命名方案。
-func snapshotRel(hash, ext string) string {
+// file:// 取用；命名沿用 sha16，保持内容寻址。
+// 文本类：落在 documents 根，**直接使用原文件名**，便于人机两端按名称传递与讨论；
+// 同名文件视为同一份文档并被覆盖更新。
+func snapshotRel(hash, ext, name string) string {
 	if IsMediaExtension(ext) {
 		return path.Join("multimedia", hash+ext)
 	}
-	return path.Join("documents", hash+ext)
+	return path.Join("documents", safeDocumentName(name, hash, ext))
+}
+
+// safeDocumentName 把建议文件名规整为 documents/ 下可用的裸文件名
+//
+// 规则：去路径、去 Windows 非法字符、保留中文与空格；无扩展名时补来源扩展名；
+// 规整后为空则退回 sha16 命名，保证始终有可落盘的名字。
+func safeDocumentName(name, hash, ext string) string {
+	base := filepath.Base(strings.ReplaceAll(strings.TrimSpace(name), "\\", "/"))
+	base = strings.TrimSpace(base)
+	if base == "" || base == "." || base == ".." {
+		return hash + ext
+	}
+	cleaned := make([]rune, 0, len(base))
+	for _, r := range base {
+		switch r {
+		case '<', '>', ':', '"', '/', '\\', '|', '?', '*':
+			cleaned = append(cleaned, '_')
+		default:
+			if r < 32 {
+				cleaned = append(cleaned, '_')
+			} else {
+				cleaned = append(cleaned, r)
+			}
+		}
+	}
+	base = strings.TrimSpace(string(cleaned))
+	// Windows 不允许文件名以空格或点结尾
+	base = strings.TrimRight(base, " .")
+	if base == "" || base == "." || base == ".." {
+		return hash + ext
+	}
+	if filepath.Ext(base) == "" && ext != "" {
+		base += ext
+	}
+	return base
 }
 
 // placeBlob 确定资源的实体位置，返回相对 LocalDir 的路径与「实体是否归归档所有」
@@ -437,19 +550,30 @@ func snapshotRel(hash, ext string) string {
 //  2. 实体在系统存储之外（工作区文件、下载件、字节流中转件）→ 复制/硬链接一份到
 //     snapshotRel 指定的位置，标记 blob_owned=true（可回收；仅系统自建的临时来源会被清理）。
 //
+// 文本类目标已存在时按「同名即同一份文档」覆盖写入，并保守标记为非归档所有，
+// 避免回收器删掉用户可见的原文件名文件。
+//
 // 返回值 moved 表示是否新写入了实体；owned 表示该实体是否归归档所有（可回收）。
-func placeBlob(localPath, hash, ext, sourceKind string) (rel string, moved bool, owned bool, err error) {
+func placeBlob(localPath, hash, ext, name, sourceKind string) (rel string, moved bool, owned bool, err error) {
 	localAbs := filepath.Clean(localPath)
-	archiveRel := snapshotRel(hash, ext)
+	archiveRel := snapshotRel(hash, ext, name)
 	archiveAbs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(archiveRel))
 
 	// 分支 1：已在系统自有的存储内 → 原地引用（受保护，不归归档所有）
 	if rel, ok := relativeToLocalDir(localAbs); ok && isSystemOwnedStore(rel) && fileExists(localAbs) {
 		return rel, false, false, nil
 	}
-	// 目标已存在：内容去重命中，复用既有实体；归属沿用**既有行的归属**由调用方决定，
-	// 这里保守地按「非归档所有」返回，避免把前端上传的实体标成可回收
-	if fileExists(archiveAbs) {
+	if IsMediaExtension(ext) {
+		// 媒体：内容寻址，目标存在即同内容复用
+		if fileExists(archiveAbs) {
+			removeTemporarySource(localAbs, sourceKind)
+			return archiveRel, false, false, nil
+		}
+	} else if fileExists(archiveAbs) {
+		// 文本类：同名即同一份文档，内容变化时覆盖原文件
+		if err := copyIntoPlace(localAbs, archiveAbs); err != nil {
+			return "", false, false, fmt.Errorf("覆盖文档实体失败: %v", err)
+		}
 		removeTemporarySource(localAbs, sourceKind)
 		return archiveRel, false, false, nil
 	}

@@ -6,6 +6,7 @@
 		"local_data/lunar_config.json",
 		"local_data/audios",
 		"local_data/package",
+		"local_data/database/memory/stickers",
 		"local_data/multimedia/background",
 		"local_data/multimedia/icon",
 		"local_data/multimedia/placeholder",

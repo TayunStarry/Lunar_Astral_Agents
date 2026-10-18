@@ -33,7 +33,7 @@ async function handleSend() {
         const contentBlocks = [];      // 多模态文本块（img/video/audio/other）
         const attachments = [];        // 本地附件预览
         const categories = new Set();
-        const textFiles = [];          // 文本文件围栏块 {name, block}
+        const documentRefs = [];       // 已入库文档 {handle, name}
 
         for (const pf of pendingFiles) {
             const category = pf.category;
@@ -78,16 +78,13 @@ async function handleSend() {
                     attachments.push({ type: 'audio', src: URL.createObjectURL(pf.file), label: pf.name });
                     categories.add('voice');
                     break;
-                // 多模态消息 -> 文本文件
+                // 文本文件 -> 服务端入库并拿到句柄（正文不进上下文）
                 case 'text':
                     try {
-                        const rawText = await readFileAsText(pf.file);
-                        if (rawText.trim()) {
-                            textFiles.push({ name: pf.name, block: `\`\`\`${pf.name}\n${rawText}\n\`\`\`` });
-                            categories.add('text');
-                        }
+                        documentRefs.push(await admitDocumentFile(pf.file));
+                        categories.add('file');
                     }
-                    catch (err) { showToast(`无法读取文件 ${pf.name}`, 'error'); }
+                    catch (err) { showToast(`无法上传文件 ${pf.name}`, 'error'); }
                     break;
                 // 多模态消息 -> 其他文件
                 default:
@@ -103,36 +100,23 @@ async function handleSend() {
             }
         }
         // ---- 组装引用与主用户文本（一次导入/引用只显示一个气泡）----
-        // 引用文法已统一为资源句柄 @D.003（文档）/ @I.007（图片）/ @V.001（视频）/ @A.002（音频）。
-        // 前端在发送时还不知道文件名对应的句柄序号（序号由服务端资源目录分配），
-        // 因此这里下发的是**文件名引用标记** `@文件名.ext`：服务端收录文件后会把标记
-        // 规范化为真正的句柄并在正文中整段展开（见 reader.ts 的 processReferencesInText）。
-        const rawRefIds = [...referencedFiles];
-        if (text && textFiles.length) {
-            for (const tf of textFiles) rawRefIds.push(tf.name);
-        }
-        const refNames = [...new Set(rawRefIds.map(id => String(id).replace(/^[#@]/, '')))];
-        // 引用写作 `@句柄` 或 `@文件名.ext` 形态：已经是句柄的直接下发，文件名形态由服务端在
-        // 收录后规范化为句柄（序号由服务端资源目录分配，前端无法预知）并整段展开。
-        const refText = refNames.map(name => `@${name}`).join(' ');
-        // 主用户文本：
-        //   - 有文字 → 带引用（此时是"就这份资料提问"的意图，服务端需展开正文）
-        //   - 只发文件不提问 → 正文留空，让该气泡由服务端回推的收录回执来承载
-        //     （此前写成「已将文件x交给月华」，会在回执之外额外留一个空气泡）
-        let userText;
-        if (text) userText = (refText ? refText + ' ' : '') + text;
-        else userText = '';
-        if (userText || textFiles.length) categories.add('text');
-        // 纯文件消息标记为 file 类别：气泡里会显示「文件」徽标而不是空的「文本」
-        if (!text && textFiles.length) categories.add('file');
-        if (!text && !textFiles.length && referencedFiles.length) categories.add('file');
+        // 文档引用统一为规范句柄 @D.003：文件在 Go 侧或前端上传后入库时即已分配，
+        // 消息里只传句柄，正文由月华按需用 read_resource 读取。
+        const handleRefs = [
+            ...referencedFiles,
+            ...documentRefs.map(item => item.handle)
+        ].map(id => String(id).trim().replace(/^[#@]/, ''))
+            .filter(Boolean);
+        const refText = [...new Set(handleRefs)].map(id => `@${id}`).join(' ');
+        // 主用户文本：有文字时带引用，只发文件时正文就是句柄
+        const userText = text ? (refText ? refText + ' ' : '') + text : refText;
+        if (text) categories.add('text');
+        if (documentRefs.length || referencedFiles.length) categories.add('file');
 
-        // ---- 组装发送给后端的消息数组（顺序：围栏块 → 主用户消息）----
-        // 前端在发送前即已知文件ID，直接自构造引用，无需等待后端推送
+        // ---- 组装发送给后端的消息数组 ----
         // 发送给月华的主文本带 QQ 适配器同款用户名前缀；本地展示（addMessage）仍用不带前缀的 userText
         const payloadText = userText ? buildUserNamePrefix() + userText : userText;
         const sendPayload = [];
-        for (const tf of textFiles) sendPayload.push({ role: 'user', content: tf.block });
         if (userText || contentBlocks.length) {
             const mainContent = contentBlocks.length
                 ? [...(payloadText ? [{ type: 'text', text: payloadText }] : []), ...contentBlocks]

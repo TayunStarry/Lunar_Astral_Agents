@@ -233,6 +233,24 @@ func ResourceOutline(rawHandle string) ([]ArchiveSection, string, error) {
 	return sections, res.Handle, nil
 }
 
+// ResourceResolve 按句柄解析资源目录条目（前端按句柄定位文件时使用）
+//
+// 只解析目录行，不读取正文；调用方可用返回的 BlobPath/Name 定位实际文件。
+func ResourceResolve(rawHandle string) (ArchiveResource, error) {
+	if err := EnsureArchiveInitialized(); err != nil {
+		return ArchiveResource{}, err
+	}
+	handle, ok := ParseHandle(rawHandle)
+	if !ok {
+		return ArchiveResource{}, fmt.Errorf("非法资源句柄: %q", rawHandle)
+	}
+	res, found := ArchiveDatabase.GetResourceByHandle(handle.Kind, handle.Seq)
+	if !found {
+		return ArchiveResource{}, fmt.Errorf("资源不存在: %s", rawHandle)
+	}
+	return res, nil
+}
+
 // ResourceList 列出资源目录（kind 为空表示全部）
 func ResourceList(kind string, limit int) ([]ArchiveResource, error) {
 	if err := EnsureArchiveInitialized(); err != nil {

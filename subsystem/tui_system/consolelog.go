@@ -6,8 +6,11 @@ package TuiSystem
 // panic 栈）只进 TUI 的内存环形缓冲——进程一退，证据全部消失。真出现「程序自己没了」
 // 时，用户与维护者都拿不到任何线索（本项目已经踩过两次）。
 //
-// 因此把管道扫到的每一行同时落盘：{exeDir}/local_data/logs/console.log，按大小滚动保留
+// 因此把管道扫到的每一行**可选地**落盘：{exeDir}/local_data/logs/console.log，按大小滚动保留
 // 最近若干份。日志文件与更新器日志同在 logs 目录，排查时一处即可看全。
+//
+// 落盘默认关闭：TUI 的「原始日志」视图与「数据导出」已能覆盖排查场景，启动即写文件
+// 既多余又容易与导出功能重复。只有 lunar_config.json 的 system.console_log=true 时才开启。
 
 import (
 	"fmt"
@@ -24,6 +27,14 @@ const (
 	consoleLogKeep = 3
 )
 
+// consoleLogEnabled 控制台日志镜像开关（宿主在 Install 之前从 lunar_config.json 注入；默认关闭）
+var consoleLogEnabled bool
+
+// SetConsoleLogEnabled 设置控制台日志镜像开关（须在 Install 之前调用）
+func SetConsoleLogEnabled(enabled bool) {
+	consoleLogEnabled = enabled
+}
+
 // consoleLog 带滚动的控制台日志写入器（并发安全：管道扫描与 panic 恢复都可能写）
 type consoleLog struct {
 	mu   sync.Mutex
@@ -32,8 +43,11 @@ type consoleLog struct {
 	size int64
 }
 
-// openConsoleLog 打开控制台日志（路径不可用时返回 nil，调用方按无日志处理）
+// openConsoleLog 打开控制台日志（开关关闭或路径不可用时返回 nil，调用方按无日志处理）
 func openConsoleLog() *consoleLog {
+	if !consoleLogEnabled {
+		return nil
+	}
 	path := consoleLogPath()
 	if path == "" {
 		return nil
@@ -67,6 +81,9 @@ func consoleLogPath() string {
 // 只进 TUI 内存视图的诊断信息必须主动落盘——它是判断「界面为何错位/滚动」的关键证据，
 // 用户报障时把它连同日志一起发来即可定位。
 func AppendConsoleLog(text string) {
+	if !consoleLogEnabled {
+		return
+	}
 	path := consoleLogPath()
 	if path == "" {
 		return

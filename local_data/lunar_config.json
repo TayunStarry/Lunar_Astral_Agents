@@ -22,10 +22,19 @@
 			}
 		}
 	},
-	"server": {
+	"system": {
 		"developer": true,
 		"allow_lan": false,
-		"insecure_tls": false
+		"insecure_tls": false,
+		"console_log": false,
+		"chat_vram_guard": true,
+		"chat_vram_guard_mib": 1024,
+		"chat_vram_guard_interval": 16,
+		"character_renderer": "live2d",
+		"-enumerate": [
+			"bedrock",
+			"live2d"
+		]
 	},
 	"agent": {
 		"user_name": "钛宇星光阁",
@@ -47,11 +56,6 @@
 		"multimodal_model": "system-multimodal",
 		"multimodal_url": "http://127.0.0.1:36789/v1",
 		"multimodal_key": null
-	},
-	"chat": {
-		"chat_vram_guard": true,
-		"chat_vram_guard_mib": 1024,
-		"chat_vram_guard_interval": 16
 	},
 	"diffusion": {
 		"allow_diffusion": true,
@@ -114,13 +118,6 @@
 		"page_scroll_captures": 10,
 		"summary_max_chars": 4096,
 		"max_run_seconds": 360
-	},
-	"client": {
-		"character_renderer": "live2d",
-		"-enumerate": [
-			"bedrock",
-			"live2d"
-		]
 	},
 	"release": {
 		"gitee_owner": "TayunStarry",

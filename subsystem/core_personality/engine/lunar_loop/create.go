@@ -51,6 +51,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册统一资源归档层适配器（句柄 / 资源目录 / 内容仓库 / 回收，见 docs/adr/0001）
 	vm.Set("resourceAdmit", adapters.resourceAdmit)
+	vm.Set("resourceAdmitDocument", adapters.resourceAdmitDocument)
 	vm.Set("resourceRead", adapters.resourceRead)
 	vm.Set("resourceOutline", adapters.resourceOutline)
 	vm.Set("resourceList", adapters.resourceList)
@@ -74,9 +75,11 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册记忆库适配器
 	vm.Set("memoryInit", adapters.memoryInit)
+	vm.Set("memoryListCollections", adapters.memoryListCollections)
 	vm.Set("memoryAdd", adapters.memoryAdd)
 	vm.Set("memoryAddWithTags", adapters.memoryAddWithTags)
 	vm.Set("memoryQuery", adapters.memoryQuery)
+	vm.Set("memoryKeywordSearch", adapters.memoryKeywordSearch)
 	vm.Set("memoryDelete", adapters.memoryDelete)
 	vm.Set("memoryAddImage", adapters.memoryAddImage)
 

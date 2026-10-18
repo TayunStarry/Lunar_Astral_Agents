@@ -47,7 +47,7 @@ func (class *Runtime) dumpForJS(call goja.FunctionCall) goja.Value {
 // 在 agent 事件循环上执行导出并同步取回结果。
 //
 // agent 取值：'lunar'（主上下文/未读队列）或子智能体名
-// （dialogue / painter / musician / perceiver / memorizer / description）。
+// （dialogue / painter / musician / perceiver / description）。
 func DumpAgentContext(agent string, includeImages bool) (string, error) {
 	agent = strings.TrimSpace(agent)
 	if agent == "" {

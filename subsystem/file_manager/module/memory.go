@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -516,6 +517,72 @@ func (d *MemoryDB) MemoryQueryMessagesWithContent(ctx context.Context, collectio
 
 	// 2. 内容向量检索
 	return c.queryTopK(queryVec, topK), nil
+}
+
+// MemoryKeywordSearch 在指定集合内按关键词或正则扫描文本记忆（不调用嵌入服务）。
+//
+// 与向量检索互补：
+//   - 关键词模式：terms 全部命中（大小写不敏感的子串匹配），适合找人名、原话、专有名词；
+//   - 正则模式：terms 以空格拼接后作为正则表达式（自动加 (?i) 忽略大小写），
+//     适合精确模式匹配。Go 的 regexp 是 RE2 语法，不支持反向引用与环视。
+//
+// 返回按入库时间倒序的结果；Similarity 固定为 0，由调用方用检索方式区分展示。
+func (d *MemoryDB) MemoryKeywordSearch(collectionName string, terms []string, useRegex bool, limit int) ([]MemoryQueryResult, error) {
+	if limit <= 0 || len(terms) == 0 {
+		return nil, nil
+	}
+	c, err := d.getCollection(collectionName)
+	if err != nil {
+		return nil, err
+	}
+	c.reloadIfChanged()
+
+	var match func(string) bool
+	if useRegex {
+		re, err := regexp.Compile("(?i)" + strings.Join(terms, " "))
+		if err != nil {
+			return nil, fmt.Errorf("正则表达式无效: %w", err)
+		}
+		match = re.MatchString
+	} else {
+		lowered := make([]string, 0, len(terms))
+		for _, term := range terms {
+			if text := strings.ToLower(strings.TrimSpace(term)); text != "" {
+				lowered = append(lowered, text)
+			}
+		}
+		if len(lowered) == 0 {
+			return nil, nil
+		}
+		match = func(text string) bool {
+			lower := strings.ToLower(text)
+			for _, term := range lowered {
+				if !strings.Contains(lower, term) {
+					return false
+				}
+			}
+			return true
+		}
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	results := make([]MemoryQueryResult, 0, limit)
+	for i := len(c.Documents) - 1; i >= 0 && len(results) < limit; i-- {
+		doc := c.Documents[i]
+		// 图片记忆没有正文，跳过
+		if doc.Content == "" || !match(doc.Content) {
+			continue
+		}
+		results = append(results, MemoryQueryResult{
+			ID:        doc.ID,
+			Role:      doc.Role,
+			Content:   doc.Content,
+			Timestamp: doc.Timestamp,
+		})
+	}
+	return results, nil
 }
 
 // queryTopK 内容向量检索核心算法 (v5)
@@ -1159,6 +1226,14 @@ func MemoryQueryMessagesWithContent(ctx context.Context, collectionName, queryTe
 		return nil, fmt.Errorf("全局 MemoryDB 未初始化")
 	}
 	return globalMemoryDB.MemoryQueryMessagesWithContent(ctx, collectionName, queryText, topK)
+}
+
+// MemoryKeywordSearch 全局关键词/正则检索（不调用嵌入服务）
+func MemoryKeywordSearch(collectionName string, terms []string, useRegex bool, limit int) ([]MemoryQueryResult, error) {
+	if globalMemoryDB == nil {
+		return nil, fmt.Errorf("全局 MemoryDB 未初始化")
+	}
+	return globalMemoryDB.MemoryKeywordSearch(collectionName, terms, useRegex, limit)
 }
 
 // MemoryDeleteMessage 全局删除消息

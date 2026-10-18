@@ -41,6 +41,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/move", Handler: file.MoveHandler, Method: "POST", Description: "文件移动操作（含冲突处理）"},
 	{Path: "/file/organize", Handler: file.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
 	{Path: "/file/hash-rename", Handler: file.HashRenameHandler, Method: "POST", Description: "哈希命名（MD5前16位）"},
+	{Path: "/file/resource/admit", Handler: file.ResourceAdmitHandler, Method: "POST", Description: "文档入库/刷新（按原文件名稳定复用句柄）"},
+	{Path: "/file/resource/resolve", Handler: file.ResourceResolveHandler, Method: "GET", Description: "按句柄解析资源目录条目（前端定位文档文件）"},
 
 	// ==================== 文件归档（ZIP） ====================
 	{Path: "/file/archive", Handler: file.ArchiveHandler, Method: "POST", Description: "文件归档"},

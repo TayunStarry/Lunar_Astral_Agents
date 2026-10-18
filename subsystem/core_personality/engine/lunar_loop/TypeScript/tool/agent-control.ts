@@ -30,7 +30,7 @@ export const agentControlTools: ToolCall[] = [
 				properties: {
 					description: {
 						type: 'string',
-						description: "绘画需求描述，如'画一只在樱花树下的白猫'、'把 @I.003 画成雪景'。描述越详细，绘画效果越好。"
+						description: "绘画需求描述，如'画一只在樱花树下的白猫'、'把 @I.003 画成雪景'。描述越详细，绘画效果越好。以第一人称书写时，「我」「我的」指月华本人（自画像），「我的妹妹」指琉璃。"
 					},
 					reference_tag: {
 						type: 'string',

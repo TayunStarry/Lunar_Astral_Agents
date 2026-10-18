@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>『 星月智能 』编辑运行</title>
+	<!-- 标准样式库 -->
+	<link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
+	<!-- 项目私有样式 -->
+	<link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+	<div class="background"></div>
+	<div class="glass-effect"></div>
+
+	<!-- 主框架：左文件栏 / 中编辑区 / 右操作记录 / 底部运行输出 -->
+	<div class="app-shell">
+		<!-- 左侧栏：文件列表 + 底部纵向操作按钮 -->
+		<aside class="panel sidebar sidebar-left">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-folder-open"></i> 文件列表</span>
+				<button class="btn-icon" id="refreshFilesBtn" title="刷新列表"><i class="fas fa-rotate"></i></button>
+			</header>
+			<div class="list-scroll file-list" id="fileList">
+				<div class="list-empty">暂无文件。</div>
+			</div>
+			<div class="sidebar-actions">
+				<button class="btn-glass btn-glass-primary" id="runBtn"><i class="fas fa-play"></i> 运行</button>
+				<button class="btn-glass" id="stopBtn"><i class="fas fa-stop"></i> 停止</button>
+				<button class="btn-glass" id="saveBtn"><i class="fas fa-floppy-disk"></i> 保存</button>
+				<button class="btn-glass" id="newBtn"><i class="fas fa-file-circle-plus"></i> 新建</button>
+			</div>
+		</aside>
+
+		<!-- 中间：代码编辑主区域 -->
+		<main class="panel workspace">
+			<header class="workspace-header">
+				<span class="workspace-title"><i class="fas fa-code"></i> 项目文件</span>
+				<div class="file-row">
+					<i class="fas fa-file-code"></i>
+					<input type="text" id="fileNameInput" placeholder="文件名，如 hello.js / index.html" autocomplete="off" spellcheck="false">
+				</div>
+				<span class="char-count" id="codeStats"></span>
+				<button class="btn-glass btn-sm btn-clear" id="themeToggle" title="切换深色/浅色模式">
+					<i class="fas fa-moon" id="themeIcon"></i><span id="themeLabel">深色</span>
+				</button>
+			</header>
+			<div class="editor-wrap">
+				<div class="line-numbers" id="lineNumbers" aria-hidden="true">1</div>
+				<textarea id="codeEditor" class="code-textarea" spellcheck="false"
+					placeholder="// 编写 JavaScript（单文件，ES2023+，支持浏览器 WebAPI）&#10;// 或编写完整 HTML 文档&#10;&#10;console.log('Hello, 月华!');"></textarea>
+			</div>
+		</main>
+
+		<!-- 右侧栏：操作记录 -->
+		<aside class="panel sidebar sidebar-right">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-list-ul"></i> 操作记录</span>
+				<button class="btn-icon" id="clearStepBtn" title="清空记录"><i class="fas fa-broom"></i></button>
+			</header>
+			<div class="list-scroll step-scroll" id="stepList">
+				<div class="list-empty">暂无操作记录。</div>
+			</div>
+		</aside>
+
+		<!-- 底部：运行输出 -->
+		<section class="panel console-dock">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-terminal"></i> 运行输出</span>
+				<button class="btn-icon" id="clearConsoleBtn" title="清空输出"><i class="fas fa-broom"></i></button>
+			</header>
+			<div class="list-scroll console-scroll" id="consoleList">
+				<div class="list-empty">暂无输出。</div>
+			</div>
+		</section>
+	</div>
+
+	<!-- 悬浮预览窗：默认隐藏，运行且需要渲染时显示 -->
+	<div class="preview-overlay" id="previewOverlay">
+		<div class="preview-window panel">
+			<header class="panel-header preview-header">
+				<span class="panel-title"><i class="fas fa-display"></i> 实时预览</span>
+				<span class="char-count" id="previewStatus"></span>
+				<button class="btn-icon" id="previewCloseBtn" title="隐藏预览"><i class="fas fa-xmark"></i></button>
+			</header>
+			<iframe id="previewFrame" class="preview-frame" sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-popups allow-downloads"></iframe>
+		</div>
+	</div>
+
+	<!-- Toast -->
+	<div id="toast" class="toast"></div>
+
+	<script src="ltpx-agent.js"></script>
+	<script src="script.js"></script>
+</body>
+
+</html>

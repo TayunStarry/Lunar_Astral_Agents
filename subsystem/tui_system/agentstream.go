@@ -63,7 +63,7 @@ func StreamTool(role, name, args string) {
 // 为什么不在 currentTurn 为空时新建轮次：历史上这样造出来的「幽灵轮次」没有结束事件，
 // 实况屏会把它当成永远进行中的一轮（界面上就是一条工具调用挂着"进行中"不下来），
 // 而当轮的思考/正文却留在了上一轮里，导出（transcript）也会多出若干只有工具的空轮次。
-func attachTurnLocked(role string) *AgentTurn {
+func attachTurnLocked(_ string) *AgentTurn {
 	if currentTurn != nil {
 		return currentTurn
 	}

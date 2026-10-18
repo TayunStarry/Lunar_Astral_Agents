@@ -50,6 +50,22 @@ func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{true, nil})
 }
 
+// memoryListCollections 列出记忆库全部集合名。
+//
+// 供智能体做跨集合检索：先取集合清单，再逐个集合调用 memoryQuery，
+// 这样「群里谁之前说过什么」可以同时命中聊天记忆与其它知识集合，
+// 而不是只在固定的 lunar_messages 集合里碰运气。
+//
+// 返回: [集合名数组, error]
+func (class *Runtime) memoryListCollections(call goja.FunctionCall) goja.Value {
+	module.InitMemoryDB("local_data/database/memory")
+	if err := module.MemoryInitInstance(); err != nil {
+		LoggerGeneral.Error("LunarCore", "记忆库实例初始化失败: %v", err)
+		return class.runtime.ToValue([]any{nil, err})
+	}
+	return class.runtime.ToValue([]any{module.MemoryListCollections(), nil})
+}
+
 // memoryAdd 添加消息到指定集合（同步阻塞，等待 LLM 标签生成完成）
 // 参数: collectionName, role, content
 func (class *Runtime) memoryAdd(call goja.FunctionCall) goja.Value {
@@ -128,7 +144,43 @@ func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, err})
 	}
 
-	resultObjs := make([]map[string]any, 0, len(results))
+	resultObjs := memoryResultsToObjects(results)
+
+	return class.runtime.ToValue([]any{resultObjs, nil})
+}
+
+// memoryKeywordSearch 关键词/正则检索指定集合（不调用嵌入服务）
+// 参数: collectionName, terms(字符串数组), useRegex(bool), limit
+func (class *Runtime) memoryKeywordSearch(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 4 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryKeywordSearch 参数不足, 需 4 个: collectionName, terms, useRegex, limit")})
+	}
+
+	collectionName, _ := call.Argument(0).Export().(string)
+	rawTerms, ok := call.Argument(1).Export().([]any)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryKeywordSearch 第 2 个参数需为字符串数组 terms")})
+	}
+	terms := make([]string, 0, len(rawTerms))
+	for _, item := range rawTerms {
+		if text, ok := item.(string); ok && text != "" {
+			terms = append(terms, text)
+		}
+	}
+	useRegex := call.Argument(2).ToBoolean()
+	limit := int(call.Argument(3).ToInteger())
+
+	results, err := module.MemoryKeywordSearch(collectionName, terms, useRegex, limit)
+	if err != nil {
+		LoggerGeneral.Error("LunarCore", "集合 [%s] 关键词检索失败: %v", collectionName, err)
+		return class.runtime.ToValue([]any{nil, err})
+	}
+	return class.runtime.ToValue([]any{memoryResultsToObjects(results), nil})
+}
+
+// memoryResultsToObjects 把记忆查询结果映射为 JS 可读对象
+func memoryResultsToObjects(results []module.MemoryQueryResult) []map[string]any {
+	objects := make([]map[string]any, 0, len(results))
 	for _, r := range results {
 		obj := map[string]any{
 			"id":         r.ID,
@@ -143,10 +195,9 @@ func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {
 		} else {
 			obj["content"] = r.Content
 		}
-		resultObjs = append(resultObjs, obj)
+		objects = append(objects, obj)
 	}
-
-	return class.runtime.ToValue([]any{resultObjs, nil})
+	return objects
 }
 
 // memoryDelete 从指定集合删除消息

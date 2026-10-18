@@ -1,5 +1,10 @@
 let SYSTEM_PROMPT = '';
 let pages = [];
+
+/** 桌面网格只展示外部扩展包；内置包（internal）由常驻侧边栏按钮进入 */
+function desktopPages() {
+    return pages.filter(p => !p.internal);
+}
 let messages = [];
 let pendingAttachments = [];
 let configData = {};
@@ -191,7 +196,7 @@ function processSystemPrompt(raw) {
         result = result.replace(/\{\{current-address\}\}/g, configData.current_address);
     }
     result = result.replace(/\{\{current-time\}\}/g, new Date().toLocaleString('zh-CN'));
-    result = result.replace(/\{\{page-count\}\}/g, String(pages.length));
+    result = result.replace(/\{\{page-count\}\}/g, String(desktopPages().length));
     return result;
 }
 
@@ -284,11 +289,12 @@ async function persistLayout() {
 /* 系统加载或新增应用时，图标从前到后填充到空位；已删除应用对应的槽位置为空格。
    返回布局是否发生变化（供调用方决定是否持久化）。 */
 function buildLayout() {
-    const validIds = new Set(pages.map(p => p.id));
-    // 保留下仍然存在的 id 与空格，删除已不存在的 id
+    const visible = desktopPages();
+    const validIds = new Set(visible.map(p => p.id));
+    // 保留下仍然存在的 id 与空格，删除已不存在的 id（内置包不进入桌面布局）
     const next = layout.map(id => (id && validIds.has(id)) ? id : null);
     const placed = new Set(next.filter(Boolean));
-    const newIds = pages.map(p => p.id).filter(id => !placed.has(id));
+    const newIds = visible.map(p => p.id).filter(id => !placed.has(id));
     // 新应用从前到后填充第一个空位，无空位则追加到末尾
     for (const id of newIds) {
         const nullIdx = next.indexOf(null);
@@ -306,7 +312,7 @@ function buildLayout() {
 }
 
 function renderPageGrid() {
-    const pageById = new Map(pages.map(p => [p.id, p]));
+    const pageById = new Map(desktopPages().map(p => [p.id, p]));
     const cols = getGridCols();
     // 补齐最后一行的空格，保持预设网格满格可放置
     const rem = layout.length % cols;
@@ -596,10 +602,11 @@ function removeEmptyRow() {
 // 每完成一个标签分组的排列后，本组图标先补满整行，再另起一整行空行分隔下一组；
 // 最后分组为不含列表标签的包
 function quickSortLayout() {
-    const pageById = new Map(pages.map(p => [p.id, p]));
+    const visible = desktopPages();
+    const pageById = new Map(visible.map(p => [p.id, p]));
     // 以当前布局顺序为基准，补充尚未占位的包，保证分组内顺序稳定
     const placed = layout.filter(id => id !== null && pageById.has(id));
-    const rest = pages.map(p => p.id).filter(id => !placed.includes(id));
+    const rest = visible.map(p => p.id).filter(id => !placed.includes(id));
     const ordered = [...placed, ...rest];
 
     const groups = [];
@@ -632,6 +639,12 @@ document.getElementById('quickSortBtn').addEventListener('click', quickSortLayou
 document.getElementById('planningBtn').addEventListener('click', () => {
     addMessage('system', '已为您打开【蓝图系统】');
     openPageInFrame('/desktop/planning/index.html', '蓝图系统');
+});
+
+// 编辑运行：内置模块（琉璃 assets/file-runner），点击后经覆盖层 iframe 嵌入打开
+document.getElementById('fileRunnerBtn').addEventListener('click', () => {
+    addMessage('system', '已为您打开【编辑运行】');
+    openPageInFrame('/desktop/file-runner/index.html', '编辑运行', 'lunar.file-runner');
 });
 
 // 构建结构化操作指令（附加到系统提示词）：不再依赖范式函数调用（避免多模态模型后端卡死），
@@ -1840,9 +1853,13 @@ function openLTPXPackage(msg) {
     // 新的派发目标：重置幂等标记并启动就绪轮询（onload 未触发时由轮询兜底完成派发）
     ltpxDispatchTarget = msg.app_id;
     ltpxInjectionDone = false;
-    const base = '/file/read/package/' + encodeURIComponent(resolvePackageDir(msg.app_id)) + '/index.html';
+    // 内置包自带 url（/desktop/<name>/index.html），外部扩展包才按目录拼 /file/read/package/
+    const page = pages.find(x => x.id === msg.app_id);
+    const base = (page && page.url)
+        ? page.url
+        : '/file/read/package/' + encodeURIComponent(resolvePackageDir(msg.app_id)) + '/index.html';
     // 带时间戳破缓存：避免浏览器复用上一版 index.html（连同其中引用到的旧脚本）
-    ltpxFrame.src = base + '?t=' + Date.now();
+    ltpxFrame.src = base + (base.includes('?') ? '&' : '?') + 't=' + Date.now();
     ltpxOverlay.classList.add('active');
     armLTPXReadinessPoll(msg.app_id);
 }

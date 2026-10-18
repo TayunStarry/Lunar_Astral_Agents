@@ -12,6 +12,159 @@ const ACTION_COLLECTION = 'actions';
 /** 动作集合是否已确认就绪（避免重复初始化） */
 let actionCollectionReady = false;
 
+/** 长期对话记忆集合名 */
+export const LUNAR_MESSAGES_COLLECTION = 'lunar_messages';
+
+/** 跨集合检索时跳过的非对话集合（图片库 / 动作库） */
+const NON_CONVERSATION_COLLECTIONS = new Set([STICKER_COLLECTION, ACTION_COLLECTION]);
+
+/** 跨集合记忆检索命中 */
+export interface MemorySearchHit {
+    /** 记忆文档 ID */
+    id: string;
+    /** 命中的集合名 */
+    collection: string;
+    /** 记忆角色（user / assistant / image 等） */
+    role: string;
+    /** 记忆正文（图片记忆为空，已跳过） */
+    content: string;
+    /** 内容向量余弦相似度 */
+    similarity: number;
+    /** 入库时间 Unix 秒级时间戳（旧数据可能为空） */
+    timestamp?: number;
+}
+
+/** 记忆检索方式：向量语义 / 关键词 / 正则 */
+export type MemorySearchMode = 'vector' | 'keyword' | 'regex';
+
+/** 跨集合记忆检索选项 */
+export interface MemorySearchOptions {
+    /** 检索方式（默认 vector） */
+    mode?: MemorySearchMode;
+    /** 必须全部包含的过滤词（如说话人昵称） */
+    filters?: string[];
+    /** 命中任意一个就排除的过滤词 */
+    exclude?: string[];
+}
+
+/** 列出可检索的对话类集合（过滤图片库与动作库） */
+export function listMemoryCollections(): string[] {
+    try {
+        // 确保记忆库实例与默认集合已初始化（幂等）
+        if (!ensureMemoryReady()) return [];
+        const [names, error] = memoryListCollections();
+        if (error || !names) {
+            console.error('[记忆检索] 列出集合失败:', error?.message ?? String(error ?? '返回为空'));
+            return [];
+        }
+        return names.filter(name =>
+            !!name
+            && !NON_CONVERSATION_COLLECTIONS.has(name)
+        );
+    }
+    catch (error) {
+        console.error('[记忆检索] 列出集合抛异常:', error);
+        return [];
+    }
+}
+
+/** 规整过滤词：去空白、小写、去重 */
+function normalizeTerms(terms?: string[]): string[] {
+    return [...new Set((terms || []).map(term => String(term || '').trim().toLowerCase()).filter(Boolean))];
+}
+
+/** 正文是否包含全部过滤词（空列表视为不限制） */
+function containsAll(content: string, terms: string[]): boolean {
+    if (terms.length === 0) return true;
+    const lower = content.toLowerCase();
+    return terms.every(term => lower.includes(term));
+}
+
+/** 正文是否命中任意排除词（空列表视为不排除） */
+function containsAny(content: string, terms: string[]): boolean {
+    if (terms.length === 0) return false;
+    const lower = content.toLowerCase();
+    return terms.some(term => lower.includes(term));
+}
+
+/**
+ * 跨集合全局检索：按指定方式（向量 / 关键词 / 正则）检索每个对话类集合，
+ * 合并、过滤、去重后取前 N 条。
+ *
+ * 集合清单属于实现细节，不暴露给模型：调用方只说「查什么」，本函数自行枚举
+ * 全部对话类集合（跳过表情包与动作库）。
+ *
+ * @param query 正向检索词（向量模式的语义查询 / 关键词模式的空格分词 / 正则模式的表达式）
+ * @param limit 返回条数上限（默认 8，最大 30）
+ * @param options 检索方式与过滤词
+ * @returns 命中条目（向量模式按相似度降序，关键词/正则模式按时间倒序）
+ */
+export function searchMemoryGlobal(
+    query: string,
+    limit = 8,
+    options: MemorySearchOptions = {}
+): MemorySearchHit[] {
+    const text = String(query || '').trim();
+    if (!text) return [];
+    const mode: MemorySearchMode = options.mode || 'vector';
+    const safeLimit = Math.min(Math.max(Math.trunc(limit) || 8, 1), 30);
+    const collections = listMemoryCollections();
+    if (collections.length === 0) return [];
+
+    const filters = normalizeTerms(options.filters);
+    const exclude = normalizeTerms(options.exclude);
+    /** 每个集合的检索条数：至少覆盖请求条数，避免合并后不足 */
+    const perCollection = Math.min(Math.max(safeLimit, 4), 30);
+    /** 关键词模式的词项（全部命中）；正则模式整串作为表达式 */
+    const terms = mode === 'regex' ? [text] : text.split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return [];
+
+    const hits: MemorySearchHit[] = [];
+    for (const collection of collections) {
+        try {
+            const [results, error] = mode === 'vector'
+                ? memoryQuery(collection, text, perCollection)
+                : memoryKeywordSearch(collection, terms, mode === 'regex', perCollection);
+            if (error || !results) continue;
+            for (const item of results as Array<{ id?: string; role?: string; content?: string; similarity?: number; timestamp?: number }>) {
+                const content = String(item.content || '').trim();
+                // 图片记忆没有正文，跳过（跨集合检索只取可读文本）
+                if (!content) continue;
+                if (!containsAll(content, filters)) continue;
+                if (containsAny(content, exclude)) continue;
+                hits.push({
+                    id: String(item.id || ''),
+                    collection,
+                    role: String(item.role || 'unknown'),
+                    content,
+                    similarity: Number(item.similarity) || 0,
+                    timestamp: item.timestamp,
+                });
+            }
+        }
+        catch (error) {
+            console.error(`[记忆检索] 集合 ${collection} 查询异常:`, error);
+        }
+    }
+
+    // 向量模式按相似度降序；关键词/正则模式按入库时间倒序
+    if (mode === 'vector') hits.sort((a, b) => b.similarity - a.similarity);
+    else hits.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    // 同一段原文可能同时出现在多个集合，按内容去重
+    const seen = new Set<string>();
+    const unique = hits.filter(hit => {
+        if (seen.has(hit.content)) return false;
+        seen.add(hit.content);
+        return true;
+    });
+    const top = unique.slice(0, safeLimit);
+    if (top.length > 0) {
+        console.log(`[记忆检索] 方式=${mode}，检索「${text.slice(0, 30)}」，返回 ${top.length} 条`);
+    }
+    return top;
+}
+
 /** 将动作组逐个写入动作记忆库（幂等：相同/相近文本内容被记忆库去重机制自动忽略），返回是否就绪 */
 export function syncActionsToMemory(actionNames: string[]): boolean {
     if (!actionNames || actionNames.length === 0) return false;

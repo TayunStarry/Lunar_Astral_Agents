@@ -47,6 +47,10 @@ func sampleOnce() {
 			}
 		}
 		atomic.StoreInt64(&lastProcTimes, procTime)
+		// 记录本次采样时刻：下一次采样据此计算时间窗内的 CPU 占用。
+		// 此前只写 lastProcTimes 不写 lastSampleAt，导致 IsZero() 恒为真、
+		// CPU 分支永远不执行，界面始终显示 0.0%。
+		lastSampleAt = now
 	}
 
 	// ==== 进程工作集（psapi GetProcessMemoryInfo） ====

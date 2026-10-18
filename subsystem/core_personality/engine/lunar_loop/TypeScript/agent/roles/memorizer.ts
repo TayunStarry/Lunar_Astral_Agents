@@ -1,22 +1,32 @@
 import { GlobalConfig } from '../../config/global';
-import { ModelBuilder } from '../base/builder';
-import { modelResponse } from '../../config/model';
 import { SCHEDULE_TRIGGER_PREFIX } from '../../tool/schedule-defs';
-import { ensureMemoryReady, extractMemoryText } from '../capabilities/memory';
+import {
+	ensureMemoryReady,
+	extractMemoryText,
+	LUNAR_MESSAGES_COLLECTION,
+	searchMemoryGlobal
+} from '../capabilities/memory';
 import { interactEvent } from '../capabilities/ltp-event';
 
 /** 长期记忆集合名 */
-const MEMORY_COLLECTION = 'lunar_messages';
-/** RAG 摘要硬切断长度上限 */
-const RAG_SUMMARY_HARD_LIMIT = 4096;
+const MEMORY_COLLECTION = LUNAR_MESSAGES_COLLECTION;
 /** 记忆时间线硬切断长度上限（按行移除超限行） */
 const RAG_TIMELINE_HARD_LIMIT = 2048;
 /** 每条用户消息查询记忆库时返回的相关度最高的记录数 */
 const RAG_PER_QUERY_TOP_K = 10;
-/** 去重后送入摘要的检索记录条数上限 */
+/** 去重后送入时间线的检索记录条数上限 */
 const RAG_MAX_RECORDS = 24;
+/** 单轮最多执行的检索查询数（跨集合检索每条查询都会调用嵌入服务，需限流） */
+const RAG_MAX_QUERIES = 4;
+/**
+ * 进入自动记忆的最低相似度门槛。
+ *
+ * Go 侧已过滤 <0.30 的候选；这里再抬到 0.40，避免把「语义上勉强相似、
+ * 但实际回答不了问题」的碎片注入对话上下文。
+ */
+const RAG_MIN_SIMILARITY = 0.40;
 
-/** 记忆检索记录（与 memoryQuery 返回结构对齐；图片记忆取 base64，文本记忆取 content） */
+/** 记忆检索记录（与 memoryQuery 返回结构对齐） */
 interface RagRecord {
 	/** 记忆记录唯一标识 */
 	id: string;
@@ -30,24 +40,33 @@ interface RagRecord {
 	similarity: number;
 	/** 入库时间 Unix 秒级时间戳（旧数据无此字段） */
 	timestamp?: number;
+	/** 命中的记忆集合名 */
+	collection?: string;
 }
 
 /**
- * 记忆者智能体
+ * 去掉群聊/用户前缀，保留实际发言文本作为检索词。
  *
- * 承接两条记忆职责，替代以往把碎片直接塞入对话者 rag 数组的做法：
- *  1. 记忆写入（ingress）：把对话者淘汰的缓冲消息逐个整理后写入长期记忆库。
- *  2. 记忆检索摘要（egress）：继承原有搜索机制检索长期记忆，对命中的碎片做一次
- *     总结与摘要，输出一篇硬切断 4096 的连贯摘要；该摘要不再回写记忆库。
+ * 记忆里的用户消息形如 `[群聊: …][用户: 某某]: 正文`；整串直接做嵌入会把
+ * 前缀当成语义的一部分，正文关键词反而被稀释。
  */
-export class MemorizerRole extends ModelBuilder {
-	/** 智能体角色标签（TUI 实况屏显示） */
-	protected roleTag: string = "记忆者";
+function memoryQueryText(message: string): string {
+	const text = String(message || '').trim();
+	const stripped = text.replace(/^(?:\s*\[[^\]]*\])+\s*[:：]?\s*/u, '').trim();
+	return stripped || text;
+}
 
-	constructor() {
-		super(fileView('prompts/memorizerRole.md')[0]);
-	}
-
+/**
+ * 记忆者
+ *
+ * 主动检索已交给对话者的 `search_memory` 工具；本类只保留两项**不依赖 LLM** 的职责：
+ *  1. 记忆写入：把对话者淘汰的缓冲消息整理后写入长期记忆库；
+ *  2. 自动背景：每轮跨集合检索，并按时间顺序拼接为时间线注入对话上下文。
+ *
+ * 不再调用 LLM 做摘要——检索不准时，摘要只会把无关碎片写成一段看似有用的噪音；
+ * 需要更多信息时，对话者可以自己调用 `search_memory` 定向查询原文。
+ */
+export class MemorizerRole {
 	/** 将缓冲的未读记录逐个写入记忆库（自 memorizeUnreadRecords 迁移） */
 	public persistUnreadRecords(): void {
 		// 缓冲池为空时跳过
@@ -79,32 +98,29 @@ export class MemorizerRole extends ModelBuilder {
 	}
 
 	/**
-	 * 检索长期记忆并生成记忆上下文
+	 * 检索长期记忆并生成时间线上下文。
 	 *
-	 * 继承原有搜索机制检索长期记忆，随后按模式分派：
-	 *  - summarize 为 true：对命中的碎片做一次总结与摘要，输出硬切断 4096 的连贯摘要；
-	 *  - summarize 为 false：按时间顺序将命中记录拼接为时间线文本，硬切断 2048（按行移除超限行）。
-	 * 检索结果为空、记忆库未就绪或整理失败时返回空字符串。
+	 * 跨集合检索 → 相似度过滤 → 按内容去重 → 按入库时间升序拼接为时间线，
+	 * 硬切断 2048（按行移除超限行）。检索结果为空或记忆库未就绪时返回空字符串。
 	 *
 	 * @param userMessages 未读用户消息（作为检索查询条件）
-	 * @param summarize 是否调用 LLM 整理摘要（深度回忆意图命中时为 true）
-	 * @returns 记忆文本，检索为空或失败时为空字符串
+	 * @returns 记忆时间线文本，检索为空或失败时为空字符串
 	 */
-	public queryRagDigest(userMessages: string[], summarize: boolean): string {
+	public queryRagDigest(userMessages: string[]): string {
 		// 条件不满足时跳过
 		if (!userMessages || userMessages.length === 0 || !ensureMemoryReady()) return '';
-		// 搜索结果
+		/** 检索结果 */
 		let records = this.retrieveRagRecords(userMessages);
 		// 检索结果为空时跳过
 		if (records.length === 0) return '';
 		// 事件 -> 构建记忆前：推送检索记录与用户消息，插件可改写后再整理
 		const feedback: RagRecord[] = interactEvent('build_memory_before', { userMessages, records }).return;
-		// 如果插件返回了非空的检索记录则直接使用（空数组 every 恒真，需显式排除，避免用空记录做无意义的整理）
+		// 如果插件返回了非空的检索记录则直接使用（空数组 every 恒真，需显式排除）
 		if (feedback && Array.isArray(feedback) && feedback.length > 0 && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
 			records = feedback;
 		}
-		// 深度回忆意图命中时由 LLM 总结与摘要，否则默认按时间顺序拼接时间线
-		return summarize ? this.summarizeRecords(records) : this.buildTimeline(records);
+		// 按时间顺序拼接时间线
+		return this.buildTimeline(records);
 	}
 
 	/** 按入库时间升序将检索记录拼接为时间线文本，硬切断 2048（到达字数上限即移除多余的行） */
@@ -126,18 +142,26 @@ export class MemorizerRole extends ModelBuilder {
 		return timeline;
 	}
 
-	/** 检索长期记忆（沿用对话者原检索逻辑：多查询合并→按内容去重→按相似度降序→取前32条） */
+	/** 跨集合检索长期记忆（按内容去重 → 相似度降序 → 取前若干条） */
 	private retrieveRagRecords(userMessages: string[]): RagRecord[] {
+		// 去重 + 去掉群聊前缀 + 限制查询条数：每条查询都会触发嵌入调用，不能随消息数量无限增长
+		const queries = [...new Set(userMessages.map(text => memoryQueryText(text)).filter(text => text.length > 0))].slice(-RAG_MAX_QUERIES);
 		/** 所有查询结果汇总（含相似度分数） */
 		const allResults: RagRecord[] = [];
-		for (const userMessage of userMessages) {
-			const [results, error] = memoryQuery(MEMORY_COLLECTION, userMessage, RAG_PER_QUERY_TOP_K);
-			// 单条查询失败则跳过，继续处理下一条
-			if (error) {
-				console.error('记忆库查询失败:', error);
-				continue;
+		for (const query of queries) {
+			// 跨集合检索：同时覆盖聊天记忆与其它对话类集合，而不是只在 lunar_messages 里碰运气
+			for (const hit of searchMemoryGlobal(query, RAG_PER_QUERY_TOP_K)) {
+				// 弱命中不进入时间线：它们只会污染上下文
+				if (hit.similarity < RAG_MIN_SIMILARITY) continue;
+				allResults.push({
+					id: hit.id,
+					role: hit.role,
+					content: hit.content,
+					similarity: hit.similarity,
+					timestamp: hit.timestamp,
+					collection: hit.collection
+				});
 			}
-			if (results && results.length > 0) allResults.push(...results);
 		}
 		/** 基于内容去重，保留相似度最高的记录 */
 		const seen = new Map<string, RagRecord>();
@@ -148,43 +172,7 @@ export class MemorizerRole extends ModelBuilder {
 		}
 		// 按相似度降序排列，相关度最高的在最前
 		const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
-		console.log(`[记忆] 检索到 ${uniqueResults.length} 条相关记录，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
+		console.log(`[记忆] 跨集合检索到 ${uniqueResults.length} 条相关记录，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
 		return uniqueResults.slice(0, RAG_MAX_RECORDS);
-	}
-
-	/** 记忆摘要任务模板（占位符 {fragments} 由检索片段填充） */
-	private readonly summaryTaskTemplate = fileView('prompts/memorizerSummaryTask.md')[0];
-
-	/** 交给 LLM 对命中的内容碎片做总结与摘要，输出硬切断 4096 的连贯摘要 */
-	private summarizeRecords(records: RagRecord[]): string {
-		/** 摘要输入：标注角色 + 入库时间 + 内容片段（时间供整理记忆时参考，旧数据无时间戳则省略） */
-		const fragments = records
-			.map((r, i) => {
-				/** 记录头部标注 */
-				let header = `--- 片段 ${i + 1}（${r.role}`;
-				if (r.timestamp) header += `，${new Date(r.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })}`;
-				header += `）---`;
-				return `${header}\n${r.content || '(空)'}`;
-			})
-			.join('\n\n');
-
-		// 覆写为本次独立摘要任务（逐次覆盖，不累积历史）
-		this.coverContext({ role: 'user', content: this.summaryTaskTemplate.replace('{fragments}', fragments) });
-		this.runtimeMessages = [];
-
-		/** 模型响应 */
-		let response: modelResponse;
-		try {
-			response = this.run([], []);
-		} catch (error) {
-			console.error('[记忆] 摘要推理失败:', error);
-			return '';
-		}
-		/** 摘要文本 */
-		let digest = (response.body?.choices?.[0]?.message?.content || '').trim();
-		// 长度硬切断 4096
-		if (digest.length > RAG_SUMMARY_HARD_LIMIT) digest = digest.slice(0, RAG_SUMMARY_HARD_LIMIT);
-		console.log(`[记忆] 已生成摘要（${digest.length}/${RAG_SUMMARY_HARD_LIMIT} 字）`);
-		return digest;
 	}
 }

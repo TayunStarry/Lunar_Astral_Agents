@@ -68,9 +68,9 @@ func TestArchiveAdmitBytesAndRead(t *testing.T) {
 	if result.Kind != KindDocument {
 		t.Errorf("类型码应为 D，实际 %s", result.Kind)
 	}
-	// 文档类资源的归档副本落在文档树根目录（与前端写入件同目录、同命名方案）
-	if !strings.HasPrefix(result.BlobPath, "documents/") || !strings.HasSuffix(result.BlobPath, ".md") {
-		t.Errorf("文档类归档副本应落在 documents/ 之下: %s", result.BlobPath)
+	// 文档类资源的归档副本落在文档树根目录，并使用原文件名
+	if result.BlobPath != "documents/note.md" {
+		t.Errorf("文档类应按原文件名落在 documents/ 之下: %s", result.BlobPath)
 	}
 
 	read, err := ResourceRead(result.Handle, 0)
@@ -143,8 +143,8 @@ func TestArchiveSectionOutlineAndAnchor(t *testing.T) {
 	}
 }
 
-// TestArchiveDedupAndSeqMonotonic 内容去重（同一内容只存一份 blob）与序号单调不复用
-func TestArchiveDedupAndSeqMonotonic(t *testing.T) {
+// TestArchiveDocumentNameIdentityAndSeqMonotonic 文本类按原文件名复用句柄；不同文件名各自独立
+func TestArchiveDocumentNameIdentityAndSeqMonotonic(t *testing.T) {
 	setupArchiveTest(t)
 
 	payload := []byte("same content")
@@ -152,20 +152,35 @@ func TestArchiveDedupAndSeqMonotonic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("首次入库失败: %v", err)
 	}
+	if first.BlobPath != "documents/a.txt" {
+		t.Errorf("文本类应按原文件名落盘，实际 %s", first.BlobPath)
+	}
+	// 同一文件名再次入库：复用同一句柄与实体
+	again, err := ResourceAdmit(AdmitInput{SourceKind: SourceKindBytes, Data: payload, Name: "a.txt"})
+	if err != nil {
+		t.Fatalf("同名二次入库失败: %v", err)
+	}
+	if again.Handle != first.Handle {
+		t.Errorf("同名文档应复用同一句柄: %s / %s", first.Handle, again.Handle)
+	}
+	if !again.Deduped {
+		t.Errorf("同名文档应标记为复用，实际 deduped=%v", again.Deduped)
+	}
+	if again.BlobPath != first.BlobPath || again.Seq != first.Seq {
+		t.Errorf("同名文档应复用同一实体与序号: %s/%d vs %s/%d",
+			first.BlobPath, first.Seq, again.BlobPath, again.Seq)
+	}
+	// 不同文件名即使内容相同，也各占一个实体与句柄
 	second, err := ResourceAdmit(AdmitInput{SourceKind: SourceKindBytes, Data: payload, Name: "b.txt"})
 	if err != nil {
-		t.Fatalf("二次入库失败: %v", err)
+		t.Fatalf("不同名入库失败: %v", err)
 	}
-	if first.Handle == second.Handle {
-		t.Errorf("两次入库应各自分配句柄: %s / %s", first.Handle, second.Handle)
+	if second.Handle == first.Handle {
+		t.Errorf("不同文件名应各自分配句柄: %s / %s", first.Handle, second.Handle)
 	}
-	if second.Deduped != true {
-		t.Errorf("相同内容二次入库应命中 blob 去重，实际 deduped=%v", second.Deduped)
+	if second.BlobPath == first.BlobPath || second.BlobPath != "documents/b.txt" {
+		t.Errorf("不同文件名应各自落盘: %s / %s", first.BlobPath, second.BlobPath)
 	}
-	if first.BlobPath != second.BlobPath {
-		t.Errorf("相同内容应复用同一 blob: %s / %s", first.BlobPath, second.BlobPath)
-	}
-	// 序号单调递增且不复用
 	if second.Seq != first.Seq+1 {
 		t.Errorf("序号应单调 +1：%d → %d", first.Seq, second.Seq)
 	}
@@ -254,6 +269,9 @@ func TestArchiveWorkspaceSource(t *testing.T) {
 	}
 	if result.Kind != KindDocument {
 		t.Errorf("工作区 Markdown 应为文档类型，实际 %s", result.Kind)
+	}
+	if result.BlobPath != "documents/AGENTS.md" {
+		t.Errorf("工作区文本应按原文件名落盘，实际 %s", result.BlobPath)
 	}
 	if _, err := os.Stat(filepath.Join(workdir, "AGENTS.md")); err != nil {
 		t.Errorf("工作区原文件绝不能被移动或删除: %v", err)
@@ -456,6 +474,9 @@ func TestArchiveDataURI(t *testing.T) {
 	result, err := ResourceAdmit(AdmitInput{SourceKind: SourceKindData, Source: dataURI, Name: "inline.md"})
 	if err != nil {
 		t.Fatalf("data URI 入库失败: %v", err)
+	}
+	if result.BlobPath != "documents/inline.md" {
+		t.Errorf("data URI 文本应按原文件名落盘，实际 %s", result.BlobPath)
 	}
 	read, err := ResourceRead(result.Handle, 0)
 	if err != nil {

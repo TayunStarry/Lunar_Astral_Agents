@@ -26,9 +26,6 @@ const maxForwardDepth = 3
 // maxReplyQuoteLen 回复引用摘要的最大字符数
 const maxReplyQuoteLen = 120
 
-// maxFileTextBytes 注入上下文的文本文件最大字节数（超出截断）
-const maxFileTextBytes = 64 * 1024
-
 // HandleNapcatMessage 处理从 Napcat 接收到的消息（私聊 / 群聊）
 func HandleNapcatMessage(rawMessage []byte) {
 	var napcatMsg NapcatMessage
@@ -681,21 +678,27 @@ func processFileSegment(fileData FileData) (string, bool, string) {
 		return "", true, "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
 	}
 
-	// 文本文件 → 打包为阅读者可识别的文件围栏块 ```fileName\n全文\n```
-	// 阅读者会在思考循环前将其切片入库，并把围栏块置换为 [已导入文件 #fileName]
-	if isTextFile(fileName) {
-		text := strings.TrimSpace(string(data))
-		if text == "" {
-			return describeFile(fileName, fileData.FileSize), false, ""
-		}
-		if len(text) > maxFileTextBytes {
-			text = strings.ToValidUTF8(text[:maxFileTextBytes], "") + "\n…（文件过长，内容已截断）"
-		}
-		return "```" + fileName + "\n" + text + "\n```", false, ""
+	// 其余可归档文件 → 在 Go 侧直接入库，上下文只传递规范句柄
+	// （文本/表格可在思考链中按句柄读取；二进制与未知类型仍回退为名称与大小描述）
+	if file.KindOfExt(strings.ToLower(filepath.Ext(fileName))) == "" {
+		return describeFile(fileName, fileData.FileSize), false, ""
 	}
-
-	// 其他类型 → 保留接口，仅回传文件大小与名称
-	return describeFile(fileName, fileData.FileSize), false, ""
+	res, err := file.ResourceAdmit(file.AdmitInput{
+		SourceKind: file.SourceKindBytes,
+		Data:       data,
+		Name:       fileName,
+		Origin:     file.OriginChannel,
+		Retain:     file.RetainNormal,
+	})
+	if err != nil || res.Handle == "" {
+		LoggerGeneral.SubError("LunarCore", "Napcat", "文件入库失败: %v", err)
+		return describeFile(fileName, fileData.FileSize), false, ""
+	}
+	name := res.Name
+	if name == "" {
+		name = fileName
+	}
+	return "[已收录] " + res.Handle + " " + name + " ", false, ""
 }
 
 // describeFile 构建文件的名称与大小信息描述
@@ -728,18 +731,6 @@ func fileSizeText(raw json.RawMessage) string {
 		return strconv.FormatFloat(n, 'f', -1, 64)
 	}
 	return ""
-}
-
-// isTextFile 通过扩展名判断是否为文本文件
-func isTextFile(fileName string) bool {
-	switch strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), ".")) {
-	case "txt", "md", "markdown", "log", "json", "xml", "csv", "tsv", "yaml", "yml",
-		"ini", "cfg", "conf", "toml", "py", "go", "js", "ts", "jsx", "tsx",
-		"java", "c", "cpp", "h", "hpp", "cs", "rb", "php", "sh", "bat", "ps1",
-		"sql", "html", "htm", "css", "rs", "kt", "swift":
-		return true
-	}
-	return false
 }
 
 // imageMIME 通过扩展名判断并返回图片 MIME 类型，非图片返回空字符串

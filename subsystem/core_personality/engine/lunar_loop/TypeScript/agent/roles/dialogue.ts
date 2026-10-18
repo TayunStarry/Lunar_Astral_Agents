@@ -1,147 +1,28 @@
 import { GlobalConfig } from '../../config/global';
 import { ChatCache } from '../../config/config';
 import { ToolCall } from '../../config/tool';
-import { MessageContent, ModelResponseBody, PostMessage } from '../../config/model';
+import { ModelResponseBody } from '../../config/model';
 import { ModelBuilder } from '../base/builder';
 import { LiteImageFile } from '../capabilities/media';
-import {
-    attachImageTags,
-    composeImagePlaceholder,
-    handleFromVisionURL,
-    IMAGE_WINDOW_SIZE,
-    sanitizeImageDesc
-} from '../capabilities/image-tag';
+import { IMAGE_WINDOW_SIZE, sanitizeImageDesc } from '../capabilities/image-tag';
 import { getResourceEntry, setResourceSummary } from '../capabilities/resource';
 import { getCrystalRemoteTools } from '../capabilities/ltpx';
 import { agentControlTools } from '../../tool/agent-control';
 import { imageRecallTools } from '../../tool/image-recall';
+import { memoryTools } from '../../tool/memory';
 import { resourceTools } from '../../tool/resource';
 import { scheduleTools } from '../../tool/schedule-defs';
 import { screenshotTools } from '../../tool/screenshot';
-import { RandomFloor } from '../../tool/math';
+import { describeError, notifyAgentSuccess, reportAgentFailure } from './dialogue/errors';
+import { applyModelResponse } from './dialogue/response';
+import { demoteOverflowImagesIn } from './dialogue/history';
+import { executeToolCalls } from './dialogue/tool-calls';
 
 /** 对话者固有工具（除琉璃聚合工具外全部固定不变，定义随本模块静态聚合） */
-const dialogueBaseTools: ToolCall[] = [...agentControlTools, ...imageRecallTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
+const dialogueBaseTools: ToolCall[] = [...agentControlTools, ...imageRecallTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
 
 /** 单次应答允许的工具调用轮次上限（防御模型在工具调用间自循环） */
 const MAX_TOOL_ROUNDS = 5;
-
-/** JSON 容错解析（工具参数在个别路径上可能是字符串） */
-function parseToolArgs(raw: unknown): Record<string, any> {
-    if (raw && typeof raw === 'object') return raw as Record<string, any>;
-    try {
-        const parsed = JSON.parse(String(raw ?? '{}'));
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    }
-    catch {
-        return {};
-    }
-}
-
-// ==== 快速应答台词：按「起句 + 动作 + 收尾」拼接，贴合月华俏皮自信、口语化的人设 ====
-
-/** 起句（俏皮、自信，不用「安排好了」这类状态播报） */
-const ACK_LEADS = ['收到', '好嘞', '交给我吧', '没问题', '这个我来'];
-
-/** 收尾（自然口语，带一点活泼的语气） */
-const ACK_ENDS = ['～', '，稍等我一下～', '，等我好消息～', '，一会儿就好～'];
-
-/** 绘图动作 */
-const DRAW_ACTIONS = ['这就动笔', '这就开画', '马上开工', '先起个稿'];
-
-/** 联网搜索动作 */
-const SEARCH_ACTIONS = ['这就去翻资料', '这就去查', '马上去找', '先去翻一翻'];
-
-/** 从数组里随机取一项 */
-function pickAckPart(parts: string[]): string {
-    return parts[RandomFloor(0, parts.length - 1)];
-}
-
-/** 拼接一条快速应答台词 */
-function composeAck(actions: string[]): string {
-    return `${pickAckPart(ACK_LEADS)}！${pickAckPart(actions)}${pickAckPart(ACK_ENDS)}`;
-}
-
-/**
- * 高耗时工具的快速应答文案
- *
- * 只覆盖「用户会明显等待」的两类任务：绘制者与 WebLTP 联网搜索。
- * 返回空串表示不是高耗时工具，不需要快速应答。
- */
-function slowTaskAckText(functionName: string, rawArgs: unknown): string {
-    if (functionName === 'dispatch_painter') return composeAck(DRAW_ACTIONS);
-    if (functionName === 'use_the_program') {
-        const target = String(parseToolArgs(rawArgs).tool || '').trim().toLowerCase();
-        if (target === 'web_search') return composeAck(SEARCH_ACTIONS);
-    }
-    return '';
-}
-
-/**
- * 发送一次快速应答（不走模型思考，直接文本 + TTS）
- *
- * 一轮思考链内只触发一次（GlobalConfig.fastAckSent）。QQ 来源的消息把
- * auto 置为 true：QQ 桥接会正常转发，但不占用本轮应答份额，真正的最终回应随后生成。
- */
-function maybeSendFastAck(functionName: string, rawArgs: unknown): void {
-    if (GlobalConfig.fastAckSent) return;
-    const text = slowTaskAckText(functionName, rawArgs);
-    if (!text) return;
-    GlobalConfig.fastAckSent = true;
-    /** 语音数据（TTS 失败时留空，文本仍然照常推送） */
-    let audio = '';
-    try {
-        const [voice, error] = tts(text);
-        if (!error && voice) audio = voice;
-    }
-    catch (error) {
-        console.error('[对话者] 快速应答 TTS 失败，仅推送文本:', error);
-    }
-    try {
-        pushContext('text', text, audio, GlobalConfig.turnFromQQ);
-        console.log(`[对话者] 已发送高耗时任务快速应答: ${text}`);
-    }
-    catch (error) {
-        // 快速应答失败不影响主任务；标记保留，避免同一轮反复重试刷屏
-        console.error('[对话者] 快速应答推送失败:', error);
-    }
-}
-
-/**
- * 把任意错误值转成可读文本
- *
- * 为什么要专门处理：`syncFetch` 失败时抛出的是 **Go 侧 error**（goja 导出为只有内部字段的
- * 对象），`console.error('...', error)` 打出来就是 `{}`，日志里只留下一句
- * 「请求处理错误: {}」——真实原因（模型服务崩了 / 连接被拒）无从查起。
- */
-function describeError(error: unknown): string {
-    if (!error) return '未知错误';
-    if (typeof error === 'string') return error;
-    const anyError = error as { message?: string; stack?: string };
-    if (typeof anyError.message === 'string' && anyError.message) return anyError.message;
-    const text = String(error);
-    return text && text !== '[object Object]' ? text : '模型调用失败（宿主未提供错误详情）';
-}
-
-/** 通知宿主「本轮模型调用成功」——用于清零宿主的连续失败计数（宿主未注册时静默跳过） */
-function notifyAgentSuccess(): void {
-    try {
-        if (typeof notifyAgentIdle === 'function') notifyAgentIdle();
-    }
-    catch {
-        // 上报失败不影响主流程
-    }
-}
-
-/** 通知宿主「本轮应答失败」：连续失败达到阈值时宿主会自动重载引擎 */
-function reportAgentFailure(reason: string): void {
-    try {
-        if (typeof notifyAgentFailure === 'function') notifyAgentFailure(reason);
-    }
-    catch {
-        // 上报失败不影响主流程
-    }
-}
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
@@ -263,6 +144,7 @@ export class DialogueRole extends ModelBuilder {
         // 终稿也没拿到文本：给一句自然的话收尾，不让前端留空（也不暴露工具机制）
         GlobalConfig.finalResponse = '这轮步骤有点多了，我先停在这里，你可以接着往下说。';
     }
+
     /**
      * 多模态图片窗口上限：只保留最近这么多张真实图片，更早的降级为「句柄 + 描述」占位文本
      *
@@ -281,53 +163,20 @@ export class DialogueRole extends ModelBuilder {
         this.demoteOverflowImages();
         // 如果处理后消息数组为空（极端情况），跳过续写
         if (this.messages.length === 0) return;
-        // 判定最后一条消息是否是用户消息
-        if (this.messages.slice(-1)[0].role === 'user') return;
+        /** 最后一条消息的角色 */
+        const lastRole = this.messages.slice(-1)[0].role;
+        // 用户消息与工具结果都不需要续写指令：
+        //   - 用户消息本身就是本轮输入；
+        //   - 工具结果是「同一应答周期」的中间态，模型应直接基于结果收尾；
+        //     若在这里补「继续」，会被模型当成新的创作指令（实测：一次画图请求连画 4 张）。
+        if (lastRole === 'user' || lastRole === 'tool') return;
         // 如果不是用户消息就补充一条默认用户消息
         this.writeContext({ role: 'user', content: "继续" });
     }
 
     /** 增量降级：窗内多模态图片超过上限时，从最老的消息开始摘图留签 */
     private demoteOverflowImages(): void {
-        /** 窗内多模态图片计数 */
-        const countImages = (): number => this.messages.reduce(
-            (sum, message) => typeof message.content === 'string'
-                ? sum
-                : sum + message.content.filter((c: any) => c.type === 'image_url').length,
-            0
-        );
-        for (let i = 0; i < this.messages.length && countImages() > this.IMAGE_WINDOW; i++) {
-            const message = this.messages[i];
-            // 纯文本消息与无图消息跳过
-            if (typeof message.content === 'string') continue;
-            if (!message.content.some((c: any) => c.type === 'image_url')) continue;
-            this.demoteMessageImages(message);
-        }
-    }
-
-    /**
-     * 将单条消息中的图片降级为占位文本：图片项 → 一条「[@I.00x]（描述）」文本
-     *
-     * 句柄直接从图片项自身的视觉读取 URL（tag 参数）解析 —— 句柄随图走，
-     * 无需任何相邻文本配对，连续多图也不会错位。
-     */
-    private demoteMessageImages(message: PostMessage): void {
-        if (typeof message.content === 'string') return;
-        const items = message.content as MessageContent[];
-        const rebuilt: MessageContent[] = [];
-        for (const item of items) {
-            const content: any = item;
-            if (content.type !== 'image_url') {
-                rebuilt.push(item);
-                continue;
-            }
-            // 相邻排布已废除：句柄从 URL 自带的 tag 参数解析
-            const tag = handleFromVisionURL(content.image_url?.url);
-            rebuilt.push({ type: 'text', text: tag
-                ? composeImagePlaceholder(tag, this.describeImage(tag, content.image_url?.url || ''))
-                : '（一张未能登记句柄的图片，已超出窗口）' });
-        }
-        message.content = rebuilt;
+        demoteOverflowImagesIn(this.messages, this.IMAGE_WINDOW, (tag, source) => this.describeImage(tag, source));
     }
 
     /**
@@ -370,106 +219,17 @@ export class DialogueRole extends ModelBuilder {
             return '';
         }
     }
+
     /** 处理聊天消息响应 */
     protected analyzeMessageResponse(message: ModelResponseBody, cache: ChatCache): void {
-        try {
-            // 处理推理内容数据
-            if (message.choices?.[0]?.message?.reasoning_content) {
-                cache.thinkingContent = message.choices[0].message.reasoning_content;
-            }
-            // 检查是否有词元生成速度数据
-            if (message.timings?.predicted_per_second) {
-                console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
-            }
-            // 检查缓存命中数量
-            if (message.timings?.cache_n !== undefined) {
-                console.log(`缓存命中数量: ${message.timings.cache_n}`);
-            }
-            // 处理工具调用
-            if (message.choices?.[0]?.message?.tool_calls) {
-                // 遍历所有工具调用
-                for (const toolCall of message.choices[0].message.tool_calls) {
-                    try {
-                        // 解析arguments字段
-                        toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
-                        // 记录工具调用
-                        cache.toolCalls.push(toolCall);
-                    }
-                    catch (parseError) {
-                        console.error('工具调用参数解析错误:', parseError);
-                    }
-                }
-            }
-            // 处理内容数据
-            if (message.choices?.[0]?.message?.content) {
-                cache.descriptionContent = message.choices[0].message.content;
-            }
-        }
-        catch (error) {
-            console.error('聊天消息响应处理错误:', error);
-        }
+        applyModelResponse(message, cache);
     }
+
     /** 批量执行工具调用 */
     protected async batchExecutionToolCall(state: ChatCache): Promise<boolean> {
-        /** 工具调用标志 */
-        let hasToolCalls = false;
-        // 遍历所有工具调用
-        for (const toolCall of state.toolCalls) {
-            /** 工具函数名称 */
-            const functionName = toolCall.function.name;
-            /** 工具函数参数 */
-            const functionArgs = toolCall.function.arguments;
-            /** 查询对应的月华工具包 */
-            const lunarToolPackage = GlobalConfig.LTPfunction.get(functionName);
-            // 检查是否有对应的工具包
-            if (!lunarToolPackage) {
-                this.messages.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
-                continue;
-            }
-            // 高耗时任务：在真正执行前先给用户一条快速应答（一轮仅一次）
-            maybeSendFastAck(functionName, functionArgs);
-            try {
-                /** 工具函数执行结果：string[]格式，下标0=文本内容，下标1=图片base64数据（无则为空字符串） */
-                const toolResult = await lunarToolPackage(functionArgs);
-                /** 提取文本内容 */
-                const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
-                /** 提取图片base64数据 */
-                const base64Image = Array.isArray(toolResult) ? toolResult[1] : '';
-                // 将工具响应添加到消息历史中：文本恒以 tool 角色回填，保证 tool_call_id 配对完整
-                this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
-                // 工具返回的图片（如截图）作为紧随其后的用户多模态消息注入：
-                // 与用户图片走同一套入队赋签机制（入库得 [@I.00x] 旁注），
-                // 一样参与窗口降级与按句柄引用
-                if (base64Image && typeof base64Image === 'string' && base64Image.length > 0) {
-                    /** 工具图片消息 */
-                    const message: PostMessage = {
-                        role: "user",
-                        content: [
-                            { type: "text", text: `【工具返回的图片】${textContent}` },
-                            { type: "image_url", image_url: { url: base64Image } }
-                        ]
-                    };
-                    attachImageTags(message);
-                    this.messages.push(message);
-                    console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节`);
-                }
-                // 标记有工具调用
-                hasToolCalls = true;
-            }
-            catch (error) {
-                // 将工具调用失败信息添加到消息历史中
-                this.messages.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
-            }
-        }
-        // 处理完所有工具调用后,清空状态
-        state.currentToolCallIndex = -1;
-        state.currentFunctionArgs = "";
-        state.currentFunctionName = "";
-        state.currentToolCall = null;
-        state.toolCalls = [];
-        // 标记有工具调用
-        return hasToolCalls;
-    };
+        return executeToolCalls(this.messages, state);
+    }
+
     /** 构造函数 */
     public constructor(private descriptionRole: ModelBuilder) {
         super(fileView('prompts/dialogueRole.md')[0]);

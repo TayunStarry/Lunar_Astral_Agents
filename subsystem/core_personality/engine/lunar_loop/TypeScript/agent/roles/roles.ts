@@ -43,7 +43,6 @@ registerDumpRoles({
     painter: { role: painterRole, label: '绘制者' },
     musician: { role: musicianRole, label: '演奏者' },
     perceiver: { role: perceiverRole, label: '感知者' },
-    memorizer: { role: memorizerRole, label: '记忆者' },
     description: { role: descriptionRole, label: '描述者' },
 });
 /** 追加 LTPX 聚合工具的使用要求（静态段落，工具名与琉璃侧一致） */
@@ -66,7 +65,6 @@ export const roleInstances = {
     painter: painterRole,
     musician: musicianRole,
     perceiver: perceiverRole,
-    memorizer: memorizerRole,
     description: descriptionRole,
 };
 try {

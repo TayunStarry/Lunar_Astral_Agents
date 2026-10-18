@@ -24,12 +24,14 @@ export interface ParsedContent {
 	actionBlocks: string[];
 	/** 清洗并切片后的正文内容，每个切片包含display和tts两个版本 */
 	textChunks: TextChunk[];
+	/** 清洗后的完整正文（未切片，保留原始排版），用于整段推送 */
+	displayText: string;
 }
 
 /** 解析文本内容 */
 export function parseContent(rawText: string): ParsedContent {
 	// 如果原始文本为空，直接返回空对象
-	if (!rawText) return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], textChunks: [] };
+	if (!rawText) return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], textChunks: [], displayText: '' };
 	/** 提取思考区内容（不参与显示与语音合成） */
 	const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
 	/** 提取代码块内容（不参与显示与语音合成） */
@@ -47,5 +49,5 @@ export function parseContent(rawText: string): ParsedContent {
 	/** 为每个切片生成显示文本和TTS文本 */
 	const textChunks: TextChunk[] = displayChunks.map(chunk => ({ display: chunk, tts: cleanTextForTTS(chunk), }));
 	// 返回解析结果
-	return { thinkingBlocks, codeBlocks, actionBlocks, textChunks };
+	return { thinkingBlocks, codeBlocks, actionBlocks, textChunks, displayText };
 }

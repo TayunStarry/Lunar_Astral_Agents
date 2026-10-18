@@ -186,16 +186,6 @@ interface EventContract {
         /** 解析结果消息数组，追加进月华未读上下文 */
         return: PostMessage[]
     }
-    /** 读取文件前：改写 `(#文件)` 引用的消息原文 */
-    read_file_before: {
-        payload: {
-            /** 消息原文 */
-            text: string
-        }
-        return: {
-            text?: string
-        }
-    }
     /** 做出行动前：改写行动块数组 */
     take_action_before: {
         payload: {

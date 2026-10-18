@@ -88,20 +88,72 @@ function formatFileSize(bytes) {
     return `${value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
 
+// ---------- 文档入库与句柄 ----------
+/** 句柄 → 文件名缓存：本地上传时即知名字，历史消息按需向后端解析 */
+const resourceNameCache = new Map();
+
+/** 去掉句柄锚点（@D.003|§4 → @D.003），用于缓存键与解析接口 */
+function baseResourceHandle(handle) {
+    return String(handle || '').trim().replace(/\|\S+$/, '');
+}
+
+/** 解析句柄对应文件名：缓存命中直接返回，否则查询资源目录 */
+async function resolveResourceName(handle) {
+    const key = baseResourceHandle(handle);
+    if (!key) return '';
+    if (resourceNameCache.has(key)) return resourceNameCache.get(key);
+    try {
+        const res = await fetch('/file/resource/resolve?handle=' + encodeURIComponent(key));
+        if (!res.ok) return '';
+        const data = await res.json();
+        const resource = data.resource || {};
+        const name = String(resource.name || resource.title || '');
+        if (name) resourceNameCache.set(key, name);
+        return name;
+    } catch (e) {
+        return '';
+    }
+}
+
+/**
+ * 上传文档并按原文件名入库，返回 { handle, name }
+ *
+ * 入库由 Go 侧资源目录完成（同一文件名稳定复用同一句柄），
+ * 前端只把规范句柄随消息下发，不再传输正文或文件名引用。
+ */
+async function admitDocumentFile(file) {
+    // 与 Go 侧 safeDocumentName 保持一致的裸文件名规整，避免非法路径字符导致落盘失败
+    const fileName = String(file.name || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim() || 'file';
+    const path = 'documents/' + fileName;
+    const saved = await fetch('/file/write', {
+        method: 'POST',
+        headers: {
+            'X-File-Name': encodeFilePath(path),
+            'X-Overwrite': 'true'
+        },
+        body: file
+    });
+    if (!saved.ok) throw new Error('文件上传失败');
+    const admitted = await fetch('/file/resource/admit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: path, name: fileName })
+    });
+    if (!admitted.ok) throw new Error('资源入库失败');
+    const data = await admitted.json();
+    const resource = data.resource || {};
+    const handle = String(resource.handle || '');
+    if (!handle) throw new Error('资源入库未返回句柄');
+    const name = String(resource.name || fileName);
+    resourceNameCache.set(handle, name);
+    return { handle: handle, name: name };
+}
+
 function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
         reader.onerror = reject;
         reader.readAsDataURL(file);
-    });
-}
-
-function readFileAsText(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsText(file);
     });
 }

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "核心人格 (Core Personality)",
-    "version": "2026.291.1121",
+    "version": "2026.291.2023",
     "x-service": "CorePersonality"
   },
   "servers": [
@@ -483,6 +483,32 @@
         "description": "文件读取操作",
         "operationId": "file.ReadHandler",
         "x-handler": "file.ReadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/resource/admit": {
+      "post": {
+        "summary": "文档入库/刷新（按原文件名稳定复用句柄）",
+        "description": "文档入库/刷新（按原文件名稳定复用句柄）",
+        "operationId": "file.ResourceAdmitHandler",
+        "x-handler": "file.ResourceAdmitHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/resource/resolve": {
+      "get": {
+        "summary": "按句柄解析资源目录条目（前端定位文档文件）",
+        "description": "按句柄解析资源目录条目（前端定位文档文件）",
+        "operationId": "file.ResourceResolveHandler",
+        "x-handler": "file.ResourceResolveHandler",
         "responses": {
           "200": {
             "description": "成功"

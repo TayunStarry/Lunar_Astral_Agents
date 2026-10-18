@@ -34,6 +34,10 @@ func main() {
 	// 预绑定监听器交由 HTTP 服务复用（避免预检与正式绑定之间的竞态窗口）
 	server.SetPreboundListener(ln)
 
+	// 控制台日志镜像默认关闭：日志仍进 TUI 的「原始日志」视图与「数据导出」，
+	// 只有 lunar_config.json 的 system.console_log=true 时才额外落盘 local_data/logs/console.log。
+	TuiSystem.SetConsoleLogEnabled(*GeneralConfig.ConsoleLogEnabled)
+
 	// 日志管线安装必须最早期：接管 stdout/stderr，启动期日志不逃逸到终端
 	TuiSystem.Install()
 

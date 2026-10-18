@@ -329,20 +329,23 @@ const BASE_ARGS = { expression: '俏皮的表情,单眼眨眼', posture: '一手
 		painter.referenceSize && painter.referenceSize.width === 800 && painter.referenceSize.height === 1066,
 		JSON.stringify(painter.referenceSize));
 
-	// 作品回写历史同样必须走入库 + 视觉读取形态；入库失败时退化为文本占位
+	// 作品回执机制已移除：作品图不再回写绘制者历史（改图基座走 reference_tag → referenceImage
+	// 管线，历史回执零参与；旧机制把 user 图消息插在 tool_call 与 tool 结果之间，
+	// 诱发同参数重复生成，实测多烧一次 40 步）。
+	check('作品回执方法已删除', typeof painter.recordPainting === 'undefined', typeof painter.recordPainting);
 	painter.messages.length = 0;
-	painter.recordPainting('扩散图像生成', 'iVBORw0KGgoAAAANSUhEUg==');
-	const paintingMessage = painter.messages[0];
-	const paintingImage = paintingMessage && Array.isArray(paintingMessage.content)
-		? paintingMessage.content.find(item => item.type === 'image_url')
-		: null;
-	const paintingURL = (paintingImage && paintingImage.image_url.url) || '';
-	check('画作回写历史只走 /file/read-multimodal/ 端点 URL',
-		paintingURL.includes('/file/read-multimodal/'),
-		paintingURL);
-	check('画作消息里不残留原图 base64',
-		!JSON.stringify(paintingMessage || {}).includes('iVBORw0KGgoAAAANSUhEUg=='),
-		JSON.stringify(paintingMessage || {}).substring(0, 160));
+	call('diffusion_generation', { prompt: 'a plate of stir-fried potatoes', ratio: '1:1' });
+	check('生成工具不向历史写入任何回执',
+		painter.messages.length === 0,
+		JSON.stringify(painter.messages).substring(0, 200));
+
+	// 第一人称任务：任务消息必须附带指代解析（「我」= 月华），避免画成通用-女
+	painter.messages.length = 0;
+	await painter.createCreativeWork('画一个我的Q版自画像');
+	const pronounText = typeof painter.messages[0]?.content === 'string' ? painter.messages[0].content : '';
+	check('第一人称任务附带代词解析（「我」= 月华）',
+		pronounText.includes('「我」「我的」「自己」= 月华'),
+		pronounText.substring(0, 160));
 
 	fs.rmSync(OUT, { recursive: true, force: true });
 	console.log(failures === 0 ? '\n全部通过' : '\n' + failures + ' 项失败');

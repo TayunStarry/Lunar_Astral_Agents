@@ -3,7 +3,7 @@ import { PostMessage } from './model';
 /** 全局配置 */
 export class GlobalConfig {
 	/** 自定义配置项 */
-	public static customConfig: Config = { agent: {}, server: {} };
+	public static customConfig: Config = { agent: {} };
 	/** 支持的图片文件扩展名 */
 	public static readonly imageFormatsExtensions: string[] = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
 	/** 支持的视频文件扩展名 */
@@ -54,9 +54,9 @@ export class GlobalConfig {
 	public static get AsrName(): string {
 		return GlobalConfig.customConfig?.agent?.asr_model || "system-asr";
 	};
-	/** 获取 调试模式开关 */
+	/** 获取 调试模式开关（system.developer） */
 	public static get debugMode(): boolean {
-		return GlobalConfig.customConfig?.server?.developer ?? false;
+		return GlobalConfig.customConfig?.system?.developer ?? false;
 	};
 	/** 获取 视频解读输入模式（agent.video_input，兼容旧 multimodal 节，默认 file） */
 	public static get VideoInputMode(): string {

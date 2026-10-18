@@ -26,23 +26,26 @@ export interface Config {
 		/** 视觉读取副本最大边长（像素） */
 		vision_max_side?: number;
 	};
-	/** 服务运行与调试 */
-	server: {
+	/** 系统级设置：运行/安全、控制台日志、聊天显存守卫、前端显示统一收拢在 system 下 */
+	system?: {
 		/** 调试模式开关：开启时导出子智能体上下文日志 */
 		developer?: boolean;
 		/** 是否允许局域网访问引擎 HTTP/WS 服务（未配置默认仅绑定回环地址） */
 		allow_lan?: boolean;
 		/** 插件沙箱网络是否跳过 TLS 证书校验（未配置默认开启校验） */
 		insecure_tls?: boolean;
-	};
-	/** 聊天（LLM）显存守卫：可用显存不足时卸载本地模型释放 KV 缓存 */
-	chat?: {
+		/** 是否把控制台输出镜像到 local_data/logs/console.log（默认关闭） */
+		console_log?: boolean;
 		/** 显存守卫开关 */
 		chat_vram_guard?: boolean;
 		/** 显存守卫阈值（MiB），可用显存低于该值时触发卸载 */
 		chat_vram_guard_mib?: number;
 		/** 显存守卫应答间隔：每完成 N 次应答检查一次 */
 		chat_vram_guard_interval?: number;
+		/** 角色渲染器：bedrock / live2d（由前端读取） */
+		character_renderer?: string;
+		/** Live2D 模型基址（空则用引擎层默认） */
+		live2d_model?: string;
 	};
 	/** 多模态解读配置（视频/动态图送入模型的方式） */
 	multimodal?: {
