@@ -10,10 +10,10 @@ import (
 	"CorePersonality/engine/lunar_loop"
 	"CorePersonality/engine/lunar_loop/container"
 	"CorePersonality/engine/model/llama"
+	image "CorePersonality/engine/multimodal/httpapi"
 	"CorePersonality/transport/napcat"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	image "LunarSubsystem/MultimodalAnalysis/server"
 )
 
 // assembleLunar 装配月华人格局的生产者部分：模型代理、绘图协处理器与 QQ 桥接。

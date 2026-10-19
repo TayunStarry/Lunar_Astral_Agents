@@ -6,9 +6,18 @@ import {
 	ResourceStats
 } from '../../config/resource';
 import { formatHandle, parseHandle } from '../handle';
+import { deleteResource } from './manage';
+
+/** 源文件丢失/损坏时的固定提示（句柄条目同时被移除，不滞留失效句柄） */
+export const LOST_FILE_NOTICE = '文件损毁或丢失,请更换句柄';
+/** 句柄不存在 / 无法解析时的固定提示 */
+export const HANDLE_INVALID_NOTICE = '句柄无效,文件不存在';
 
 /**
  * 按句柄取回资源内容（带锚点时按锚点整段展开）
+ *
+ * blob 已丢失/损坏（result.lost）时顺带移除该句柄条目：失效句柄不再滞留目录，
+ * 调用方据 lost 标记返回 LOST_FILE_NOTICE。
  *
  * @param handle 资源句柄
  * @param maxBytes 单次取回字节上限
@@ -25,6 +34,11 @@ export function readResource(handle: string, maxBytes?: number): ResourceReadRes
 		if (error || !result) {
 			console.error('[资源] 取回失败:', error?.message || '返回为空', handle);
 			return null;
+		}
+		// 本体丢失/损坏：立即移除句柄条目（幂等），失效句柄不再滞留目录
+		if (result.lost) {
+			console.warn('[资源] 本体丢失/损坏，移除句柄:', formatHandle(parsed));
+			deleteResource(formatHandle(parsed));
 		}
 		return result;
 	}
@@ -163,11 +177,11 @@ export function getResourceEntry(handle: string): ResourceEntry | null {
  *   - `file://` 是给 llama-server 媒体管线用的 URI 方案（它的 media-path 指向 multimedia 根），
  *     不是本进程内的路径格式。本进程内直接用路径即可，Go 侧按 LocalDir 解析。
  *   - 系统既有的文件读取端点就是 `GET /file/read/<相对 LocalDir 路径>`
- *     （file_manager 的 ReadHandler → module.ReadFile），同样以「相对 LocalDir 路径」为约定。
+ *     （engine/persistence 的 ReadHandler → ReadFile），同样以「相对 LocalDir 路径」为约定。
  *
  * **只给 Go 侧管线用**（扩散引擎的 initImg、RealESRGAN 超分、动图判定等），
  * 它返回的是**原图**路径。不要拿它拼 `image_url`：图片进思维链只能走
- * `/file/read-multimodal/` 或 `visionRead`（见 docs/adr/0008）。
+ * `/file/miniature/` 或 `visionRead`（见 docs/adr/0008）。
  *
  * @param handle 资源句柄
  * @returns 相对 LocalDir 的路径；blob 丢失或不存在返回空串

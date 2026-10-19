@@ -1,7 +1,7 @@
 package lunarloop
 
 import (
-	"LunarSubsystem/FileManager/module"
+	module "CorePersonality/engine/persistence"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"context"
@@ -190,7 +190,10 @@ func memoryResultsToObjects(results []module.MemoryQueryResult) []map[string]any
 		if r.Timestamp != 0 {
 			obj["timestamp"] = r.Timestamp
 		}
-		if r.Base64 != "" {
+		if r.URL != "" {
+			obj["url"] = r.URL
+		} else if r.Base64 != "" {
+			// 历史数据兼容：旧记忆仍内联 base64
 			obj["base64"] = r.Base64
 		} else {
 			obj["content"] = r.Content

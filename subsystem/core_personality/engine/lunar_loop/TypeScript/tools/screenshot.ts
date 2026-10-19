@@ -2,6 +2,7 @@ import { ToolCall } from '../config/tool';
 import { GlobalConfig } from '../config/global';
 import { ResizeImageResult, ResizeImageResults } from '../config/image';
 import { pushAssistantImage } from '../io/conversation';
+import { localPathToReadURL } from '../io/conversation/codec';
 
 // ==== 工具定义 ====
 
@@ -98,9 +99,9 @@ async function handleScreenshot(args?: Record<string, any> | string): Promise<st
 	const firstFrame = results[0];
 	console.log(`截图处理成功: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
 
-	// 将所有帧的 base64 推送到前端
-	const base64List = results.map((r: ResizeImageResult) => r.base64);
-	pushAssistantImage(base64List);
+	// 将截图落盘为内容仓库实体，以 URL 推送给前端与 QQ 适配器
+	const urls = results.map((r: ResizeImageResult, index: number) => persistScreenshot(r, index)).filter(Boolean);
+	if (urls.length > 0) pushAssistantImage(urls);
 	console.log(`图片已推送: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
 
 	// 返回文本响应 + 首帧 base64 图片数据
@@ -110,6 +111,36 @@ async function handleScreenshot(args?: Record<string, any> | string): Promise<st
 	console.log(`返回响应: ${sizeInfo}`);
 	console.log(`========== 截图工具调用结束(成功) ==========`);
 	return [textResponse, firstFrame.base64];
+}
+
+/**
+ * 把一帧截图写入内容仓库并返回可访问 URL
+ *
+ * @param frame 截图结果（base64 / 格式）
+ * @param index 帧序号（仅用于文件名）
+ * @returns /file/read/ 地址；落盘失败返回空串
+ */
+function persistScreenshot(frame: ResizeImageResult, index: number): string {
+	try {
+		const base64 = String(frame.base64 || '');
+		const payload = base64.includes('base64,') ? base64.split('base64,')[1] : base64;
+		if (!payload) return '';
+		const binary = atob(payload);
+		const bytes = new Uint8Array(binary.length);
+		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		const ext = frame.format === 'jpg' || frame.format === 'jpeg' ? 'jpg' : 'png';
+		const name = `multimedia/screenshot_${Date.now()}_${index}.${ext}`;
+		const [, path, error] = saveFile(name, true, bytes);
+		if (error) {
+			console.warn('[截图] 落盘失败:', error);
+			return '';
+		}
+		return localPathToReadURL(path);
+	}
+	catch (error) {
+		console.warn('[截图] 落盘异常:', error);
+		return '';
+	}
 }
 
 // ==== 模块级注册 ====

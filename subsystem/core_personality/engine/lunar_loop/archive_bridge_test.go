@@ -7,7 +7,7 @@ package lunarloop
 // 从 JS 侧按 TypeScript 的真实调用形态传参，断言参数被正确解析。
 
 import (
-	file "LunarSubsystem/FileManager/module"
+	file "CorePersonality/engine/persistence"
 	"LunarSubsystem/GeneralConfig"
 	"bytes"
 	"crypto/sha256"

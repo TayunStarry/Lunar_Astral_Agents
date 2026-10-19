@@ -140,7 +140,7 @@ declare global {
      * 传入地址时由 Go 侧下载/解码后判定，无需 TypeScript 先取回字节
      *
      * 注意：宿主**不提供** resizeImage —— 思维链不允许自己缩放图片。
-     * 图片进入模型上下文的唯一形态是视觉读取管线产物（/file/read-multimodal/ 或 visionRead），
+     * 图片进入模型上下文的唯一形态是视觉读取管线产物（/file/miniature/ 或 visionRead），
      * 缩放与尺寸约束在 Go 侧统一完成（见 docs/adr/0008）。
      *
      * @param {Blob | File | string | Uint8Array} imgData 图片数据或地址
@@ -151,7 +151,7 @@ declare global {
     /**
      * 视觉读取：按「约束尺寸 + 句柄叠印」管线生成思维链消费副本，直接返回 data URI
      *
-     * 与 /file/read-multimodal 端点共用同一变换实现（缩放到 vision_max_side、
+     * 与 /file/miniature 端点共用同一变换实现（缩放到 vision_max_side、
      * 右上角叠印句柄标签、按内容哈希盘上缓存、动图原样直通）。原图不被修改。
      *
      * 这是 base64 形态的视觉副本入口：把同一 VisionCopy 管线产出的副本交给无法回取
@@ -167,25 +167,14 @@ declare global {
      */
     function visionRead(relPath: string, tag?: string, side?: number): [string, Error | null, number, number];
     /**
-     * 将动态图编码为慢放视频并写入 llama-server 媒体目录
+     * 将动态图直接解码为图片帧序列
      *
-     * 动态图多为数秒，直接交给固定抽帧频率的 llama-server 只能采到一两帧，
-     * 因此转码时按目标采样点数做等比例慢放，再以 file:// 交给感知者理解
-     *
-     * @param {Blob | File | string | Uint8Array} imgData 动态图数据或地址
-     *
-     * @returns {[MediaSegment[], Error | null]} 包含媒体片段列表的元组，[{file, start, end}]
-     */
-    function animatedImageToVideo(imgData: Blob | File | string | Uint8Array): [MediaSegment[], Error | null];
-    /**
-     * 将动态图编码为慢放视频后抽帧为图片序列帧（序列帧解读模式）
-     *
-     * 与 animatedImageToVideo 同样先做等比例慢放转码以补足采样相位，
-     * 但转码产物写临时文件（不产出媒体目录文件），随后按 0.5fps 抽帧为 JPEG data URI。
+     * 不再转码为慢放视频：长边约束到 640，按「开头稠密、结尾稀疏」规则摘取至多 64 帧，
+     * 编码为 JPEG data URI 交给模型理解。
      *
      * @param {Blob | File | string | Uint8Array} imgData 动态图数据或地址
      *
-     * @returns {[MediaFrameGroup[], Error | null]} 包含分组采样帧列表的元组，[{start, end, frames:[{image, time}]}]
+     * @returns {[MediaFrameGroup[], Error | null]} 包含分组帧列表的元组，[{start, end, frames:[{image, time}]}]
      */
     function animatedImageToFrames(imgData: Blob | File | string | Uint8Array): [MediaFrameGroup[], Error | null];
     /**
@@ -244,10 +233,12 @@ declare global {
     /**
      * 推送图片
      * 
-     * @param {string[]} imageData 图片数据列表（base64编码）
+     * @param {string[]} imageData 图片 URL 列表（/file/read/... 或 http(s)://）
      * @param {boolean} [isSticker=false] 是否为表情包（前端据此决定角标显示）
+     *
+     * @returns {string[]} 登记句柄并做哈希唯一性归一后的最终 URL 列表
      */
-    function pushImage(imageData: string[], isSticker?: boolean): boolean;
+    function pushImage(imageData: string[], isSticker?: boolean): string[];
     /**
      * 获取缓存的智能体3D位置（由前端遥测数据更新）
      *
@@ -324,9 +315,9 @@ declare global {
      *
      * @param {number} topK 返回的最相关结果数量
      *
-     * @returns {[Array<{id: string, role: string, content?: string, image?: string, similarity: number, timestamp?: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列（text 集合返回 content，image 集合返回 image；timestamp 为入库 Unix 秒时间戳，旧数据无此字段）
+     * @returns {[Array<{id: string, role: string, content?: string, url?: string, similarity: number, timestamp?: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列（文本记忆返回 content，图片记忆返回 url；timestamp 为入库 Unix 秒时间戳，旧数据无此字段）
      */
-    function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content?: string, image?: string, similarity: number, timestamp?: number }>, Error | null];
+    function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content?: string, url?: string, base64?: string, similarity: number, timestamp?: number }>, Error | null];
     /**
      * 关键词 / 正则检索指定集合（不调用嵌入服务）
      *
@@ -498,6 +489,10 @@ declare global {
         retain?: 'normal' | 'soft' | 'ephemeral';
         /** 建议 MIME（可空：按扩展名推断） */
         mime?: string;
+        /** 按内容哈希去重（媒体默认开启） */
+        dedup?: boolean;
+        /** 强制写入指定目录：true 时跳过内容哈希复用 */
+        mustStore?: boolean;
     }
 
     /** 入库结果 */
@@ -733,21 +728,6 @@ declare global {
      * @returns {[boolean, Error | null]} 包含操作结果的元组
      */
     function resourceSetSections(id: number, sections: ResourceSectionDraft[]): [boolean, Error | null];
-
-    /**
-     * 触发内容仓库回收（只删 blob、保留目录行；句柄仍可解析并降级为描述）
-     *
-     * @param {{force?: boolean}} [options] force 为 true 时忽略配额直接按等级回收
-     *
-     * @returns {[object | null, Error | null]} 包含回收统计的元组
-     */
-    function resourceCollect(options?: { force?: boolean }): [{
-        scanned: number;
-        collected: number;
-        freed_bytes: number;
-        remaining_bytes: number;
-        over_quota: boolean;
-    } | null, Error | null];
 
     /**
      * 显式删除资源（目录行 + 独占 blob；仍被其它目录行引用时保留实体）

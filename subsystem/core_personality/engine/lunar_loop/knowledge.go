@@ -10,7 +10,7 @@ package lunarloop
 import (
 	"fmt"
 
-	"LunarSubsystem/FileManager/module"
+	module "CorePersonality/engine/persistence"
 
 	"github.com/dop251/goja"
 )

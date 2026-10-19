@@ -1,7 +1,7 @@
 package lunarloop
 
 import (
-	"LunarSubsystem/MultimodalAnalysis/module"
+	module "CorePersonality/engine/multimodal"
 	"fmt"
 
 	"github.com/dop251/goja"

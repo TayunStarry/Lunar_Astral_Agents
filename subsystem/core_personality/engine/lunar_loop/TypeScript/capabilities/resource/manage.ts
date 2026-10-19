@@ -74,33 +74,6 @@ export function deleteResource(handle: string): boolean {
 }
 
 /**
- * 触发内容仓库回收（只删 blob、保留目录行；句柄仍可解析并降级为描述）
- *
- * @param force 忽略配额直接按等级回收
- * @returns 回收统计；失败返回 null
- */
-export function collectResources(force = false): {
-	scanned: number;
-	collected: number;
-	freed_bytes: number;
-	remaining_bytes: number;
-	over_quota: boolean;
-} | null {
-	try {
-		const [result, error] = resourceCollect({ force });
-		if (error || !result) {
-			console.error('[资源] 回收失败:', error?.message || '返回为空');
-			return null;
-		}
-		return result;
-	}
-	catch (error) {
-		console.error('[资源] 回收抛异常:', error);
-		return null;
-	}
-}
-
-/**
  * 把「资源不存在 / blob 丢失」翻译为模型可见的降级说明
  *
  * @param handle 资源句柄

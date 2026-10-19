@@ -1,8 +1,11 @@
 package lunarloop
 
 import (
+	persistence "CorePersonality/engine/persistence"
 	"CorePersonality/transport/napcat"
 	"encoding/json"
+	"net/url"
+	"strings"
 
 	"github.com/dop251/goja"
 )
@@ -32,6 +35,7 @@ func (class *Runtime) pushContext(call goja.FunctionCall) goja.Value {
 
 // pushImage 推送图片（供 JS 运行时调用）
 // 用法：pushImage(images)；表情包可选：pushImage(images, true)
+// images 为图片 URL 列表（/file/read/... 或 http(s)://），前端与 QQ 适配器都按 URL 消费
 // 第二个参数 isSticker 标记图片是否为表情包，前端据此决定角标显示
 func (class *Runtime) pushImage(call goja.FunctionCall) goja.Value {
 	// 解析图片数组（兼容 []string / []any）
@@ -50,6 +54,11 @@ func (class *Runtime) pushImage(call goja.FunctionCall) goja.Value {
 	if arg := call.Argument(1); !goja.IsUndefined(arg) && !goja.IsNull(arg) {
 		isSticker = arg.ToBoolean()
 	}
+	// 图片推送即登记：把生成目录中的作品纳入句柄体系，并按内容哈希唯一性
+	// 归一到最终保留路径（根目录重复件会被舍弃，URL 同步改写）
+	for i, img := range images {
+		images[i] = registerPushedImage(img)
+	}
 
 	data := PushImageData{
 		Type:    "image",
@@ -57,7 +66,34 @@ func (class *Runtime) pushImage(call goja.FunctionCall) goja.Value {
 		Sticker: isSticker,
 	}
 	PushMessageFunc("image", data)
-	return class.runtime.ToValue(true)
+	// 把规范化后的 URL 返回给 JS，近期记忆必须与广播使用同一份地址
+	return class.runtime.ToValue(images)
+}
+
+// registerPushedImage 把待推送图片的服务路径登记进句柄体系，返回规范化后的 URL
+//
+// 只处理本机内容仓库路径（/file/read/... 或 multimedia/...）；http(s) 与 data URI 原样返回。
+// 若同哈希已存在于优先级更高的路径，RegisterPath 会返回该路径（新副本已被清理），
+// 因此这里改写 URL 后，前端与 QQ 适配器拿到的始终是有效实体。
+func registerPushedImage(raw string) string {
+	const readPrefix = "/file/read/"
+	rel := ""
+	switch {
+	case strings.HasPrefix(raw, readPrefix):
+		rel = strings.TrimPrefix(raw, readPrefix)
+	case strings.HasPrefix(raw, "multimedia/"), strings.HasPrefix(raw, "audios/"):
+		rel = raw
+	default:
+		return raw
+	}
+	if decoded, err := url.PathUnescape(rel); err == nil {
+		rel = decoded
+	}
+	canonical, _, err := persistence.RegisterPath(rel)
+	if err != nil || canonical == "" {
+		return raw
+	}
+	return readPrefix + canonical
 }
 
 // NewVideoUrlContent 创建视频URL内容项（入统一未读队列）

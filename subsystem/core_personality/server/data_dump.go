@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"CorePersonality/engine/console"
 	"CorePersonality/engine/lunar_loop"
+	persistence "CorePersonality/engine/persistence"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	"LunarSubsystem/TuiSystem"
 )
 
 // ==== 数据导出端点（TUI「数据导出」调用） ====
@@ -42,25 +42,22 @@ func dumpDir() string {
 	return filepath.Join(*GeneralConfig.LocalDir, "logs", "dump")
 }
 
-// writeDumpFile 写入导出文件，返回相对程序根目录的路径与字节数。
+// writeDumpFile 写入导出文件，返回绝对路径与字节数。
 // 文件名格式：<时间戳>-<名称>.<扩展名>，时间戳保证多次导出不互相覆盖。
+// 文件写入统一经 persistence（core_personality 内文件操作的唯一实现）。
 func writeDumpFile(name, ext string, data []byte) (string, int, error) {
-	dir := dumpDir()
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", 0, fmt.Errorf("创建导出目录失败: %w", err)
-	}
 	// 名称中的路径分隔符与空白替换为下划线，避免越出导出目录
 	safe := strings.NewReplacer("/", "_", "\\", "_", " ", "_", ":", "_").Replace(strings.TrimSpace(name))
 	if safe == "" {
 		safe = "dump"
 	}
 	filename := fmt.Sprintf("%s-%s.%s", time.Now().Format("20060102-150405"), safe, ext)
-	full := filepath.Join(dir, filename)
-	if err := os.WriteFile(full, data, 0644); err != nil {
+	rel := filepath.ToSlash(filepath.Join("logs", "dump", filename))
+	result, err := persistence.SaveFileEx(rel, persistence.SaveOptions{Overwrite: true}, bytes.NewReader(data))
+	if err != nil {
 		return "", 0, fmt.Errorf("写入导出文件失败: %w", err)
 	}
-	rel := filepath.Join(*GeneralConfig.LocalDir, "logs", "dump", filename)
-	return rel, len(data), nil
+	return result.Path, len(data), nil
 }
 
 // DataDumpLogsHandler 导出原始日志为 JSON Lines（POST /debug/dump/logs）。
@@ -69,10 +66,10 @@ func writeDumpFile(name, ext string, data []byte) (string, int, error) {
 // 也便于只看末尾若干行（tail）而不必解析整个文件。
 //
 // 两个「为可读性服务」的取舍：
-//  1. 正文一律经 TuiSystem.ScrubLogText 再写出：导出给的是**离线排查用的文本**，
+//  1. 正文一律经 console.ScrubLogText 再写出：导出给的是**离线排查用的文本**，
 //     终端控制序列（彩色工具的 `\u001b[…`、进度行的 `\r`）只会干扰阅读与 grep。
 //     清洗本已在日志入缓冲时做过，这里再兜一次——避免今后有人绕过管线直接写入
-//     （例如经 TuiSystem.PushTaskLog 之外的路径）时把转义码漏进导出文件。
+//     （例如经 console.PushTaskLog 之外的路径）时把转义码漏进导出文件。
 //  2. **关闭 encoding/json 的 HTML 转义**：`json.Marshal` 默认把 `>` `<` `&` 写成
 //     `\u003e` / `\u003c` / `\u0026`（防的是"把 JSON 直接嵌进 HTML"这种场景）。
 //     普通日志里 `->`、`=>`、`&&` 极常见，转义后整份文件几乎没法用肉眼扫读，
@@ -82,7 +79,7 @@ func DataDumpLogsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	lines := TuiSystem.GetLogs(TuiSystem.SourceRaw)
+	lines := console.GetLogs(console.SourceRaw)
 	if len(lines) == 0 {
 		writeJSON(w, http.StatusOK, DataDumpResponse{OK: false, Error: "原始日志缓冲为空：还没有任何输出"})
 		return
@@ -96,7 +93,7 @@ func DataDumpLogsHandler(w http.ResponseWriter, r *http.Request) {
 	/** 实际写出的记录数（清洗后为空的整行会被丢弃，不再等于 lines 长度） */
 	written := 0
 	for _, line := range lines {
-		for _, text := range TuiSystem.ScrubLogText(line.Text) {
+		for _, text := range console.ScrubLogText(line.Text) {
 			rec := map[string]any{
 				"time":   line.Time.Format("2006-01-02 15:04:05.000"),
 				"level":  line.Level,
@@ -140,7 +137,7 @@ func DataDumpTranscriptHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	content, err := TuiSystem.BuildTranscriptJSON()
+	content, err := console.BuildTranscriptJSON()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, DataDumpResponse{OK: false, Error: err.Error()})
 		return

@@ -194,10 +194,11 @@ class LunarCoreApp {
 				const data = message.data || {};
 				const images = data.images || [];
 				const label = data.sticker ? '表情包' : '图片';
-				for (const imageBase64 of images) {
-					const imageUrl = imageBase64.startsWith('data:') || imageBase64.startsWith('http')
-						? imageBase64
-						: 'data:image/jpeg;base64,' + imageBase64;
+				for (const image of images) {
+					// 图片统一以 URL 传递：/file/read/... 与 http(s):// 直接使用；其余走服务读取端点
+					const imageUrl = (image.startsWith('data:') || image.startsWith('http') || image.startsWith('/'))
+						? image
+						: '/file/read/' + image.replace(/^\.?\//, '');
 					if (window.previewImage) {
 						window.previewImage(imageUrl, label);
 					}

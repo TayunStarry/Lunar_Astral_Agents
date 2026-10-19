@@ -1,10 +1,10 @@
 package lunarloop
 
 import (
+	"CorePersonality/engine/console"
 	"LunarSubsystem/BrowserClient"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	"LunarSubsystem/TuiSystem"
 	"bufio"
 	"bytes"
 	"crypto/tls"
@@ -113,7 +113,7 @@ func (class *Runtime) syncFetch(call goja.FunctionCall) goja.Value {
 	}
 
 	// 图片闸门：模型请求出站前逐条校验 image_url，超尺寸 / 非视觉读取产物一律拦截
-	// （思维链只接受 /file/read-multimodal/ 端点或视觉副本，见 model_image_guard.go 与 docs/adr/0008）
+	// （思维链只接受 /file/miniature/ 端点或视觉副本，见 model_image_guard.go 与 docs/adr/0008）
 	blockedImages, guardErr := guardChatRequestImages(url, execute)
 	if guardErr != nil {
 		return class.runtime.ToValue([]any{nil, guardErr})
@@ -265,7 +265,7 @@ func prepareStreamingBody(url string, execute map[string]any) bool {
 //  3. usage 到账按真实 token 计量，缺失时按文本长度估算（estimated 标记）；
 //  4. 组装完整 choices[0].message 非流式结构同步返回 JS，消费端零改动。
 func (class *Runtime) doStreamingChat(req *http.Request, role string, promptEstimate int) goja.Value {
-	TuiSystem.StreamBegin(role)
+	console.StreamBegin(role)
 	start := time.Now()
 
 	req.Header.Set("Accept", "text/event-stream")
@@ -277,7 +277,7 @@ func (class *Runtime) doStreamingChat(req *http.Request, role string, promptEsti
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		TuiSystem.StreamEnd(role)
+		console.StreamEnd(role)
 		LoggerGeneral.SubError(lunarCoreModule, lunarJavaScriptSub, "流式模型调用失败: %v", err)
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("发送请求失败: %v", err)})
 	}
@@ -285,7 +285,7 @@ func (class *Runtime) doStreamingChat(req *http.Request, role string, promptEsti
 
 	// 非 200：按非流式约定返回原始内容（错误说明多在响应体中）
 	if resp.StatusCode != http.StatusOK {
-		TuiSystem.StreamEnd(role)
+		console.StreamEnd(role)
 		raw, _ := io.ReadAll(resp.Body)
 		var responseJSON map[string]any
 		if json.Unmarshal(raw, &responseJSON) == nil {
@@ -323,11 +323,11 @@ func (class *Runtime) doStreamingChat(req *http.Request, role string, promptEsti
 			delta := choice.Delta
 			if think := delta.ReasoningContent + delta.Reasoning; think != "" {
 				reasoning.WriteString(think)
-				TuiSystem.StreamDelta(role, TuiSystem.KindThink, think)
+				console.StreamDelta(role, console.KindThink, think)
 			}
 			if delta.Content != "" {
 				content.WriteString(delta.Content)
-				TuiSystem.StreamDelta(role, TuiSystem.KindContent, delta.Content)
+				console.StreamDelta(role, console.KindContent, delta.Content)
 			}
 			tools.ingest(delta.ToolCalls)
 			if choice.FinishReason != nil && *choice.FinishReason != "" {
@@ -347,17 +347,17 @@ func (class *Runtime) doStreamingChat(req *http.Request, role string, promptEsti
 	// 事件与现实就对不上了——实况屏会出现「只有一条工具调用、永远进行中」的幽灵轮次，
 	// 而真正的思考/正文留在上一轮里，导出与界面都错位。
 	tools.report(role)
-	TuiSystem.StreamEnd(role)
+	console.StreamEnd(role)
 
 	// 计量入账：优先真实 usage，缺失时按文本长度估算（prompt 取请求体字符数 / 3）
 	if usage != nil {
-		TuiSystem.RecordModelCall(usage.Prompt, usage.Completion, time.Since(start), false)
+		console.RecordModelCall(usage.Prompt, usage.Completion, time.Since(start), false)
 	} else {
 		prompt := int64(promptEstimate) / 3
 		completion := int64(utf8.RuneCountInString(content.String()) +
 			utf8.RuneCountInString(reasoning.String()) +
 			utf8.RuneCountInString(tools.argsText()))
-		TuiSystem.RecordModelCall(prompt, completion, time.Since(start), true)
+		console.RecordModelCall(prompt, completion, time.Since(start), true)
 	}
 
 	// 组装非流式等价响应（choices[0].message），JS 消费端零改动
@@ -422,7 +422,7 @@ func (t *toolCallAccumulator) report(role string) {
 		if item.name == "" {
 			continue
 		}
-		TuiSystem.StreamTool(role, item.name, item.args.String())
+		console.StreamTool(role, item.name, item.args.String())
 	}
 }
 

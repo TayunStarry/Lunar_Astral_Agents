@@ -169,6 +169,36 @@ var agentSystem = (function (exports) {
             + '段落锚点可写 @D.003|§4（第 4 节）或 @D.003|L120-168（第 120-168 行）';
     }
 
+    function setResourceSummary(id, summary, tags) {
+        try {
+            const [ok, error] = resourceSetSummary(id, summary, tags ?? []);
+            if (error || !ok)
+                console.error('[资源] 写摘要失败:', error?.message || '返回失败');
+        }
+        catch (error) {
+            console.error('[资源] 写摘要抛异常:', error);
+        }
+    }
+    function deleteResource(handle) {
+        const parsed = parseHandle(handle);
+        if (!parsed)
+            return false;
+        try {
+            const [ok, error] = resourceDelete(formatHandle(parsed));
+            if (error || !ok) {
+                console.error('[资源] 删除失败:', error?.message || '返回失败', handle);
+                return false;
+            }
+            return true;
+        }
+        catch (error) {
+            console.error('[资源] 删除抛异常:', error);
+            return false;
+        }
+    }
+
+    const LOST_FILE_NOTICE = '文件损毁或丢失,请更换句柄';
+    const HANDLE_INVALID_NOTICE = '句柄无效,文件不存在';
     function readResource(handle, maxBytes) {
         const parsed = parseHandle(handle);
         if (!parsed) {
@@ -180,6 +210,10 @@ var agentSystem = (function (exports) {
             if (error || !result) {
                 console.error('[资源] 取回失败:', error?.message || '返回为空', handle);
                 return null;
+            }
+            if (result.lost) {
+                console.warn('[资源] 本体丢失/损坏，移除句柄:', formatHandle(parsed));
+                deleteResource(formatHandle(parsed));
             }
             return result;
         }
@@ -244,19 +278,8 @@ var agentSystem = (function (exports) {
         }
     }
 
-    function setResourceSummary(id, summary, tags) {
-        try {
-            const [ok, error] = resourceSetSummary(id, summary, tags ?? []);
-            if (error || !ok)
-                console.error('[资源] 写摘要失败:', error?.message || '返回失败');
-        }
-        catch (error) {
-            console.error('[资源] 写摘要抛异常:', error);
-        }
-    }
-
     const IMAGE_WINDOW_SIZE = 20;
-    const VISION_READ_PATH$1 = '/file/read-multimodal/';
+    const VISION_READ_PATH$1 = '/file/miniature/';
     const TAG_PATTERN = /^@[A-Z]\.\d{3,}$/;
     function guessImageExt(source) {
         const lower = (source || '').toLowerCase();
@@ -352,6 +375,10 @@ var agentSystem = (function (exports) {
         const entry = getResourceEntry(normalized);
         if (!entry)
             return null;
+        if (entry.state === 'lost') {
+            deleteResource(normalized);
+            return null;
+        }
         const source = entry.state === 'active' && entry.blob_path ? entry.blob_path : '';
         return { handle: normalized, source, desc: entry.summary || '' };
     }
@@ -492,8 +519,11 @@ var agentSystem = (function (exports) {
     }
     function resourceSource(handle) {
         const entry = getResourceEntry(handle);
-        if (!entry || entry.state !== 'active' || !entry.blob_path)
+        if (!entry || entry.state !== 'active' || !entry.blob_path) {
+            if (entry?.state === 'lost')
+                deleteResource(handle);
             return '';
+        }
         const [, error] = visionRead(entry.blob_path, handle);
         if (error) {
             console.error('[资源描述] 视觉副本生成失败，降级为目录摘要:', error?.message ?? String(error));
@@ -617,80 +647,44 @@ var agentSystem = (function (exports) {
         {
             type: "function",
             function: {
-                name: "create_schedule",
-                description: "在计划表中创建新的计划项，指定执行时间点和对应的工作内容。时间格式为 ISO 8601 (如 '2026-06-14T15:30:00') 或中文日期时间格式 (如 '2026年6月14日 15:30')。",
+                name: "schedule",
+                description: "计划表综合工具：创建、编辑、删除与查询计划项。查询支持关键词数组（内容/时间混合检索，多条结果按相关度排序）与时间范围（某天/某月/某年，查某天不填日期默认今天）；可按内容查时间、按时间查内容、按关键词查完整计划。",
                 parameters: {
                     type: "object",
                     properties: {
-                        time: {
+                        action: {
                             type: "string",
-                            description: "计划执行的时间点，支持 ISO 8601 格式或中文日期时间格式，例如 '2026-06-14T15:30:00' 或 '2026年6月14日 15:30'"
+                            enum: ["create", "edit", "delete", "query"],
+                            description: "要执行的动作：create 创建计划 / edit 编辑计划 / delete 删除计划 / query 查询计划"
                         },
-                        content: {
-                            type: "string",
-                            description: "计划执行的工作内容描述，应清晰说明需要完成的事项"
-                        }
-                    },
-                    required: ["time", "content"]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "edit_schedule",
-                description: "编辑计划表中已存在的计划项，可修改其执行时间和/或工作内容。需要提供计划项的ID，至少提供 time 或 content 中的一个进行修改。",
-                parameters: {
-                    type: "object",
-                    properties: {
                         id: {
                             type: "string",
-                            description: "要编辑的计划项ID，从 query_schedule 返回结果中获得"
+                            description: "计划项ID（edit/delete 必填），从 action=query 的返回结果中获得"
                         },
                         time: {
                             type: "string",
-                            description: "修改后的执行时间点，不修改则留空"
+                            description: "计划执行时间点（create 必填；edit 选填）。支持 ISO 8601（'2026-06-14T15:30:00'）或中文格式（'2026年6月14日 15:30'）"
                         },
                         content: {
                             type: "string",
-                            description: "修改后的工作内容描述，不修改则留空"
-                        }
-                    },
-                    required: ["id"]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "delete_schedule",
-                description: "从计划表中删除指定的计划项。需要提供计划项的ID。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        id: {
+                            description: "计划工作内容（create 必填；edit 选填，提供时覆盖原内容）"
+                        },
+                        keywords: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "查询关键词数组（query 选填）：同时检索计划内容与时间，命中越多排序越靠前；可传单个关键词；不传则返回范围内全部计划"
+                        },
+                        date: {
                             type: "string",
-                            description: "要删除的计划项ID，从 query_schedule 返回结果中获得"
-                        }
-                    },
-                    required: ["id"]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "query_schedule",
-                description: "查询计划表中已有的计划项列表，可按关键词筛选。返回所有匹配的计划项及其ID、时间和内容。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        keyword: {
+                            description: "查询日期范围（query 选填）：'2026-06-14' 查某天 / '2026-06' 查某月 / '2026' 查某年；支持中文（'6月14日'）与相对词（今天/明天/昨天）。查某天计划不填时默认今天"
+                        },
+                        scope: {
                             type: "string",
-                            description: "用于筛选计划项的关键词，留空则返回全部计划项"
+                            enum: ["day", "month", "year", "all"],
+                            description: "查询粒度（query 选填）：day 某天 / month 某月 / year 某年 / all 全部计划；缺省时按 date 格式推断，date 与 keywords 都未提供时也可用 all 列出全部计划"
                         }
                     },
-                    required: []
+                    required: ["action"]
                 }
             }
         }
@@ -734,15 +728,86 @@ var agentSystem = (function (exports) {
             return null;
         return new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(match[1]), Number(match[2]));
     }
+    function dayRange(base, labelSuffix = '') {
+        const start = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+        const end = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 23, 59, 59, 999);
+        return { start, end, label: `${formatDate(base)}${labelSuffix}` };
+    }
+    function monthRange(year, month, label = '') {
+        return {
+            start: new Date(year, month - 1, 1),
+            end: new Date(year, month, 0, 23, 59, 59, 999),
+            label: label || `${year}年${month}月`,
+        };
+    }
+    function yearRange(year, label = '') {
+        return {
+            start: new Date(year, 0, 1),
+            end: new Date(year, 11, 31, 23, 59, 59, 999),
+            label: label || `${year}年`,
+        };
+    }
+    const RELATIVE_DAYS = { '今天': 0, '今日': 0, '明天': 1, '明日': 1, '后天': 2, '昨天': -1, '昨日': -1 };
+    function toHalfWidth(raw) {
+        return raw.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).replace(/[－—–]/g, '-');
+    }
+    function parseDateRange(raw, scope) {
+        const now = new Date();
+        const normalized = toHalfWidth(String(raw || '').trim());
+        const effectiveScope = ['day', 'month', 'year', 'all'].includes(scope) ? scope : undefined;
+        if (normalized && normalized in RELATIVE_DAYS) {
+            const base = new Date(now.getFullYear(), now.getMonth(), now.getDate() + RELATIVE_DAYS[normalized]);
+            const suffix = normalized === '今天' ? '（今天）' : `（${normalized}）`;
+            return { range: dayRange(base, suffix), error: null };
+        }
+        if (!normalized) {
+            if (effectiveScope === 'month')
+                return { range: monthRange(now.getFullYear(), now.getMonth() + 1), error: null };
+            if (effectiveScope === 'year')
+                return { range: yearRange(now.getFullYear()), error: null };
+            if (effectiveScope === 'all')
+                return { range: null, error: null };
+            return { range: dayRange(now, '（今天）'), error: null };
+        }
+        let match = normalized.match(/^(\d{4})[年\-/.](\d{1,2})[月\-/.](\d{1,2})日?$/);
+        if (match) {
+            const [, y, m, d] = match;
+            const date = new Date(Number(y), Number(m) - 1, Number(d));
+            if (isNaN(date.getTime()))
+                return { range: null, error: `无法识别日期 "${raw}"` };
+            return { range: dayRange(date), error: null };
+        }
+        match = normalized.match(/^(\d{4})[年\-/.](\d{1,2})月?$/);
+        if (match) {
+            const [, y, m] = match;
+            return { range: monthRange(Number(y), Number(m)), error: null };
+        }
+        match = normalized.match(/^(\d{1,2})月(\d{1,2})日?$/);
+        if (match) {
+            const [, m, d] = match;
+            return { range: dayRange(new Date(now.getFullYear(), Number(m) - 1, Number(d))), error: null };
+        }
+        match = normalized.match(/^(\d{1,2})月$/);
+        if (match) {
+            return { range: monthRange(now.getFullYear(), Number(match[1])), error: null };
+        }
+        match = normalized.match(/^(\d{4})年?$/);
+        if (match) {
+            return { range: yearRange(Number(match[1])), error: null };
+        }
+        const std = new Date(normalized);
+        if (!isNaN(std.getTime()))
+            return { range: dayRange(std), error: null };
+        return { range: null, error: `无法识别日期 "${raw}"，请使用如 "2026-06-14"、"2026-06"、"2026" 或 "今天"` };
+    }
 
     function loadSchedulesFromDisk() {
-        const [fileData, , , readErr] = readFile(SCHEDULE_FILE_PATH);
-        if (readErr) {
+        const [fileData, readErr] = readTextFile(SCHEDULE_FILE_PATH);
+        if (readErr || !fileData) {
             return [];
         }
         try {
-            const jsonStr = atob(fileData);
-            const data = JSON.parse(jsonStr);
+            const data = JSON.parse(fileData);
             return Array.isArray(data) ? data : [];
         }
         catch (e) {
@@ -764,6 +829,79 @@ var agentSystem = (function (exports) {
             console.error('[计划表] 序列化计划表失败:', e);
             return false;
         }
+    }
+
+    const CONTENT_HIT_SCORE = 2;
+    const TIME_HIT_SCORE = 1;
+    function formatLine(item, index) {
+        const time = item.type === 'daily' ? `每日 ${item.time}` : item.time;
+        return `[计划项${index + 1}] ID:${item.id} | 时间:${time} | 内容:${item.content}`;
+    }
+    function sortKey(item, now) {
+        if (item.type === 'daily')
+            return dailyTaskTime(item, now)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        const t = new Date(item.time).getTime();
+        return isNaN(t) ? Number.MAX_SAFE_INTEGER : t;
+    }
+    function scoreItem(item, keywords) {
+        const content = item.content.toLowerCase();
+        let score = 0;
+        for (const keyword of keywords) {
+            const kw = keyword.toLowerCase();
+            if (!kw)
+                continue;
+            if (content.includes(kw))
+                score += CONTENT_HIT_SCORE;
+            else if (item.time.includes(keyword))
+                score += TIME_HIT_SCORE;
+        }
+        return score;
+    }
+    function inRange(item, start, end, now) {
+        if (item.type === 'daily')
+            return true;
+        const t = new Date(item.time).getTime();
+        if (isNaN(t))
+            return false;
+        return t >= start.getTime() && t <= end.getTime();
+    }
+    function querySchedules(cache, keywords, date, scope) {
+        const rawList = Array.isArray(keywords) ? keywords : (keywords ? [keywords] : []);
+        const keywordList = rawList.map(k => String(k ?? '').trim()).filter(k => k.length > 0);
+        const { range, error } = parseDateRange(date === undefined || date === null ? '' : String(date), scope === undefined || scope === null ? undefined : String(scope));
+        if (error)
+            return [`查询计划失败：${error}`, ''];
+        const now = new Date();
+        const candidates = range
+            ? cache.filter(item => inRange(item, range.start, range.end))
+            : [...cache];
+        let matched;
+        if (keywordList.length > 0) {
+            matched = candidates
+                .map(item => ({ item, score: scoreItem(item, keywordList) }))
+                .filter(entry => entry.score > 0)
+                .sort((a, b) => b.score - a.score ||
+                sortKey(a.item, now) - sortKey(b.item, now));
+        }
+        else {
+            matched = candidates
+                .map(item => ({ item, score: 0 }))
+                .sort((a, b) => sortKey(a.item, now) - sortKey(b.item, now));
+        }
+        if (matched.length === 0) {
+            if (candidates.length === 0) {
+                const scopeText = range ? `${range.label}没有安排任何计划` : '当前计划表为空';
+                return [`${scopeText}，没有任何计划项。`, ''];
+            }
+            const scopeText = range ? `${range.label}` : '计划表';
+            return [`${scopeText}共有 ${candidates.length} 个计划项，但没有命中关键词「${keywordList.join('、')}」的计划。`, ''];
+        }
+        const parts = [];
+        parts.push(range
+            ? `${range.label}共有 ${candidates.length} 个计划项` + (keywordList.length ? `，命中「${keywordList.join('、')}」的有 ${matched.length} 条（按相关度排序）` : '（按时间排序）')
+            : `当前计划表共有 ${candidates.length} 个计划项` + (keywordList.length ? `，命中「${keywordList.join('、')}」的有 ${matched.length} 条（按相关度排序）` : ''));
+        matched.forEach((entry, i) => parts.push(formatLine(entry.item, i)));
+        return [parts.join('\n'), ''];
     }
 
     let scheduleCache = [];
@@ -813,7 +951,7 @@ var agentSystem = (function (exports) {
     function parseArgs(args) {
         return typeof args === 'string' ? JSON.parse(args) : (args || {});
     }
-    async function handleCreateSchedule(args) {
+    async function handleCreate(args) {
         const { time, content } = parseArgs(args);
         if (!time || time.trim().length === 0) {
             return ['创建计划项失败：执行时间不能为空，请提供有效的时间点', ''];
@@ -838,17 +976,17 @@ var agentSystem = (function (exports) {
         console.log(`[计划表] 创建成功: [${newItem.id}] ${newItem.time} - ${newItem.content}`);
         return [`计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`, ''];
     }
-    async function handleEditSchedule(args) {
+    async function handleEdit(args) {
         const { id, time, content } = parseArgs(args);
         if (!id || id.trim().length === 0) {
-            return ['编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID', ''];
+            return ['编辑计划项失败：计划项ID不能为空，请先用 action=query 查询获取有效ID', ''];
         }
         if ((!time || time.trim().length === 0) && (!content || content.trim().length === 0)) {
             return ['编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改', ''];
         }
         const index = scheduleCache.findIndex(item => item.id === id.trim());
         if (index === -1) {
-            return [`编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`, ''];
+            return [`编辑计划项失败：未找到ID为 ${id} 的计划项，请先用 action=query 查询确认正确的ID`, ''];
         }
         const snapshot = { ...scheduleCache[index] };
         if (time && time.trim().length > 0) {
@@ -868,7 +1006,7 @@ var agentSystem = (function (exports) {
         console.log(`[计划表] 编辑成功: [${id}] -> ${scheduleCache[index].time} - ${scheduleCache[index].content}`);
         return [`计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`, ''];
     }
-    async function handleDeleteSchedule(args) {
+    async function handleDelete(args) {
         const { id } = parseArgs(args);
         if (!id || id.trim().length === 0) {
             return ['删除计划项失败：计划项ID不能为空', ''];
@@ -886,20 +1024,19 @@ var agentSystem = (function (exports) {
         console.log(`[计划表] 删除成功: [${id}] ${deletedItem.time} - ${deletedItem.content}`);
         return [`计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`, ''];
     }
-    async function handleQuerySchedule(args) {
-        const { keyword } = parseArgs(args);
-        if (scheduleCache.length === 0) {
-            return ['当前计划表为空，没有任何计划项，可以放心创建新计划。', ''];
+    async function handleSchedule(args) {
+        const { action } = parseArgs(args);
+        switch (String(action || '').trim()) {
+            case 'create': return handleCreate(args);
+            case 'edit': return handleEdit(args);
+            case 'delete': return handleDelete(args);
+            case 'query': {
+                const { keywords, date, scope } = parseArgs(args);
+                return querySchedules(scheduleCache, keywords, date, scope);
+            }
+            default:
+                return [`计划表工具调用失败：未知的动作 "${action}"，action 必须是 create / edit / delete / query 之一`, ''];
         }
-        const sorted = [...scheduleCache].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-        const filtered = keyword && keyword.trim().length > 0
-            ? sorted.filter(item => item.content.includes(keyword.trim()) || item.time.includes(keyword.trim()))
-            : sorted;
-        if (filtered.length === 0) {
-            return [`未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`, ''];
-        }
-        return [`当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
-                filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n'), ''];
     }
     function checkDueItems() {
         if (scheduleCache.length === 0)
@@ -961,12 +1098,9 @@ var agentSystem = (function (exports) {
         return executed;
     }
     initSchedules();
-    GlobalConfig.LTPfunction.set('create_schedule', handleCreateSchedule);
-    GlobalConfig.LTPfunction.set('edit_schedule', handleEditSchedule);
-    GlobalConfig.LTPfunction.set('delete_schedule', handleDeleteSchedule);
-    GlobalConfig.LTPfunction.set('query_schedule', handleQuerySchedule);
+    GlobalConfig.LTPfunction.set('schedule', handleSchedule);
 
-    const VISION_READ_PATH = '/file/read-multimodal/';
+    const VISION_READ_PATH = '/file/miniature/';
     const FILE_READ_PATH = '/file/read/';
     function pathPartOf(source) {
         return String(source || '').split('?')[0].split('#')[0];
@@ -1057,7 +1191,7 @@ var agentSystem = (function (exports) {
                 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/flac': 'flac', 'audio/ogg': 'ogg',
             };
             const ext = extMap[contentType] || 'bin';
-            const name = `multimedia/cache/${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+            const name = `multimedia/${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
             const [, , error] = saveFile(name, true, bytes);
             if (error) {
                 console.warn('[对话缓存] 媒体落盘失败:', error);
@@ -1308,14 +1442,16 @@ var agentSystem = (function (exports) {
         return ok;
     }
     function pushAssistantImage(images, isSticker, sourcePaths) {
-        const ok = pushImage(images, isSticker);
-        (images || []).forEach((image, index) => {
+        const canonical = pushImage(images, isSticker);
+        const list = Array.isArray(canonical) && canonical.length > 0 ? canonical : images;
+        (list || []).forEach((image, index) => {
             if (!image)
                 return;
-            const hint = sourcePaths && sourcePaths[index] ? localPathToReadURL(sourcePaths[index]) : '';
-            const src = hint || saveBase64Media(image, 'image/jpeg', isSticker ? 'sticker' : 'image');
-            if (!src)
+            const src = toDisplaySource(image);
+            if (!src || src.startsWith('data:') || src.startsWith('blob:')) {
+                console.warn('[对话缓存] 图片不是 URL，已跳过近期记忆写入');
                 return;
+            }
             appendCachedMessage({
                 id: newId(),
                 role: 'assistant',
@@ -1327,7 +1463,7 @@ var agentSystem = (function (exports) {
             });
         });
         persistConversation();
-        return ok;
+        return list;
     }
 
     const screenshotTools = [
@@ -1410,8 +1546,9 @@ var agentSystem = (function (exports) {
         }
         const firstFrame = results[0];
         console.log(`截图处理成功: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
-        const base64List = results.map((r) => r.base64);
-        pushAssistantImage(base64List);
+        const urls = results.map((r, index) => persistScreenshot(r, index)).filter(Boolean);
+        if (urls.length > 0)
+            pushAssistantImage(urls);
         console.log(`图片已推送: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
         const sizeInfo = `${firstFrame.width}x${firstFrame.height}`;
         const frameInfo = results.length > 1 ? `（共${results.length}帧）` : '';
@@ -1419,6 +1556,30 @@ var agentSystem = (function (exports) {
         console.log(`返回响应: ${sizeInfo}`);
         console.log(`========== 截图工具调用结束(成功) ==========`);
         return [textResponse, firstFrame.base64];
+    }
+    function persistScreenshot(frame, index) {
+        try {
+            const base64 = String(frame.base64 || '');
+            const payload = base64.includes('base64,') ? base64.split('base64,')[1] : base64;
+            if (!payload)
+                return '';
+            const binary = atob(payload);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++)
+                bytes[i] = binary.charCodeAt(i);
+            const ext = frame.format === 'jpg' || frame.format === 'jpeg' ? 'jpg' : 'png';
+            const name = `multimedia/screenshot_${Date.now()}_${index}.${ext}`;
+            const [, path, error] = saveFile(name, true, bytes);
+            if (error) {
+                console.warn('[截图] 落盘失败:', error);
+                return '';
+            }
+            return localPathToReadURL(path);
+        }
+        catch (error) {
+            console.warn('[截图] 落盘异常:', error);
+            return '';
+        }
     }
     GlobalConfig.LTPfunction.set('screenshot', handleScreenshot);
 
@@ -1631,25 +1792,15 @@ var agentSystem = (function (exports) {
             console.log('[感知者] 命中动态图缓存，直接返回');
             return cachedPrompt;
         }
-        console.log('[感知者] 检测到动态图，开始编码为视频...');
-        if (useFrameSequence()) {
-            const [groups, framesError] = animatedImageToFrames(imageSource);
-            if (!groups || groups.length === 0 || framesError) {
-                console.error('[感知者] 动态图抽帧失败:', framesError);
-                throw new Error('动态图抽帧失败');
-            }
-            const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
-            console.log(`[感知者] 动态图抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
-            return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchFrames(groups), cacheKey);
+        console.log('[感知者] 检测到动态图，开始解码帧序列...');
+        const [groups, framesError] = animatedImageToFrames(imageSource);
+        if (!groups || groups.length === 0 || framesError) {
+            console.error('[感知者] 动态图抽帧失败:', framesError);
+            throw new Error('动态图抽帧失败');
         }
-        const [segments, mediaError] = animatedImageToVideo(imageSource);
-        if (!segments || segments.length === 0 || mediaError) {
-            console.error('[感知者] 动态图转视频失败:', mediaError);
-            throw new Error('动态图转视频失败');
-        }
-        const mediaUrls = segments.map(segment => `file://${segment.file}`);
-        console.log(`[感知者] 动态图转视频完成，共 ${mediaUrls.length} 个片段`);
-        return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchVideo(mediaUrls), cacheKey);
+        const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
+        console.log(`[感知者] 动态图抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
+        return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchFrames(groups), cacheKey);
     }
     async function replaceAnimatedImage(imageSource, handle) {
         const media = resolveAdmittedMedia(handle);
@@ -3258,8 +3409,12 @@ var agentSystem = (function (exports) {
             }
             if (!result || !result.base64)
                 return '超分失败：引擎返回空结果';
-            if (!pushAssistantImage([result.base64], false, [result.path]))
+            const url = localPathToReadURL(result.path);
+            const urls = url ? pushAssistantImage([url], false) : [];
+            if (urls.length === 0)
                 console.warn('[绘制者] 推送超分结果到前端失败');
+            else
+                host.rememberResult(urls[0]);
             return `超分成功。图片尺寸: ${result.width}x${result.height}，已推送给用户`;
         }
         catch (error) {
@@ -3358,8 +3513,12 @@ var agentSystem = (function (exports) {
             this.rememberResult(result.path);
             const stepsNote = imageParams.steps ? `，${imageParams.steps} 步` : '';
             console.log(`[绘制者] ${label}成功，尺寸: ${result.width}x${result.height}${stepsNote}${imageParams.superResolution ? '（含超分重建）' : ''}`);
-            if (!pushAssistantImage([result.base64], false, [result.path]))
+            const url = localPathToReadURL(result.path);
+            const urls = url ? pushAssistantImage([url], false) : [];
+            if (urls.length === 0)
                 console.warn(`[绘制者] 推送${label}结果到前端失败`);
+            else
+                this.rememberResult(urls[0]);
             return `${label}成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}${stepsNote}${imageParams.superResolution ? '，已附带超分辨率重建' : ''}`;
         }
         characterCatalog() {
@@ -3691,44 +3850,73 @@ var agentSystem = (function (exports) {
         }
     }
 
-    const FALLBACK_TOOL_PARAMETERS = {
-        type: 'object',
-        properties: {
-            tool: { type: 'string', description: '要使用的目标工具名（从工具描述清单中选择）' },
-            instruction: { type: 'string', description: '要对目标工具发出的自然语言指令' }
-        },
-        required: ['tool', 'instruction']
+    const CRYSTAL_TOOL_NAME = 'use_the_program';
+    const crystalTool = {
+        type: 'function',
+        function: {
+            name: CRYSTAL_TOOL_NAME,
+            description: [
+                '调用星月智能的扩展应用（如文件管理、文件编辑、窗口操作、网络搜索）。',
+                'tool 填应用名，本身即表示「打开这个应用」；instruction 填打开后要该应用完成的任务。',
+                '只打开应用时只填 tool；查询有哪些应用时只传 list=true，不要传 tool 或 instruction。'
+            ].join(''),
+            parameters: {
+                type: 'object',
+                properties: {
+                    list: {
+                        type: 'boolean',
+                        description: '仅查询可用应用清单，不执行任何操作。为 true 时不要传 tool 或 instruction（即使传了也会被忽略）'
+                    },
+                    tool: {
+                        type: 'string',
+                        description: '要使用的应用名，必须取自 list 清单（如 file_manager、file_editor）。只填本项表示打开该应用'
+                    },
+                    instruction: {
+                        type: 'string',
+                        description: '打开应用后交给它执行的具体任务，如：进入 D 盘根目录；查询北京今天的天气；把 README.md 移动到 docs 目录。只打开应用时省略；不要填「打开文件管理器」这类与 tool 重复的内容'
+                    }
+                },
+                required: []
+            }
+        }
     };
-    let crystalToolDefinition = null;
     function getCrystalRemoteTools() {
-        return crystalToolDefinition ? [crystalToolDefinition] : [];
+        return [crystalTool];
     }
-    function syncLTPXRemoteStatus() {
+    function queryCrystalToolchain() {
         try {
             const statusJSON = getLTPXRemoteStatus();
-            const tool = statusJSON ? JSON.parse(statusJSON).tool : undefined;
-            if (!tool || !tool.name)
-                return;
-            if (!GlobalConfig.LTPfunction.has(tool.name)) {
-                GlobalConfig.LTPfunction.set(tool.name, async (args) => {
-                    const argsJSON = typeof args === 'string' ? args : JSON.stringify(args || {});
-                    const text = await callLTPXRemoteTool(tool.name, argsJSON);
-                    return [text, ''];
-                });
-            }
-            crystalToolDefinition = {
-                type: 'function',
-                function: {
-                    name: tool.name,
-                    description: tool.description || '',
-                    parameters: tool.parameters || FALLBACK_TOOL_PARAMETERS
-                },
-            };
+            const status = statusJSON ? JSON.parse(statusJSON) : {};
+            const lines = String(status.tool?.description || '')
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.startsWith('- '));
+            if (!lines.length)
+                return '当前没有可用的扩展应用（琉璃侧工具链为空）。';
+            return `【可用应用清单（共 ${lines.length} 个，本次仅查询，尚未打开任何应用）】\n${lines.join('\n')}\n\n选定后再次调用本工具：只打开应用只填 tool；要让应用执行任务，再填 instruction 说明任务。`;
         }
         catch (e) {
-            console.error('LTPX 工具链同步失败:', e);
+            console.error('[LTPX] 应用清单查询失败:', e);
+            return '查询扩展应用清单失败，请稍后重试。';
         }
     }
+    GlobalConfig.LTPfunction.set(CRYSTAL_TOOL_NAME, async (args) => {
+        const parsed = typeof args === 'string' ? JSON.parse(args || '{}') : (args || {});
+        const tool = String(parsed.tool || '').trim();
+        const instruction = String(parsed.instruction || '').trim();
+        if (parsed.list) {
+            const note = (tool || instruction)
+                ? '\n\n提示：list=true 只查询清单，本次传入的 tool/instruction 已忽略；确定应用名后再单独调用（只打开应用只填 tool）。'
+                : '';
+            return [queryCrystalToolchain() + note, ''];
+        }
+        if (!tool) {
+            return ['调用失败：tool 不能为空。请先传 list=true 查询可用应用清单，再从中选择应用名填入 tool；只打开应用时无需 instruction。', ''];
+        }
+        const argsJSON = JSON.stringify({ tool, instruction });
+        const text = await callLTPXRemoteTool(CRYSTAL_TOOL_NAME, argsJSON);
+        return [text, ''];
+    });
 
     const STICKER_COLLECTION = 'stickers';
     let stickerCollectionReady = false;
@@ -3880,8 +4068,12 @@ var agentSystem = (function (exports) {
             const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
             if (error || !results || results.length === 0)
                 return null;
-            const image = results[RandomFloor(0, results.length - 1)].base64;
-            return image || null;
+            const item = results[RandomFloor(0, results.length - 1)];
+            if (item.url)
+                return item.url;
+            if (item.base64)
+                return saveBase64Media(item.base64, 'image/jpeg', 'sticker') || null;
+            return null;
         }
         catch (error) {
             console.error('[表情包] 检索失败:', error);
@@ -4050,7 +4242,7 @@ var agentSystem = (function (exports) {
         return KIND_LABELS[kind] ?? kind;
     }
     function stateNote(entry) {
-        return entry.state === 'active' ? '' : ' [本体已回收，仅存描述]';
+        return entry.state === 'active' ? '' : ` [${LOST_FILE_NOTICE}]`;
     }
     function entryLine(entry) {
         const desc = entry.summary ? `：${entry.summary}` : '';
@@ -4065,12 +4257,24 @@ var agentSystem = (function (exports) {
             return [`类型码无效：${kind}。可用类型码：D 文档 / I 图片 / V 视频 / A 音频 / T 表格`, ''];
         }
         const entries = listResources(kind, limit);
-        if (entries.length === 0) {
-            return ['资源目录为空：当前没有已收录的资源。用户可以上传图片、发送文本文件，或让我生成图片后再引用', ''];
+        const valid = [];
+        let purged = 0;
+        for (const entry of entries) {
+            if (entry.state === 'lost') {
+                if (deleteResource(entry.handle))
+                    purged++;
+                continue;
+            }
+            valid.push(entry);
+        }
+        if (valid.length === 0) {
+            const purgedNote = purged > 0 ? `（已自动清理 ${purged} 条源文件丢失的失效句柄）` : '';
+            return [`资源目录为空：当前没有已收录的资源${purgedNote}。用户可以上传图片、发送文本文件，或让我生成图片后再引用`, ''];
         }
         const stats = resourceStatistics();
-        const lines = entries.map(entryLine);
-        const head = `当前可用资源（共 ${entries.length} 条，按收录时间倒序，越靠前越新${stats ? `；目录总计 ${stats.total} 条 / ${formatBytes(stats.bytes)}` : ''}）：`;
+        const lines = valid.map(entryLine);
+        const purgeNote = purged > 0 ? `；已自动清理 ${purged} 条源文件丢失的失效句柄` : '';
+        const head = `当前可用资源（共 ${valid.length} 条，按收录时间倒序，越靠前越新${purgeNote}${stats ? `；目录总计 ${stats.total} 条 / ${formatBytes(stats.bytes)}` : ''}）：`;
         const tail = `\n${grammarCheatsheet()}。需要正文时用 read_resource 按句柄取回；文档可先用 outline_resource 看结构再定向读取。`;
         return [`${head}\n${lines.join('\n')}${tail}`, ''];
     }
@@ -4099,6 +4303,11 @@ var agentSystem = (function (exports) {
                     missing.push(normalized);
                     continue;
                 }
+                if (entry.state === 'lost') {
+                    deleteResource(normalized);
+                    blocks.push(`【${normalized}】\n${LOST_FILE_NOTICE}`);
+                    continue;
+                }
                 const desc = describeResource(normalized, question);
                 blocks.push(`【${normalized}｜${kindLabel(parsedHandle.kind)}｜${entry.title || entry.name}】\n${desc || '（暂无描述，且本体不可直接解读）'}`);
                 continue;
@@ -4109,8 +4318,8 @@ var agentSystem = (function (exports) {
                 continue;
             }
             if (result.lost) {
-                const sections = entry?.section_count ?? 0;
-                blocks.push(`【${normalized}｜${result.title}】\n正文已从内容仓库回收（句柄仍然有效）。${entry?.summary ? `目录摘要：${entry.summary}` : ''}${sections > 0 ? `\n可用 outline_resource 查看 ${sections} 节结构` : ''}`);
+                deleteResource(normalized);
+                blocks.push(`【${normalized}｜${result.title}】\n${LOST_FILE_NOTICE}`);
                 continue;
             }
             const rangeNote = result.line_start && result.line_end ? `｜第 ${result.line_start}-${result.line_end} 行` : '';
@@ -4119,11 +4328,11 @@ var agentSystem = (function (exports) {
             blocks.push(`【${normalized}${sectionNote}${rangeNote}｜共 ${result.total_lines || 0} 行】\n${result.content || ''}${truncated}`);
         }
         if (blocks.length === 0) {
-            return [`取回失败：${missing.join('、')} 均不存在或句柄非法。请先用 list_resources 确认可用句柄`, ''];
+            return [`取回失败：${missing.join('、')} —— ${HANDLE_INVALID_NOTICE}。请先用 list_resources 确认可用句柄`, ''];
         }
         let text = blocks.join('\n\n---\n\n');
         if (missing.length > 0)
-            text += `\n\n以下句柄无法取回：${missing.join('、')}（请用 list_resources 确认）`;
+            text += `\n\n以下句柄无法取回：${missing.join('、')}（${HANDLE_INVALID_NOTICE}）`;
         return [text, ''];
     }
     async function handleOutlineResource(args) {
@@ -4135,7 +4344,11 @@ var agentSystem = (function (exports) {
         const normalized = formatHandle(parsedHandle);
         const entry = getResourceEntry(normalized);
         if (!entry)
-            return [`资源不存在：${normalized}。请用 list_resources 确认可用句柄`, ''];
+            return [`【${normalized}】\n${HANDLE_INVALID_NOTICE}。请用 list_resources 确认可用句柄`, ''];
+        if (entry.state === 'lost') {
+            deleteResource(normalized);
+            return [`【${normalized}｜${entry.title || entry.name}】\n${LOST_FILE_NOTICE}`, ''];
+        }
         if (entry.kind !== 'D' && entry.kind !== 'T') {
             return [`${normalized} 是${kindLabel(entry.kind)}，没有段落大纲；图片/视频/音频请用 read_resource 取描述`, ''];
         }
@@ -4499,6 +4712,8 @@ var agentSystem = (function (exports) {
 
     const dialogueBaseTools = [...agentControlTools, ...imageRecallTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
     const MAX_TOOL_ROUNDS = 5;
+    const ACTION_CLAIM_PATTERN = /(已经|已|这就|马上|现在)[^，。！？\n]{0,12}(打开|启动|运行|调出|叫出|切换|准备好|准备完毕)/;
+    const ACTION_CLAIM_GUARD = '【系统校验】你刚才声称已经完成了打开/启动类操作，但本轮没有调用任何工具，用户看不到任何变化。请直接调用 use_the_program 执行（只打开应用只填 tool），或如实说明没有完成，不要只口头宣称。';
     function composeDialoguePrompt(appearances) {
         return fileView('prompts/dialogueRole.md')[0]
             .split('{lunar-appearance}').join(appearances.lunar)
@@ -4509,17 +4724,18 @@ var agentSystem = (function (exports) {
         roleTag = "对话者";
         async generateDialogue(cache) {
             this.toolRounds = 0;
+            this.actionClaimGuarded = false;
             GlobalConfig.lastFailure = '';
             await this.continueDialogue(cache);
         }
-        async continueDialogue(cache) {
+        async continueDialogue(cache, guardNote = null) {
             try {
                 await LiteImageFile();
                 GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
                 GlobalConfig.unreadContext = [];
                 this.formatHistoricalMessages();
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
-                const response = this.run(this.ragMessages, [...dialogueBaseTools, ...getCrystalRemoteTools()]);
+                const response = this.run(guardNote ? [...this.ragMessages, guardNote] : this.ragMessages, [...dialogueBaseTools, ...getCrystalRemoteTools()]);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     this.writeContext(response.body.choices?.[0]?.message);
@@ -4534,6 +4750,16 @@ var agentSystem = (function (exports) {
                         this.toolRounds++;
                         return await this.continueDialogue(cache);
                     }
+                }
+                if (!this.actionClaimGuarded
+                    && cache.toolCalls.length === 0
+                    && this.toolRounds === 0
+                    && ACTION_CLAIM_PATTERN.test(cache.descriptionContent)) {
+                    this.actionClaimGuarded = true;
+                    console.warn('[对话者] 未调用工具却宣称已完成动作，触发纠偏重答');
+                    cache.descriptionContent = '';
+                    cache.thinkingContent = '';
+                    return await this.continueDialogue(cache, { role: 'user', content: ACTION_CLAIM_GUARD });
                 }
                 this.writeContext(response.body.choices?.[0]?.message);
                 notifyAgentSuccess();
@@ -4570,6 +4796,7 @@ var agentSystem = (function (exports) {
         }
         IMAGE_WINDOW = IMAGE_WINDOW_SIZE;
         toolRounds = 0;
+        actionClaimGuarded = false;
         formatHistoricalMessages() {
             if (this.messages.length === 0)
                 return;
@@ -5261,7 +5488,6 @@ var agentSystem = (function (exports) {
                 return;
             }
             updatePreviousMemories();
-            syncLTPXRemoteStatus();
             const feedback = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext }).return;
             if (feedback && Array.isArray(feedback.messages))
                 GlobalConfig.unreadContext = feedback.messages;

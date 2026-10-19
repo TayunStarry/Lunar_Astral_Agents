@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "核心人格 (Core Personality)",
-    "version": "2026.292.0740",
+    "version": "2026.293.0019",
     "x-service": "CorePersonality"
   },
   "servers": [
@@ -336,8 +336,8 @@
     },
     "/file/delete/": {
       "delete": {
-        "summary": "文件删除",
-        "description": "文件删除",
+        "summary": "文件删除（同步移除对应句柄）",
+        "description": "文件删除（同步移除对应句柄）",
         "operationId": "file.DeleteHandler",
         "x-handler": "file.DeleteHandler",
         "responses": {
@@ -375,8 +375,8 @@
     },
     "/file/list/": {
       "post": {
-        "summary": "文件列表",
-        "description": "文件列表",
+        "summary": "文件列表（内容仓库内文件返回句柄 / 类型 / 内容哈希）",
+        "description": "文件列表（内容仓库内文件返回句柄 / 类型 / 内容哈希）",
         "operationId": "file.FileListHandler",
         "x-handler": "file.FileListHandler",
         "responses": {
@@ -386,10 +386,23 @@
         }
       }
     },
+    "/file/miniature/": {
+      "get": {
+        "summary": "视觉读取端点（仅图片：返回缩放到约束尺寸并叠印句柄标签的副本，动图原样直通）",
+        "description": "视觉读取端点（仅图片：返回缩放到约束尺寸并叠印句柄标签的副本，动图原样直通）",
+        "operationId": "VisionReadHandler",
+        "x-handler": "VisionReadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
     "/file/move": {
       "post": {
-        "summary": "文件移动操作（含冲突处理）",
-        "description": "文件移动操作（含冲突处理）",
+        "summary": "文件移动操作（含冲突处理，同步改写句柄路径）",
+        "description": "文件移动操作（含冲突处理，同步改写句柄路径）",
         "operationId": "file.MoveHandler",
         "x-handler": "file.MoveHandler",
         "responses": {
@@ -464,23 +477,10 @@
         }
       }
     },
-    "/file/read-multimodal/": {
-      "get": {
-        "summary": "视觉读取端点（仅图片：返回缩放到约束尺寸并叠印句柄标签的副本，动图原样直通）",
-        "description": "视觉读取端点（仅图片：返回缩放到约束尺寸并叠印句柄标签的副本，动图原样直通）",
-        "operationId": "VisionReadHandler",
-        "x-handler": "VisionReadHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/file/read/": {
       "get": {
-        "summary": "文件读取操作",
-        "description": "文件读取操作",
+        "summary": "文件读取（内容仓库内路径自动续期，失效句柄同步清理）",
+        "description": "文件读取（内容仓库内路径自动续期，失效句柄同步清理）",
         "operationId": "file.ReadHandler",
         "x-handler": "file.ReadHandler",
         "responses": {
@@ -492,8 +492,8 @@
     },
     "/file/resource/admit": {
       "post": {
-        "summary": "文档入库/刷新（按原文件名稳定复用句柄）",
-        "description": "文档入库/刷新（按原文件名稳定复用句柄）",
+        "summary": "文本文件句柄入库/刷新（统一句柄体系：按原文件名稳定复用）",
+        "description": "文本文件句柄入库/刷新（统一句柄体系：按原文件名稳定复用）",
         "operationId": "file.ResourceAdmitHandler",
         "x-handler": "file.ResourceAdmitHandler",
         "responses": {
@@ -505,8 +505,8 @@
     },
     "/file/resource/resolve": {
       "get": {
-        "summary": "按句柄解析资源目录条目（前端定位文档文件）",
-        "description": "按句柄解析资源目录条目（前端定位文档文件）",
+        "summary": "按句柄解析资源目录条目（统一句柄体系：不存在返回「句柄无效,文件不存在」）",
+        "description": "按句柄解析资源目录条目（统一句柄体系：不存在返回「句柄无效,文件不存在」）",
         "operationId": "file.ResourceResolveHandler",
         "x-handler": "file.ResourceResolveHandler",
         "responses": {
@@ -518,8 +518,8 @@
     },
     "/file/write": {
       "post": {
-        "summary": "文件保存操作",
-        "description": "文件保存操作",
+        "summary": "文件保存（自动登记句柄；内容哈希全局唯一，生成目录优先于 audios/multimedia 根目录；X-Store-Exact 仅影响新内容落点）",
+        "description": "文件保存（自动登记句柄；内容哈希全局唯一，生成目录优先于 audios/multimedia 根目录；X-Store-Exact 仅影响新内容落点）",
         "operationId": "file.SaveHandler",
         "x-handler": "file.SaveHandler",
         "responses": {

@@ -149,10 +149,11 @@ const searchToolDescription = "网络搜索：用浏览器检索网页、从上�
 
 // buildUseTheProgram 将扫描到的全部 AtoA 工具收敛为单一 use_the_program 聚合工具。
 // 其 description 内嵌「工具名：功能简述」清单，供模型在调用时从清单中挑取正确的 tool 参数；
-// 参数 schema 统一为 {tool, instruction} 两个必填项。
+// 参数语义：tool = 要使用的应用名（只填 tool 即打开该应用），instruction = 打开后交给
+// 该应用执行的任务（可省略）；仅查询清单时传 list=true，此时不需要 tool/instruction。
 func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
 	var b strings.Builder
-	b.WriteString("使用本工具可以调用以下应用程序（tool 参数指定要使用的目标工具，instruction 传入对该工具的自然语言指令，工具会自动识别意图并执行）：")
+	b.WriteString("调用以下扩展应用（tool 填应用名，instruction 填打开后要该应用完成的任务）：")
 	for _, d := range defs {
 		b.WriteString("\n- ")
 		b.WriteString(d.Name)
@@ -164,7 +165,9 @@ func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
 	// 已有工具清单时不追加说明；无可用工具则明确提示
 	count := len(defs)
 	if count > 0 {
-		b.WriteString("\n\n请根据用户需求从上述清单中选择合适的 tool，并填入对应的自然语言 instruction。")
+		b.WriteString("\n\n用法：tool 只能取自上方清单；只打开应用只填 tool，instruction 省略；")
+		b.WriteString("要让应用执行任务再填 instruction（写清要它做什么，不要用 instruction 重复「打开某应用」）。")
+		b.WriteString("查询清单用 list=true，此时不要传 tool/instruction。")
 	}
 	return LTPXRemoteToolDef{
 		Name:        integratedToolsName,
@@ -172,16 +175,20 @@ func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"list": map[string]any{
+					"type":        "boolean",
+					"description": "仅查询可用应用清单，不执行任何操作；为 true 时不要传 tool 或 instruction",
+				},
 				"tool": map[string]any{
 					"type":        "string",
-					"description": "要使用的目标工具名（从描述清单中选择，如 weather_news_query 或 file_manager）",
+					"description": "要使用的应用名（从清单中选择，如 file_manager、web_search）；只填本项表示打开该应用",
 				},
 				"instruction": map[string]any{
 					"type":        "string",
-					"description": "要对目标工具发出的自然语言指令，例如：查询北京今天的天气；把 README.md 移动到 docs 目录",
+					"description": "打开应用后交给它执行的任务，例如：进入 D 盘根目录；查询北京今天的天气。只打开应用时省略",
 				},
 			},
-			"required": []string{"tool", "instruction"},
+			"required": []string{"tool"},
 		},
 	}
 }
@@ -268,6 +275,19 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// instruction 语义：打开应用后要它完成的任务；省略表示只打开应用。
+	// 内置智能体本身就是「执行任务」而非可打开的应用，缺 instruction 时无法开工，
+	// 直接给出可操作的错误，避免空指令跑到智能体内部才失败。
+	instruction, _ := req.Arguments["instruction"].(string)
+	instruction = strings.TrimSpace(instruction)
+	if (targetTool == operateToolName || targetTool == searchToolName) && instruction == "" {
+		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{
+			Success: false,
+			Error:   "工具 " + targetTool + " 需要 instruction 描述要执行的任务（如：把窗口切到文件管理器），不能只传 tool。",
+		})
+		return
+	}
+
 	// 单次扫描同时取得工具链与路由表：避免"先无条件广播、再回头扫描才发现无此包"
 	pkgMap := map[string]string{}
 	{
@@ -287,7 +307,6 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 声明 Auto-LTP <窗口操作>智能体：进程内调用多角色编排智能体（goroutine 异步执行）
 	if targetTool == operateToolName {
-		instruction, _ := req.Arguments["instruction"].(string)
 		LoggerGeneral.Info("CrystalAstral", "月华调用内置 Auto-LTP 智能体（工具=%s, request_id=%s）：%s", targetTool, requestID, instruction)
 		go func() {
 			// 处理器 panic 不得带崩宿主进程（进程内直调失去了 net/http 的 per-request recover）
@@ -320,7 +339,6 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 声明 Web-LTP <网络搜索>智能体：进程内独立执行搜索流水线（goroutine 异步执行）
 	if targetTool == searchToolName {
-		instruction, _ := req.Arguments["instruction"].(string)
 		LoggerGeneral.Info("CrystalAstral", "月华调用内置 Web-LTP 网络搜索（工具=%s, request_id=%s）：%s", targetTool, requestID, instruction)
 		go func() {
 			defer func() {

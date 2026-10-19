@@ -3,13 +3,13 @@ package server
 import (
 	"CorePersonality/crystal"
 	KokoroTTS "CorePersonality/engine/kokoro_tts"
+	media "CorePersonality/engine/media/httpapi"
 	"CorePersonality/engine/model/llama"
+	image "CorePersonality/engine/multimodal/httpapi"
 	OmniVoiceTTS "CorePersonality/engine/omnivoice_tts"
+	file "CorePersonality/engine/persistence/httpapi"
 	ttsrouter "CorePersonality/engine/tts_router"
 	"CorePersonality/lunar"
-	file "LunarSubsystem/FileManager/server"
-	media "LunarSubsystem/MediaTools/server"
-	image "LunarSubsystem/MultimodalAnalysis/server"
 	"net/http"
 )
 
@@ -31,18 +31,19 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/load/application", Handler: crystal.LoadApplicationHandler, Method: "POST", Description: "加载应用"},
 
 	// ==================== 文件操作 ====================
-	{Path: "/file/write", Handler: file.SaveHandler, Method: "POST", Description: "文件保存操作"},
-	{Path: "/file/read/", Handler: file.ReadHandler, Method: "GET", Description: "文件读取操作"},
-	{Path: "/file/read-multimodal/", Handler: VisionReadHandler, Method: "GET", Description: "视觉读取端点（仅图片：返回缩放到约束尺寸并叠印句柄标签的副本，动图原样直通）"},
-	{Path: "/file/delete/", Handler: file.DeleteHandler, Method: "DELETE", Description: "文件删除"},
-	{Path: "/file/list/", Handler: file.FileListHandler, Method: "POST", Description: "文件列表"},
+	{Path: "/file/write", Handler: file.SaveHandler, Method: "POST", Description: "文件保存（自动登记句柄；内容哈希全局唯一，生成目录优先于 audios/multimedia 根目录；X-Store-Exact 仅影响新内容落点）"},
+	{Path: "/file/read/", Handler: file.ReadHandler, Method: "GET", Description: "文件读取（内容仓库内路径自动续期，失效句柄同步清理）"},
+	{Path: "/file/miniature/", Handler: VisionReadHandler, Method: "GET", Description: "视觉读取端点（仅图片：返回缩放到约束尺寸并叠印句柄标签的副本，动图原样直通）"},
+	{Path: "/file/delete/", Handler: file.DeleteHandler, Method: "DELETE", Description: "文件删除（同步移除对应句柄）"},
+	{Path: "/file/list/", Handler: file.FileListHandler, Method: "POST", Description: "文件列表（内容仓库内文件返回句柄 / 类型 / 内容哈希）"},
+	{Path: "/file/move", Handler: file.MoveHandler, Method: "POST", Description: "文件移动操作（含冲突处理，同步改写句柄路径）"},
+	{Path: "/file/resource/admit", Handler: file.ResourceAdmitHandler, Method: "POST", Description: "文本文件句柄入库/刷新（统一句柄体系：按原文件名稳定复用）"},
+	{Path: "/file/resource/resolve", Handler: file.ResourceResolveHandler, Method: "GET", Description: "按句柄解析资源目录条目（统一句柄体系：不存在返回「句柄无效,文件不存在」）"},
+
 	{Path: "/file/download/", Handler: file.DownloadHandler, Method: "GET", Description: "文件下载"},
 	{Path: "/file/preview", Handler: file.PreviewHandler, Method: "GET", Description: "全局文件预览（图片/视频/文本）"},
-	{Path: "/file/move", Handler: file.MoveHandler, Method: "POST", Description: "文件移动操作（含冲突处理）"},
 	{Path: "/file/organize", Handler: file.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
 	{Path: "/file/hash-rename", Handler: file.HashRenameHandler, Method: "POST", Description: "哈希命名（MD5前16位）"},
-	{Path: "/file/resource/admit", Handler: file.ResourceAdmitHandler, Method: "POST", Description: "文档入库/刷新（按原文件名稳定复用句柄）"},
-	{Path: "/file/resource/resolve", Handler: file.ResourceResolveHandler, Method: "GET", Description: "按句柄解析资源目录条目（前端定位文档文件）"},
 
 	// ==================== 文件归档（ZIP） ====================
 	{Path: "/file/archive", Handler: file.ArchiveHandler, Method: "POST", Description: "文件归档"},

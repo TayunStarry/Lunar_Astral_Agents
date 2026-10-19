@@ -34,7 +34,7 @@ func BridgeStructuredMessage(response ws.WSResponse) {
 			go HandleAgentResponse(msgType, content, auto)
 		}
 	case "image":
-		// 图片消息：提取 base64 编码的图片列表并转发到QQ
+		// 图片消息：提取图片 URL 列表并转发到 QQ（本地服务路径会补全为本机 HTTP 地址）
 		dataBytes, err := json.Marshal(response.Data)
 		if err != nil {
 			LoggerGeneral.SubError("LunarCore", "Napcat", "桥接序列化图片数据失败: %v", err)

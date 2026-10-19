@@ -79,7 +79,10 @@ function handleWebSocketMessage(msg) {
         const images = data.images || [];
         const isSticker = !!data.sticker;
         images.forEach(img => {
-            const src = (img.startsWith('data:') || img.startsWith('http')) ? img : ('data:image/jpeg;base64,' + img);
+            // 图片统一以 URL 传递：/file/read/... 与 http(s):// 直接使用；data: 仅兼容历史消息
+            const src = (img.startsWith('data:') || img.startsWith('http') || img.startsWith('/'))
+                ? img
+                : ('/file/read/' + img.replace(/^\.?\//, ''));
             addMessage({ id: generateId(), role: 'assistant', categories: ['image'], content: '', imageSrc: src, imageLabel: isSticker ? '表情包' : '图片', timestamp: Date.now() });
         });
         return;

@@ -1,8 +1,9 @@
 package lunarloop
 
 import (
+	module "CorePersonality/engine/persistence"
 	"CorePersonality/prompts"
-	"LunarSubsystem/FileManager/module"
+	"LunarSubsystem/GeneralConfig"
 	"bytes"
 	"encoding/base64"
 	"fmt"
@@ -199,13 +200,20 @@ func (class *Runtime) saveDebugFile(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("content必须是字符串")})
 	}
 
-	// 确保目录存在
+	// LocalDir 内的路径统一经 persistence 写入（core_personality 内文件操作的唯一实现）
+	if rel, relErr := filepath.Rel(filepath.Clean(*GeneralConfig.LocalDir), filepath.Clean(filePath)); relErr == nil &&
+		rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		if _, err := module.SaveFileEx(filepath.ToSlash(rel), module.SaveOptions{Overwrite: true}, strings.NewReader(content)); err != nil {
+			return class.runtime.ToValue([]any{"", fmt.Errorf("写入文件失败: %w", err)})
+		}
+		return class.runtime.ToValue([]any{filePath, nil})
+	}
+
+	// LocalDir 之外的调试路径（如系统临时目录）：直接写入
 	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("创建目录失败: %w", err)})
 	}
-
-	// 覆写写入文件
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("写入文件失败: %w", err)})
 	}

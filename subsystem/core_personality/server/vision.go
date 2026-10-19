@@ -2,7 +2,7 @@ package server
 
 // vision.go 视觉读取端点：思维链中静态图的统一消费入口
 //
-// GET /file/read-multimodal/<相对 LocalDir 路径>?tag=<句柄>&size=<边长>
+// GET /file/miniature/<相对 LocalDir 路径>?tag=<句柄>&size=<边长>
 //
 // 行为：
 //   - 仅允许读取 multimedia/ 下的图片类文件（其他一律拒绝）
@@ -25,7 +25,7 @@ import (
 
 // VisionReadHandler 视觉读取端点处理函数
 func VisionReadHandler(w http.ResponseWriter, r *http.Request) {
-	rel := strings.TrimPrefix(r.URL.Path, "/file/read-multimodal/")
+	rel := strings.TrimPrefix(r.URL.Path, "/file/miniature/")
 	if rel == "" {
 		http.Error(w, "未指定文件路径", http.StatusBadRequest)
 		return

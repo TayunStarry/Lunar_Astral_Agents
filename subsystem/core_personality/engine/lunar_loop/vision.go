@@ -3,7 +3,7 @@ package lunarloop
 // vision.go 视觉读取管线：思维链中静态图的统一消费形态
 //
 // 无论来源是 URL 还是 data URI，静态图入库后统一以「约束尺寸 + 句柄叠印」的副本流转：
-//   - url 形态：/file/read-multimodal/<blob路径>?tag=<句柄>（服务端按需变换并缓存副本）
+//   - url 形态：/file/miniature/<blob路径>?tag=<句柄>（服务端按需变换并缓存副本）
 //   - base64 形态：visionRead 经同一 VisionCopy 管线直出 data URI（供云端模型使用）
 //
 // 原图 blob 永远不被修改，也不进入模型上下文：扩散引擎的 initImg、超分等 Go 侧管线
@@ -24,9 +24,9 @@ import (
 	"strconv"
 	"strings"
 
-	filemodule "LunarSubsystem/FileManager/module"
+	mmmodule "CorePersonality/engine/multimodal"
+	filemodule "CorePersonality/engine/persistence"
 	"LunarSubsystem/GeneralConfig"
-	mmmodule "LunarSubsystem/MultimodalAnalysis/module"
 
 	"github.com/dop251/goja"
 )
@@ -132,7 +132,7 @@ func VisionCopy(relPath, tag string, side int) (data []byte, mime string, width,
 
 // visionRead 适配TypeScript调用：按视觉读取管线生成副本并直接返回 data URI（base64 形态专用）
 //
-// 思维链里图片字节**唯一**的合法来源（url 形态走 /file/read-multimodal/ 端点，
+// 思维链里图片字节**唯一**的合法来源（url 形态走 /file/miniature/ 端点，
 // base64 形态走这里）。resizeImage 已从 goja 卸载：模型侧不提供任何"自己缩放"的能力。
 //
 // 入参: (relPath, tag, side?)  返回值: [dataURI, error, width, height]

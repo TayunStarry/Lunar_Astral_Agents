@@ -6,6 +6,7 @@ import type { CreateCharacterParams, ImageTagParams, SchemeSwitchParams } from '
 import { LIST_LIMIT_MAX } from './frame';
 import type { PainterHost } from './host';
 import { pushAssistantImage } from '../../io/conversation';
+import { localPathToReadURL } from '../../io/conversation/codec';
 
 /** 创建或更新自定义角色（写入 SQLite 角色库，供立绘与合照共用） */
 export function handleCreateCharacter(host: PainterHost, args: CreateCharacterParams): string {
@@ -89,7 +90,11 @@ export function handleUpscaleImage(host: PainterHost, args: ImageTagParams): str
 			return `超分失败: ${error}`;
 		}
 		if (!result || !result.base64) return '超分失败：引擎返回空结果';
-		if (!pushAssistantImage([result.base64], false, [result.path])) console.warn('[绘制者] 推送超分结果到前端失败');
+		// 超分结果同样以 URL 传递（与绘图输出保持同一种数据形态）
+		const url = localPathToReadURL(result.path);
+		const urls = url ? pushAssistantImage([url], false) : [];
+		if (urls.length === 0) console.warn('[绘制者] 推送超分结果到前端失败');
+		else host.rememberResult(urls[0]);
 		return `超分成功。图片尺寸: ${result.width}x${result.height}，已推送给用户`;
 	}
 	catch (error) {

@@ -69,7 +69,7 @@ var (
 	// frames=本地抽帧为图片序列帧（base64）后以多个 image_url 提交，供不支持 file:// 的架构使用
 	VideoInputMode = flag.String("video-input", "file", "视频解读输入模式: file(file://) / frames(图片序列帧)")
 	// ImageInputMode 静态图进入思维链的统一形态：
-	// url=视觉读取端点 URL（/file/read-multimodal/，服务端按需缩放并叠印句柄标签，默认）；
+	// url=视觉读取端点 URL（/file/miniature/，服务端按需缩放并叠印句柄标签，默认）；
 	// base64=经同一视觉读取管线直出 data URI（供无法回取本机 URL 的云端模型使用）。
 	// 两种形态都是 ≤ vision_max_side 的副本，原图永远不进入思维链（见 docs/adr/0008）。
 	ImageInputMode = flag.String("image-input", "url", "静态图思维链形态: url(视觉读取端点) / base64(视觉读取管线直出)")

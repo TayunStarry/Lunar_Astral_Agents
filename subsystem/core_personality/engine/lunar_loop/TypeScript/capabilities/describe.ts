@@ -1,7 +1,7 @@
 import { ModelBuilder } from '../agent/builder';
 import { sanitizeImageDesc, visionReference } from './image-tag';
 import { formatHandle, parseHandle } from './handle';
-import { getResourceEntry, setResourceSummary } from './resource';
+import { deleteResource, getResourceEntry, setResourceSummary } from './resource';
 
 // ===== 资源描述能力（图片视觉描述 + 视频/音频理解结论） =====
 //
@@ -100,7 +100,11 @@ export function describeResource(handle: string, question = ''): string {
  */
 function resourceSource(handle: string): string {
 	const entry = getResourceEntry(handle);
-	if (!entry || entry.state !== 'active' || !entry.blob_path) return '';
+	if (!entry || entry.state !== 'active' || !entry.blob_path) {
+		// 本体已丢失/损坏：顺带移除失效句柄，不在目录中滞留
+		if (entry?.state === 'lost') deleteResource(handle);
+		return '';
+	}
 	const [, error] = visionRead(entry.blob_path, handle);
 	if (error) {
 		console.error('[资源描述] 视觉副本生成失败，降级为目录摘要:', error?.message ?? String(error));

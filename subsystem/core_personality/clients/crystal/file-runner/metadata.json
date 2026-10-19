@@ -8,8 +8,8 @@
 	],
 	"tools": [
 		{
-			"name": "file_runner",
-			"description": "执行文件编辑与运行JavaScript/HTML代码"
+			"name": "file_editor",
+			"description": "编辑文档库中的文本文件，并可运行 JavaScript/HTML 代码"
 		}
 	],
 	"background_retention": true

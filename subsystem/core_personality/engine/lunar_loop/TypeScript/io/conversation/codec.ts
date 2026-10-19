@@ -1,7 +1,7 @@
 // ===== 对话缓存编解码：图片地址 / base64 媒体落盘 =====
 
 /** 视觉读取端点（思维链唯一允许的静态图消费入口） */
-const VISION_READ_PATH = '/file/read-multimodal/';
+const VISION_READ_PATH = '/file/miniature/';
 /** 前端可查看原图的读取端点 */
 const FILE_READ_PATH = '/file/read/';
 
@@ -77,7 +77,12 @@ function guessImageMime(base64: string): string {
 	return 'image/png';
 }
 
-/** Base64（可带 data URI 前缀）写入 multimedia/cache，返回 /file/read/ 地址 */
+/**
+ * Base64（可带 data URI 前缀）写入 multimedia/ 内容仓库，返回 /file/read/ 地址
+ *
+ * 不再使用 multimedia/cache 兼容目录：图片与语音与其它媒体共用内容寻址树，
+ * 由 Go 侧按内容哈希去重并登记句柄。
+ */
 export function saveBase64Media(base64: string, mime: string, kind: string): string {
 	const raw = String(base64 || '');
 	if (!raw) return '';
@@ -93,7 +98,7 @@ export function saveBase64Media(base64: string, mime: string, kind: string): str
 			'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/flac': 'flac', 'audio/ogg': 'ogg',
 		};
 		const ext = extMap[contentType] || 'bin';
-		const name = `multimedia/cache/${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+		const name = `multimedia/${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
 		const [, , error] = saveFile(name, true, bytes);
 		if (error) {
 			console.warn('[对话缓存] 媒体落盘失败:', error);

@@ -1,5 +1,5 @@
 // ============================================================
-//  计划表 — 入口聚合（初始化 / 工具处理 / 到期检查），保持公共 API 不变
+//  计划表 — 入口聚合（初始化 / 综合工具分发 / 到期检查），保持公共 API 不变
 // ============================================================
 
 import { GlobalConfig } from '../../config/global';
@@ -7,6 +7,7 @@ import type { ScheduleItem } from './defs';
 import { scheduleTools, PRESET_DAILY_TASKS, SCHEDULE_OVERDUE_ABANDON_MS } from './defs';
 import { normalizeTime, dailyTaskTime, formatDate } from './time';
 import { loadSchedulesFromDisk, saveSchedulesToDisk } from './store';
+import { querySchedules } from './query';
 
 // 重导出定义模块（保持原公共 API：SCHEDULE_TRIGGER_PREFIX / scheduleTools）
 export { SCHEDULE_TRIGGER_PREFIX, scheduleTools } from './defs';
@@ -85,8 +86,8 @@ function parseArgs(args?: Record<string, any> | string): Record<string, any> {
 
 // ==== 工具处理函数 ====
 
-/** 处理创建计划项工具 */
-async function handleCreateSchedule(args?: Record<string, any> | string): Promise<string[]> {
+/** 处理创建动作 */
+async function handleCreate(args?: Record<string, any> | string): Promise<string[]> {
 	const { time, content } = parseArgs(args);
 	if (!time || time.trim().length === 0) {
 		return ['创建计划项失败：执行时间不能为空，请提供有效的时间点', ''];
@@ -118,11 +119,11 @@ async function handleCreateSchedule(args?: Record<string, any> | string): Promis
 	return [`计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`, ''];
 }
 
-/** 处理编辑计划项工具 */
-async function handleEditSchedule(args?: Record<string, any> | string): Promise<string[]> {
+/** 处理编辑动作 */
+async function handleEdit(args?: Record<string, any> | string): Promise<string[]> {
 	const { id, time, content } = parseArgs(args);
 	if (!id || id.trim().length === 0) {
-		return ['编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID', ''];
+		return ['编辑计划项失败：计划项ID不能为空，请先用 action=query 查询获取有效ID', ''];
 	}
 	if ((!time || time.trim().length === 0) && (!content || content.trim().length === 0)) {
 		return ['编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改', ''];
@@ -130,7 +131,7 @@ async function handleEditSchedule(args?: Record<string, any> | string): Promise<
 
 	const index = scheduleCache.findIndex(item => item.id === id.trim());
 	if (index === -1) {
-		return [`编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`, ''];
+		return [`编辑计划项失败：未找到ID为 ${id} 的计划项，请先用 action=query 查询确认正确的ID`, ''];
 	}
 
 	/** 修改前的快照（用于回滚） */
@@ -157,8 +158,8 @@ async function handleEditSchedule(args?: Record<string, any> | string): Promise<
 	return [`计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`, ''];
 }
 
-/** 处理删除计划项工具 */
-async function handleDeleteSchedule(args?: Record<string, any> | string): Promise<string[]> {
+/** 处理删除动作 */
+async function handleDelete(args?: Record<string, any> | string): Promise<string[]> {
 	const { id } = parseArgs(args);
 	if (!id || id.trim().length === 0) {
 		return ['删除计划项失败：计划项ID不能为空', ''];
@@ -183,28 +184,24 @@ async function handleDeleteSchedule(args?: Record<string, any> | string): Promis
 	return [`计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`, ''];
 }
 
-/** 处理查询计划项工具 */
-async function handleQuerySchedule(args?: Record<string, any> | string): Promise<string[]> {
-	const { keyword } = parseArgs(args);
-
-	if (scheduleCache.length === 0) {
-		return ['当前计划表为空，没有任何计划项，可以放心创建新计划。', ''];
+/**
+ * 计划表综合工具入口：按 action 分发到创建 / 编辑 / 删除 / 查询
+ *
+ * 查询走独立查询引擎（keywords 数组 × date/scope 时间范围，按相关度排序，见 query.ts）。
+ */
+async function handleSchedule(args?: Record<string, any> | string): Promise<string[]> {
+	const { action } = parseArgs(args);
+	switch (String(action || '').trim()) {
+		case 'create': return handleCreate(args);
+		case 'edit': return handleEdit(args);
+		case 'delete': return handleDelete(args);
+		case 'query': {
+			const { keywords, date, scope } = parseArgs(args);
+			return querySchedules(scheduleCache, keywords, date, scope);
+		}
+		default:
+			return [`计划表工具调用失败：未知的动作 "${action}"，action 必须是 create / edit / delete / query 之一`, ''];
 	}
-
-	/** 按时间升序排序 */
-	const sorted = [...scheduleCache].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-
-	/** 筛选后的计划项 */
-	const filtered = keyword && keyword.trim().length > 0
-		? sorted.filter(item => item.content.includes(keyword.trim()) || item.time.includes(keyword.trim()))
-		: sorted;
-
-	if (filtered.length === 0) {
-		return [`未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`, ''];
-	}
-
-	return [`当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
-		filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n'), ''];
 }
 
 // ==== 定时检查 ====
@@ -299,8 +296,5 @@ export function checkDueItems(): ScheduleItem[] {
 // 初始化计划表缓存
 initSchedules();
 
-// 注册计划表工具到 LTPfunction 列表（工具定义由对话者聚合，不再入公共数组）
-GlobalConfig.LTPfunction.set('create_schedule', handleCreateSchedule);
-GlobalConfig.LTPfunction.set('edit_schedule', handleEditSchedule);
-GlobalConfig.LTPfunction.set('delete_schedule', handleDeleteSchedule);
-GlobalConfig.LTPfunction.set('query_schedule', handleQuerySchedule);
+// 注册计划表综合工具到 LTPfunction 列表（工具定义由对话者聚合，不再入公共数组）
+GlobalConfig.LTPfunction.set('schedule', handleSchedule);

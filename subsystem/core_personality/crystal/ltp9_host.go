@@ -25,7 +25,7 @@ import (
 	"CorePersonality/transport/ws"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	Multimodal "LunarSubsystem/MultimodalAnalysis/module"
+	Multimodal "CorePersonality/engine/multimodal"
 )
 
 // BridgeLTP9 初始化 LTP9-Flash 引擎并注入宿主通道（幂等）。

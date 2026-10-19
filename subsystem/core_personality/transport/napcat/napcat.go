@@ -4,6 +4,7 @@ package napcat
 // 接口文档: https://napcat.apifox.cn/5430207m0
 
 import (
+	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/base64"
@@ -12,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -182,23 +184,53 @@ func atSegment(qq string) map[string]any {
 	}
 }
 
-// imageSegments 将图片列表转为消息段：http 链接直接引用，base64 数据剥掉 data URI 前缀
+// imageSegments 将图片列表转为消息段
+//
+// 输入统一为 URL（相对服务路径 /file/read/... 或 http(s):// 绝对地址）：
+//   - 绝对 http(s) URL 原样交给 NapCat；
+//   - 相对服务路径补全为本机 HTTP 地址（NapCat 与宿主同机部署，可直接访问）；
+//   - 历史 base64 / data URI 仅作兜底，不再作为常规输出形态。
 func imageSegments(images []string) []map[string]any {
 	segments := make([]map[string]any, 0, len(images))
 	for _, img := range images {
-		if strings.HasPrefix(img, "http://") || strings.HasPrefix(img, "https://") {
-			segments = append(segments, map[string]any{
-				"type": "image",
-				"data": map[string]string{"file": img},
-			})
-			continue
-		}
 		segments = append(segments, map[string]any{
 			"type": "image",
-			"data": map[string]string{"file": "base64://" + normalizeBase64Image(img)},
+			"data": map[string]string{"file": outboundImageSource(img)},
 		})
 	}
 	return segments
+}
+
+// outboundImageSource 把内部图片地址归一为 NapCat 可消费的 URL
+func outboundImageSource(img string) string {
+	raw := strings.TrimSpace(img)
+	if raw == "" {
+		return raw
+	}
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") || strings.HasPrefix(raw, "base64://") {
+		return raw
+	}
+	// 历史形态：data URI 仍按 base64 发送（新链路不再产生这种输出）
+	if strings.HasPrefix(raw, "data:") {
+		return "base64://" + normalizeBase64Image(raw)
+	}
+	base := fmt.Sprintf("http://127.0.0.1:%d", *GeneralConfig.BasicPort)
+	if strings.HasPrefix(raw, "/") {
+		return base + raw
+	}
+	rel := strings.TrimPrefix(filepath.ToSlash(raw), "./")
+	// 本地绝对路径：位于 LocalDir 内时转成服务路径；否则原样交给 NapCat（它支持本地文件）
+	if filepath.IsAbs(raw) {
+		localDir := filepath.Clean(*GeneralConfig.LocalDir)
+		if strings.HasPrefix(filepath.Clean(raw), localDir+string(os.PathSeparator)) {
+			if r, err := filepath.Rel(localDir, filepath.Clean(raw)); err == nil {
+				rel = filepath.ToSlash(r)
+			}
+		} else {
+			return raw
+		}
+	}
+	return base + "/file/read/" + rel
 }
 
 // buildOutboundSegments 将回应文本组装为消息段：

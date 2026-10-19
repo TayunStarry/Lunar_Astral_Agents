@@ -18,7 +18,7 @@ import (
 
 	webltp "CorePersonality/agents/WebLTP"
 	"LunarSubsystem/LoggerGeneral"
-	multimodal "LunarSubsystem/MultimodalAnalysis/module"
+	multimodal "CorePersonality/engine/multimodal"
 
 	"github.com/chai2010/webp"
 	"github.com/disintegration/imaging"

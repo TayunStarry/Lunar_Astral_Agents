@@ -1,7 +1,7 @@
 import { GlobalConfig } from '../config/global';
 import { ChatCache } from '../config/config';
 import { ToolCall } from '../config/tool';
-import { ModelResponseBody } from '../config/model';
+import { ModelResponseBody, PostMessage } from '../config/model';
 import { ModelBuilder } from '../agent/builder';
 import { LiteImageFile } from '../capabilities/media';
 import { IMAGE_WINDOW_SIZE, sanitizeImageDesc } from '../capabilities/image-tag';
@@ -23,6 +23,12 @@ const dialogueBaseTools: ToolCall[] = [...agentControlTools, ...imageRecallTools
 
 /** 单次应答允许的工具调用轮次上限（防御模型在工具调用间自循环） */
 const MAX_TOOL_ROUNDS = 5;
+
+/** 「未调用工具却宣称已完成」的判定：打开/启动/切换这类会改变用户可见状态的动作 */
+const ACTION_CLAIM_PATTERN = /(已经|已|这就|马上|现在)[^，。！？\n]{0,12}(打开|启动|运行|调出|叫出|切换|准备好|准备完毕)/;
+
+/** 动作声明纠偏提示：作为一次性追加上下文重新请求，不写入历史 */
+const ACTION_CLAIM_GUARD = '【系统校验】你刚才声称已经完成了打开/启动类操作，但本轮没有调用任何工具，用户看不到任何变化。请直接调用 use_the_program 执行（只打开应用只填 tool），或如实说明没有完成，不要只口头宣称。';
 
 /** 姐妹基础外观（直接复用绘制者已解析的角色提示词，避免重复解析 Markdown） */
 export interface SisterAppearances {
@@ -62,6 +68,8 @@ export class DialogueRole extends ModelBuilder {
          * 都会在真正执行前被判定"已达上限"并直接丢掉，表现为助手从此再也不会用工具、也不再推进任务。
          */
         this.toolRounds = 0;
+        // 每个应答周期最多纠偏一次「未调用工具却宣称已完成」
+        this.actionClaimGuarded = false;
         // 每轮应答都从"没有失败"开始：这一格只描述本轮，不继承上一轮的失败
         GlobalConfig.lastFailure = '';
         await this.continueDialogue(cache);
@@ -73,7 +81,7 @@ export class DialogueRole extends ModelBuilder {
      * 拆成独立方法是为了把「重置计数」与「同周期递归」分开：递归调用不能重置计数，
      * 否则 MAX_TOOL_ROUNDS 形同虚设。
      */
-    private async continueDialogue(cache: ChatCache): Promise<void> {
+    private async continueDialogue(cache: ChatCache, guardNote: PostMessage | null = null): Promise<void> {
         try {
             // 对消息中的图片文件进行压缩与解析处理
             await LiteImageFile();
@@ -86,7 +94,7 @@ export class DialogueRole extends ModelBuilder {
             // 添加当前时间到运行时消息列表
             this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
             /** 向处理器模型发送请求并等待响应（固有工具 + 琉璃聚合工具常驻槽位，工具链变化时刷新定义） */
-            const response = this.run(this.ragMessages, [...dialogueBaseTools, ...getCrystalRemoteTools()]);
+            const response = this.run(guardNote ? [...this.ragMessages, guardNote] : this.ragMessages, [...dialogueBaseTools, ...getCrystalRemoteTools()]);
             // 处理响应文本内容
             this.analyzeMessageResponse(response.body, cache);
             // 如果有工具调用,处理它们并重新发送请求
@@ -110,6 +118,19 @@ export class DialogueRole extends ModelBuilder {
                     this.toolRounds++;
                     return await this.continueDialogue(cache);
                 }
+            }
+            // 本轮尚未执行任何工具，却宣称已完成打开/启动类动作：丢弃这句话并纠偏重答一次。
+            // 历史中存在同类「已打开」说法，模型会模仿；仅靠提示词无法保证，故在生成后确定性拦截。
+            if (!this.actionClaimGuarded
+                && cache.toolCalls.length === 0
+                && this.toolRounds === 0
+                && ACTION_CLAIM_PATTERN.test(cache.descriptionContent)) {
+                this.actionClaimGuarded = true;
+                console.warn('[对话者] 未调用工具却宣称已完成动作，触发纠偏重答');
+                // 这句话不写入上下文：否则会污染历史，下一轮继续复读同样的假宣称
+                cache.descriptionContent = '';
+                cache.thinkingContent = '';
+                return await this.continueDialogue(cache, { role: 'user', content: ACTION_CLAIM_GUARD });
             }
             // 在历史上下文中添加模型响应
             this.writeContext(response.body.choices?.[0]?.message);
@@ -177,6 +198,8 @@ export class DialogueRole extends ModelBuilder {
     private readonly IMAGE_WINDOW = IMAGE_WINDOW_SIZE;
     /** 本轮已发生的工具调用轮次（防御模型自循环） */
     private toolRounds = 0;
+    /** 本轮是否已触发过动作声明纠偏（每周期最多一次，防重答循环） */
+    private actionClaimGuarded = false;
 
     /** 格式化历史消息：窗内图片超限时增量降级最老的图片，末尾非用户消息时补续写指令 */
     public formatHistoricalMessages() {

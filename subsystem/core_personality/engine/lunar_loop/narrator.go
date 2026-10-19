@@ -4,9 +4,9 @@ import (
 	logger "LunarSubsystem/LoggerGeneral"
 	"fmt"
 
+	proxy "CorePersonality/engine/console/proxy"
 	ttsrouter "CorePersonality/engine/tts_router"
 	"CorePersonality/transport/ws"
-	proxy "LunarSubsystem/TuiSystem/proxy"
 
 	"github.com/dop251/goja"
 )

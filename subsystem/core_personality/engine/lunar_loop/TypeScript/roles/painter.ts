@@ -38,6 +38,7 @@ import {
 } from './painter/manage-handler';
 import type { PainterHost } from './painter/host';
 import { pushAssistantImage } from '../io/conversation';
+import { localPathToReadURL } from '../io/conversation/codec';
 
 /**
  * 组装绘制者系统提示词：把角色提示词中的基础外观填入占位符
@@ -67,7 +68,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> implements Pai
 	customCharacters: Map<string, CustomCharacterProfile> = loadCustomCharacters();
 	/** 本次任务的参考图状态（任务级，开工时重置） */
 	private readonly reference: ReferenceState = createReferenceState();
-	/** 最近一次生成作品的本地路径（绝对路径，供超分工具对最新作品重建） */
+	/** 最近一次生成作品的地址（服务 URL 或本地路径，供超分工具对最新作品重建） */
 	private resultPath = '';
 
 	/** 构造函数 */
@@ -91,7 +92,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> implements Pai
 	public get referenceSize(): { width: number; height: number } | null { return this.reference.size; }
 	public set referenceSize(value: { width: number; height: number } | null) { this.reference.size = value; }
 
-	/** 最近一次生成作品的本地路径 */
+	/** 最近一次生成作品的地址 */
 	public get lastResultPath(): string { return this.resultPath; }
 
 	/** 记录最近一次生成作品的路径 */
@@ -214,7 +215,12 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> implements Pai
 		/** 实际生效的步数（0 表示交引擎按 sd_steps 处理） */
 		const stepsNote = imageParams.steps ? `，${imageParams.steps} 步` : '';
 		console.log(`[绘制者] ${label}成功，尺寸: ${result.width}x${result.height}${stepsNote}${imageParams.superResolution ? '（含超分重建）' : ''}`);
-		if (!pushAssistantImage([result.base64], false, [result.path])) console.warn(`[绘制者] 推送${label}结果到前端失败`);
+		// 图片以 URL 传递：作品已由绘图引擎落盘到 multimedia/generated/，
+		// 推送时由句柄系统做哈希唯一性归一，返回的 URL 才是最终保留路径
+		const url = localPathToReadURL(result.path);
+		const urls = url ? pushAssistantImage([url], false) : [];
+		if (urls.length === 0) console.warn(`[绘制者] 推送${label}结果到前端失败`);
+		else this.rememberResult(urls[0]);
 		return `${label}成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}${stepsNote}${imageParams.superResolution ? '，已附带超分辨率重建' : ''}`;
 	}
 

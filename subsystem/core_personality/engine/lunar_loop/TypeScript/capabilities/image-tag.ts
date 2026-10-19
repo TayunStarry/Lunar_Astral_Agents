@@ -1,4 +1,4 @@
-import { admitImageDataURI, getResourceEntry } from './resource';
+import { admitImageDataURI, deleteResource, getResourceEntry } from './resource';
 import { formatHandle, parseHandle } from './handle';
 import { GlobalConfig } from '../config/global';
 import type { PostMessage } from '../config/model';
@@ -20,7 +20,7 @@ import type { PostMessage } from '../config/model';
 export const IMAGE_WINDOW_SIZE = 20;
 
 /** 视觉读取端点路径（与 server/variable.go 的路由声明一致） */
-const VISION_READ_PATH = '/file/read-multimodal/';
+const VISION_READ_PATH = '/file/miniature/';
 
 /** 合法句柄形态（tag 参数校验，与 Go 侧 visionTagPattern 一致） */
 const TAG_PATTERN = /^@[A-Z]\.\d{3,}$/;
@@ -102,7 +102,7 @@ export function attachImageTags(message: PostMessage): void {
 /**
  * 生成图片的思维链消费引用（两种形态，均由视觉读取管线产出）
  *
- * - url（默认）：`/file/read-multimodal/` 端点 URL，服务端按需缩放、叠印句柄并缓存；
+ * - url（默认）：`/file/miniature/` 端点 URL，服务端按需缩放、叠印句柄并缓存；
  * - base64：`visionRead` 走同一套 VisionCopy 管线直出 data URI，供无法回取本机 URL 的云端模型。
  *
  * 两种形态都是 ≤ vision_max_side 的副本，模型永远拿不到原图，也没有自己缩放的能力。
@@ -176,6 +176,11 @@ export function resolveImageRef(raw: string): { handle: string; source: string; 
     const normalized = formatHandle(handle);
     const entry = getResourceEntry(normalized);
     if (!entry) return null;
+    // 本体已丢失/损坏：移除失效句柄并返回 null（句柄已从目录清除，等同不存在）
+    if (entry.state === 'lost') {
+        deleteResource(normalized);
+        return null;
+    }
     // blob 在位时给出相对 LocalDir 的路径，交给管线按路径解析；已回收时来源为空（仅描述可用）
     const source = entry.state === 'active' && entry.blob_path ? entry.blob_path : '';
     return { handle: normalized, source, desc: entry.summary || '' };

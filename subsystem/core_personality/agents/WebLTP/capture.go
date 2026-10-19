@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	imageproc "LunarSubsystem/MultimodalAnalysis/module"
+	imageproc "CorePersonality/engine/multimodal"
 )
 
 // shotCapture 会话窗口截图：优先 PrintWindow 内容截图（与窗口遮挡状态无关），

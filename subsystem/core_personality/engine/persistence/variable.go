@@ -1,0 +1,100 @@
+package persistence
+
+import "sync"
+
+// 文件类别常量
+const (
+	CategoryImage = "image"
+	CategoryVideo = "video"
+	CategoryText  = "text"
+)
+
+// 内容仓库根目录（相对 LocalDir）：句柄体系只维护这三棵树
+const (
+	StorageRootDocuments  = "documents"
+	StorageRootAudios     = "audios"
+	StorageRootMultimedia = "multimedia"
+)
+
+// StorageRoots 内容仓库扫描根（顺序固定，便于日志与测试）
+var StorageRoots = []string{StorageRootDocuments, StorageRootAudios, StorageRootMultimedia}
+
+// 句柄体系错误语义（调用方与 HTTP 层按同一组文案透出）
+const (
+	ErrHandleInvalid = "句柄无效,文件不存在"
+	ErrFileLost      = "文件损毁或丢失,请更换句柄"
+)
+
+// OriginStorageScan 启动扫描入库的来源标记
+const OriginStorageScan = "storage-scan"
+
+// v5 记忆库配置常量 — 文本/图片混合存储，仅内容嵌入向量
+const (
+	CurrentVersion       = 5    // 当前数据格式版本号（v5: 混合存储 + 仅内容嵌入）
+	DocumentsChunkSize   = 100  // 文档分块大小（条/块，文本与图片统一；100 条一块）
+	MemoryDedupThreshold = 0.98 // 内容嵌入向量去重阈值（余弦相似度，判定重复记忆）
+	DocRankThreshold     = 0.30 // 文档内容余弦得分门槛（低于此值不返回）
+	MaxTagRetries        = 3    // 图片多模态标签生成最大重试次数
+)
+
+// 图片识别取向常量 — 决定图片标签生成的描述角度与方式
+const (
+	RecognitionAuto       = "auto"       // 自动处理（默认）：综合性系统描述，由多模态模型自主决定重点
+	RecognitionEmotion    = "emotion"    // 情绪表达：专注识别图片所表达的情绪
+	RecognitionText       = "text"       // 文本内容：专注识别图片中的文字信息
+	RecognitionColor      = "color"      // 色彩风格：专注分析主要配色、次要配色及点缀色
+	RecognitionAppearance = "appearance" // 衣着发型：着重人物衣着、发型、身材、发色及瞳色
+	RecognitionSpecies    = "species"    // 物种识别：着重事物种类与关键识别特征
+	RecognitionPosture    = "posture"    // 姿态动作：重点表达肢体动作及人物表情
+	RecognitionCustom     = "custom"     // 自定义：以用户文本作为识别取向参考
+)
+
+// FileLocks 用于存储文件路径对应的互斥锁
+var FileLocks sync.Map
+
+// 允许预览的文件类型白名单（含分类与 MIME 信息，三合一）
+var previewAllowlist = map[string]PreviewEntry{
+	// 图片格式
+	".png":  {MIME: "image/png", Category: CategoryImage},
+	".jpg":  {MIME: "image/jpeg", Category: CategoryImage},
+	".jpeg": {MIME: "image/jpeg", Category: CategoryImage},
+	".webp": {MIME: "image/webp", Category: CategoryImage},
+	".gif":  {MIME: "image/gif", Category: CategoryImage},
+	".svg":  {MIME: "image/svg+xml", Category: CategoryImage},
+	".ico":  {MIME: "image/x-icon", Category: CategoryImage},
+	".bmp":  {MIME: "image/bmp", Category: CategoryImage},
+	".tiff": {MIME: "image/tiff", Category: CategoryImage},
+	".tif":  {MIME: "image/tiff", Category: CategoryImage},
+	// 视频格式
+	".mp4":  {MIME: "video/mp4", Category: CategoryVideo},
+	".webm": {MIME: "video/webm", Category: CategoryVideo},
+	".avi":  {MIME: "video/x-msvideo", Category: CategoryVideo},
+	".mov":  {MIME: "video/quicktime", Category: CategoryVideo},
+	".mkv":  {MIME: "video/x-matroska", Category: CategoryVideo},
+	".wmv":  {MIME: "video/x-ms-wmv", Category: CategoryVideo},
+	".flv":  {MIME: "video/x-flv", Category: CategoryVideo},
+	".m4v":  {MIME: "video/mp4", Category: CategoryVideo},
+	".mpg":  {MIME: "video/mpeg", Category: CategoryVideo},
+	".mpeg": {MIME: "video/mpeg", Category: CategoryVideo},
+	// 文本格式（仅数据与配置文件，不含代码/脚本）
+	".txt":  {MIME: "text/plain", Category: CategoryText},
+	".md":   {MIME: "text/markdown", Category: CategoryText},
+	".log":  {MIME: "text/plain", Category: CategoryText},
+	".csv":  {MIME: "text/csv", Category: CategoryText},
+	".json": {MIME: "application/json", Category: CategoryText},
+	".xml":  {MIME: "application/xml", Category: CategoryText},
+	".yaml": {MIME: "text/yaml", Category: CategoryText},
+	".yml":  {MIME: "text/yaml", Category: CategoryText},
+	".toml": {MIME: "text/toml", Category: CategoryText},
+	".ini":  {MIME: "text/plain", Category: CategoryText},
+	".cfg":  {MIME: "text/plain", Category: CategoryText},
+}
+
+// KnowledgeDatabase 知识库实例（KnowledgeDB）
+var KnowledgeDatabase *KnowledgeDB
+
+// ArchiveDatabase 统一资源目录实例（ArchiveDB，句柄 / 元数据 / 段落结构）
+var ArchiveDatabase *ArchiveDB
+
+// MemoryDatabase 记忆库实例（MemoryDB）
+var MemoryDatabase *MemoryDB

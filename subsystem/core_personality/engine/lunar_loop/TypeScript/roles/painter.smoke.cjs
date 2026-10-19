@@ -52,12 +52,12 @@ globalThis.generateImage = (params) => {
 	captured.push(params);
 	return [{ path: 'generated/test.png', base64: 'iVBORw0KGgo=', width: params.width, height: params.height, seed: 12345 }, null];
 };
-globalThis.pushImage = () => true;
+globalThis.pushImage = (images) => images;
 // 对话缓存写入桩：只记录调用，不落盘
 globalThis.saveFile = (name) => [name, name, null];
 globalThis.readResource = () => ({ base64: '', mime: 'image/png', lost: false, truncated: false });
 globalThis.listResources = () => [];
-// 视觉引用固定走 /file/read-multimodal/ 端点形态
+// 视觉引用固定走 /file/miniature/ 端点形态
 globalThis.url = () => ['http://127.0.0.1:0'];
 // 图片入库桩：返回一个句柄 + blob 路径，供 attachImageTags 改写为视觉副本
 globalThis.resourceAdmit = () => [{ handle: '@I.900', id: 900, blob_path: 'multimedia/stub.png' }, null];
@@ -321,8 +321,8 @@ const BASE_ARGS = { expression: '俏皮的表情,单眼眨眼', posture: '一手
 	const imageItem = taskMessage && Array.isArray(taskMessage.content)
 		? taskMessage.content.find(item => item.type === 'image_url')
 		: null;
-	check('任务消息里的参考图是 /file/read-multimodal/ 端点 URL',
-		!!imageItem && imageItem.image_url.url.includes('/file/read-multimodal/'),
+	check('任务消息里的参考图是 /file/miniature/ 端点 URL',
+		!!imageItem && imageItem.image_url.url.includes('/file/miniature/'),
 		imageItem && imageItem.image_url.url);
 	check('任务消息不含原图字节（无 3072 级 base64）',
 		!JSON.stringify(taskMessage || {}).includes('AAAA') && JSON.stringify(taskMessage || {}).length < 4096,

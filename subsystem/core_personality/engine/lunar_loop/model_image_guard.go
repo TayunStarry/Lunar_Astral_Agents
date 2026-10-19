@@ -2,7 +2,7 @@ package lunarloop
 
 // model_image_guard.go 模型请求的出站图片闸门
 //
-// 思维链里的图片只允许一种形态：视觉读取管线（/file/read-multimodal/ 端点或
+// 思维链里的图片只允许一种形态：视觉读取管线（/file/miniature/ 端点或
 // visionRead → VisionCopy）产出的副本。其余一切来源都视为「原图」：
 //
 //   - 远程 URL（QQ 图床等）：模型会自己去下载原图；
@@ -36,7 +36,7 @@ import (
 const hostDerivedImageMaxSide = 1024
 
 // 被拦截图片的替身文本（进入模型上下文，措辞保持简短稳定）
-const blockedImagePlaceholder = "[图片已拦截：思维链只接受视觉读取产物（/file/read-multimodal/ 或视觉副本）]"
+const blockedImagePlaceholder = "[图片已拦截：思维链只接受视觉读取产物（/file/miniature/ 或视觉副本）]"
 
 // 视频类引用白名单：视频不走图片闸门（服务端按 --video-fps 抽帧，另有尺寸约束）
 var modelVideoExts = []string{".mp4", ".webm", ".mov", ".avi", ".mkv", ".m4v", ".mpg", ".mpeg", ".wmv", ".flv"}
@@ -157,7 +157,7 @@ func imageURLBlockReason(raw string, sideCap int) string {
 	return "非视觉端点来源"
 }
 
-// isLocalVisionURL 判断地址是否为本机 /file/read-multimodal/ 端点
+// isLocalVisionURL 判断地址是否为本机 /file/miniature/ 端点
 //
 // 用「路径前缀 + 本机端口」判定，不绑定主机名：服务在 allow_lan 打开时给出的是
 // 局域网 IP，但端口恒为基本端口，路径恒为视觉读取前缀。
@@ -166,7 +166,7 @@ func isLocalVisionURL(raw string) bool {
 	if err != nil || parsed == nil {
 		return false
 	}
-	if !strings.HasPrefix(parsed.Path, "/file/read-multimodal/") {
+	if !strings.HasPrefix(parsed.Path, "/file/miniature/") {
 		return false
 	}
 	return parsed.Port() != "" && parsed.Port() == strconv.Itoa(*GeneralConfig.BasicPort)

@@ -1,12 +1,13 @@
 package lunarloop
 
 import (
+	module "CorePersonality/engine/multimodal"
 	"LunarSubsystem/GeneralConfig"
-	"LunarSubsystem/MultimodalAnalysis/module"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,40 +117,9 @@ func (class *Runtime) isAnimatedImage(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{module.IsAnimatedImage(bytesData), nil})
 }
 
-// animatedImageToVideo 将动态图编码为慢放视频并写入 llama-server 媒体目录
+// animatedImageToFrames 将动态图直接解码为图片帧序列（长边受限、至多 64 帧）
 // 入参支持字节数据与来源地址（HTTP(S) URL、data:image URI、本地文件路径）
-// 返回值: [Array<{file: string, start: number, end: number}>, error] 媒体片段列表和错误信息
-func (class *Runtime) animatedImageToVideo(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 1 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
-	}
-
-	bytesData, err := resolveImageBytes(call.Argument(0))
-	if err != nil {
-		return class.runtime.ToValue([]any{nil, err})
-	}
-
-	segments, err := module.AnimatedImageToMedia(bytesData)
-	if err != nil {
-		return class.runtime.ToValue([]any{nil, err})
-	}
-
-	// 转换为TypeScript可处理的格式
-	result := make([]map[string]any, len(segments))
-	for i, seg := range segments {
-		result[i] = map[string]any{
-			"file":  seg.File,
-			"start": seg.Start,
-			"end":   seg.End,
-		}
-	}
-	return class.runtime.ToValue([]any{result, nil})
-}
-
-// animatedImageToFrames 将动态图编码为慢放视频后抽帧为图片序列（序列帧解读模式）
-// 入参支持字节数据与来源地址（HTTP(S) URL、data:image URI、本地文件路径）
-// 与 file 模式同样先做等比例慢放转码，但转码产物写临时文件，不产出媒体目录文件
-// 返回值: [Array<{start, end, frames: Array<{image, time}>}>, error] 分组采样帧列表和错误信息
+// 返回值: [Array<{start, end, frames: Array<{image, time}>}>, error] 分组帧列表和错误信息
 func (class *Runtime) animatedImageToFrames(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
@@ -179,6 +149,24 @@ func resolveImageBytes(arg goja.Value) ([]byte, error) {
 	case []byte:
 		return data, nil
 	case string:
+		// 本机服务路径（/file/read/... 或 /file/miniature/...）：转换为 LocalDir 相对路径读取。
+		// 句柄唯一性归一后，绘制者的 lastResultPath 可能已是服务 URL。
+		for _, prefix := range []string{"/file/read/", "/file/miniature/"} {
+			if rel, ok := strings.CutPrefix(data, prefix); ok {
+				// 视觉读取 URL 自带 ?tag=... 查询参数：查询串属于 HTTP 语义，不是文件路径。
+				// 不剥离会按「带问号的文件名」查找而必然失败，动态图判定随之报错并退化为静态图。
+				if cut := strings.IndexAny(rel, "?#"); cut >= 0 {
+					rel = rel[:cut]
+				}
+				if decoded, err := url.PathUnescape(rel); err == nil {
+					rel = decoded
+				}
+				if abs, found := resolveLocalFilePath(rel); found {
+					return module.ImageSourceToBytes(abs)
+				}
+				return nil, fmt.Errorf("服务路径引用的文件不存在: %s", data)
+			}
+		}
 		// 来源地址：交给模块按 URL / data URI / 本地路径读取
 		if strings.HasPrefix(data, "http://") || strings.HasPrefix(data, "https://") || strings.HasPrefix(data, "data:") {
 			return module.ImageSourceToBytes(data)
@@ -245,7 +233,7 @@ func fileExists(path string) bool {
 }
 
 // 注意：这里**不提供** resizeImage。图片缩放与尺寸约束只允许由视觉读取管线
-// （/file/read-multimodal/ 端点与 visionRead → VisionCopy）完成；思维链拿不到
+// （/file/miniature/ 端点与 visionRead → VisionCopy）完成；思维链拿不到
 // 任何"自己把原图缩一下"的入口。历史实现见 docs/adr/0008「思维链图片来源唯一化」。
 
 // generateImage 适配TypeScript调用的图片生成功能，处理图片生成参数并返回结果

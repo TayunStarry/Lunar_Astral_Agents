@@ -7,20 +7,20 @@ package app
 // 签发规则本身留在引擎侧（与运行时校验共用同一份实现）。
 
 import (
+	"CorePersonality/engine/console"
 	StarLTP "CorePersonality/engine/ltp9"
-	"LunarSubsystem/TuiSystem"
 )
 
-// WireTUILTP9AuthHooks 注入 LTP9 授权能力（须在 TuiSystem.Run() 之前调用）：
+// WireTUILTP9AuthHooks 注入 LTP9 授权能力（须在 console.Run() 之前调用）：
 //   - inspect：读取某包的授权现状（不修改文件）；
 //   - sign：依据脚本现有引用的权限签发授权（覆盖写 permissions.key）。
 func WireTUILTP9AuthHooks() {
-	TuiSystem.SetLTP9AuthHooks(
-		func(dir string) (TuiSystem.LTP9AuthStatus, error) {
+	console.SetLTP9AuthHooks(
+		func(dir string) (console.LTP9AuthStatus, error) {
 			auth, err := StarLTP.InspectPackageAuth(dir)
 			return toTuiLTP9Auth(auth), err
 		},
-		func(dir string) (TuiSystem.LTP9AuthStatus, error) {
+		func(dir string) (console.LTP9AuthStatus, error) {
 			auth, err := StarLTP.SignPackageAuth(dir)
 			return toTuiLTP9Auth(auth), err
 		},
@@ -28,8 +28,8 @@ func WireTUILTP9AuthHooks() {
 }
 
 // toTuiLTP9Auth 引擎侧授权现状 → 控制台展示结构
-func toTuiLTP9Auth(auth StarLTP.PackageAuth) TuiSystem.LTP9AuthStatus {
-	return TuiSystem.LTP9AuthStatus{
+func toTuiLTP9Auth(auth StarLTP.PackageAuth) console.LTP9AuthStatus {
+	return console.LTP9AuthStatus{
 		HasScript: auth.HasScript,
 		HasKey:    auth.HasKey,
 		Signed:    auth.Signed,

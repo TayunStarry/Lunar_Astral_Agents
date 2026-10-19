@@ -2074,6 +2074,12 @@ function armLTPXDispatchWatchdog(requestId, label) {
 // 派发后等待包回执的上限（毫秒）：覆盖"打开页面 → 注入智能体 → 模型多轮执行"的首段耗时
 const LTPX_DISPATCH_TIMEOUT_MS = 90000;
 
+// 取出调用中的 instruction：空串表示「只打开应用」，不向包派发任务
+function ltpCallInstruction(call) {
+    const args = (call && call.arguments) || {};
+    return String(args.instruction == null ? '' : args.instruction).trim();
+}
+
 // 向包页面投递执行指令（在 iframe 加载完成、且注入完成后调用）。
 // 自带 AtoA 实现的包与注入型智能体都监听同一条 ltpx_run 消息；注入型智能体额外回
 // ltpx_ack 作为"已识别"凭证，宿主据此判断是否需要补投（见 handleFrameLoad）。
@@ -2082,6 +2088,20 @@ function deliverLTPXRun() {
     const call = activeLTPXCall;
     const win = ltpxFrame.contentWindow;
     if (!win) return;
+    // 只打开应用：页面已展示即视为完成，直接回执成功。
+    // 空 instruction 不能投给包内智能体——它代表「没有任务」，投递只会触发包的缺省行为
+    // （例如文件管理器默认回到根目录），与「打开应用」的意图不符。
+    if (!ltpCallInstruction(call)) {
+        const page = pages.find(x => x.id === call.app_id);
+        const title = (page && page.title) || call.tool;
+        const label = title === call.tool ? title : title + '（' + call.tool + '）';
+        if (markLTPXSettled(call.request_id)) {
+            submitLTPXResult(call.request_id, true, '已打开「' + label + '」。');
+        }
+        activeLTPXCall = null;
+        updateLTPXIsland(title, 'fa-cube');
+        return;
+    }
     win.postMessage({
         type: 'ltpx_run',
         request_id: call.request_id,

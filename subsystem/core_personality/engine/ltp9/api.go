@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	module "LunarSubsystem/FileManager/module"
+	module "CorePersonality/engine/persistence"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 
@@ -128,7 +128,14 @@ func memorySearchImage(query string, limit int) (any, error) {
 	}
 	out := make([]map[string]any, 0, len(results))
 	for _, r := range results {
-		out = append(out, map[string]any{"base64": r.Base64, "similarity": r.Similarity})
+		item := map[string]any{"similarity": r.Similarity}
+		// 新记忆只存 URL；历史记忆仍可能只有内联 base64
+		if r.URL != "" {
+			item["url"] = r.URL
+		} else {
+			item["base64"] = r.Base64
+		}
+		out = append(out, item)
 	}
 	return map[string]any{"success": true, "results": out}, nil
 }
@@ -165,6 +172,10 @@ func memoryRandomImage(query string) (any, error) {
 		return rwResult{Success: false, Error: "无匹配的表情包"}, nil
 	}
 	pick := results[rand.Intn(len(results))]
+	if pick.URL != "" {
+		return map[string]any{"success": true, "url": pick.URL}, nil
+	}
+	// 历史记忆兼容：仅当没有 URL 时回退内联 base64
 	return map[string]any{"success": true, "base64": pick.Base64}, nil
 }
 

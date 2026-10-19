@@ -3,11 +3,14 @@ import { GlobalConfig } from '../config/global';
 import { ResourceEntry, ResourceSection } from '../config/resource';
 import { KIND_LABELS, formatHandle, grammarCheatsheet, parseHandle, sectionHandle } from '../capabilities/handle';
 import {
+	deleteResource,
 	getResourceEntry,
 	listResources,
 	readResource,
 	resourceStatistics,
-	searchResources
+	searchResources,
+	LOST_FILE_NOTICE,
+	HANDLE_INVALID_NOTICE
 } from '../capabilities/resource';
 import { describeResource } from '../capabilities/describe';
 
@@ -32,9 +35,9 @@ function kindLabel(kind: string): string {
 	return KIND_LABELS[kind as keyof typeof KIND_LABELS] ?? kind;
 }
 
-/** 内容状态说明（blob 丢失时句柄仍有效，只是本体不可取） */
+/** 内容状态说明（blob 丢失的条目会在列出时被清理，正常不会出现在列表里） */
 function stateNote(entry: ResourceEntry): string {
-	return entry.state === 'active' ? '' : ' [本体已回收，仅存描述]';
+	return entry.state === 'active' ? '' : ` [${LOST_FILE_NOTICE}]`;
 }
 
 /** 资源目录条目的单行展示 */
@@ -53,12 +56,24 @@ async function handleListResources(args?: Record<string, any> | string): Promise
 		return [`类型码无效：${kind}。可用类型码：D 文档 / I 图片 / V 视频 / A 音频 / T 表格`, ''];
 	}
 	const entries = listResources(kind, limit);
-	if (entries.length === 0) {
-		return ['资源目录为空：当前没有已收录的资源。用户可以上传图片、发送文本文件，或让我生成图片后再引用', ''];
+	// 失效句柄清理：本体已丢失/损坏的条目不滞留目录，列出时顺带移除
+	const valid: ResourceEntry[] = [];
+	let purged = 0;
+	for (const entry of entries) {
+		if (entry.state === 'lost') {
+			if (deleteResource(entry.handle)) purged++;
+			continue;
+		}
+		valid.push(entry);
+	}
+	if (valid.length === 0) {
+		const purgedNote = purged > 0 ? `（已自动清理 ${purged} 条源文件丢失的失效句柄）` : '';
+		return [`资源目录为空：当前没有已收录的资源${purgedNote}。用户可以上传图片、发送文本文件，或让我生成图片后再引用`, ''];
 	}
 	const stats = resourceStatistics();
-	const lines = entries.map(entryLine);
-	const head = `当前可用资源（共 ${entries.length} 条，按收录时间倒序，越靠前越新${stats ? `；目录总计 ${stats.total} 条 / ${formatBytes(stats.bytes)}` : ''}）：`;
+	const lines = valid.map(entryLine);
+	const purgeNote = purged > 0 ? `；已自动清理 ${purged} 条源文件丢失的失效句柄` : '';
+	const head = `当前可用资源（共 ${valid.length} 条，按收录时间倒序，越靠前越新${purgeNote}${stats ? `；目录总计 ${stats.total} 条 / ${formatBytes(stats.bytes)}` : ''}）：`;
 	const tail = `\n${grammarCheatsheet()}。需要正文时用 read_resource 按句柄取回；文档可先用 outline_resource 看结构再定向读取。`;
 	return [`${head}\n${lines.join('\n')}${tail}`, ''];
 }
@@ -92,6 +107,12 @@ async function handleReadResource(args?: Record<string, any> | string): Promise<
 				missing.push(normalized);
 				continue;
 			}
+			// 本体已丢失/损坏：移除失效句柄并返回固定提示，不再降级为描述
+			if (entry.state === 'lost') {
+				deleteResource(normalized);
+				blocks.push(`【${normalized}】\n${LOST_FILE_NOTICE}`);
+				continue;
+			}
 			const desc = describeResource(normalized, question);
 			blocks.push(`【${normalized}｜${kindLabel(parsedHandle.kind)}｜${entry.title || entry.name}】\n${desc || '（暂无描述，且本体不可直接解读）'}`);
 			continue;
@@ -104,9 +125,9 @@ async function handleReadResource(args?: Record<string, any> | string): Promise<
 			continue;
 		}
 		if (result.lost) {
-			// blob 已回收：句柄仍有效，退化为目录摘要 + 大纲提示
-			const sections = entry?.section_count ?? 0;
-			blocks.push(`【${normalized}｜${result.title}】\n正文已从内容仓库回收（句柄仍然有效）。${entry?.summary ? `目录摘要：${entry.summary}` : ''}${sections > 0 ? `\n可用 outline_resource 查看 ${sections} 节结构` : ''}`);
+			// 本体已丢失/损坏：readResource 已顺带移除句柄条目，这里幂等兜底并返回固定提示
+			deleteResource(normalized);
+			blocks.push(`【${normalized}｜${result.title}】\n${LOST_FILE_NOTICE}`);
 			continue;
 		}
 		const rangeNote = result.line_start && result.line_end ? `｜第 ${result.line_start}-${result.line_end} 行` : '';
@@ -116,10 +137,10 @@ async function handleReadResource(args?: Record<string, any> | string): Promise<
 	}
 
 	if (blocks.length === 0) {
-		return [`取回失败：${missing.join('、')} 均不存在或句柄非法。请先用 list_resources 确认可用句柄`, ''];
+		return [`取回失败：${missing.join('、')} —— ${HANDLE_INVALID_NOTICE}。请先用 list_resources 确认可用句柄`, ''];
 	}
 	let text = blocks.join('\n\n---\n\n');
-	if (missing.length > 0) text += `\n\n以下句柄无法取回：${missing.join('、')}（请用 list_resources 确认）`;
+	if (missing.length > 0) text += `\n\n以下句柄无法取回：${missing.join('、')}（${HANDLE_INVALID_NOTICE}）`;
 	return [text, ''];
 }
 
@@ -132,7 +153,12 @@ async function handleOutlineResource(args?: Record<string, any> | string): Promi
 	const normalized = formatHandle(parsedHandle);
 
 	const entry = getResourceEntry(normalized);
-	if (!entry) return [`资源不存在：${normalized}。请用 list_resources 确认可用句柄`, ''];
+	if (!entry) return [`【${normalized}】\n${HANDLE_INVALID_NOTICE}。请用 list_resources 确认可用句柄`, ''];
+	// 本体已丢失/损坏：移除失效句柄并返回固定提示，不滞留
+	if (entry.state === 'lost') {
+		deleteResource(normalized);
+		return [`【${normalized}｜${entry.title || entry.name}】\n${LOST_FILE_NOTICE}`, ''];
+	}
 	if (entry.kind !== 'D' && entry.kind !== 'T') {
 		return [`${normalized} 是${kindLabel(entry.kind)}，没有段落大纲；图片/视频/音频请用 read_resource 取描述`, ''];
 	}

@@ -5,7 +5,6 @@ import { checkDueItems } from '../tools/schedule/index';
 import { SCHEDULE_TRIGGER_PREFIX } from '../tools/schedule/defs';
 import { parseContent, cleanTextForTTS } from '../text/index';
 import { dialogueRole, randomDefaultMessage } from '../roles/index';
-import { syncLTPXRemoteStatus } from '../capabilities/ltpx';
 import { interactEvent } from '../capabilities/ltp-event';
 import { queryEmotionSticker } from '../capabilities/memory';
 import { persistConversation, pushAssistantContext, pushAssistantImage } from '../io/conversation';
@@ -66,8 +65,6 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         }
         // 更新远期记忆摘要
         updatePreviousMemories();
-        // 拉取琉璃工具链
-        syncLTPXRemoteStatus();
         // 事件 -> 收到消息前：把待处理的消息上下文（含内嵌的视频/音频URL内容项）推送到琉璃，插件可经 return.messages 改写后再消费
         const feedback: { messages?: PostMessage[] } = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext }).return;
         // 如果插件返回了新的消息上下文，更新全局上下文

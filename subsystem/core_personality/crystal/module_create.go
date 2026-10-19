@@ -2,7 +2,7 @@ package crystal
 
 import (
 	"CorePersonality/agents"
-	"LunarSubsystem/FileManager/module"
+	module "CorePersonality/engine/persistence"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"archive/zip"

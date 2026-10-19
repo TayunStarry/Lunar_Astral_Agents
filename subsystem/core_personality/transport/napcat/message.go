@@ -3,7 +3,7 @@ package napcat
 // 消息解析与单线程收发流程
 
 import (
-	file "LunarSubsystem/FileManager/module"
+	file "CorePersonality/engine/persistence"
 	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/base64"
@@ -584,7 +584,13 @@ func resolveImageURL(imageData ImageData) string {
 			return imageData.File
 		}
 		if bytes, err := getImageContent(imageData.File); err == nil && len(bytes) > 0 {
-			return "data:image/png;base64," + base64.StdEncoding.EncodeToString(bytes)
+			// MIME 按文件头嗅探：QQ 常把 GIF 动图当作 png/jpg 下发，
+			// 硬编码 image/png 会让后续入库把动图存成 .png，按扩展名判定时退化为静态图。
+			mimeType := sniffImageMIME(bytes)
+			if mimeType == "" {
+				mimeType = "image/png"
+			}
+			return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(bytes)
 		}
 	}
 	return ""

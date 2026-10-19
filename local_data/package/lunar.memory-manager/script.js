@@ -538,7 +538,7 @@ function sleep(ms) {
 
 /** 创建统一尺寸的记忆卡片 */
 function createCard(entry) {
-    const isImage = !!(entry.base64);
+    const isImage = !!(entry.url || entry.base64);
     const card = document.createElement('div');
     card.className = 'memory-card ' + (isImage ? 'image-card' : 'text-card');
     card.dataset.id = entry.id || '';
@@ -567,11 +567,16 @@ function createCard(entry) {
         img.className = 'card-image';
         img.alt = '图片记忆';
         img.loading = 'lazy';
-        img.src = entry.base64;
+        img.src = entry.url || entry.base64;
         body.appendChild(img);
         // 点击图片区经多媒体预览浮层缩放查看（头部改写/删除按钮不受影响）
         body.classList.add('card-body-zoomable');
         body.addEventListener('click', () => {
+            // 新数据只存 URL；历史数据仍为 base64 data URI
+            if (entry.url) {
+                openPreview(entry.url, '记忆图片 ' + String(entry.id || '').slice(0, 8));
+                return;
+            }
             const blobUrl = base64ToBlobUrl(entry.base64);
             openPreview(blobUrl || entry.base64, '记忆图片 ' + String(entry.id || '').slice(0, 8));
             // 延迟回收 Blob（浮层已取到数据后释放，避免内存驻留）
@@ -723,12 +728,12 @@ let pendingEdit = null; // { entry, newBase64 }
 
 function openEditModal(entry) {
     pendingEdit = { entry: entry, newBase64: '' };
-    const isImage = !!(entry.base64);
+    const isImage = !!(entry.url || entry.base64);
     editMeta.textContent = 'ID: ' + (entry.id || '') + (entry.timestamp ? ' · ' + new Date(entry.timestamp * 1000).toLocaleString('zh-CN', { hour12: false }) : '');
     editTextWrap.classList.toggle('hidden', isImage);
     editImageWrap.classList.toggle('hidden', !isImage);
     if (isImage) {
-        editImagePreview.src = entry.base64;
+        editImagePreview.src = entry.url || entry.base64;
         pendingEdit.newBase64 = '';
     } else {
         editTextContent.value = entry.content || '';
@@ -762,7 +767,7 @@ editSaveBtn.addEventListener('click', async () => {
     const entry = pendingEdit.entry;
     try {
         editSaveBtn.disabled = true;
-        const isImage = !!(entry.base64);
+        const isImage = !!(entry.url || entry.base64);
         const changes = {};
         if (isImage) {
             if (!pendingEdit.newBase64) { showToast('未选择新图片', 'error'); return; }

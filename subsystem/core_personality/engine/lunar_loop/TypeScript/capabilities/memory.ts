@@ -1,6 +1,7 @@
 import { GlobalConfig } from '../config/global';
 import { PostMessage } from '../config/model';
 import { RandomFloor } from '../tools/math';
+import { saveBase64Media } from '../io/conversation/codec';
 
 /** 表情包记忆库集合名（image 类型集合，由 memory.store 前端管理） */
 const STICKER_COLLECTION = 'stickers';
@@ -205,7 +206,7 @@ export function queryBestAction(text: string): string | null {
     }
 }
 
-/** 基于查询文本从表情包记忆库检索表情包图片，返回 base64；无结果或失败时返回 null */
+/** 基于查询文本从表情包记忆库检索表情包图片，返回图片 URL；无结果或失败时返回 null */
 export async function queryEmotionSticker(query: string): Promise<string | null> {
     if (!query || !query.trim()) return null;
     try {
@@ -219,10 +220,12 @@ export async function queryEmotionSticker(query: string): Promise<string | null>
         const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
         // 查询失败或无结果时返回 null
         if (error || !results || results.length === 0) return null;
-        /** 在查询结果中随机选择一个结果（图片记忆 base64 字段） */
-        const image = (results[RandomFloor(0, results.length - 1)] as { base64?: string }).base64;
-        // 返回随机选择的图片或 null
-        return image || null;
+        /** 在查询结果中随机选择一个结果（图片记忆 url 字段） */
+        const item = results[RandomFloor(0, results.length - 1)] as { url?: string; base64?: string };
+        if (item.url) return item.url;
+        // 历史记忆兼容：旧数据仍为内联 base64 时先落盘为内容仓库实体，再按 URL 返回
+        if (item.base64) return saveBase64Media(item.base64, 'image/jpeg', 'sticker') || null;
+        return null;
     }
     catch (error) {
         console.error('[表情包] 检索失败:', error);

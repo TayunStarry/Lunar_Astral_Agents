@@ -15,7 +15,7 @@ export interface PainterHost {
 	readonly customCharacters: Map<string, CustomCharacterProfile>;
 	/** 本次任务参考图（归档 blob 相对路径；无参考图为空串） */
 	readonly referenceImage: string;
-	/** 最近一次生成作品的本地路径 */
+	/** 最近一次生成作品的地址（/file/read/ 服务 URL 或本地路径） */
 	readonly lastResultPath: string;
 	/** 当前任务的输出尺寸计划 */
 	planFor(ratio?: string): DimensionPlan;

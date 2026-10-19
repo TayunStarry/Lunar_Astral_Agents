@@ -14,12 +14,11 @@ package lunarloop
 //   resourceStats()                   → [stats, error]
 //   resourceSetSummary(id, summary, tags) → [bool, error]
 //   resourceSetSections(id, sections)→ [bool, error]
-//   resourceCollect(force)            → [result, error]
 //   resourceDelete(handle)            → [bool, error]
 //   resourceGrammar()                 → {pattern, handle, section, line, typeCodes}
 
 import (
-	"LunarSubsystem/FileManager/module"
+	module "CorePersonality/engine/persistence"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -142,6 +141,7 @@ func (class *Runtime) resourceAdmit(call goja.FunctionCall) goja.Value {
 		Retain:     mapString(in, "retain"),
 		MIME:       mapString(in, "mime"),
 		Dedup:      mapBool(in, "dedup"),
+		MustStore:  mapBool(in, "mustStore"),
 	}
 	// 入参完整性校验：来源与字节至少提供一个，否则一律拒绝。
 	// （缺了这道闸，空对象会一路走到建表，写出 kind="" / seq=0 的垃圾目录行）
@@ -195,7 +195,7 @@ func (class *Runtime) resourceAdmitDocument(call goja.FunctionCall) goja.Value {
 // 返回值: [result, error]
 //
 // 图片资源永不回原图：命中 KindImage 时改走视觉读取管线（VisionCopy —— 与
-// /file/read-multimodal/ 同一套缩放 + 叠印实现），返回的是 ≤ vision_max_side 的副本。
+// /file/miniature/ 同一套缩放 + 叠印实现），返回的是 ≤ vision_max_side 的副本。
 // 副本生成失败时直接报错，**不降级回原图字节**：宁可这条读取失败，也不让原图进入思维链。
 func (class *Runtime) resourceRead(call goja.FunctionCall) goja.Value {
 	handle := call.Argument(0).String()
@@ -211,7 +211,14 @@ func (class *Runtime) resourceRead(call goja.FunctionCall) goja.Value {
 	if result.Kind == module.KindImage && !result.Lost && result.BlobPath != "" {
 		data, mime, width, height, visionErr := VisionCopy(result.BlobPath, result.Handle, 0)
 		if visionErr != nil {
-			return class.runtime.ToValue([]any{nil, fmt.Errorf("图片视觉副本生成失败（禁止回退原图）: %w", visionErr)})
+			// 副本生成失败即视为本体损坏（坏字节、无法解码等）：与"丢失"同路降级，
+			// 由 TS 侧按失效句柄清理并提示，绝不回退原图字节
+			if res, rerr := module.ResourceResolve(result.Handle); rerr == nil {
+				_ = module.ResourceMarkLost(res.ID)
+			}
+			result.Lost = true
+			result.Base64 = ""
+			return class.runtime.ToValue([]any{toJS(result), nil})
 		}
 		// 副本已由管线按 vision_max_side 约束，体积天然有界：不再套用 maxBytes 截断，
 		// 半张 JPEG 既不可解码也无法理解，截断只会制造新的故障面
@@ -327,17 +334,6 @@ func (class *Runtime) resourceSetSections(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{false, err})
 	}
 	return class.runtime.ToValue([]any{true, nil})
-}
-
-// resourceCollect 触发内容仓库回收
-// 返回值: [result, error]
-func (class *Runtime) resourceCollect(call goja.FunctionCall) goja.Value {
-	force := mapBool(exportMap(call.Argument(0)), "force")
-	result, err := module.ArchiveCollect(force)
-	if err != nil {
-		return class.runtime.ToValue([]any{nil, err})
-	}
-	return class.runtime.ToValue([]any{toJS(result), nil})
 }
 
 // resourceDelete 显式删除资源（目录行 + 独占 blob）

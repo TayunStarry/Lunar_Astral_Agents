@@ -6,7 +6,7 @@
 //   - 月华启动时把缓存载回对话者上下文；
 //   - 每轮思考结束、以及每次向前端推送文本/语音/图片时落盘；
 //   - 写盘用 /file/read/ 便于前端查看原图；载入思维链时统一换成
-//     /file/read-multimodal/ 视觉副本；
+//     /file/miniature/ 视觉副本；
 //   - 月华自己输出的图片只给前端看，不载回上下文。
 
 import type { CachedAttachment, CachedMessage } from './conversation/types';
@@ -143,19 +143,29 @@ export function pushAssistantContext(type: string, content: string, audio: strin
 }
 
 /**
- * 推送助手图片并写入缓存
+ * 推送助手图片并写入近期记忆
  *
- * @param images 图片 base64 列表
+ * 图片一律以 URL 传递（/file/read/... 或 http(s)://...），不再接受 base64：
+ * 绘图结果、表情包记忆与截图都已由 Go 侧落盘为内容仓库实体并返回 URL。
+ * 近期记忆（messages.json）只保存 URL，不内联图片数据、也不写 multimedia/cache。
+ *
+ * @param images 图片 URL 列表
  * @param isSticker 是否表情包
- * @param sourcePaths 可选：图片已落盘的本地路径（生成/超分结果），优先转成 /file/read/ 地址
+ * @param sourcePaths 可选：本地绝对路径（生成/超分结果），用于兜底转换为 /file/read/ 地址
  */
-export function pushAssistantImage(images: string[], isSticker?: boolean, sourcePaths?: string[]): boolean {
-	const ok = pushImage(images, isSticker);
-	(images || []).forEach((image, index) => {
+export function pushAssistantImage(images: string[], isSticker?: boolean, sourcePaths?: string[]): string[] {
+	// Go 侧会登记句柄并把根目录重复件归一到生成目录，返回最终有效的 URL 列表
+	const canonical = pushImage(images, isSticker);
+	const list = Array.isArray(canonical) && canonical.length > 0 ? canonical : images;
+	(list || []).forEach((image, index) => {
 		if (!image) return;
 		const hint = sourcePaths && sourcePaths[index] ? localPathToReadURL(sourcePaths[index]) : '';
-		const src = hint || saveBase64Media(image, 'image/jpeg', isSticker ? 'sticker' : 'image');
-		if (!src) return;
+		const src = hint || toDisplaySource(image);
+		// 仅接受 URL 形态；base64 / blob 等旧形态不再写入近期记忆
+		if (!src || src.startsWith('data:') || src.startsWith('blob:')) {
+			console.warn('[对话缓存] 图片不是 URL，已跳过近期记忆写入');
+			return;
+		}
 		appendCachedMessage({
 			id: newId(),
 			role: 'assistant',
@@ -167,5 +177,5 @@ export function pushAssistantImage(images: string[], isSticker?: boolean, source
 		});
 	});
 	persistConversation();
-	return ok;
+	return list;
 }

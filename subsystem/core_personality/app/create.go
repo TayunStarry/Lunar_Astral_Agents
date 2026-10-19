@@ -6,13 +6,13 @@ import (
 
 	"CorePersonality/crystal"
 	"CorePersonality/engine/lunar_loop"
+	file "CorePersonality/engine/persistence"
 	"CorePersonality/engine/tts_router"
 	"CorePersonality/server"
 	"CorePersonality/transport/enginebus"
 	"CorePersonality/transport/napcat"
 	"CorePersonality/transport/ws"
 	"LunarSubsystem/BrowserClient"
-	file "LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 )
@@ -92,9 +92,6 @@ func Assemble() {
 	// ==== TTS 闲置卸载守护：三引擎 5 分钟无合成调用即卸载模型占用 ====
 	// 引擎本体在首次合成请求时惰性加载（engine/tts_router），本守护只负责闲置回收。
 	ttsrouter.StartIdleUnloader()
-
-	// ==== 统一资源仓库回收守护：按配额与保留等级回收 blob（句柄保留，降级为描述） ====
-	startArchiveCollector()
 
 	// ==== 入站消费：ltp9/* 调试信封交由 LTP9 引擎处理 ====
 	ws.Instance.SubscribeInbound("ltp9", crystal.HandleInbound)

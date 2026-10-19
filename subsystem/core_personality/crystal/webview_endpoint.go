@@ -20,7 +20,7 @@ import (
 	"LunarSubsystem/BrowserClient"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	imageproc "LunarSubsystem/MultimodalAnalysis/module"
+	imageproc "CorePersonality/engine/multimodal"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"

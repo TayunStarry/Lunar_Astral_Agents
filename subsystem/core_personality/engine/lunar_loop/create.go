@@ -34,14 +34,13 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册图像处理适配器
 	//
 	// 这里**没有** resizeImage：思维链不允许自己缩放图片。图片进入模型上下文的唯一
-	// 形态是视觉读取管线产物（/file/read-multimodal/ 端点或 visionRead），缩放与尺寸
+	// 形态是视觉读取管线产物（/file/miniature/ 端点或 visionRead），缩放与尺寸
 	// 约束在 Go 侧统一完成。任何"模型自己把原图缩一缩"的路径都会被这条缺失的导出
 	// 直接掐断（见 docs/adr/0008）。
 	vm.Set("videoMedia", adapters.videoMedia)
 	vm.Set("videoFrames", adapters.videoFrames)
 	vm.Set("audioWav", adapters.audioWav)
 	vm.Set("isAnimatedImage", adapters.isAnimatedImage)
-	vm.Set("animatedImageToVideo", adapters.animatedImageToVideo)
 	vm.Set("animatedImageToFrames", adapters.animatedImageToFrames)
 	vm.Set("generateImage", adapters.generateImage)
 	vm.Set("upscaleImage", adapters.upscaleImage)
@@ -60,7 +59,6 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("resourceStats", adapters.resourceStats)
 	vm.Set("resourceSetSummary", adapters.resourceSetSummary)
 	vm.Set("resourceSetSections", adapters.resourceSetSections)
-	vm.Set("resourceCollect", adapters.resourceCollect)
 	vm.Set("resourceDelete", adapters.resourceDelete)
 	vm.Set("resourceGrammar", adapters.resourceGrammar)
 

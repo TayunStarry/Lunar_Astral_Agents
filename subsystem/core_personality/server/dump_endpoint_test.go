@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"CorePersonality/engine/console"
 	"LunarSubsystem/GeneralConfig"
-	"LunarSubsystem/TuiSystem"
 )
 
 // 清掉本次用例写入的导出文件（避免污染工作目录）
@@ -55,13 +55,13 @@ func readDump(t *testing.T, path string) string {
 //
 // 本测试走真实链路：TuiSystem 日志管线入缓冲 → 导出端点读缓冲 → 落盘 → 读回断言。
 func TestDataDumpLogsStripsEscapeCodes(t *testing.T) {
-	TuiSystem.Install() // 幂等；确保环形缓冲可用
+	console.Install() // 幂等；确保环形缓冲可用
 	cleanupDumps(t, "*-raw-logs.log")
 
 	// 经管线入口投递带颜色与回车的日志：清理成多行后应各自成为一条 JSONL 记录
-	TuiSystem.PushTaskLog("\x1b[31m[ERROR]\x1b[0m 模型加载失败")
-	TuiSystem.PushTaskLog("采样 40%\r采样 100%")
-	TuiSystem.PushTaskLog("\x1b]0;窗口标题\x07完成标记")
+	console.PushTaskLog("\x1b[31m[ERROR]\x1b[0m 模型加载失败")
+	console.PushTaskLog("采样 40%\r采样 100%")
+	console.PushTaskLog("\x1b]0;窗口标题\x07完成标记")
 
 	resp := doDump(t, DataDumpLogsHandler, "/debug/dump/logs")
 	if !resp.OK {
@@ -124,11 +124,11 @@ func TestDataDumpLogsStripsEscapeCodes(t *testing.T) {
 // `->`、`=>`、`&&` 极常见——实测用户导出 261 行日志里几乎每条都带 `\u003e`，
 // 肉眼扫读与 grep `->` 全部失效。导出文件只落本地磁盘，故用 Encoder 关闭转义。
 func TestDataDumpLogsKeepsHtmlSensitiveCharsReadable(t *testing.T) {
-	TuiSystem.Install()
+	console.Install()
 	cleanupDumps(t, "*-raw-logs.log")
 
-	TuiSystem.PushTaskLog("[CorePersonality] -> 统一 WebSocket 集线器已启动")
-	TuiSystem.PushTaskLog(`路径 D:\a\b 且 "引号" & <标签> 都在`)
+	console.PushTaskLog("[CorePersonality] -> 统一 WebSocket 集线器已启动")
+	console.PushTaskLog(`路径 D:\a\b 且 "引号" & <标签> 都在`)
 
 	resp := doDump(t, DataDumpLogsHandler, "/debug/dump/logs")
 	if !resp.OK {
@@ -178,11 +178,11 @@ func TestDataDumpTranscriptExportsLiveTurns(t *testing.T) {
 	cleanupDumps(t, "*-transcript.json")
 
 	// 走真实管道：向实况轮次缓冲投递一轮，再经端点导出
-	TuiSystem.StreamBegin("对话者")
-	TuiSystem.StreamDelta("对话者", TuiSystem.KindThink, "先看图再回答")
-	TuiSystem.StreamDelta("对话者", TuiSystem.KindContent, "这是回答 a -> b")
-	TuiSystem.StreamTool("对话者", "list_images", `{"limit":5}`)
-	TuiSystem.StreamEnd("对话者")
+	console.StreamBegin("对话者")
+	console.StreamDelta("对话者", console.KindThink, "先看图再回答")
+	console.StreamDelta("对话者", console.KindContent, "这是回答 a -> b")
+	console.StreamTool("对话者", "list_images", `{"limit":5}`)
+	console.StreamEnd("对话者")
 
 	resp := doDump(t, DataDumpTranscriptHandler, "/debug/dump/transcript")
 	if !resp.OK {
@@ -196,7 +196,7 @@ func TestDataDumpTranscriptExportsLiveTurns(t *testing.T) {
 	}
 	content := readDump(t, resp.Path)
 
-	// 键名与结构必须与 TuiSystem.TranscriptDump 一致（端点只落盘，不重塑结构）
+	// 键名与结构必须与 console.TranscriptDump 一致（端点只落盘，不重塑结构）
 	var parsed struct {
 		Meta struct {
 			Kind      string `json:"kind"`
