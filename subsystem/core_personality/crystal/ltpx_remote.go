@@ -148,40 +148,34 @@ const searchToolName = "web_search"
 const searchToolDescription = "网络搜索：用浏览器检索网页、从上到下阅读页面并汇总情报"
 
 // buildUseTheProgram 将扫描到的全部 AtoA 工具收敛为单一 use_the_program 聚合工具。
-// 其 description 内嵌「工具名：功能简述」清单，供模型在调用时从清单中挑取正确的 tool 参数；
+// 工具名直接写成 tool 参数的 enum：模型启动时即拿到完整枚举，不必先 list 再拼参数，
+// 避免「忘了查清单 / 照清单抄错名字」这条不可靠路径；
 // 参数语义：tool = 要使用的应用名（只填 tool 即打开该应用），instruction = 打开后交给
-// 该应用执行的任务（可省略）；仅查询清单时传 list=true，此时不需要 tool/instruction。
+// 该应用执行的任务（可省略）；details=true 时只按 tool 回查该应用的详细说明，不执行操作。
 func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
-	var b strings.Builder
-	b.WriteString("调用以下扩展应用（tool 填应用名，instruction 填打开后要该应用完成的任务）：")
+	names := make([]string, 0, len(defs))
 	for _, d := range defs {
-		b.WriteString("\n- ")
-		b.WriteString(d.Name)
-		if d.Description != "" {
-			b.WriteString("：")
-			b.WriteString(ltpxFirstSentence(d.Description))
+		if d.Name != "" {
+			names = append(names, d.Name)
 		}
 	}
-	// 已有工具清单时不追加说明；无可用工具则明确提示
-	count := len(defs)
-	if count > 0 {
-		b.WriteString("\n\n用法：tool 只能取自上方清单；只打开应用只填 tool，instruction 省略；")
-		b.WriteString("要让应用执行任务再填 instruction（写清要它做什么，不要用 instruction 重复「打开某应用」）。")
-		b.WriteString("查询清单用 list=true，此时不要传 tool/instruction。")
-	}
 	return LTPXRemoteToolDef{
-		Name:        integratedToolsName,
-		Description: b.String(),
+		Name: integratedToolsName,
+		Description: "调用星月智能的扩展应用：" +
+			"tool 只能取参数枚举中的应用名，填入即表示打开该应用；" +
+			"instruction 填打开后要该应用完成的任务；" +
+			"details=true 时只返回 tool 所指应用的详细说明，不执行任何操作。",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"list": map[string]any{
+				"details": map[string]any{
 					"type":        "boolean",
-					"description": "仅查询可用应用清单，不执行任何操作；为 true 时不要传 tool 或 instruction",
+					"description": "仅查询 tool 指定应用的详细说明，不执行任何操作；为 true 时仍需传 tool",
 				},
 				"tool": map[string]any{
 					"type":        "string",
-					"description": "要使用的应用名（从清单中选择，如 file_manager、web_search）；只填本项表示打开该应用",
+					"enum":        names,
+					"description": "要使用的应用名（只能取枚举值，如 file_manager、web_search）；只填本项表示打开该应用",
 				},
 				"instruction": map[string]any{
 					"type":        "string",
@@ -193,7 +187,8 @@ func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
 	}
 }
 
-// ltpxFirstSentence 截取工具描述的首句（按中英文句号/分号切分），避免聚合清单过长占用上下文
+// ltpxFirstSentence 截取工具描述的首句（按中英文句号/分号切分）
+// 供需要「一句话能力简介」的场景使用（如 Mini-LTP 页面工具描述）
 func ltpxFirstSentence(desc string) string {
 	desc = strings.TrimSpace(desc)
 	if desc == "" {
@@ -232,6 +227,8 @@ func LTPRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 	LoggerGeneral.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，聚合为 %s（内含 %d 个目标工具）", aggTool.Name, len(defs))
 	jsonOK(w, http.StatusOK, map[string]any{
 		"tool": aggTool,
+		// 结构化应用清单：月华据此生成 tool 参数枚举，并保留「工具名 → 描述」供 details 查询
+		"tools": defs,
 	})
 }
 

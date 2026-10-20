@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "核心人格 (Core Personality)",
-    "version": "2026.293.0019",
+    "version": "2026.293.0748",
     "x-service": "CorePersonality"
   },
   "servers": [

@@ -30,7 +30,8 @@ func (b *Broker) Status() ltpx.Status {
 	}
 
 	var resp struct {
-		Tool LTPXRemoteToolDef `json:"tool"`
+		Tool  LTPXRemoteToolDef   `json:"tool"`
+		Tools []LTPXRemoteToolDef `json:"tools"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		LoggerGeneral.Warn("CrystalAstral", "LTPX 工具链解析失败: %v", err)
@@ -40,14 +41,25 @@ func (b *Broker) Status() ltpx.Status {
 		return ltpx.Status{}
 	}
 
+	// 应用清单随状态一并透传：月华据此把工具名写进 tool 参数枚举，
+	// 并保存「工具名 → 描述」映射供 details 查询按名回查
+	tools := make([]ltpx.ToolRef, 0, len(resp.Tools))
+	for _, t := range resp.Tools {
+		if t.Name == "" {
+			continue
+		}
+		tools = append(tools, ltpx.ToolRef{Name: t.Name, Description: t.Description})
+	}
+
 	return ltpx.Status{
 		Tool: &ltpx.ToolDef{
 			Name:        resp.Tool.Name,
 			Description: resp.Tool.Description,
 			// 参数 schema 必须随定义透传：缺失会让模型收到 parameters=null 的函数定义，
-			// 无从得知 {tool, instruction} 两个必填参数
+			// 无从得知 {details, tool, instruction} 的参数语义
 			Parameters: resp.Tool.Parameters,
 		},
+		Tools: tools,
 	}
 }
 

@@ -79,13 +79,21 @@ type LTPXPackageInfo struct {
 type LTPXRemoteToolDef struct {
 	Name        string `json:"name"`        // 工具名
 	Description string `json:"description"` // 工具能力描述（供 LLM 决策）
-	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义（聚合工具的 {tool, instruction}）
+	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义（聚合工具的 {details, tool, instruction}）
+}
+
+// LTPXRemoteToolRef 聚合工具可调用的单个应用（名称 + 能力描述）。
+// 月华把 Name 写成 use_the_program 的 tool 参数枚举，并按名查询 Description。
+type LTPXRemoteToolRef struct {
+	Name        string `json:"name"`        // 应用名（tool 参数枚举值）
+	Description string `json:"description"` // 应用能力描述（details 查询结果）
 }
 
 // LTPXRemoteStatusResult 月华同步 LTPX 工具链的返回结果。
 // 合并为单进程后不含在线状态：宿主未就绪时 Tool 为 nil（JS 侧保留上次定义）。
 type LTPXRemoteStatusResult struct {
-	Tool *LTPXRemoteToolDef `json:"tool,omitempty"` // 聚合工具（v5 起恒为单一 use_the_program；未就绪时为 nil）
+	Tool  *LTPXRemoteToolDef  `json:"tool,omitempty"`  // 聚合工具（v5 起恒为单一 use_the_program；未就绪时为 nil）
+	Tools []LTPXRemoteToolRef `json:"tools,omitempty"` // 可调用应用清单（tool 枚举 + details 数据源）
 }
 
 // LTPXRemoteEventResult 月华事件推送结果（同步返回给 JS 端）

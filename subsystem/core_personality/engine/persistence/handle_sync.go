@@ -31,7 +31,13 @@ func RegisterPath(rel string) (canonicalRel string, handle string, err error) {
 	if statErr != nil || info.IsDir() {
 		return rel, "", statErr
 	}
-	return upsertHandleWithKnownHash(rel, abs, "")
+	// 注意返回顺序：多值赋值按位置绑定，与参数名无关。
+	// upsertHandleWithKnownHash 是 (handle, canonicalRel, err)，本函数对外是
+	// (canonicalRel, handle, err)，因此左侧必须先写 handle 再写 canonicalRel；
+	// 直接 `return upsert...` 会把两者对调，调用方就会把句柄（@I.00x）当成路径
+	// 拼进 /file/read/，表现为图片 404。
+	handle, canonicalRel, err = upsertHandleWithKnownHash(rel, abs, "")
+	return canonicalRel, handle, err
 }
 
 // UpsertHandleForPath 为内容仓库内的文件登记 / 刷新句柄（路径不在三棵树内返回空串）

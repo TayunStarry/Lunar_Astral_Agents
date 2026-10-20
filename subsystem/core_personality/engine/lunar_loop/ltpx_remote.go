@@ -42,7 +42,7 @@ func syncLTPXRemoteTools() *LTPXRemoteStatusResult {
 	tool := &LTPXRemoteToolDef{
 		Name:        status.Tool.Name,
 		Description: status.Tool.Description,
-		// 参数 schema 透传至 JS 侧（缺失时 JS 按 {tool, instruction} 兜底），
+		// 参数 schema 透传至 JS 侧（缺失时 JS 按 {details, tool, instruction} 兜底），
 		// 保证发给模型的函数定义带有完整参数说明
 		Parameters: status.Tool.Parameters,
 	}
@@ -50,13 +50,23 @@ func syncLTPXRemoteTools() *LTPXRemoteStatusResult {
 	ltpRemoteTool = tool
 	ltpRemoteMutex.Unlock()
 
-	// 聚合工具的 description 内嵌子工具清单，仅在清单变化时打日志（避免每轮重复刷屏）
-	names := ltpxSubToolNames(*tool)
+	// 应用清单：工具名写进枚举，描述供 details 回查
+	tools := make([]LTPXRemoteToolRef, 0, len(status.Tools))
+	names := make([]string, 0, len(status.Tools))
+	for _, t := range status.Tools {
+		if t.Name == "" {
+			continue
+		}
+		tools = append(tools, LTPXRemoteToolRef{Name: t.Name, Description: t.Description})
+		names = append(names, t.Name)
+	}
+
+	// 应用清单变化时打日志（避免每轮重复刷屏）
 	if len(names) > 0 && !equalStrings(names, ltpLoggedSubTools) {
 		ltpLoggedSubTools = names
 		LoggerGeneral.Info("LunarCore", "已同步 LTPX 工具: \n%s", strings.Join(names, "\n"))
 	}
-	return &LTPXRemoteStatusResult{Tool: tool}
+	return &LTPXRemoteStatusResult{Tool: tool, Tools: tools}
 }
 
 // equalStrings 比较两个字符串切片是否完全相同（工具清单日志去重）
@@ -70,26 +80,6 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
-}
-
-// ltpxSubToolNames 从聚合工具的 description 中提取子工具名清单。
-// buildUseTheProgram 以「- 工具名：功能简述」逐行罗列，此处按行取首个「：」前的名称。
-func ltpxSubToolNames(tool LTPXRemoteToolDef) []string {
-	var names []string
-	for _, line := range strings.Split(tool.Description, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "- ") {
-			continue
-		}
-		entry := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
-		if idx := strings.Index(entry, "："); idx > 0 {
-			entry = strings.TrimSpace(entry[:idx])
-		}
-		if entry != "" {
-			names = append(names, entry)
-		}
-	}
-	return names
 }
 
 // callLTPXRemoteTool 进程内调用工具并返回文本结果。

@@ -1216,6 +1216,20 @@ var agentSystem = (function (exports) {
         if (cachedMessages.length > MAX_CACHE_MESSAGES)
             cachedMessages = cachedMessages.slice(-MAX_CACHE_MESSAGES);
     }
+    function repairHandleImageURL(source) {
+        const match = /^\/file\/read\/(@[DIVAT]\.\d{3,})\/?$/.exec(String(source || ''));
+        if (!match)
+            return source;
+        try {
+            const [resource, error] = resourceRead(match[1], 1);
+            if (!error && resource && !resource.lost && resource.blob_path)
+                return '/file/read/' + resource.blob_path;
+        }
+        catch (error) {
+            console.warn('[对话缓存] 句柄图片地址修复失败:', error);
+        }
+        return source;
+    }
     function appendCachedMessage(record) {
         cachedMessages.push(record);
         trimCache();
@@ -1301,6 +1315,22 @@ var agentSystem = (function (exports) {
                 .slice(-MAX_CACHE_MESSAGES);
             let migrated = false;
             for (const record of cachedMessages) {
+                if (record.imageSrc) {
+                    const fixed = repairHandleImageURL(record.imageSrc);
+                    if (fixed !== record.imageSrc) {
+                        record.imageSrc = fixed;
+                        migrated = true;
+                    }
+                }
+                for (const attachment of record.attachments || []) {
+                    if (attachment.type !== 'image' || !attachment.src)
+                        continue;
+                    const fixed = repairHandleImageURL(attachment.src);
+                    if (fixed !== attachment.src) {
+                        attachment.src = fixed;
+                        migrated = true;
+                    }
+                }
                 if (record.role === 'assistant' && record.imageSrc && record.imageSrc.startsWith('data:image/')) {
                     const saved = saveBase64Media(record.imageSrc, 'image/jpeg', 'image');
                     if (saved) {
@@ -2597,7 +2627,7 @@ var agentSystem = (function (exports) {
             type: "function",
             function: {
                 name: "switch_diffusion_scheme",
-                description: "切换后续绘图使用的模型方案。quality=质量优先(默认,细节更好、耗时更长);turbo=速度优先(出图更快,适合草图、快速确认与批量尝试,推荐 8~12 步)。切换后省略 steps 即使用该方案的推荐步数。切换状态由宿主记录,对所有后续绘图工具生效;任务本身不需要画得快时不要切换,保持当前方案即可",
+                description: "切换后续绘图使用的模型方案。quality=质量优先(细节更好、耗时更长);turbo=速度优先(出图更快,适合草图、快速确认与批量尝试,推荐 8~12 步)。切换后省略 steps 即使用该方案的推荐步数。切换状态由宿主记录,对所有后续绘图工具生效;任务本身不需要画得快时不要切换,保持当前方案即可",
                 parameters: {
                     type: "object",
                     properties: {
@@ -3851,72 +3881,124 @@ var agentSystem = (function (exports) {
     }
 
     const CRYSTAL_TOOL_NAME = 'use_the_program';
-    const crystalTool = {
-        type: 'function',
-        function: {
-            name: CRYSTAL_TOOL_NAME,
-            description: [
-                '调用星月智能的扩展应用（如文件管理、文件编辑、窗口操作、网络搜索）。',
-                'tool 填应用名，本身即表示「打开这个应用」；instruction 填打开后要该应用完成的任务。',
-                '只打开应用时只填 tool；查询有哪些应用时只传 list=true，不要传 tool 或 instruction。'
-            ].join(''),
-            parameters: {
-                type: 'object',
-                properties: {
-                    list: {
-                        type: 'boolean',
-                        description: '仅查询可用应用清单，不执行任何操作。为 true 时不要传 tool 或 instruction（即使传了也会被忽略）'
-                    },
-                    tool: {
-                        type: 'string',
-                        description: '要使用的应用名，必须取自 list 清单（如 file_manager、file_editor）。只填本项表示打开该应用'
-                    },
-                    instruction: {
-                        type: 'string',
-                        description: '打开应用后交给它执行的具体任务，如：进入 D 盘根目录；查询北京今天的天气；把 README.md 移动到 docs 目录。只打开应用时省略；不要填「打开文件管理器」这类与 tool 重复的内容'
-                    }
-                },
-                required: []
-            }
-        }
-    };
-    function getCrystalRemoteTools() {
-        return [crystalTool];
+    let programs = [];
+    let crystalTool = buildCrystalTool(programs);
+    function programNames(list) {
+        return list.map(program => program.name);
     }
-    function queryCrystalToolchain() {
+    function buildCrystalTool(list) {
+        const names = programNames(list);
+        return {
+            type: 'function',
+            function: {
+                name: CRYSTAL_TOOL_NAME,
+                description: [
+                    '调用星月智能的扩展应用（如文件管理、文件编辑、窗口操作、网络搜索）。',
+                    'tool 只能取参数枚举中的应用名，填入即表示「打开这个应用」；instruction 填打开后要该应用完成的任务。',
+                    '只打开应用时只填 tool；需要先了解某个应用的能力时传 details=true 与 tool，此时不执行任何操作。'
+                ].join(''),
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        details: {
+                            type: 'boolean',
+                            description: '为 true 时只返回 tool 所指应用的详细说明，不执行任何操作；此时仍需传 tool'
+                        },
+                        tool: {
+                            type: 'string',
+                            enum: names.length ? names : undefined,
+                            description: names.length
+                                ? '要使用的应用名，只能取枚举值；只填本项表示打开该应用'
+                                : '要使用的应用名（当前没有可用应用）'
+                        },
+                        instruction: {
+                            type: 'string',
+                            description: '打开应用后交给它执行的具体任务，如：进入 D 盘根目录；查询北京今天的天气；把 README.md 移动到 docs 目录。只打开应用时省略；不要填「打开文件管理器」这类与 tool 重复的内容'
+                        }
+                    },
+                    required: names.length ? ['tool'] : []
+                }
+            }
+        };
+    }
+    function fetchCrystalPrograms() {
         try {
             const statusJSON = getLTPXRemoteStatus();
             const status = statusJSON ? JSON.parse(statusJSON) : {};
-            const lines = String(status.tool?.description || '')
-                .split('\n')
-                .map(line => line.trim())
-                .filter(line => line.startsWith('- '));
-            if (!lines.length)
-                return '当前没有可用的扩展应用（琉璃侧工具链为空）。';
-            return `【可用应用清单（共 ${lines.length} 个，本次仅查询，尚未打开任何应用）】\n${lines.join('\n')}\n\n选定后再次调用本工具：只打开应用只填 tool；要让应用执行任务，再填 instruction 说明任务。`;
+            if (!status?.tool?.name)
+                return null;
+            const tools = Array.isArray(status.tools) ? status.tools : [];
+            return tools
+                .map(item => ({
+                name: String(item?.name || '').trim(),
+                description: String(item?.description || '').trim()
+            }))
+                .filter(program => program.name);
         }
         catch (e) {
-            console.error('[LTPX] 应用清单查询失败:', e);
-            return '查询扩展应用清单失败，请稍后重试。';
+            console.error('[LTPX] 应用清单拉取失败:', e);
+            return null;
         }
+    }
+    function refreshCrystalPrograms() {
+        const latest = fetchCrystalPrograms();
+        if (!latest)
+            return false;
+        const oldNames = programNames(programs);
+        const newNames = programNames(latest);
+        programs = latest;
+        if (oldNames.length === newNames.length && oldNames.every((name, index) => name === newNames[index])) {
+            return false;
+        }
+        crystalTool = buildCrystalTool(programs);
+        console.info(`[LTPX] 可用应用清单已更新（${programs.length} 个）：${newNames.join('、') || '无'}`);
+        return true;
+    }
+    function queryCrystalProgramDetails(name) {
+        if (!name) {
+            return `查询应用详情失败：details=true 时还需传 tool（应用名）。当前可用应用：${programNames(programs).join('、') || '无'}。`;
+        }
+        let program = programs.find(item => item.name === name);
+        if (!program) {
+            refreshCrystalPrograms();
+            program = programs.find(item => item.name === name);
+        }
+        if (!program) {
+            return `未找到应用 ${name}；当前可用应用：${programNames(programs).join('、') || '无'}。`;
+        }
+        const description = program.description || '（该应用未提供说明）';
+        return `【${program.name}】${description}\n\n用法：只打开该应用传 tool=${program.name}；要它执行任务再填 instruction。`;
     }
     GlobalConfig.LTPfunction.set(CRYSTAL_TOOL_NAME, async (args) => {
         const parsed = typeof args === 'string' ? JSON.parse(args || '{}') : (args || {});
         const tool = String(parsed.tool || '').trim();
         const instruction = String(parsed.instruction || '').trim();
-        if (parsed.list) {
-            const note = (tool || instruction)
-                ? '\n\n提示：list=true 只查询清单，本次传入的 tool/instruction 已忽略；确定应用名后再单独调用（只打开应用只填 tool）。'
-                : '';
-            return [queryCrystalToolchain() + note, ''];
+        const detailsArg = parsed.details;
+        const detailsName = typeof detailsArg === 'string'
+            && detailsArg !== 'true' && detailsArg !== 'false'
+            ? detailsArg.trim()
+            : '';
+        if (detailsArg === true || detailsArg === 'true' || detailsName) {
+            return [queryCrystalProgramDetails(detailsName || tool), ''];
         }
         if (!tool) {
-            return ['调用失败：tool 不能为空。请先传 list=true 查询可用应用清单，再从中选择应用名填入 tool；只打开应用时无需 instruction。', ''];
+            const available = programNames(programs).join('、') || '无';
+            return [`调用失败：tool 不能为空，只能取以下应用名：${available}。只打开应用时无需 instruction。`, ''];
         }
         const argsJSON = JSON.stringify({ tool, instruction });
-        const text = await callLTPXRemoteTool(CRYSTAL_TOOL_NAME, argsJSON);
-        return [text, ''];
+        try {
+            return [await callLTPXRemoteTool(CRYSTAL_TOOL_NAME, argsJSON), ''];
+        }
+        finally {
+            refreshCrystalPrograms();
+        }
     });
+    refreshCrystalPrograms();
+    function getCrystalRemoteTools() {
+        if (programs.length === 0)
+            refreshCrystalPrograms();
+        return [crystalTool];
+    }
 
     const STICKER_COLLECTION = 'stickers';
     let stickerCollectionReady = false;

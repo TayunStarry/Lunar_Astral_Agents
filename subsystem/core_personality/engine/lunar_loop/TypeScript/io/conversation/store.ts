@@ -24,6 +24,27 @@ function trimCache(): void {
 	if (cachedMessages.length > MAX_CACHE_MESSAGES) cachedMessages = cachedMessages.slice(-MAX_CACHE_MESSAGES);
 }
 
+/**
+ * 修复历史坏图片地址：/file/read/@I.00x（把资源句柄当成了文件路径）
+ *
+ * 资源登记入口曾把 (canonicalRel, handle) 的返回顺序写反，pushImage 因此把句柄拼进
+ * /file/read/，前端与 QQ 适配器都会 404（QQ 侧报「下载文件失败: Not Found」）。
+ * 载入缓存时按句柄回查真实 blob_path；查不到就保留原样（前端显示占位，不影响启动）。
+ */
+function repairHandleImageURL(source: string): string {
+	const match = /^\/file\/read\/(@[DIVAT]\.\d{3,})\/?$/.exec(String(source || ''));
+	if (!match) return source;
+	try {
+		// 只需要 blob_path：maxBytes=1 避免把整张图读进 JS 侧
+		const [resource, error] = resourceRead(match[1], 1);
+		if (!error && resource && !resource.lost && resource.blob_path) return '/file/read/' + resource.blob_path;
+	}
+	catch (error) {
+		console.warn('[对话缓存] 句柄图片地址修复失败:', error);
+	}
+	return source;
+}
+
 /** 追加一条缓存消息（不立即写盘） */
 export function appendCachedMessage(record: CachedMessage): void {
 	cachedMessages.push(record);
@@ -107,9 +128,25 @@ export function initConversationCache(loadContext: (messages: PostMessage[]) => 
 			.map(normalizeRecord)
 			.filter((item): item is CachedMessage => !!item)
 			.slice(-MAX_CACHE_MESSAGES);
-		// 旧版前端把月华图片存成 data URI：迁移成 /file/read/ 文件地址，避免缓存越写越大
+		// 旧版前端把月华图片存成 data URI：迁移成 /file/read/ 文件地址，避免缓存越写越大；
+		// 同时修复历史回归留下的 /file/read/@I.00x 句柄地址（见 repairHandleImageURL）
 		let migrated = false;
 		for (const record of cachedMessages) {
+			if (record.imageSrc) {
+				const fixed = repairHandleImageURL(record.imageSrc);
+				if (fixed !== record.imageSrc) {
+					record.imageSrc = fixed;
+					migrated = true;
+				}
+			}
+			for (const attachment of record.attachments || []) {
+				if (attachment.type !== 'image' || !attachment.src) continue;
+				const fixed = repairHandleImageURL(attachment.src);
+				if (fixed !== attachment.src) {
+					attachment.src = fixed;
+					migrated = true;
+				}
+			}
 			if (record.role === 'assistant' && record.imageSrc && record.imageSrc.startsWith('data:image/')) {
 				const saved = saveBase64Media(record.imageSrc, 'image/jpeg', 'image');
 				if (saved) {

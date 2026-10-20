@@ -6,7 +6,7 @@ export const runtimeTools: ToolCall[] = [
 		type: "function",
 		function: {
 			name: "switch_diffusion_scheme",
-			description: "切换后续绘图使用的模型方案。quality=质量优先(默认,细节更好、耗时更长);turbo=速度优先(出图更快,适合草图、快速确认与批量尝试,推荐 8~12 步)。切换后省略 steps 即使用该方案的推荐步数。切换状态由宿主记录,对所有后续绘图工具生效;任务本身不需要画得快时不要切换,保持当前方案即可",
+			description: "切换后续绘图使用的模型方案。quality=质量优先(细节更好、耗时更长);turbo=速度优先(出图更快,适合草图、快速确认与批量尝试,推荐 8~12 步)。切换后省略 steps 即使用该方案的推荐步数。切换状态由宿主记录,对所有后续绘图工具生效;任务本身不需要画得快时不要切换,保持当前方案即可",
 			parameters: {
 				type: "object",
 				properties: {

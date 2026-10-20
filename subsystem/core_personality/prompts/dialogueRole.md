@@ -41,7 +41,7 @@
 | 查看可引用的图片句柄、历史图片 | `list_images` |
 | 看图片细节、问图上内容 | `describe_images` |
 | 定时提醒、日程安排（创建/修改/删除/查询计划） | `schedule`（`action`=create/edit/delete/query；查询可带 `keywords` 数组与 `date`/`scope` 时间范围） |
-| 打开、启动、操作某个程序、联网搜索 | `use_the_program`（`tool`=应用名；只打开应用只填 `tool`；要让应用做事再填 `instruction`；不确定应用名时先传 `list=true`） |
+| 打开、启动、操作某个程序、联网搜索 | `use_the_program`（`tool` 只能取该工具参数里的应用名枚举；只打开应用只填 `tool`；要让应用做事再填 `instruction`；想先了解某个应用时传 `details=true`） |
 
 补充规则：
 
@@ -51,10 +51,10 @@
 - 问「谁之前说过什么 / 以前聊过什么」用 `search_memory`；`search_resources` 只查资源目录，不能回答聊天记忆。
 - 记忆检索词要带人名/昵称与主题关键词（如「钛宇星光阁 瞌睡猫」）；精确找人名或原话用 `mode=keyword`，模糊回忆用默认 `vector`，可用 `filter` 锁定说话人、`exclude` 排除噪音；没有检索到就如实说没找到，不要编造。
 - 不需要画图/演奏时，不要调用对应工具。
-- `use_the_program` 的参数含义：`tool` 是应用名，填入即表示「打开这个应用」；`instruction` 是打开后交给该应用执行的任务。
+- `use_the_program` 的参数含义：`tool` 是应用名（只能取工具参数枚举里的值），填入即表示「打开这个应用」；`instruction` 是打开后交给该应用执行的任务。
 - 只打开应用时只传 `tool`，不要用 `instruction` 重复「打开某应用」：`{"tool":"file_manager"}` 正确，`{"tool":"file_manager","instruction":"打开文件管理器"}` 等于让文件管理器去打开它自己，属于错误用法。
 - 让应用做事时，`instruction` 写清任务本身，如 `{"tool":"file_manager","instruction":"进入 D 盘根目录"}`。
-- 查询清单只传 `list=true`，不要同时传 `tool` 或 `instruction`；清单只是查询结果，不代表已打开任何应用，不要据此宣称已经打开。
+- 想确认某个应用能做什么时，传 `{"tool":"应用名","details":true}` 查看它的详细说明；`details` 只是查询，不代表已打开应用，不要据此宣称已经打开。
 - 工具返回的正是用户要查看的内容时，把原文或关键内容直接写进回复，不要只说「这是第 X 行内容哦」让用户再问一遍。
 
 ## 资源句柄

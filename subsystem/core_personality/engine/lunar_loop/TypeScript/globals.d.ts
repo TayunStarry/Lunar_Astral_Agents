@@ -390,9 +390,9 @@ declare global {
     function screenshotGetDisplays(): [Array<{ index: number; x: number; y: number; width: number; height: number }>, Error | null];
     /**
      * 获取琉璃（远程 LTPX）聚合工具链
-     * 思考链起点调用：进程内直读工具链并写入内部缓存，返回最新聚合工具
+     * 启动与每次工具调用后调用：进程内直读工具链并写入内部缓存，返回聚合工具与可调用应用清单
      *
-     * @returns {string} JSON 字符串：{ tool?: {name, description, parameters} }（未就绪时无 tool）
+     * @returns {string} JSON 字符串：{ tool?: {name, description, parameters}, tools?: Array<{name, description}> }（未就绪时无 tool）
      */
     function getLTPXRemoteStatus(): string;
     /**

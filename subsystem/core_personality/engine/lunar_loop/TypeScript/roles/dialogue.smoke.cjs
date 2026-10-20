@@ -59,6 +59,12 @@ globalThis.listResources = () => [];
 // 宿主不提供 resizeImage（思维链不允许自己缩放图片，见 docs/adr/0008）
 globalThis.visionRead = () => [null, null];
 globalThis.mediaSegment = () => [];
+// LTPX 桩：模块加载即拉取应用清单（工具名写进 use_the_program 的枚举）
+globalThis.getLTPXRemoteStatus = () => JSON.stringify({
+	tool: { name: 'use_the_program' },
+	tools: [{ name: 'fake_tool', description: '冒烟测试桩工具' }],
+});
+globalThis.callLTPXRemoteTool = async () => '桩调用结果';
 // 对话缓存写入桩：只记录调用，不落盘
 globalThis.saveFile = (name) => [name, name, null];
 

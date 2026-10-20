@@ -429,9 +429,9 @@ func reprTitle(html string) string {
 }
 
 // buildMiniLTPToolDesc 生成 Mini-LTP 页面操作工具的一句能力简介。
-// 收敛协议下，聚合工具 use_the_program 的清单逐条取工具描述的首句，
+// 聚合工具 use_the_program 的 details 查询会按工具名原样返回该描述，
 // 因此生成的描述必须是「一句话能力简介」——以模块名称为对象、取用户描述首句作为能力，
-// 保证月华看清单时能一眼识别该工具用途，且不会因多句模板被首句截断而丢失关键信息。
+// 保证月华按名查询时能一眼识别该工具用途，且不会因多句模板过长而丢失关键信息。
 func buildMiniLTPToolDesc(id, title, description string) string {
 	readable := strings.TrimSpace(title)
 	if readable == "" {

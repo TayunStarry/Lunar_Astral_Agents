@@ -145,7 +145,9 @@ func SendGroupTextMessage(groupID int64, content string, replyToUserID int64) er
 
 // SendPrivateImageMessage 发送私聊图片消息（base64 数据或 http 链接）
 func SendPrivateImageMessage(userID int64, images []string) error {
-	if err := postMessage("/send_private_msg", map[string]any{"user_id": userID}, imageSegments(images)); err != nil {
+	segments, cleanup := imageSegments(images)
+	defer cleanup()
+	if err := postMessage("/send_private_msg", map[string]any{"user_id": userID}, segments); err != nil {
 		return err
 	}
 	return nil
@@ -153,7 +155,9 @@ func SendPrivateImageMessage(userID int64, images []string) error {
 
 // SendGroupImageMessage 发送群图片消息（base64 数据或 http 链接）
 func SendGroupImageMessage(groupID int64, images []string) error {
-	if err := postMessage("/send_group_msg", map[string]any{"group_id": groupID}, imageSegments(images)); err != nil {
+	segments, cleanup := imageSegments(images)
+	defer cleanup()
+	if err := postMessage("/send_group_msg", map[string]any{"group_id": groupID}, segments); err != nil {
 		return err
 	}
 	return nil
@@ -184,21 +188,35 @@ func atSegment(qq string) map[string]any {
 	}
 }
 
-// imageSegments 将图片列表转为消息段
+// imageSegments 将图片列表转为消息段，并返回临时文件清理函数
 //
 // 输入统一为 URL（相对服务路径 /file/read/... 或 http(s):// 绝对地址）：
 //   - 绝对 http(s) URL 原样交给 NapCat；
 //   - 相对服务路径补全为本机 HTTP 地址（NapCat 与宿主同机部署，可直接访问）；
+//   - 超出 QQ 上传上限的本机大图先压成临时 JPEG（见 image_media.go），避免
+//     sendMsg 报「rich media transfer failed」；
 //   - 历史 base64 / data URI 仅作兜底，不再作为常规输出形态。
-func imageSegments(images []string) []map[string]any {
+func imageSegments(images []string) ([]map[string]any, func()) {
 	segments := make([]map[string]any, 0, len(images))
+	var temps []string
 	for _, img := range images {
+		source := outboundImageSource(img)
+		if compressed, ok := compressImageForQQ(img); ok {
+			source = compressed
+			temps = append(temps, compressed)
+		}
 		segments = append(segments, map[string]any{
 			"type": "image",
-			"data": map[string]string{"file": outboundImageSource(img)},
+			"data": map[string]string{"file": source},
 		})
 	}
-	return segments
+	// postMessage 是同步调用（NapCat 读完文件后才返回），返回后即可清理临时副本
+	cleanup := func() {
+		for _, path := range temps {
+			_ = os.Remove(path)
+		}
+	}
+	return segments, cleanup
 }
 
 // outboundImageSource 把内部图片地址归一为 NapCat 可消费的 URL

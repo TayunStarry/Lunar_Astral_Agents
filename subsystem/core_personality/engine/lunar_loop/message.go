@@ -90,7 +90,10 @@ func registerPushedImage(raw string) string {
 		rel = decoded
 	}
 	canonical, _, err := persistence.RegisterPath(rel)
-	if err != nil || canonical == "" {
+	// 兜底：canonical 必须是内容仓库路径。句柄（@I.00x）一旦混进 /file/read/，
+	// 前端与 QQ 适配器都会拿到 404（QQ 侧表现为「下载文件失败: Not Found」）。
+	// 这种情况下退回原始 URL —— 实体在我们登记前已 stat 存在，原始路径通常仍可读。
+	if err != nil || canonical == "" || strings.HasPrefix(canonical, "@") {
 		return raw
 	}
 	return readPrefix + canonical
