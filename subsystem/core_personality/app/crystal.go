@@ -1,9 +1,7 @@
 package app
 
 import (
-	"context"
 	"net/http"
-	"time"
 
 	"CorePersonality/clients"
 	"CorePersonality/crystal"
@@ -21,15 +19,21 @@ func assembleCrystal() error {
 		LoggerGeneral.Warn("CorePersonality", "统一资源目录初始化失败: %v (不影响服务启动)", err)
 	}
 
-	// ==== 知识库（SQLite） ====
+	// ==== 知识库（SQLite，仅用户/插件自建表） ====
 	if err := file.InitKnowledgeDB(*GeneralConfig.KnowledgeDBPath); err != nil {
 		LoggerGeneral.Warn("CorePersonality", "知识库初始化失败: %v (不影响服务启动)", err)
+	}
+
+	// ==== 领域数据库（media / web / text / character） ====
+	// 历史版本的内建表在上面两个 Init 中已迁出；这里统一建表并提前暴露打开失败。
+	if err := file.InitDomainDBs(); err != nil {
+		LoggerGeneral.Warn("CorePersonality", "领域数据库初始化存在失败项: %v", err)
 	}
 
 	// ==== 记忆库存储目录（仅准备本地存储结构，不产生网络请求） ====
 	file.InitMemoryDB(*GeneralConfig.MemoryDBDir)
 
-	// ==== 记忆库实例与默认集合（与月华 JS agent 行为对齐） ====
+	// ==== 记忆库实例与默认分组（与月华 JS agent 行为对齐） ====
 	initMemoryDatabase()
 
 	// ==== LTP9-Flash 引擎：注入宿主通道（前端智能体 / 单向通报 / 调试回执推送） ====
@@ -44,23 +48,14 @@ func assembleCrystal() error {
 	return nil
 }
 
-// initMemoryDatabase 自动初始化记忆库实例与默认集合（模型配置从 lunar_config.json 读取）。
-// 失败仅打印警告，不阻断服务启动，用户仍可通过记忆库面板手动初始化。
+// initMemoryDatabase 初始化记忆库实例：一次性加载全部集合，并补齐默认分组与集合名向量。
+// 模型配置与月华共用 lunar_config.json 的 agent 分组；失败仅告警，不阻断服务启动。
 func initMemoryDatabase() {
 	if err := file.MemoryInitInstance(); err != nil {
-		LoggerGeneral.Warn("CorePersonality", "记忆库实例初始化失败: %v (可手动通过记忆库面板初始化)", err)
+		LoggerGeneral.Warn("CorePersonality", "记忆库初始化失败: %v（可稍后通过 /memory/init 重试）", err)
 		return
 	}
-	LoggerGeneral.Info("CorePersonality", "记忆库实例初始化完成 (模型配置从 lunar_config.json 读取)")
-
-	// 探针文本嵌入定维度，含网络请求，加超时保护
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	if err := file.CollectionInit(ctx, crystal.DefaultMemoryCollection, crystal.DefaultMemoryModelName); err != nil {
-		LoggerGeneral.Warn("CorePersonality", "集合 [%s] 创建失败: %v (可手动通过记忆库面板初始化)", crystal.DefaultMemoryCollection, err)
-		return
-	}
-	LoggerGeneral.Info("CorePersonality", "集合 [%s] 创建成功, 模型: %s", crystal.DefaultMemoryCollection, crystal.DefaultMemoryModelName)
+	LoggerGeneral.Info("CorePersonality", "记忆库初始化完成（全部集合已加载，默认分组与集合名向量已就绪）")
 }
 
 // crystalStaticRoot 琉璃桌面的静态资源根（clients/crystal 子树，含 file-runner 编辑运行等内置子页）

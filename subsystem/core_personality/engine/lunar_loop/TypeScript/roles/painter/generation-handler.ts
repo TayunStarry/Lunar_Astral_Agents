@@ -10,7 +10,7 @@ export function handleDiffusionGeneration(host: PainterHost, args: DiffusionGene
 		if (!prompt.trim()) return '扩散生成失败：正向提示词不能为空';
 		/** 输出尺寸计划（文生图无参考图，取比例预设） */
 		const plan = resolveDimensionPlan(args.ratio);
-		/** 迭代步数（0 表示交引擎按 sd_steps 处理） */
+		/** 迭代步数（0 表示交引擎按当前方案推荐步数处理，方案未配置时回退 sd_steps） */
 		const steps = normalizeSteps(args.steps, '扩散生成');
 		console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...，画面比例: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
 		return host.paint({

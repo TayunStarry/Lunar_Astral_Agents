@@ -31,6 +31,9 @@ var (
 	storeMu sync.RWMutex
 	// logStores 各来源日志缓冲（下标对应 LogSource）
 	logStores [sourceCount][]LogLine
+	// logStoreVersions 各来源日志追加版本号：环形缓冲满后长度恒为 logStoreCap，
+	// 不能再用 len(logs) 判断“有没有新内容”（否则视图缓存永远不刷新）。
+	logStoreVersions [sourceCount]uint64
 
 	// notifyCh 日志/事件到达通知（TUI 唤醒信号，缓冲 1 防阻塞）
 	notifyCh = make(chan struct{}, 1)

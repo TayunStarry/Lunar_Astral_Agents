@@ -164,6 +164,15 @@ func GracefulShutdown(reason string) {
 		if err := file.CloseArchiveDB(); err != nil {
 			LoggerGeneral.Warn("CorePersonality", "关闭资源目录失败: %v", err)
 		}
+		// 知识库与领域库（media / web / text / character）一并释放
+		if file.KnowledgeDatabase != nil {
+			if err := file.KnowledgeDatabase.Close(); err != nil {
+				LoggerGeneral.Warn("CorePersonality", "关闭知识库失败: %v", err)
+			}
+		}
+		if err := file.CloseDomainDBs(); err != nil {
+			LoggerGeneral.Warn("CorePersonality", "关闭领域数据库失败: %v", err)
+		}
 		if ws.Instance != nil {
 			ws.Instance.CloseAll()
 		}

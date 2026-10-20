@@ -2,9 +2,11 @@ package multimodal
 
 // 动态图（GIF / APNG / 动态 WebP）检测与帧提取
 //
-// 动态图不再视频化：按「开头稠密、结尾稀疏」的规则智能选择至多 64 帧、
-// 长边不超过 AnimatedFrameMaxDim，交由多模态模型按序列帧理解。
-// 序列帧实现见 video_frame.go 的 AnimatedImageToFrames，选择规则见 animated_select.go。
+// 动态图不再视频化：先经分析通道（32×32 缩略网格）做循环裁剪、运动窗口识别与
+// 近重复去重，再按分层自适应规则选出至多 64 帧（长边 ≤ AnimatedFrameMaxDim），
+// 交由多模态模型按序列帧理解。
+// 分析与智能选帧见 animated_analyze.go / animated_smart.go，
+// 数量骨架回退见 animated_select.go，序列帧实现见 video_frame.go。
 
 import (
 	"bytes"
@@ -20,9 +22,9 @@ import (
 )
 
 const (
-	// AnimatedSampleFps 视频抽帧频率，需与 --video-fps 保持一致
-	// （见 lunar_astral/model/llama/proxy.go）
-	AnimatedSampleFps = 0.5
+	// AnimatedSampleFps 视频采样网格步长（1fps），需与 models.ini 的 --video-fps 保持一致；
+	// 80 秒分组 = 80 帧，长边 ≤640 时单帧 ≤171 token，单组 ≤13.7k，适配 20480 上下文
+	AnimatedSampleFps = 1.0
 	// AnimatedFrameMaxDim 动态图序列帧的最大边长（约束视觉 token 量）
 	AnimatedFrameMaxDim = 640
 )

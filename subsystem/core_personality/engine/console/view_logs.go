@@ -23,9 +23,9 @@ type logsState struct {
 	source  LogSource
 	offset  int
 	follow  bool
-	lines   int // 当前内容行数（位置指示与滚动步长用）
-	lastSeq int // 上次构建时的日志条数
-	lastW   int // 上次构建时的折行宽度
+	lines   int    // 当前内容行数（位置指示与滚动步长用）
+	lastSeq uint64 // 上次构建时的日志追加版本号（不能用条数：环形缓冲满后长度不变）
+	lastW   int    // 上次构建时的折行宽度
 	cache   []string
 	// renderLine 单行渲染器（nil=按级别/来源着色；绘图引擎屏注入专用排版）
 	renderLine func(LogLine) string
@@ -33,7 +33,7 @@ type logsState struct {
 
 // newLogsState 构建指定来源的日志视图
 func newLogsState(source LogSource) logsState {
-	return logsState{source: source, follow: true, lastSeq: -1}
+	return logsState{source: source, follow: true}
 }
 
 // reset 丢弃缓存并要求重新构建（清空日志或重新进入日志屏时调用）
@@ -41,7 +41,7 @@ func (s *logsState) reset() {
 	s.offset = 0
 	s.follow = true
 	s.cache = nil
-	s.lastSeq = -1
+	s.lastSeq = 0
 	s.lastW = 0
 	s.lines = 0
 }
@@ -58,8 +58,8 @@ func (s *logsState) render(line LogLine) string {
 // 必须同时被 Update（刷新行数供滚动计算）与 View（实际取内容）调用：
 // 只在 View 里更新的派生状态不会写回模型，按键时便看不到真实行数。
 func (s *logsState) content(width int) []string {
-	logs := GetLogs(s.source)
-	if s.cache != nil && len(logs) == s.lastSeq && width == s.lastW {
+	logs, version := GetLogsWithVersion(s.source)
+	if s.cache != nil && version == s.lastSeq && width == s.lastW {
 		return s.cache
 	}
 	if width < 8 {
@@ -70,7 +70,7 @@ func (s *logsState) content(width int) []string {
 		lines = append(lines, wrapPlain(s.render(line), width)...)
 	}
 	s.cache = lines
-	s.lastSeq = len(logs)
+	s.lastSeq = version
 	s.lastW = width
 	s.lines = len(lines)
 	return s.cache

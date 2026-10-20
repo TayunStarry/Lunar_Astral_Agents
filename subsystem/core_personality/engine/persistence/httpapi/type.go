@@ -23,14 +23,17 @@ type resourceAdmitDocumentRequest struct {
 	Name string `json:"name"` // 原始文件名
 }
 
-// memoryAddRequest v5 统一添加请求（文本和图片共用）
-// 若 Base64 字段非空，则视为图片记忆；否则为文本记忆
+// memoryAddRequest 记忆添加请求（文本 / 图片 / 音频共用，type 指定类型）
 type memoryAddRequest struct {
-	Role                   string `json:"role,omitempty"`                    // 消息角色，文本记忆使用
-	Content                string `json:"content,omitempty"`                 // 文本内容，文本记忆使用
-	Base64                 string `json:"base64,omitempty"`                  // 图片 base64 数据，图片记忆使用
-	RecognitionOrientation string `json:"recognition_orientation,omitempty"` // 图片识别取向标识（auto/emotion/text/color/appearance/species/posture/custom）
-	RecognitionCustom      string `json:"recognition_custom,omitempty"`      // 自定义识别取向参考文本（仅 custom 使用）
+	Type                   string   `json:"type,omitempty"`                    // 记忆类型：text / image / audio（空=按字段推断）
+	Role                   string   `json:"role,omitempty"`                    // 消息角色，文本记忆使用
+	Content                string   `json:"content,omitempty"`                 // 文本内容，文本记忆使用
+	Base64                 string   `json:"base64,omitempty"`                  // 图片/音频 base64 数据
+	Description            string   `json:"description,omitempty"`             // 音频记忆描述（用于嵌入与归组）
+	Tags                   []string `json:"tags,omitempty"`                    // 文本记忆显式标签（以标签文本嵌入）
+	Source                 string   `json:"source,omitempty"`                  // 写入来源标记（如 action）
+	RecognitionOrientation string   `json:"recognition_orientation,omitempty"` // 图片识别取向标识（auto/emotion/text/color/appearance/species/posture/custom）
+	RecognitionCustom      string   `json:"recognition_custom,omitempty"`      // 自定义识别取向参考文本（仅 custom 使用）
 }
 
 type memoryDeleteRequest struct {
@@ -44,19 +47,23 @@ type memoryInitRequest struct {
 }
 
 // memoryCollectionRequest 创建/打开集合请求
-// v5: 文本与图片记忆混合存储，不再需要集合类型；模型名从 config 模块读取
+// 集合是内容自动归入的分组；创建时按集合名调用嵌入模型生成名称向量
 type memoryCollectionRequest struct {
+	Name string `json:"name"`
 }
 
-// memoryMessageData v5 查询结果单条记忆（文本和图片统一，客户端依据 content/base64 区分）
+// memoryMessageData 记忆条目（文本/图片/音频统一，客户端依据 type 取用对应内容）
 type memoryMessageData struct {
-	ID         string  `json:"id"`                  // 消息 ID
-	Role       string  `json:"role"`                // 消息角色，图片记忆为 "image"
-	Content    string  `json:"content"`             // 文本内容，文本记忆使用；图片记忆为空
-	URL        string  `json:"url,omitempty"`       // 图片读取地址（multimedia/<集合名> 下的文件）
-	Base64     string  `json:"base64,omitempty"`    // 旧版图片内联数据（仅历史数据兼容）
-	Similarity float32 `json:"similarity"`          // 内容向量余弦相似度 [0, 1]
-	Timestamp  int64   `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳，旧数据无此字段
+	ID         string  `json:"id"`                   // 消息 ID
+	Type       string  `json:"type"`                 // 记忆类型：text / image / audio
+	Role       string  `json:"role"`                 // 消息角色，图片记忆为 "image"
+	Content    string  `json:"content"`              // 文本内容，文本记忆使用；音频记忆为描述
+	URL        string  `json:"url,omitempty"`        // 媒体读取地址（multimedia|audios/<集合名> 下的文件）
+	Base64     string  `json:"base64,omitempty"`     // 旧版图片内联数据（仅历史数据兼容）
+	Collection string  `json:"collection,omitempty"` // 内容所属分组集合名
+	Source     string  `json:"source,omitempty"`     // 写入来源标记
+	Similarity float32 `json:"similarity"`           // 内容向量余弦相似度 [0, 1]
+	Timestamp  int64   `json:"timestamp,omitempty"`  // 入库时间 Unix 秒级时间戳，旧数据无此字段
 }
 
 type memoryStatsData struct {
@@ -64,23 +71,27 @@ type memoryStatsData struct {
 	Initialized   bool `json:"initialized"`
 	EntryCount    int  `json:"entry_count"`
 	SyncMismatch  bool `json:"sync_mismatch"` // 维度不符文档存在标记
+	TextCount     int  `json:"text_count"`
+	ImageCount    int  `json:"image_count"`
+	AudioCount    int  `json:"audio_count"`
 }
 
 type memoryQueryData struct {
 	Query      string              `json:"query"`
+	Type       string              `json:"type"`
 	TopK       int                 `json:"top_k"`
 	Results    []memoryMessageData `json:"results"`
 	TotalFound int                 `json:"total_found"`
 }
 
-// memoryCollectionInfo v2 集合信息
+// memoryCollectionInfo 集合信息（分组）
 type memoryCollectionInfo struct {
-	Name            string `json:"name"`
-	EmbeddingModel  string `json:"embedding_model"`
-	Dimension       int    `json:"dimension"`
-	Count           int    `json:"count"`
-	Type            string `json:"type"`
-	MultimodalModel string `json:"multimodal_model,omitempty"`
-	Version         int    `json:"version"`
-	TagCount        int    `json:"tag_count"`
+	Name                   string `json:"name"`
+	EmbeddingModel         string `json:"embedding_model"`
+	Dimension              int    `json:"dimension"`
+	Count                  int    `json:"count"`
+	Version                int    `json:"version"`
+	HasNameEmbedding       bool   `json:"has_name_embedding"`
+	NameEmbeddingDimension int    `json:"name_embedding_dimension"`
+	NameEmbeddingModel     string `json:"name_embedding_model,omitempty"`
 }

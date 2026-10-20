@@ -3,36 +3,30 @@ import { PostMessage } from '../config/model';
 import { RandomFloor } from '../tools/math';
 import { saveBase64Media } from '../io/conversation/codec';
 
-/** 表情包记忆库集合名（image 类型集合，由 memory.store 前端管理） */
-const STICKER_COLLECTION = 'stickers';
-/** 表情包集合是否已确认就绪（避免重复初始化） */
-let stickerCollectionReady = false;
+/** 记忆类型：文本 / 图像 / 音频（查询只按类型过滤，不再按集合名过滤） */
+export type MemoryMediaType = 'text' | 'image' | 'audio';
 
-/** 动作组记忆集合名（text 类型集合，动作名逐条入库） */
-const ACTION_COLLECTION = 'actions';
-/** 动作集合是否已确认就绪（避免重复初始化） */
-let actionCollectionReady = false;
-
-/** 长期对话记忆集合名 */
-export const LUNAR_MESSAGES_COLLECTION = 'lunar_messages';
-
-/** 跨集合检索时跳过的非对话集合（图片库 / 动作库） */
-const NON_CONVERSATION_COLLECTIONS = new Set([STICKER_COLLECTION, ACTION_COLLECTION]);
+/** 动作记忆的来源标记：写入时打标，动作匹配时优先取这一类文本记忆 */
+const ACTION_SOURCE = 'action';
 
 /** 跨集合记忆检索命中 */
 export interface MemorySearchHit {
     /** 记忆文档 ID */
     id: string;
-    /** 命中的集合名 */
-    collection: string;
+    /** 记忆类型 */
+    type: string;
     /** 记忆角色（user / assistant / image 等） */
     role: string;
-    /** 记忆正文（图片记忆为空，已跳过） */
+    /** 记忆正文（文本记忆；图像/音频记忆通常为空） */
     content: string;
     /** 内容向量余弦相似度 */
     similarity: number;
     /** 入库时间 Unix 秒级时间戳（旧数据可能为空） */
     timestamp?: number;
+    /** 内容自动归入的分组集合名 */
+    collection?: string;
+    /** 写入来源标记（如 action） */
+    source?: string;
 }
 
 /** 记忆检索方式：向量语义 / 关键词 / 正则 */
@@ -46,27 +40,6 @@ export interface MemorySearchOptions {
     filters?: string[];
     /** 命中任意一个就排除的过滤词 */
     exclude?: string[];
-}
-
-/** 列出可检索的对话类集合（过滤图片库与动作库） */
-export function listMemoryCollections(): string[] {
-    try {
-        // 确保记忆库实例与默认集合已初始化（幂等）
-        if (!ensureMemoryReady()) return [];
-        const [names, error] = memoryListCollections();
-        if (error || !names) {
-            console.error('[记忆检索] 列出集合失败:', error?.message ?? String(error ?? '返回为空'));
-            return [];
-        }
-        return names.filter(name =>
-            !!name
-            && !NON_CONVERSATION_COLLECTIONS.has(name)
-        );
-    }
-    catch (error) {
-        console.error('[记忆检索] 列出集合抛异常:', error);
-        return [];
-    }
 }
 
 /** 规整过滤词：去空白、小写、去重 */
@@ -89,11 +62,10 @@ function containsAny(content: string, terms: string[]): boolean {
 }
 
 /**
- * 跨集合全局检索：按指定方式（向量 / 关键词 / 正则）检索每个对话类集合，
- * 合并、过滤、去重后取前 N 条。
+ * 全局检索：按指定方式检索全部集合中的**文本类型**记忆，过滤后返回前 N 条。
  *
- * 集合清单属于实现细节，不暴露给模型：调用方只说「查什么」，本函数自行枚举
- * 全部对话类集合（跳过表情包与动作库）。
+ * 集合清单属于实现细节，不暴露给模型：调用方只说「查什么、怎么查、过滤什么、要几条」。
+ * 月华思维链里的记忆引用固定为文本类型；表情包等图像记忆走 queryEmotionSticker。
  *
  * @param query 正向检索词（向量模式的语义查询 / 关键词模式的空格分词 / 正则模式的表达式）
  * @param limit 返回条数上限（默认 8，最大 30）
@@ -109,78 +81,72 @@ export function searchMemoryGlobal(
     if (!text) return [];
     const mode: MemorySearchMode = options.mode || 'vector';
     const safeLimit = Math.min(Math.max(Math.trunc(limit) || 8, 1), 30);
-    const collections = listMemoryCollections();
-    if (collections.length === 0) return [];
 
     const filters = normalizeTerms(options.filters);
     const exclude = normalizeTerms(options.exclude);
-    /** 每个集合的检索条数：至少覆盖请求条数，避免合并后不足 */
-    const perCollection = Math.min(Math.max(safeLimit, 4), 30);
     /** 关键词模式的词项（全部命中）；正则模式整串作为表达式 */
     const terms = mode === 'regex' ? [text] : text.split(/\s+/).filter(Boolean);
     if (terms.length === 0) return [];
 
-    const hits: MemorySearchHit[] = [];
-    for (const collection of collections) {
-        try {
-            const [results, error] = mode === 'vector'
-                ? memoryQuery(collection, text, perCollection)
-                : memoryKeywordSearch(collection, terms, mode === 'regex', perCollection);
-            if (error || !results) continue;
-            for (const item of results as Array<{ id?: string; role?: string; content?: string; similarity?: number; timestamp?: number }>) {
-                const content = String(item.content || '').trim();
-                // 图片记忆没有正文，跳过（跨集合检索只取可读文本）
-                if (!content) continue;
-                if (!containsAll(content, filters)) continue;
-                if (containsAny(content, exclude)) continue;
-                hits.push({
-                    id: String(item.id || ''),
-                    collection,
-                    role: String(item.role || 'unknown'),
-                    content,
-                    similarity: Number(item.similarity) || 0,
-                    timestamp: item.timestamp,
-                });
-            }
+    try {
+        const [results, error] = mode === 'vector'
+            ? memoryQuery(text, 'text', safeLimit)
+            : memoryKeywordSearch('text', terms, mode === 'regex', safeLimit);
+        if (error || !results) {
+            if (error) console.error('[记忆检索] 查询失败:', error?.message ?? String(error));
+            return [];
         }
-        catch (error) {
-            console.error(`[记忆检索] 集合 ${collection} 查询异常:`, error);
+
+        const hits: MemorySearchHit[] = [];
+        for (const item of results) {
+            const content = String(item.content || '').trim();
+            // 纯媒体记忆没有正文，跳过（文本类型查询理论上不会返回）
+            if (!content) continue;
+            // 动作记忆是内部执行数据，不进入面向用户的聊天记忆检索
+            if (item.source === ACTION_SOURCE) continue;
+            if (!containsAll(content, filters)) continue;
+            if (containsAny(content, exclude)) continue;
+            hits.push({
+                id: String(item.id || ''),
+                type: String(item.type || 'text'),
+                role: String(item.role || 'unknown'),
+                content,
+                similarity: Number(item.similarity) || 0,
+                timestamp: item.timestamp,
+                collection: item.collection,
+                source: item.source,
+            });
         }
-    }
 
-    // 向量模式按相似度降序；关键词/正则模式按入库时间倒序
-    if (mode === 'vector') hits.sort((a, b) => b.similarity - a.similarity);
-    else hits.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-    // 同一段原文可能同时出现在多个集合，按内容去重
-    const seen = new Set<string>();
-    const unique = hits.filter(hit => {
-        if (seen.has(hit.content)) return false;
-        seen.add(hit.content);
-        return true;
-    });
-    const top = unique.slice(0, safeLimit);
-    if (top.length > 0) {
-        console.log(`[记忆检索] 方式=${mode}，检索「${text.slice(0, 30)}」，返回 ${top.length} 条`);
+        // 同一段原文可能同时存在于多个集合，按内容去重
+        const seen = new Set<string>();
+        const unique = hits.filter(hit => {
+            if (seen.has(hit.content)) return false;
+            seen.add(hit.content);
+            return true;
+        });
+        const top = unique.slice(0, safeLimit);
+        if (top.length > 0) {
+            console.log(`[记忆检索] 方式=${mode}，检索「${text.slice(0, 30)}」，返回 ${top.length} 条`);
+        }
+        return top;
     }
-    return top;
+    catch (error) {
+        console.error('[记忆检索] 查询异常:', error);
+        return [];
+    }
 }
 
-/** 将动作组逐个写入动作记忆库（幂等：相同/相近文本内容被记忆库去重机制自动忽略），返回是否就绪 */
+/** 将动作组逐个写入动作记忆（源标记 action；相同/相近文本由记忆库去重），返回是否就绪 */
 export function syncActionsToMemory(actionNames: string[]): boolean {
     if (!actionNames || actionNames.length === 0) return false;
     try {
-        // 首次使用时确保动作集合存在（幂等：已存在则直接打开，不清空数据）
-        if (!actionCollectionReady) {
-            const [ready] = memoryInit(ACTION_COLLECTION);
-            if (!ready) return false;
-            actionCollectionReady = true;
-        }
-        // 逐个动作名入库：以动作名作为显式标签（跳过 LLM 标签生成），重复写入被去重机制忽略
+        if (!ensureMemoryReady()) return false;
+        // 逐个动作名入库：动作名与「动作」标签共同决定嵌入与归组，重复写入被去重机制忽略
         for (const name of actionNames) {
             const trimmed = (name || '').trim();
             if (!trimmed) continue;
-            memoryAddWithTags(ACTION_COLLECTION, 'assistant', trimmed, [trimmed]);
+            memoryAddWithTags('assistant', trimmed, [trimmed, '动作'], ACTION_SOURCE);
         }
         return true;
     }
@@ -190,15 +156,15 @@ export function syncActionsToMemory(actionNames: string[]): boolean {
     }
 }
 
-/** 将文本与动作记忆库执行一次匹配，返回最高匹配度的动作名（无结果或失败时返回 null） */
+/** 将文本与动作记忆执行一次匹配，返回最高匹配度的动作名（无结果或失败时返回 null） */
 export function queryBestAction(text: string): string | null {
     if (!text || !text.trim()) return null;
     try {
-        /** 查询动作记忆库，取相似度最高的首条结果 */
-        const [results, error] = memoryQuery(ACTION_COLLECTION, text.trim(), 1);
-        // 查询失败或无结果时返回 null
+        // 全局文本检索：只在 source=action 的条目里取最佳匹配，避免把普通聊天文本当作动作名
+        const [results, error] = memoryQuery(text.trim(), 'text', 30);
         if (error || !results || results.length === 0) return null;
-        return (results[0] as { content?: string }).content || null;
+        const matched = results.find(item => item.source === ACTION_SOURCE && String(item.content || '').trim());
+        return matched ? String(matched.content).trim() : null;
     }
     catch (error) {
         console.error('[动作库] 匹配失败:', error);
@@ -206,22 +172,16 @@ export function queryBestAction(text: string): string | null {
     }
 }
 
-/** 基于查询文本从表情包记忆库检索表情包图片，返回图片 URL；无结果或失败时返回 null */
+/** 基于查询文本从图像类型记忆中检索表情包，返回图片 URL；无结果或失败时返回 null */
 export async function queryEmotionSticker(query: string): Promise<string | null> {
     if (!query || !query.trim()) return null;
     try {
-        // 首次使用时确保表情包集合存在（幂等：已存在则直接打开，不清空数据）
-        if (!stickerCollectionReady) {
-            const [ready] = memoryInit(STICKER_COLLECTION);
-            if (!ready) return null;
-            stickerCollectionReady = true;
-        }
-        /** 查询表情包记忆库 */
-        const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
-        // 查询失败或无结果时返回 null
+        if (!ensureMemoryReady()) return null;
+        /** 查询图像类型记忆（跨全部集合） */
+        const [results, error] = memoryQuery(query.trim(), 'image', 10);
         if (error || !results || results.length === 0) return null;
         /** 在查询结果中随机选择一个结果（图片记忆 url 字段） */
-        const item = results[RandomFloor(0, results.length - 1)] as { url?: string; base64?: string };
+        const item = results[RandomFloor(0, results.length - 1)];
         if (item.url) return item.url;
         // 历史记忆兼容：旧数据仍为内联 base64 时先落盘为内容仓库实体，再按 URL 返回
         if (item.base64) return saveBase64Media(item.base64, 'image/jpeg', 'sticker') || null;
@@ -259,11 +219,55 @@ export function extractMemoryText(message: PostMessage): string {
     return extractTextFromMessage(message);
 }
 
-/** 初始化记忆库 */
+/** 按 ID 读取一条记忆（跨全部集合；不存在时返回 null） */
+export function getMemoryEntry(id: string): MemorySearchHit | null {
+    try {
+        const [entry, error] = memoryGet(String(id || '').trim());
+        if (error || !entry) return null;
+        return {
+            id: String(entry.id || ''),
+            type: String(entry.type || 'text'),
+            role: String(entry.role || 'unknown'),
+            content: String(entry.content || ''),
+            similarity: Number(entry.similarity) || 0,
+            timestamp: entry.timestamp,
+            collection: entry.collection,
+            source: entry.source,
+        };
+    }
+    catch (error) {
+        console.error('[记忆] 按 ID 读取失败:', error);
+        return null;
+    }
+}
+
+/** 逐条列举记忆（跨全部集合；mediaType 为空表示全部类型，limit<=0 返回全部） */
+export function listMemoryEntries(mediaType?: MemoryMediaType, limit = 0, offset = 0): MemorySearchHit[] {
+    try {
+        const [entries, error] = memoryList(mediaType || '', limit, offset);
+        if (error || !entries) return [];
+        return entries.map(entry => ({
+            id: String(entry.id || ''),
+            type: String(entry.type || 'text'),
+            role: String(entry.role || 'unknown'),
+            content: String(entry.content || ''),
+            similarity: Number(entry.similarity) || 0,
+            timestamp: entry.timestamp,
+            collection: entry.collection,
+            source: entry.source,
+        }));
+    }
+    catch (error) {
+        console.error('[记忆] 列举失败:', error);
+        return [];
+    }
+}
+
+/** 初始化记忆库（启动时一次性加载全部集合与默认分组） */
 function initMemory(): void {
     if (GlobalConfig.memoryReady) return;
-    const [_, err] = memoryInit('lunar_messages');
-    if (err) console.error('记忆库初始化失败:', err);
+    const [ok, err] = memoryInit();
+    if (err || !ok) console.error('记忆库初始化失败:', err ?? '返回失败');
     else GlobalConfig.memoryReady = true;
 }
 

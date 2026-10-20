@@ -33,6 +33,9 @@ func InitKnowledgeDB(dbPath string) error {
 
 	KnowledgeDatabase = db
 	LoggerGeneral.Info("FileManager", "知识库初始化完成: %s", dbPath)
+	// 历史版本把媒体摘要、网页缓存、角色库、文件索引都塞在 knowledge.db：
+	// 启动时一次性搬到各自领域库，旧表搬完即删（先整库备份，失败则保留旧表待下次重试）
+	db.migrateLegacyTables(dbPath)
 	return nil
 }
 
@@ -116,10 +119,10 @@ func (d *KnowledgeDB) Ping() error {
 // 数据操作统一回归原生 SQL 语句，不再使用结构化 JSON 操作封装
 // =============================================================================
 
-// executeRawSQL 执行原生 SQL
+// executeRawSQLOn 在指定连接上执行原生 SQL（不依赖 KnowledgeDB 实例，领域库同样适用）
 // 支持带参数的占位符（params 为 []any），自动区分查询类与写操作类语句
-// dbHandle 为执行目标连接（knowledgeDB 或 fileDBs 懒打开连接）
-func (d *KnowledgeDB) executeRawSQL(dbHandle *sql.DB, op map[string]interface{}, tx *sql.Tx) OperationResult {
+// dbHandle 为执行目标连接（knowledgeDB、领域库或 fileDBs 懒打开连接）
+func executeRawSQLOn(dbHandle *sql.DB, op map[string]interface{}, tx *sql.Tx) OperationResult {
 	stmt, _ := op["sql"].(string)
 	stmt = strings.TrimSpace(stmt)
 
@@ -255,7 +258,8 @@ func ExecuteSQL(stmt string, params []any) *BatchResult {
 }
 
 // ExecuteSQLOn 指定数据源执行原生 SQL
-// db 为空或 "knowledge" 时使用知识库（knowledge.db）；
+// db 为空或 "knowledge" 时使用通用知识库（knowledge.db）；
+// "archive" / "media" / "web" / "text" / "character" 分别指向对应领域库（见 domain_db.go）；
 // 其他取值视为 database 目录内的 *.db 文件路径（去 .db，支持子目录如 "sub/foo"）：文件必须已存在
 // 且为有效 SQLite 库，连接懒打开并缓存复用，不创建新文件。执行语义与 ExecuteSQL 一致。
 func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
@@ -268,24 +272,38 @@ func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
 	}
 
 	var target *sql.DB
+	var openErr error
 	switch db {
 	case "", "knowledge":
 		if err := EnsureKnowledgeInitialized(); err != nil {
-			result.Success = false
-			result.Error = err.Error()
-			result.Results[0].Error = err.Error()
-			return result
+			openErr = err
+			break
 		}
 		target = KnowledgeDatabase.knowledgeDB
+	case "archive":
+		// 统一资源名录（句柄 / 元数据 / 段落结构）
+		if err := EnsureArchiveInitialized(); err != nil {
+			openErr = err
+			break
+		}
+		target = ArchiveDatabase.db
+	case "media":
+		target, openErr = mediaDatabase.open()
+	case "web":
+		target, openErr = webDatabase.open()
+	case "text":
+		target, openErr = textDatabase.open()
+	case "character":
+		target, openErr = characterDatabase.open()
 	default:
 		fileDB, ferr := KnowledgeDatabase.ensureFileDB(db)
-		if ferr != nil {
-			result.Success = false
-			result.Error = ferr.Error()
-			result.Results[0].Error = ferr.Error()
-			return result
-		}
-		target = fileDB
+		target, openErr = fileDB, ferr
+	}
+	if openErr != nil {
+		result.Success = false
+		result.Error = openErr.Error()
+		result.Results[0].Error = openErr.Error()
+		return result
 	}
 
 	op := map[string]any{"type": "sql", "sql": stmt}
@@ -293,12 +311,91 @@ func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
 		op["params"] = params
 	}
 
-	opResult := KnowledgeDatabase.executeRawSQL(target, op, nil)
+	opResult := executeRawSQLOn(target, op, nil)
 	result.Success = opResult.Success
 	result.Error = opResult.Error
 	result.Results[0] = opResult
 	result.TotalTime = time.Since(startTime).Milliseconds()
 	return result
+}
+
+// =============================================================================
+// 内建表分域路由与历史库迁移
+// =============================================================================
+
+// knowledgeBuiltinTables 内建逻辑表 → 实际落库的领域库。
+// 未登记的表仍落通用知识库 knowledge.db（用户 / 插件自建表）。
+var knowledgeBuiltinTables = map[string]*domainDB{
+	"video_summary":      mediaDatabase,     // 动图 / 视频 / 音频理解摘要
+	"file_mapping":       textDatabase,      // 文本文件 → 分块集合索引
+	"painter_characters": characterDatabase, // 自定义角色档案
+}
+
+// legacyBuiltinTable 旧版塞在 knowledge.db 里的内建表及其迁移列。
+type legacyBuiltinTable struct {
+	table   string
+	target  *domainDB
+	columns []string
+}
+
+// legacyKnowledgeTables 迁移清单；列顺序必须与目标表一致。
+var legacyKnowledgeTables = []legacyBuiltinTable{
+	{"video_summary", mediaDatabase, []string{"key", "value"}},
+	{"web_ltp_page_cache", webDatabase, []string{"url", "title", "domain", "summary", "query_hint", "fetched_at"}},
+	{"file_mapping", textDatabase, []string{"key", "value"}},
+	{"painter_characters", characterDatabase, []string{"key", "value"}},
+}
+
+// migrateLegacyTables 把历史 knowledge.db 的内建表搬到各自领域库，搬完即删旧表。
+// 幂等：旧表不存在则跳过；复制用 INSERT OR IGNORE，中断后重跑不会覆盖新库数据。
+// 迁移前先整库备份；备份失败则不动旧表，等下次启动重试。
+func (d *KnowledgeDB) migrateLegacyTables(dbPath string) {
+	pending := make([]legacyBuiltinTable, 0, len(legacyKnowledgeTables))
+	for _, item := range legacyKnowledgeTables {
+		ok, err := tableExists(d.knowledgeDB, item.table)
+		if err != nil {
+			LoggerGeneral.Warn("FileManager", "检查历史表 %s 失败: %v", item.table, err)
+			continue
+		}
+		if ok {
+			pending = append(pending, item)
+		}
+	}
+	if len(pending) == 0 {
+		return
+	}
+	if err := backupDatabase(d.knowledgeDB, dbPath, "before-db-split"); err != nil {
+		LoggerGeneral.Error("FileManager", "知识库拆表迁移已跳过（备份失败）: %v", err)
+		return
+	}
+	for _, item := range pending {
+		target, err := item.target.open()
+		if err != nil {
+			LoggerGeneral.Warn("FileManager", "迁移 %s 失败（打开目标库）: %v", item.table, err)
+			continue
+		}
+		copied, err := copyTableRows(d.knowledgeDB, item.table, target, item.table, item.columns)
+		if err != nil {
+			LoggerGeneral.Warn("FileManager", "迁移 %s 失败: %v", item.table, err)
+			continue
+		}
+		if _, err := d.knowledgeDB.Exec("DROP TABLE " + item.table); err != nil {
+			LoggerGeneral.Warn("FileManager", "迁移 %s 后删除旧表失败: %v", item.table, err)
+			continue
+		}
+		LoggerGeneral.Info("FileManager", "知识库表 %s 已迁入 %s 数据库（%d 行）", item.table, item.target.label, copied)
+	}
+}
+
+// knowledgeTableTarget 返回逻辑表实际落库的连接。
+func knowledgeTableTarget(table string) (*sql.DB, error) {
+	if domain, ok := knowledgeBuiltinTables[table]; ok {
+		return domain.open()
+	}
+	if err := EnsureKnowledgeInitialized(); err != nil {
+		return nil, err
+	}
+	return KnowledgeDatabase.knowledgeDB, nil
 }
 
 // =============================================================================
@@ -308,16 +405,18 @@ func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
 // knowledgeValidName 库名/表名白名单（防路径穿越与表名拼接注入）
 var knowledgeValidName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
-// KnowledgeLoadEntries 读取指定表的全部条目（月华 knowledge 存储通道）。
+// KnowledgeLoadEntries 读取指定逻辑表的全部条目（月华 knowledge 存储通道）。
 // 条目格式 [key, text][]，按 rowid 稳定排序；表不存在时返回空数组。
+// 内建表按 knowledgeBuiltinTables 路由到 media / text / character 库，其余落 knowledge.db。
 func KnowledgeLoadEntries(table string) ([][]string, error) {
 	if !knowledgeValidName.MatchString(table) {
 		return nil, fmt.Errorf("无效的知识库表名: %q", table)
 	}
-	if err := EnsureKnowledgeInitialized(); err != nil {
+	target, err := knowledgeTableTarget(table)
+	if err != nil {
 		return nil, err
 	}
-	rows, err := KnowledgeDatabase.knowledgeDB.Query("SELECT key, value FROM " + table + " ORDER BY rowid")
+	rows, err := target.Query("SELECT key, value FROM " + table + " ORDER BY rowid")
 	if err != nil {
 		if strings.Contains(err.Error(), "no such table") {
 			return [][]string{}, nil
@@ -336,16 +435,17 @@ func KnowledgeLoadEntries(table string) ([][]string, error) {
 	return entries, rows.Err()
 }
 
-// KnowledgeReplaceEntries 以「全表替换」语义写入指定表（月华 knowledge 存储通道）。
+// KnowledgeReplaceEntries 以「全表替换」语义写入指定逻辑表（月华 knowledge 存储通道）。
 // 事务内：建表（幂等）→ 清空 → 逐条插入；任一步失败整体回滚。
 func KnowledgeReplaceEntries(table string, entries [][]string) error {
 	if !knowledgeValidName.MatchString(table) {
 		return fmt.Errorf("无效的知识库表名: %q", table)
 	}
-	if err := EnsureKnowledgeInitialized(); err != nil {
+	target, err := knowledgeTableTarget(table)
+	if err != nil {
 		return err
 	}
-	tx, err := KnowledgeDatabase.knowledgeDB.Begin()
+	tx, err := target.Begin()
 	if err != nil {
 		return err
 	}

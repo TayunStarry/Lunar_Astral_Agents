@@ -37,6 +37,17 @@ declare global {
      */
     function readFile(filePath: string): [string, number, string, Error | null];
     /**
+     * 解码 base64 为字节数组（二进制专用）
+     *
+     * `atob` 返回 Go 字符串，goja 按 UTF-8 转 JS 字符串会把 PNG/JPEG 等二进制中的
+     * 非法 UTF-8 字节替换成 U+FFFD，落盘后文件损坏；图片、音频等二进制内容必须用本函数。
+     *
+     * @param {string} data base64 文本（可带 data URI 前缀由调用方自行剥离）
+     *
+     * @returns {[ArrayBuffer, Error | null]} 包含解码结果的元组，[字节缓冲区, 错误信息]
+     */
+    function base64Decode(data: string): [ArrayBuffer, Error | null];
+    /**
      * 以 UTF-8 文本读取文件（不经过 base64，适合直接解析 JSON/文本缓存）
      *
      * @param {string} filePath 文件路径
@@ -104,7 +115,7 @@ declare global {
      * 将视频本地化并写入 llama-server 媒体目录，供感知者以 file:// 引用观看
      *
      * 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径。
-     * 超过 60 秒的视频自动按 60 秒分段（FFmpeg 流复制切分）。
+     * 超过 80 秒的视频自动按 80 秒分段（长边超限时重编码归一化，否则流复制切分），切片一律不含音轨。
      *
      * @param {string} inputFile 视频地址（URL / data URI / 本地路径）
      *
@@ -116,7 +127,7 @@ declare global {
      *
      * 供不支持 llama-server「媒体目录 + file:// 引用」机制的架构（如云端 OpenAI 兼容 API）使用：
      * 在本地用 FFmpeg 抽帧并编码为 JPEG data URI，直接以多个 image_url 提交，无需服务端解码视频。
-     * 分组与 file 模式一致（每 60 秒一组），组内按 0.5fps 采样，视觉 token 量级与 file 模式相当。
+     * 分组与 file 模式一致（每 80 秒一组），组内按 1fps 采样，视觉 token 量级与 file 模式相当。
      *
      * @param {string} inputFile 视频地址（URL / data URI / 本地路径）
      *
@@ -169,7 +180,7 @@ declare global {
     /**
      * 将动态图直接解码为图片帧序列
      *
-     * 不再转码为慢放视频：长边约束到 640，按「开头稠密、结尾稀疏」规则摘取至多 64 帧，
+     * 不再转码为慢放视频：长边约束到 640，按内容感知规则（循环裁剪、运动加密、去重）摘取至多 64 帧，
      * 编码为 JPEG data URI 交给模型理解。
      *
      * @param {Blob | File | string | Uint8Array} imgData 动态图数据或地址
@@ -263,65 +274,83 @@ declare global {
      *                   引擎未就绪或缓存为空时返回 "{}"
      */
     function getAvailableActions(): string;
+    /** 记忆库条目（查询/列举/按 ID 读取共用） */
+    interface MemoryEntry {
+        /** 条目 ID */
+        id: string;
+        /** 记忆类型：text / image / audio */
+        type: string;
+        /** 消息角色（图片记忆通常为 image） */
+        role: string;
+        /** 内容所属分组集合名 */
+        collection?: string;
+        /** 写入来源标记（如 action） */
+        source?: string;
+        /** 文本内容（音频记忆为描述） */
+        content?: string;
+        /** 媒体读取地址 */
+        url?: string;
+        /** 旧版图片内联数据（仅历史数据兼容） */
+        base64?: string;
+        /** 内容向量余弦相似度（列举/按 ID 读取为 0） */
+        similarity: number;
+        /** 入库 Unix 秒时间戳（旧数据无此字段） */
+        timestamp?: number;
+    }
     /**
-     * 初始化记忆库实例并创建/打开指定集合（v5 文本/图片混合存储，仅需集合名）
-     * 模型配置从 lunar_config.json 的 memory 配置组读取
+     * 初始化记忆库实例：一次性加载全部集合，补齐默认分组与集合名向量
      *
-     * @param {string} collectionName 集合名称
+     * 模型配置与月华共用 lunar_config.json 的 agent 分组；不再按集合启动。
      *
      * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
      */
-    function memoryInit(collectionName: string): [boolean, Error | null];
+    function memoryInit(): [boolean, Error | null];
     /**
-     * 列出记忆库全部集合名（跨集合检索用）
-     *
-     * 返回的集合名可直接传给 memoryQuery；调用前无需自行 memoryInit。
+     * 列出记忆库全部分组集合名（管理/调试用途，不参与检索参数）
      *
      * @returns {[string[], Error | null]} 包含集合清单的元组，[集合名数组, 错误信息]
      */
     function memoryListCollections(): [string[], Error | null];
     /**
-     * 向指定集合添加消息
-     *
-     * @param {string} collectionName 集合名称
+     * 添加文本记忆（内容自动归入最相关的分组集合）
      *
      * @param {string} role 消息角色 (user/assistant/system/tool)
      *
      * @param {string} content 消息文本内容
-     *
-     * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
-     */
-    function memoryAdd(collectionName: string, role: string, content: string): [boolean, Error | null];
-    /**
-     * 向指定集合添加消息，携带调用方提供的显式标签（跳过 LLM 标签生成）
-     *
-     * @param {string} collectionName 集合名称
-     *
-     * @param {string} role 消息角色 (user/assistant/system/tool)
-     *
-     * @param {string} content 消息文本内容
-     *
-     * @param {string[]} tags 显式标签数组（如启发式提取的 Function/Class 名）
      *
      * @returns {[string, Error | null]} 包含操作结果的元组，[文档ID, 错误信息]
      */
-    function memoryAddWithTags(collectionName: string, role: string, content: string, tags: string[]): [string, Error | null];
+    function memoryAdd(role: string, content: string): [string, Error | null];
     /**
-     * 从指定集合查询相关消息
+     * 添加文本记忆，携带调用方提供的显式标签与来源标记
      *
-     * @param {string} collectionName 集合名称
+     * @param {string} role 消息角色 (user/assistant/system/tool)
+     *
+     * @param {string} content 消息文本内容
+     *
+     * @param {string[]} tags 显式标签数组（以标签文本计算嵌入与归组）
+     *
+     * @param {string} [source] 来源标记（如 action），用于内部区分动作记忆
+     *
+     * @returns {[string, Error | null]} 包含操作结果的元组，[文档ID, 错误信息]
+     */
+    function memoryAddWithTags(role: string, content: string, tags: string[], source?: string): [string, Error | null];
+    /**
+     * 在全部集合中检索指定类型的相关记忆
      *
      * @param {string} queryText 查询文本
      *
+     * @param {string} mediaType 返回类型：text / image / audio
+     *
      * @param {number} topK 返回的最相关结果数量
      *
-     * @returns {[Array<{id: string, role: string, content?: string, url?: string, similarity: number, timestamp?: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列（文本记忆返回 content，图片记忆返回 url；timestamp 为入库 Unix 秒时间戳，旧数据无此字段）
+     * @returns {[MemoryEntry[], Error | null]} 包含查询结果的元组，结果按相似度降序排列
      */
-    function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content?: string, url?: string, base64?: string, similarity: number, timestamp?: number }>, Error | null];
+    function memoryQuery(queryText: string, mediaType: string, topK: number): [MemoryEntry[], Error | null];
     /**
-     * 关键词 / 正则检索指定集合（不调用嵌入服务）
+     * 在全部集合中按关键词 / 正则检索指定类型的记忆（不调用嵌入服务）
      *
-     * @param {string} collectionName 集合名称
+     * @param {string} mediaType 返回类型：text / image / audio
      *
      * @param {string[]} terms 关键词数组（全部命中）或正则片段
      *
@@ -329,24 +358,39 @@ declare global {
      *
      * @param {number} limit 返回条数上限
      *
-     * @returns {[Array<{ id: string, role: string, content?: string, similarity: number, timestamp?: number }>, Error | null]}
-     *          命中结果（按入库时间倒序；similarity 固定为 0）与错误信息
+     * @returns {[MemoryEntry[], Error | null]} 命中结果（按入库时间倒序；similarity 固定为 0）与错误信息
      */
-    function memoryKeywordSearch(collectionName: string, terms: string[], useRegex: boolean, limit: number): [Array<{ id: string, role: string, content?: string, similarity: number, timestamp?: number }>, Error | null];
+    function memoryKeywordSearch(mediaType: string, terms: string[], useRegex: boolean, limit: number): [MemoryEntry[], Error | null];
     /**
-     * 从指定集合删除消息
+     * 按 ID 返回一条记忆（跨全部集合查找）
      *
-     * @param {string} collectionName 集合名称
+     * @param {string} id 记忆条目 ID
      *
-     * @param {string} id 要删除的消息ID
+     * @returns {[MemoryEntry | null, Error | null]} 包含查询结果的元组，未找到时结果为 null
+     */
+    function memoryGet(id: string): [MemoryEntry | null, Error | null];
+    /**
+     * 逐条列举记忆条目（跨全部集合）
+     *
+     * @param {string} [mediaType] 返回类型；空或省略表示全部类型
+     *
+     * @param {number} [limit] 返回条数上限；<=0 表示返回全部
+     *
+     * @param {number} [offset] 跳过条数
+     *
+     * @returns {[MemoryEntry[], Error | null]} 包含条目列表的元组
+     */
+    function memoryList(mediaType?: string, limit?: number, offset?: number): [MemoryEntry[], Error | null];
+    /**
+     * 按 ID 删除记忆（跨全部集合查找）
+     *
+     * @param {string} id 要删除的记忆 ID
      *
      * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
      */
-    function memoryDelete(collectionName: string, id: string): [boolean, Error | null];
+    function memoryDelete(id: string): [boolean, Error | null];
     /**
-     * 向 image 类型集合添加图片文档（LLM 自动生成标签）
-     *
-     * @param {string} collectionName 集合名称
+     * 添加图片记忆（LLM 自动生成标签并归组）
      *
      * @param {string} base64Image 图片 base64 数据（data:image/...;base64,...）
      *
@@ -356,7 +400,17 @@ declare global {
      *
      * @returns {[string, Error | null]} 包含操作结果的元组，[图片文档ID, 错误信息]
      */
-    function memoryAddImage(collectionName: string, base64Image: string, orientation?: string, custom?: string): [string, Error | null];
+    function memoryAddImage(base64Image: string, orientation?: string, custom?: string): [string, Error | null];
+    /**
+     * 添加音频记忆（按描述文本归组）
+     *
+     * @param {string} base64Audio 音频 base64 数据（data:audio/...;base64,...）
+     *
+     * @param {string} [description] 音频描述（用于嵌入与归组）
+     *
+     * @returns {[string, Error | null]} 包含操作结果的元组，[音频文档ID, 错误信息]
+     */
+    function memoryAddAudio(base64Audio: string, description?: string): [string, Error | null];
     /**
      * 文本转语音生成
      * 

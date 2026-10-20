@@ -1,11 +1,11 @@
-/** 知识表名：一个表对应 local_data/database/knowledge 下的一个 JSON 文件（格式 [key,text][]） */
+/** 知识逻辑表名：宿主按键路由到对应领域库（video_summary → media.db，file_mapping → text.db），其余落 knowledge.db */
 type KnowledgeTable = 'video_summary' | 'file_mapping';
 
 /**
  * 读取整表 [key,text][] 条目并构建 Map（Map 天然按 key 去重）
  *
- * @param table 表名（即 JSON 文件名，不含扩展名）
- * @returns 键值 Map，读取失败或文件不存在时返回空 Map
+ * @param table 逻辑表名（由宿主按领域路由到实际 SQLite 库）
+ * @returns 键值 Map，读取失败或表不存在时返回空 Map
  */
 function loadKnowledge(table: KnowledgeTable): Map<string, string> {
 	const [entries, error] = knowledgeLoad(table);
@@ -23,9 +23,9 @@ function loadKnowledge(table: KnowledgeTable): Map<string, string> {
 }
 
 /**
- * 将 Map 写回对应表对应的 JSON 文件（[key,text][] 落盘，按键去重）
+ * 将 Map 写回对应逻辑表（[key,text][] 落盘，按键去重）
  *
- * @param table 表名（即 JSON 文件名，不含扩展名）
+ * @param table 逻辑表名（由宿主按领域路由到实际 SQLite 库）
  * @param map 待持久化的键值 Map
  * @returns 是否成功
  */
@@ -51,6 +51,31 @@ export function getPromptFromKnowledge(key: string): string | null {
 	}
 	catch (error) {
 		console.error('[知识库] 读取视频摘要失败:', error);
+		return null;
+	}
+}
+
+/**
+ * 从媒体理解缓存中按多个候选键查找
+ *
+ * 同一张动图在不同链路里可能以 /file/read/、/file/miniature/、带 ?tag= 的
+ * 视觉地址或 multimedia/ 相对路径出现；调用方给出候选键，这里只加载一次表。
+ *
+ * @param keys 候选索引键
+ * @returns 第一条非空缓存文本或 null
+ */
+export function getPromptFromKnowledgeAny(keys: string[]): string | null {
+	if (!keys.length) return null;
+	try {
+		const map = loadKnowledge('video_summary');
+		for (const key of keys) {
+			const value = map.get(key);
+			if (typeof value === 'string' && value.trim()) return value;
+		}
+		return null;
+	}
+	catch (error) {
+		console.error('[知识库] 读取媒体理解缓存失败:', error);
 		return null;
 	}
 }

@@ -5,7 +5,7 @@
 // ---------- 用户发言跳转 ----------
 function summarizeUserMessage(msg) {
     if (msg.content && msg.content.trim()) {
-        const text = msg.content.replace(/\s+/g, ' ').trim();
+        const text = stripUserPrefix(msg.content).replace(/\s+/g, ' ').trim();
         return text.length > 30 ? text.slice(0, 30) + '…' : text;
     }
     if (msg.attachments && msg.attachments.length) {

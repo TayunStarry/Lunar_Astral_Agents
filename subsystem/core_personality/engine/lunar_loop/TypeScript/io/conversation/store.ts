@@ -2,7 +2,8 @@
 
 import type { PostMessage } from '../../config/model';
 import type { CachedMessage } from './types';
-import { saveBase64Media, stripUserPrefix, toDisplaySource, toVisionSource } from './codec';
+import { getPromptFromKnowledgeAny } from '../knowledge';
+import { fileNameOf, saveBase64Media, splitUserPrefix, toDisplaySource, toVisionSource } from './codec';
 
 /** 缓存文件（相对 LocalDir） */
 const CACHE_FILE = 'database/messages.json';
@@ -13,6 +14,8 @@ export const MAX_CACHE_MESSAGES = 48;
 let cachedMessages: CachedMessage[] = [];
 /** 上次成功写盘的序列化快照，避免同一内容重复写盘 */
 let lastSnapshot = '';
+/** 历史图片动态图判定缓存：避免每轮都解码几十 MB 的 GIF */
+const animatedHistoryCache = new Map<string, boolean>();
 
 /** 生成消息 ID（时间戳 + 随机后缀） */
 function newId(): string {
@@ -72,11 +75,18 @@ export function persistConversation(): void {
 /** 规整缓存条目（容忍旧版前端写入的缺省字段） */
 function normalizeRecord(raw: any): CachedMessage | null {
 	if (!raw || (raw.role !== 'user' && raw.role !== 'assistant')) return null;
+	let content = typeof raw.content === 'string' ? raw.content : '';
+	let sender = typeof raw.sender === 'string' ? raw.sender.trim() : '';
+	// 旧缓存可能只有正文前缀、没有 sender 字段：补出 sender 供前端展示，
+	// 正文保持原样（前缀留在缓存与模型历史里，前端渲染时再隐藏）。
+	const parsed = splitUserPrefix(content);
+	if (!sender && parsed.sender) sender = parsed.sender;
 	return {
 		id: typeof raw.id === 'string' && raw.id ? raw.id : newId(),
 		role: raw.role,
 		categories: Array.isArray(raw.categories) ? raw.categories.map(String) : ['text'],
-		content: typeof raw.content === 'string' ? raw.content : '',
+		content: content,
+		sender: sender || undefined,
 		attachments: Array.isArray(raw.attachments) ? raw.attachments : undefined,
 		imageSrc: typeof raw.imageSrc === 'string' ? raw.imageSrc : undefined,
 		imageLabel: typeof raw.imageLabel === 'string' ? raw.imageLabel : undefined,
@@ -89,17 +99,79 @@ function normalizeRecord(raw: any): CachedMessage | null {
 	};
 }
 
+/** 构造动图理解缓存的候选键：同一资源可能以 read/miniature、带 tag 或相对路径缓存 */
+function animatedSummaryKeys(source: string): string[] {
+	const raw = String(source || '');
+	if (!raw) return [];
+	const normalize = (value: string): string => String(value || '').split('?')[0].split('#')[0];
+	const vision = toVisionSource(raw);
+	const keys = new Set<string>();
+	for (const value of [raw, vision, normalize(raw), normalize(vision)]) {
+		if (value) keys.add(value);
+	}
+	const path = normalize(raw);
+	const marker = path.indexOf('/multimedia/');
+	if (marker >= 0) {
+		const rel = path.slice(marker + 1); // multimedia/xxx.gif
+		keys.add(rel);
+		keys.add('/file/read/' + rel);
+		keys.add('/file/miniature/' + rel);
+		keys.add('file://' + rel);
+		try {
+			const base = url()[0];
+			if (base) {
+				keys.add(base + '/file/read/' + rel);
+				keys.add(base + '/file/miniature/' + rel);
+			}
+		}
+		catch { /* url() 不可用时只查相对键 */ }
+	}
+	return [...keys];
+}
+
 /** 把一条缓存消息还原成对话者上下文消息（月华自己的图片不回读） */
 function cachedToContext(record: CachedMessage): PostMessage | null {
 	if (record.role === 'user') {
-		const text = stripUserPrefix(record.content);
+		const parsed = splitUserPrefix(record.content);
+		const sender = (record.sender || parsed.sender).trim();
+		const text = record.content;
+		// 正文本身已带前缀时不再重复添加；旧缓存只有 sender、正文已净化时补回前缀
+		const prefix = sender && !parsed.sender ? `[用户: ${sender}]: ` : '';
 		const blocks: any[] = [];
-		if (text) blocks.push({ type: 'text', text });
+		if (text) blocks.push({ type: 'text', text: prefix + text });
+		else if (sender) blocks.push({ type: 'text', text: `[用户: ${sender}]:` });
 		for (const attachment of record.attachments || []) {
 			if (attachment.type === 'image') {
+				// 只处理本机视觉端点可承载的图片；远程 URL / data: / blob: 维持原有的跳过策略，
+				// 避免在载入历史时发起网络请求或把原图塞进上下文。
 				const vision = toVisionSource(attachment.src);
+				if (!vision) continue;
+				// 历史动图不能直接回读：/file/miniature 对动图原样直通，会把几十 MB 的 GIF
+				// 交给多模态服务，llama-server 拉取/解码失败时整轮模型请求 500
+				// （error: cannot make GET request）。历史动图只保留文本占位；
+				// 当前新消息仍由 LiteImageFile 走感知者理解后置换成文本。
+				const [animated, animatedError] = animatedHistoryCache.has(attachment.src)
+					? [animatedHistoryCache.get(attachment.src) === true, null] as [boolean, Error | null]
+					: isAnimatedImage(attachment.src);
+				if (!animatedError && !animatedHistoryCache.has(attachment.src)) {
+					animatedHistoryCache.set(attachment.src, animated);
+				}
+				if (animatedError) {
+					blocks.push({ type: 'text', text: `[历史图片不可用：${attachment.label || fileNameOf(attachment.src)}]` });
+					continue;
+				}
+				if (animated) {
+					// 历史动图不回传原图（GIF 太大且会让多模态服务 500），但感知者可能已经
+					// 理解过它。命中 video_summary 缓存时把理解文本带回上下文，没命中则只留标记。
+					const summary = (getPromptFromKnowledgeAny(animatedSummaryKeys(attachment.src)) || '').trim();
+					const text = summary
+						? `[动态图: ${summary.length > 1200 ? summary.slice(0, 1200) + '…' : summary}]`
+						: '[动态图]';
+					blocks.push({ type: 'text', text });
+					continue;
+				}
 				// 只接受视觉读取端点形态；data:/blob: 等原图来源一律跳过
-				if (vision) blocks.push({ type: 'image_url', image_url: { url: vision } });
+				blocks.push({ type: 'image_url', image_url: { url: vision } });
 			}
 			else if (attachment.type === 'video') {
 				const display = toDisplaySource(attachment.src);

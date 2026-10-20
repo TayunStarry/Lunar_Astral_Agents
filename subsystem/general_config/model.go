@@ -18,18 +18,7 @@ var (
 	// AgentASRModel 核心智能体语音识别模型名称（月华 models.ini 中的预设名）
 	AgentASRModel = flag.String("agent-asr-model", "system-asr", "核心智能体语音识别模型名称")
 
-	// MemoryEmbeddingModel 记忆库嵌入模型名称
-	MemoryEmbeddingModel = flag.String("memory-embedding-model", "system-embedding", "记忆库嵌入模型名称, 用于文本向量化")
-	// MemoryEmbeddingURL 记忆库嵌入服务 API 地址
-	MemoryEmbeddingURL = flag.String("memory-embedding-url", "http://127.0.0.1:36789/v1", "记忆库嵌入服务 API 地址")
-	// MemoryEmbeddingKey 记忆库嵌入服务 API 密钥
-	MemoryEmbeddingKey = flag.String("memory-embedding-key", "", "记忆库嵌入服务 API 密钥")
-	// MemoryMultimodalModel 记忆库多模态模型名称，用于标签生成
-	MemoryMultimodalModel = flag.String("memory-multimodal-model", "system-multimodal", "记忆库多模态模型名称, 用于标签生成")
-	// MemoryMultimodalURL 记忆库多模态服务 API 地址
-	MemoryMultimodalURL = flag.String("memory-multimodal-url", "http://127.0.0.1:36789/v1", "记忆库多模态服务 API 地址")
-	// MemoryMultimodalKey 记忆库多模态服务 API 密钥
-	MemoryMultimodalKey = flag.String("memory-multimodal-key", "", "记忆库多模态服务 API 密钥")
+	// 记忆库不再有独立的模型配置：记忆库与月华共用上面的 agent.* 模型路由。
 
 	// MmprojModel 多模态投影模型路径，用于图像与文本的联合编码
 	MmprojModel = flag.String("mmproj-model", *LocalDir+"/models/mmproj-Qwen3.GGUF", "多模态投影模型路径, 用于图像与文本的联合编码")

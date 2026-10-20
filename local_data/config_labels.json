@@ -2,7 +2,6 @@
 	"models": "模型配置",
 	"server": "服务器配置",
 	"agent": "智能体配置",
-	"memory": "记忆库配置",
 	"chat": "聊天显存配置",
 	"diffusion": "图像生成配置",
 	"bridging": "QQ 桥接配置",
@@ -36,6 +35,7 @@
 	"image_input": "静态图思维链形态(url/base64)",
 	"vision_max_side": "视觉读取副本最大边长(像素)",
 	"vision_cache_cap_mb": "视觉副本缓存池上限(MB)",
+	"append_settings": "追加设定(每项一行,附加到提示词末尾)",
 
 	"chat_vram_guard": "聊天显存守卫",
 	"chat_vram_guard_mib": "聊天显存守卫阈值(MiB)",
@@ -54,7 +54,7 @@
 	"sd_scheduler": "调度器(auto=按模型)",
 	"sd_flow_shift": "Flow shift(0=auto)",
 	"sd_diffusion_fa": "扩散模型flash attention",
-	"sd_steps": "默认采样步数",
+	"sd_steps": "默认采样步数(方案未指定steps时)",
 	"sd_image_size": "默认图片边长",
 
 	"bridging_type": "桥接类型",

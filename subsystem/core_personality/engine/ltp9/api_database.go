@@ -32,6 +32,16 @@ var (
 // nsValidName 命名空间名白名单（防路径穿越，仅允许字母数字-_）。
 var nsValidName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
+// reservedNamespaceNames 宿主内建领域库名（见 docs/adr/0009），插件命名空间不得占用，
+// 避免把 _migrations 或业务表写进资源名录 / 媒体 / 网页 / 文本 / 角色库。
+var reservedNamespaceNames = map[string]bool{
+	"archive":   true,
+	"media":     true,
+	"web":       true,
+	"text":      true,
+	"character": true,
+}
+
 // databaseDir LTP9 数据库目录（可执行目录/local_data/database）。
 func databaseDir() string {
 	execPath, err := os.Executable()
@@ -53,6 +63,9 @@ func nsDB(name string) (*sql.DB, error) {
 	if name != "" {
 		if !nsValidName.MatchString(name) {
 			return nil, fmt.Errorf("非法命名空间名: %s（仅允许字母数字-_）", name)
+		}
+		if reservedNamespaceNames[name] {
+			return nil, fmt.Errorf("数据库名 %s 为宿主保留领域库，请改用其它命名空间名", name)
 		}
 		file = name + ".db"
 	}

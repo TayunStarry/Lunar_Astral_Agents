@@ -19,27 +19,17 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	imageproc "CorePersonality/engine/multimodal"
 )
 
-// shotCapture 会话窗口截图：优先 PrintWindow 内容截图（与窗口遮挡状态无关），
-// 失败时回退屏幕 DC 区域截图，返回 JPEG 字节
+// shotCapture 会话窗口截图：PrintWindow 内容优先、纯色/失败时自动回退屏幕客户区，
+// 具体 GDI 生命周期与空图判定由 WindowCapture 统一实现，这里只做 JPEG 编码。
 func shotCapture(sess *BrowserClient.WebViewSession, quality int) ([]byte, error) {
 	if quality <= 0 || quality > 100 {
 		quality = 85
 	}
 	img, err := sess.ClientScreenshot()
 	if err != nil {
-		// 回退：屏幕区域截图（窗口被遮挡时会截到遮挡内容）
-		x, y, w, h, rerr := sess.WindowRect()
-		if rerr != nil {
-			return nil, fmt.Errorf("内容截图失败: %w；区域截图失败: %w", err, rerr)
-		}
-		img, err = imageproc.CaptureScreenRegionRGBA(x, y, w, h)
-		if err != nil {
-			return nil, fmt.Errorf("区域截图失败: %w", err)
-		}
+		return nil, fmt.Errorf("会话窗口截图失败: %w", err)
 	}
 	buf := &bytes.Buffer{}
 	if err := jpeg.Encode(buf, img, &jpeg.Options{Quality: quality}); err != nil {
@@ -56,12 +46,15 @@ func (s *shotSaver) save(jpg []byte, label string) int {
 	}
 	name := fmt.Sprintf("%02d-%s.jpg", s.count, sanitizeFileName(label))
 	path := filepath.Join(s.dir, name)
-	if err := os.MkdirAll(s.dir, 0o755); err == nil {
-		if err := os.WriteFile(path, jpg, 0o644); err == nil {
-			s.files = append(s.files, path)
-			return s.count
-		}
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+		LoggerGeneralWarn("截图目录创建失败 %s: %v", s.dir, err)
+		return s.count
 	}
+	if err := os.WriteFile(path, jpg, 0o644); err != nil {
+		LoggerGeneralWarn("截图保存失败 %s: %v", path, err)
+		return s.count
+	}
+	s.files = append(s.files, path)
 	return s.count
 }
 
@@ -190,6 +183,7 @@ func walkPage(sess *BrowserClient.WebViewSession, probe pageProbe, maxSteps int,
 		}
 		jpg, err := shotCapture(sess, 85)
 		if err != nil {
+			LoggerGeneralWarn("页面截图失败 [%s]: %v", label, err)
 			return
 		}
 		h := fnv.New64a()

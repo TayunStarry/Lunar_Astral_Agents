@@ -86,16 +86,11 @@ type ModelConfig struct {
 		// 指针语义：未配置时保持默认（开启、阈值 2 次）
 		AutoReload         *bool `json:"auto_reload,omitempty"`
 		AutoReloadFailures *int  `json:"auto_reload_failures,omitempty"`
+		// 追加设定：逐行附加到「月华 · 对话者」系统提示词末尾（由月华 TypeScript 侧读取；
+		// 未配置或空数组时不追加任何内容）
+		AppendSettings []string `json:"append_settings"`
 	} `json:"agent"`
-	// 记忆库模型路由（独立于 agent，可单独指向其它服务）
-	Memory struct {
-		EmbeddingModel  string `json:"embedding_model"`  // 嵌入模型名称
-		EmbeddingURL    string `json:"embedding_url"`    // 嵌入服务 API 地址
-		EmbeddingKey    string `json:"embedding_key"`    // 嵌入服务 API 密钥
-		MultimodalModel string `json:"multimodal_model"` // 多模态模型名称
-		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
-		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
-	} `json:"memory"`
+	// 记忆库不再有独立的模型路由：嵌入与多模态模型统一复用 agent 分组
 	// 图像生成（sd.cpp）行为与资源策略
 	Diffusion struct {
 		AllowDiffusion bool `json:"allow_diffusion"` // 是否允许运行扩散生成
@@ -307,25 +302,8 @@ func applyConfig(parameter *ModelConfig) []string {
 		SetDiffusionSchemes(parameter.Models.DefaultScheme, schemes)
 	}
 
-	// ==== 记忆库模型路由（memory） ====
-	if parameter.Memory.EmbeddingModel != "" {
-		*MemoryEmbeddingModel = parameter.Memory.EmbeddingModel
-	}
-	if parameter.Memory.EmbeddingURL != "" {
-		*MemoryEmbeddingURL = parameter.Memory.EmbeddingURL
-	}
-	if parameter.Memory.EmbeddingKey != "" {
-		*MemoryEmbeddingKey = parameter.Memory.EmbeddingKey
-	}
-	if parameter.Memory.MultimodalModel != "" {
-		*MemoryMultimodalModel = parameter.Memory.MultimodalModel
-	}
-	if parameter.Memory.MultimodalURL != "" {
-		*MemoryMultimodalURL = parameter.Memory.MultimodalURL
-	}
-	if parameter.Memory.MultimodalKey != "" {
-		*MemoryMultimodalKey = parameter.Memory.MultimodalKey
-	}
+	// ==== 记忆库模型路由：已移除（统一复用 agent 分组的嵌入/多模态模型） ====
+	// 旧版 lunar_config.json 的 memory 节会被 JSON 解码忽略；迁移提示由文档说明。
 	// ==== 核心智能体配置（agent） ====
 	if parameter.Agent.EmbeddingModel != "" {
 		*AgentEmbeddingModel = parameter.Agent.EmbeddingModel

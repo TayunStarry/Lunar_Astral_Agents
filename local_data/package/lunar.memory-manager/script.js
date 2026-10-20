@@ -1,9 +1,12 @@
 /**
  * 记忆库管理 - 页面逻辑（Zero-LTP：纯人类操作，无 AtoA 智能体）
+ * 新版记忆库：集合是内容自动归入的语义分组，不再是查询表。
  * 职责：
- * - 集合管理：新增 / 删除 / 清空（/memory REST 接口）
- * - 记忆导入：带标签文本与纯文本（标签并入内容参与向量化）、单张与批量图片（识别取向可选）
- * - 条目管理：删除（/memory DELETE）、改写内容（直改 documents_NNNN.json 分片，不动 embeddings，向量保持不变）
+ * - 分组管理：新增 / 删除 / 清空（/memory REST 接口）
+ * - 记忆导入：全局导入，入库时自动归组；文本可带标签影响向量，图片按识别取向生成标签
+ * - 浏览：按分组浏览，或查看全部条目
+ * - 查询：只指定返回类型（文本/图像/音频），跨全部分组检索
+ * - 条目管理：全局删除；文本条目改写内容（直改 documents_NNNN.json，不动 embeddings）
  * - 逐个渲染加载：卡片逐个创建渲染，完成一个再开始下一个，保证大数据量下的流畅体验
  */
 
@@ -34,6 +37,7 @@ const progressText = document.getElementById('progressText');
 const listStats = document.getElementById('listStats');
 const clearListBtn = document.getElementById('clearListBtn');
 const queryInput = document.getElementById('queryInput');
+const queryTypeSelect = document.getElementById('queryTypeSelect');
 const topKInput = document.getElementById('topKInput');
 const queryBtn = document.getElementById('queryBtn');
 const backBrowseBtn = document.getElementById('backBrowseBtn');
@@ -45,9 +49,6 @@ const editModal = document.getElementById('editModal');
 const editMeta = document.getElementById('editMeta');
 const editTextWrap = document.getElementById('editTextWrap');
 const editTextContent = document.getElementById('editTextContent');
-const editImageWrap = document.getElementById('editImageWrap');
-const editImagePreview = document.getElementById('editImagePreview');
-const editImagePickBtn = document.getElementById('editImagePickBtn');
 const editCancelBtn = document.getElementById('editCancelBtn');
 const editSaveBtn = document.getElementById('editSaveBtn');
 const confirmModal = document.getElementById('confirmModal');
@@ -175,57 +176,68 @@ async function memoryAPI(path, options) {
     return body.data;
 }
 
-/** 列出所有集合 */
+/** 列出所有分组 */
 async function apiListCollections() {
     const data = await memoryAPI('collections');
     return (data && Array.isArray(data.collections)) ? data.collections : [];
 }
 
-/** 创建集合 */
+/** 创建分组（后端会按分组名生成名称嵌入向量） */
 async function apiCreateCollection(name) {
-    return await memoryAPI(encodeURIComponent(name), {
+    return await memoryAPI('collections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({ name: name })
     });
 }
 
-/** 删除集合 */
+/** 删除分组 */
 async function apiDeleteCollection(name) {
     return await memoryAPI(encodeURIComponent(name), { method: 'DELETE' });
 }
 
-/** 清空集合 */
+/** 清空分组 */
 async function apiClearCollection(name) {
     return await memoryAPI(encodeURIComponent(name) + '/clear', { method: 'POST' });
 }
 
-/** 分页获取集合文档 */
+/** 外部改写分片文件后，让后端从磁盘重新加载分组（不重算向量） */
+async function apiReloadCollection(name) {
+    return await memoryAPI(encodeURIComponent(name) + '/reload', { method: 'POST' });
+}
+
+/** 分页获取指定分组内的文档（管理用途） */
 async function apiGetDocuments(name, offset, limit) {
     return await memoryAPI(encodeURIComponent(name) + '/documents?offset=' + offset + '&limit=' + limit);
 }
 
-/** 添加记忆（文本或图片统一端点） */
-async function apiAddMessage(name, payload) {
-    return await memoryAPI(encodeURIComponent(name) + '/messages', {
+/** 分页获取全部记忆条目（跨全部分组） */
+async function apiGetEntries(offset, limit) {
+    return await memoryAPI('entries?offset=' + offset + '&limit=' + limit);
+}
+
+/** 添加记忆（文本/图片/音频统一端点，后端自动归组） */
+async function apiAddMessage(payload) {
+    return await memoryAPI('messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     });
 }
 
-/** 删除单条记忆 */
-async function apiDeleteMessage(name, id) {
-    return await memoryAPI(encodeURIComponent(name) + '/messages', {
+/** 按 ID 删除单条记忆（跨全部分组） */
+async function apiDeleteMessage(id) {
+    return await memoryAPI('messages', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: id })
     });
 }
 
-/** 语义查询（后端执行一次嵌入并按余弦相似度检索） */
-async function apiQueryMessages(name, query, topK) {
-    return await memoryAPI(encodeURIComponent(name) + '/messages?query=' + encodeURIComponent(query) + '&top_k=' + topK);
+/** 按指定返回类型跨全部分组语义查询（后端执行一次嵌入并按余弦相似度检索） */
+async function apiQueryMessages(type, query, topK) {
+    return await memoryAPI('messages?type=' + encodeURIComponent(type)
+        + '&query=' + encodeURIComponent(query) + '&top_k=' + topK);
 }
 
 // ===== 文件接口封装（直改分片文件，用于条目内容改写） =====
@@ -261,7 +273,7 @@ function writeFileToServer(path, content) {
     });
 }
 
-/** 列出集合的 documents 分片文件名（documents_NNNN.json） */
+/** 列出分组内的 documents 分片文件名（documents_NNNN.json） */
 async function listSliceFiles(collection) {
     const resp = await fetch('/file/list/' + MEMORY_DIR + '/' + encodeURIComponent(collection), { cache: 'no-store' });
     if (!resp.ok) throw new Error('列出分片文件失败（HTTP ' + resp.status + '）');
@@ -274,9 +286,9 @@ async function listSliceFiles(collection) {
 
 /**
  * 改写记忆条目内容（仅修改数据字段，不重建嵌入向量）
- * @param {string} collection - 集合名
+ * @param {string} collection - 分组名
  * @param {string} entryId - 条目 ID
- * @param {Object} changes - 要覆盖的字段，如 { content } 或 { base64 }
+ * @param {Object} changes - 要覆盖的字段（仅文本条目，如 { content }）
  */
 async function updateEntryContent(collection, entryId, changes) {
     const files = await listSliceFiles(collection);
@@ -295,94 +307,128 @@ async function updateEntryContent(collection, entryId, changes) {
         Object.assign(arr[idx], changes);
         // 紧凑单行 JSON 写回（与记忆库存储格式一致）
         await writeFileToServer(relPath, JSON.stringify(arr));
+        // 通知后端从磁盘重载该分组，使改写立即生效（不重建向量）
+        try {
+            await apiReloadCollection(collection);
+        } catch (e) {
+            console.warn('分组重载失败（改写可能需重启后生效）:', e);
+        }
         return file;
     }
     throw new Error('未在分片文件中找到该记忆条目：' + entryId);
 }
 
-// ===== 集合管理 =====
+// ===== 分组管理 =====
 
+/** 当前浏览的分组；空串表示“全部记忆” */
 let currentCollection = '';
 let collectionsCache = [];
 
-/** 刷新集合并渲染列表 */
+/** 渲染“全部记忆”入口 */
+function renderGlobalItem(totalCount) {
+    const el = document.createElement('div');
+    el.className = 'collection-item global-item' + (currentCollection === '' ? ' active' : '');
+    el.innerHTML = '<span class="collection-icon"><i class="fas fa-globe"></i></span>'
+        + '<span class="collection-name">全部记忆</span>'
+        + '<span class="collection-count"></span>'
+        + '<span class="collection-actions"></span>';
+    el.querySelector('.collection-count').textContent = totalCount + ' 条';
+    el.title = '跨全部分组浏览全部条目（新版记忆库的查询不再绑定分组）';
+    el.addEventListener('click', selectAllMemories);
+    collectionList.appendChild(el);
+}
+
+/** 刷新分组并渲染列表 */
 async function renderCollections() {
     try {
         collectionsCache = await apiListCollections();
         collectionList.innerHTML = '';
+        const totalCount = collectionsCache.reduce((sum, c) => sum + (Number(c.count) || 0), 0);
+        renderGlobalItem(totalCount);
         if (collectionsCache.length === 0) {
-            collectionList.innerHTML = '<div class="list-empty">暂无集合。</div>';
+            const empty = document.createElement('div');
+            empty.className = 'list-empty';
+            empty.textContent = '暂无分组。启动后会自动创建默认分组，也可手动新增。';
+            collectionList.appendChild(empty);
             return;
         }
         collectionsCache.forEach(c => {
             const el = document.createElement('div');
             el.className = 'collection-item' + (c.name === currentCollection ? ' active' : '');
-            el.innerHTML = '<span class="collection-icon"><i class="fas fa-database"></i></span>'
+            el.innerHTML = '<span class="collection-icon"><i class="fas fa-layer-group"></i></span>'
                 + '<span class="collection-name"></span>'
                 + '<span class="collection-count"></span>'
                 + '<span class="collection-actions">'
-                + '<button class="icon-btn warn" data-act="clear" title="清空集合"><i class="fas fa-eraser"></i></button>'
-                + '<button class="icon-btn" data-act="delete" title="删除集合"><i class="fas fa-trash"></i></button>'
+                + '<button class="icon-btn warn" data-act="clear" title="清空分组"><i class="fas fa-eraser"></i></button>'
+                + '<button class="icon-btn" data-act="delete" title="删除分组"><i class="fas fa-trash"></i></button>'
                 + '</span>';
             el.querySelector('.collection-name').textContent = c.name;
             el.querySelector('.collection-count').textContent = (c.count || 0) + ' 条';
-            // 选择集合
+            el.title = c.has_name_embedding === false
+                ? '分组名称向量缺失，重新初始化记忆库后会自动补齐'
+                : '内容按语义自动归入的分组；点击浏览该组条目';
+            // 选择分组浏览
             el.addEventListener('click', (ev) => {
                 if (ev.target.closest('.icon-btn')) return;
                 selectCollection(c.name);
             });
-            // 清空集合
+            // 清空分组
             el.querySelector('[data-act="clear"]').addEventListener('click', async () => {
-                const ok = await showConfirm('清空集合', '确定清空集合「' + c.name + '」中的所有 ' + (c.count || 0) + ' 条记忆吗？此操作不可恢复。');
+                const ok = await showConfirm('清空分组', '确定清空分组「' + c.name + '」中的所有 ' + (c.count || 0) + ' 条记忆吗？此操作不可恢复。');
                 if (!ok) return;
                 try {
                     await apiClearCollection(c.name);
-                    showToast('集合已清空：' + c.name, 'success');
+                    showToast('分组已清空：' + c.name, 'success');
                     await renderCollections();
-                    if (currentCollection === c.name) await loadEntries(true);
+                    if (currentCollection === c.name || currentCollection === '') await loadEntries(true);
                 } catch (e) { showToast(e.message, 'error'); }
             });
-            // 删除集合
+            // 删除分组
             el.querySelector('[data-act="delete"]').addEventListener('click', async () => {
-                const ok = await showConfirm('删除集合', '确定删除集合「' + c.name + '」吗？集合目录及全部文档与向量将被移除，此操作不可恢复。');
+                const ok = await showConfirm('删除分组', '确定删除分组「' + c.name + '」吗？分组目录及其中全部文档与向量将被移除，此操作不可恢复。');
                 if (!ok) return;
                 try {
                     await apiDeleteCollection(c.name);
-                    showToast('集合已删除：' + c.name, 'success');
-                    if (currentCollection === c.name) {
-                        currentCollection = '';
-                        importTarget.textContent = '';
-                        clearCardGrid();
-                    }
+                    showToast('分组已删除：' + c.name, 'success');
+                    if (currentCollection === c.name) currentCollection = '';
                     await renderCollections();
+                    await loadEntries(true);
                 } catch (e) { showToast(e.message, 'error'); }
             });
             collectionList.appendChild(el);
         });
     } catch (e) {
-        collectionList.innerHTML = '<div class="list-empty">集合加载失败：' + escapeText(e.message) + '</div>';
+        collectionList.innerHTML = '<div class="list-empty">分组加载失败：' + escapeText(e.message) + '</div>';
     }
 }
 
-/** 选择当前集合并加载条目 */
+/** 浏览全部记忆（跨全部分组） */
+async function selectAllMemories() {
+    currentCollection = '';
+    importTarget.textContent = '自动归组';
+    await renderCollections();
+    await loadEntries(true);
+}
+
+/** 选择分组浏览 */
 async function selectCollection(name) {
     currentCollection = name;
-    importTarget.textContent = '→ ' + name;
+    importTarget.textContent = '自动归组';
     await renderCollections(); // 刷新选中态与条数
     await loadEntries(true);
 }
 
-/** 新增集合 */
+/** 新增分组 */
 async function handleAddCollection() {
     const name = newCollectionInput.value.trim();
-    if (!name) { showToast('请输入集合名称', 'error'); return; }
-    if (name === 'init' || name === 'stats' || name === 'collections') {
-        showToast('该名称是保留字，不能用作集合名', 'error');
+    if (!name) { showToast('请输入分组名称', 'error'); return; }
+    if (['init', 'stats', 'collections', 'messages', 'entries'].includes(name)) {
+        showToast('该名称是保留字，不能用作分组名', 'error');
         return;
     }
     try {
         await apiCreateCollection(name);
-        showToast('集合已创建：' + name, 'success');
+        showToast('分组已创建：' + name, 'success');
         newCollectionInput.value = '';
         await renderCollections();
     } catch (e) { showToast(e.message, 'error'); }
@@ -390,7 +436,10 @@ async function handleAddCollection() {
 
 addCollectionBtn.addEventListener('click', handleAddCollection);
 newCollectionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleAddCollection(); });
-refreshCollectionsBtn.addEventListener('click', () => { renderCollections(); showToast('集合列表已刷新', 'success'); });
+refreshCollectionsBtn.addEventListener('click', async () => {
+    await renderCollections();
+    showToast('分组列表已刷新', 'success');
+});
 
 // ===== 记忆导入 =====
 
@@ -414,6 +463,7 @@ orientationSelect.addEventListener('change', () => {
 /** 构造当前导入载荷的公共字段（图片） */
 function imagePayload(base64) {
     const payload = {
+        type: 'image',
         base64: base64,
         recognition_orientation: orientationSelect.value || 'auto'
     };
@@ -426,19 +476,22 @@ function imagePayload(base64) {
     return payload;
 }
 
-/** 导入文本记忆（带标签时标签并入内容参与向量化） */
+/** 导入文本记忆（标签只参与嵌入与归组，正文保持干净） */
 importTextBtn.addEventListener('click', async () => {
-    if (!currentCollection) { showToast('请先在左侧选择一个集合', 'error'); return; }
     const content = textContentInput.value.trim();
     if (!content) { showToast('记忆内容不能为空', 'error'); return; }
-    const tags = tagInput.value.trim();
-    const fullContent = tags ? '[标签] ' + tags.split(/[,，]/).map(s => s.trim()).filter(Boolean).join('、') + '\n' + content : content;
+    const tags = tagInput.value.split(/[,，]/).map(s => s.trim()).filter(Boolean);
     try {
         importTextBtn.disabled = true;
-        await apiAddMessage(currentCollection, { role: roleSelect.value, content: fullContent });
-        showToast('文本记忆导入成功', 'success');
+        await apiAddMessage({
+            type: 'text',
+            role: roleSelect.value,
+            content: content,
+            tags: tags
+        });
+        showToast('文本记忆导入成功（已自动归组）', 'success');
         textContentInput.value = '';
-        await loadEntries(true);
+        await selectAllMemories();
     } catch (e) {
         showToast(e.message, 'error');
     } finally {
@@ -458,7 +511,6 @@ function readImageAsBase64(file) {
 
 /** 导入单张图片 */
 importImageBtn.addEventListener('click', () => {
-    if (!currentCollection) { showToast('请先在左侧选择一个集合', 'error'); return; }
     imageFileInput.value = '';
     imageFileInput.onchange = async () => {
         const file = imageFileInput.files && imageFileInput.files[0];
@@ -466,9 +518,9 @@ importImageBtn.addEventListener('click', () => {
         try {
             importImageBtn.disabled = true;
             const base64 = await readImageAsBase64(file);
-            await apiAddMessage(currentCollection, imagePayload(base64));
-            showToast('图片记忆导入成功：' + file.name, 'success');
-            await loadEntries(true);
+            await apiAddMessage(imagePayload(base64));
+            showToast('图片记忆导入成功（已自动归组）：' + file.name, 'success');
+            await selectAllMemories();
         } catch (e) {
             showToast(e.message, 'error');
         } finally {
@@ -480,7 +532,6 @@ importImageBtn.addEventListener('click', () => {
 
 /** 批量导入图片（逐张顺序导入，进度条反馈） */
 importImagesBtn.addEventListener('click', () => {
-    if (!currentCollection) { showToast('请先在左侧选择一个集合', 'error'); return; }
     imageFilesInput.value = '';
     imageFilesInput.onchange = async () => {
         const files = Array.from(imageFilesInput.files || []);
@@ -493,7 +544,7 @@ importImagesBtn.addEventListener('click', () => {
             progressText.textContent = (i + 1) + ' / ' + files.length;
             try {
                 const base64 = await readImageAsBase64(files[i]);
-                await apiAddMessage(currentCollection, imagePayload(base64));
+                await apiAddMessage(imagePayload(base64));
                 ok++;
             } catch (e) {
                 fail++;
@@ -505,19 +556,19 @@ importImagesBtn.addEventListener('click', () => {
         setTimeout(() => importProgress.classList.add('hidden'), 1200);
         importImagesBtn.disabled = false;
         showToast('批量导入完成：成功 ' + ok + ' 张' + (fail ? '，失败 ' + fail + ' 张' : ''), fail ? 'error' : 'success');
-        await loadEntries(true);
+        await selectAllMemories();
     };
     imageFilesInput.click();
 });
 
 // ===== 记忆条目列表（逐个渲染 + 分页加载） =====
 
-let loadedCount = 0;  // 已加载条数
-let totalCount = 0;   // 集合总条数
+let loadedCount = 0;  // 当前视图已加载条数
+let totalCount = 0;   // 当前视图总条数
 let rendering = false; // 渲染中标记（防并发）
 
 function clearCardGrid() {
-    cardGrid.innerHTML = '<div class="list-empty" id="cardEmpty">请先在左侧选择一个集合。</div>';
+    cardGrid.innerHTML = '<div class="list-empty" id="cardEmpty">选择左侧分组浏览，或直接查询全部记忆。</div>';
     loadedCount = 0;
     totalCount = 0;
     listStats.textContent = '';
@@ -538,28 +589,35 @@ function sleep(ms) {
 
 /** 创建统一尺寸的记忆卡片 */
 function createCard(entry) {
-    const isImage = !!(entry.url || entry.base64);
+    const entryType = entry.type || ((entry.url || entry.base64) ? 'image' : 'text');
+    const isImage = entryType === 'image' && !!(entry.url || entry.base64);
+    const isAudio = entryType === 'audio' && !!(entry.url || entry.base64);
     const card = document.createElement('div');
-    card.className = 'memory-card ' + (isImage ? 'image-card' : 'text-card');
+    card.className = 'memory-card ' + (isImage ? 'image-card' : (isAudio ? 'audio-card' : 'text-card'));
     card.dataset.id = entry.id || '';
 
-    // 头部：类型图标 + role 徽标 + 改写/删除按钮
-    const role = entry.role || (isImage ? 'image' : '-');
+    // 头部：类型图标 + role 徽标 + 改写（仅文本）/删除按钮
+    const role = entry.role || entryType;
     const timeText = entry.timestamp
         ? new Date(entry.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })
         : '早前记录';
+    const typeIcon = isImage ? 'fa-image' : (isAudio ? 'fa-volume-high' : 'fa-font');
+    const canEdit = entryType === 'text' && entry.source !== 'action';
+    const editBtn = canEdit
+        ? '<button class="icon-btn warn" data-act="edit" title="改写文本内容（不重算向量）"><i class="fas fa-pen"></i></button>'
+        : '';
     const head = document.createElement('div');
     head.className = 'card-head';
-    head.innerHTML = '<i class="fas ' + (isImage ? 'fa-image' : 'fa-font') + ' card-type-icon"></i>'
+    head.innerHTML = '<i class="fas ' + typeIcon + ' card-type-icon"></i>'
         + '<span class="card-role"><span class="role-badge"></span></span>'
         + '<span class="card-actions">'
-        + '<button class="icon-btn warn" data-act="edit" title="改写内容"><i class="fas fa-pen"></i></button>'
+        + editBtn
         + '<button class="icon-btn" data-act="del" title="删除条目"><i class="fas fa-trash"></i></button>'
         + '</span>';
     head.querySelector('.role-badge').textContent = role;
     card.appendChild(head);
 
-    // 主体：图片显示区 / 文本显示区（固定高度，超长滚动，保留换行）
+    // 主体：图片显示区 / 音频播放区 / 文本显示区（固定高度，超长滚动，保留换行）
     const body = document.createElement('div');
     body.className = 'card-body';
     if (isImage) {
@@ -582,6 +640,21 @@ function createCard(entry) {
             // 延迟回收 Blob（浮层已取到数据后释放，避免内存驻留）
             if (blobUrl) setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
         });
+    } else if (isAudio) {
+        const audioWrap = document.createElement('div');
+        audioWrap.className = 'card-audio';
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.preload = 'none';
+        audio.src = entry.url || entry.base64;
+        audioWrap.appendChild(audio);
+        if (entry.content) {
+            const desc = document.createElement('div');
+            desc.className = 'card-audio-desc';
+            desc.textContent = entry.content;
+            audioWrap.appendChild(desc);
+        }
+        body.appendChild(audioWrap);
     } else {
         const text = document.createElement('div');
         text.className = 'card-text';
@@ -599,28 +672,37 @@ function createCard(entry) {
     }
     card.appendChild(body);
 
-    // 底部：ID + 入库时间
+    // 底部：ID + 所属分组 + 入库时间
     const foot = document.createElement('div');
     foot.className = 'card-foot';
     foot.innerHTML = '<span class="foot-id"></span><span class="foot-time"></span>';
-    foot.querySelector('.foot-id').textContent = entry.id || '';
-    foot.title = (entry.id || '') + (entry.timestamp ? ' · ' + timeText : '');
+    foot.querySelector('.foot-id').textContent = entry.collection
+        ? entry.collection + ' · ' + String(entry.id || '').slice(0, 8)
+        : (entry.id || '');
+    foot.title = (entry.id || '') + (entry.collection ? ' · 分组：' + entry.collection : '') + (entry.timestamp ? ' · ' + timeText : '');
     foot.querySelector('.foot-time').textContent = timeText;
     card.appendChild(foot);
 
-    // 改写按钮
-    head.querySelector('[data-act="edit"]').addEventListener('click', () => openEditModal(entry));
-    // 删除按钮
+    // 改写按钮（仅文本条目：新版图片/音频以实体 URL 存储，不支持直改内容）
+    const editButton = head.querySelector('[data-act="edit"]');
+    if (editButton) {
+        editButton.addEventListener('click', () => openEditModal(entry));
+    }
+    // 删除按钮：全局按 ID 删除，不再依赖当前分组
     head.querySelector('[data-act="del"]').addEventListener('click', async () => {
-        const ok = await showConfirm('删除记忆', '确定删除该条记忆吗？\nID: ' + (entry.id || '')); 
+        const ok = await showConfirm('删除记忆', '确定删除该条记忆吗？\nID: ' + (entry.id || ''));
         if (!ok) return;
         try {
-            await apiDeleteMessage(currentCollection, entry.id);
+            await apiDeleteMessage(entry.id);
             card.remove();
             loadedCount = Math.max(0, loadedCount - 1);
             totalCount = Math.max(0, totalCount - 1);
             listStats.textContent = '已加载 ' + loadedCount + ' / 共 ' + totalCount + ' 条';
+            if (loadedCount === 0) {
+                cardGrid.innerHTML = '<div class="list-empty" id="cardEmpty">暂无记忆。</div>';
+            }
             showToast('记忆已删除', 'success');
+            await renderCollections();
         } catch (e) { showToast(e.message, 'error'); }
     });
 
@@ -635,9 +717,8 @@ async function renderCardsSequentially(entries) {
     }
 }
 
-/** 加载记忆条目（reset=true 时从第一页开始） */
+/** 加载记忆条目（reset=true 时从第一页开始；空 currentCollection 表示全部条目） */
 async function loadEntries(reset) {
-    if (!currentCollection) return;
     if (rendering) return;
     rendering = true;
     loadMoreBtn.disabled = true;
@@ -650,19 +731,25 @@ async function loadEntries(reset) {
         }
         const empty = cardGrid.querySelector('.list-empty');
         const offset = loadedCount;
-        const data = await apiGetDocuments(currentCollection, offset, PAGE_SIZE);
-        const docs = (data && Array.isArray(data.documents)) ? data.documents : [];
+        const data = currentCollection
+            ? await apiGetDocuments(currentCollection, offset, PAGE_SIZE)
+            : await apiGetEntries(offset, PAGE_SIZE);
+        const docs = currentCollection
+            ? ((data && Array.isArray(data.documents)) ? data.documents : [])
+            : ((data && Array.isArray(data.entries)) ? data.entries : []);
         totalCount = (data && typeof data.total === 'number') ? data.total : loadedCount + docs.length;
 
         if (reset && empty) empty.remove();
         if (reset && docs.length === 0) {
-            cardGrid.innerHTML = '<div class="list-empty" id="cardEmpty">该集合暂无记忆。</div>';
+            cardGrid.innerHTML = '<div class="list-empty" id="cardEmpty">'
+                + (currentCollection ? '该分组暂无记忆。' : '暂无记忆。') + '</div>';
         } else {
             // 逐个渲染，完成一个再开始下一个
             await renderCardsSequentially(docs);
         }
         loadedCount += docs.length;
-        listStats.textContent = '已加载 ' + loadedCount + ' / 共 ' + totalCount + ' 条';
+        listStats.textContent = (currentCollection ? '分组「' + currentCollection + '」 ' : '全部记忆 ')
+            + '已加载 ' + loadedCount + ' / 共 ' + totalCount + ' 条';
         const hasMore = loadedCount < totalCount;
         loadMoreBtn.classList.toggle('hidden', !hasMore);
         listEndHint.textContent = hasMore ? '' : (loadedCount > 0 ? '已全部加载' : '');
@@ -681,17 +768,17 @@ clearListBtn.addEventListener('click', clearCardGrid);
 
 // ===== 语义查询 =====
 
-/** 执行语义查询：输入文本 → 后端嵌入一次 → 展示带匹配度的命中结果 */
+/** 执行语义查询：输入文本 → 后端跨全部分组嵌入检索 → 展示指定类型、带匹配度的命中结果 */
 async function handleQuery() {
-    if (!currentCollection) { showToast('请先在左侧选择一个集合', 'error'); return; }
     const query = queryInput.value.trim();
     if (!query) { showToast('请输入查询文本', 'error'); return; }
+    const type = queryTypeSelect.value || 'text';
     let topK = parseInt(topKInput.value, 10);
     if (!isFinite(topK)) topK = 10;
     topK = Math.max(1, Math.min(100, topK));
     try {
         queryBtn.disabled = true;
-        const data = await apiQueryMessages(currentCollection, query, topK);
+        const data = await apiQueryMessages(type, query, topK);
         const results = (data && Array.isArray(data.results)) ? data.results : [];
         // 查询结果占满列表区（退出分页浏览态），移除空态占位避免首格留白
         clearCardGrid();
@@ -702,7 +789,11 @@ async function handleQuery() {
         } else {
             await renderCardsSequentially(results);
         }
-        listStats.textContent = '查询命中 ' + results.length + ' 条（TopK ' + topK + '）';
+        loadedCount = results.length;
+        totalCount = results.length;
+        const typeLabel = { text: '文本', image: '图像', audio: '音频' }[type] || type;
+        listStats.textContent = '在全部 ' + collectionsCache.length + ' 个分组中检索 ' + typeLabel
+            + '，命中 ' + results.length + ' 条（TopK ' + topK + '）';
         listEndHint.textContent = '查询模式 · 点击「返回浏览」恢复全部浏览';
         backBrowseBtn.classList.remove('hidden');
         showToast('查询完成：命中 ' + results.length + ' 条', 'success');
@@ -722,40 +813,19 @@ backBrowseBtn.addEventListener('click', () => {
     loadEntries(true);
 });
 
-// ===== 条目改写弹窗 =====
+// ===== 条目改写弹窗（仅文本条目） =====
 
-let pendingEdit = null; // { entry, newBase64 }
+let pendingEdit = null; // { entry }
 
 function openEditModal(entry) {
-    pendingEdit = { entry: entry, newBase64: '' };
-    const isImage = !!(entry.url || entry.base64);
-    editMeta.textContent = 'ID: ' + (entry.id || '') + (entry.timestamp ? ' · ' + new Date(entry.timestamp * 1000).toLocaleString('zh-CN', { hour12: false }) : '');
-    editTextWrap.classList.toggle('hidden', isImage);
-    editImageWrap.classList.toggle('hidden', !isImage);
-    if (isImage) {
-        editImagePreview.src = entry.url || entry.base64;
-        pendingEdit.newBase64 = '';
-    } else {
-        editTextContent.value = entry.content || '';
-    }
+    pendingEdit = { entry: entry };
+    editMeta.textContent = 'ID: ' + (entry.id || '')
+        + (entry.collection ? ' · 分组：' + entry.collection : '')
+        + (entry.timestamp ? ' · ' + new Date(entry.timestamp * 1000).toLocaleString('zh-CN', { hour12: false }) : '');
+    editTextWrap.classList.remove('hidden');
+    editTextContent.value = entry.content || '';
     editModal.classList.remove('hidden');
 }
-
-editImagePickBtn.addEventListener('click', () => {
-    imageFileInput.value = '';
-    imageFileInput.onchange = () => {
-        const file = imageFileInput.files && imageFileInput.files[0];
-        if (!file || !pendingEdit) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            pendingEdit.newBase64 = String(reader.result || '');
-            editImagePreview.src = pendingEdit.newBase64;
-        };
-        reader.onerror = () => showToast('读取图片失败', 'error');
-        reader.readAsDataURL(file);
-    };
-    imageFileInput.click();
-});
 
 editCancelBtn.addEventListener('click', () => {
     pendingEdit = null;
@@ -767,18 +837,14 @@ editSaveBtn.addEventListener('click', async () => {
     const entry = pendingEdit.entry;
     try {
         editSaveBtn.disabled = true;
-        const isImage = !!(entry.url || entry.base64);
-        const changes = {};
-        if (isImage) {
-            if (!pendingEdit.newBase64) { showToast('未选择新图片', 'error'); return; }
-            changes.base64 = pendingEdit.newBase64;
-        } else {
-            const content = editTextContent.value.trim();
-            if (!content) { showToast('内容不能为空', 'error'); return; }
-            changes.content = content;
+        const content = editTextContent.value.trim();
+        if (!content) { showToast('内容不能为空', 'error'); return; }
+        if (!entry.collection) {
+            showToast('缺少条目所属分组，无法定位分片文件', 'error');
+            return;
         }
         // 直改分片文件：仅覆盖内容字段，嵌入向量与标签保持不变
-        await updateEntryContent(currentCollection, entry.id, changes);
+        await updateEntryContent(entry.collection, entry.id, { content: content });
         showToast('改写已保存（向量未变更）', 'success');
         pendingEdit = null;
         editModal.classList.add('hidden');
@@ -791,4 +857,5 @@ editSaveBtn.addEventListener('click', async () => {
 });
 
 // ===== 初始化 =====
-renderCollections();
+// 默认进入“全部记忆”视图；分组列表与全局条目一起加载
+selectAllMemories();

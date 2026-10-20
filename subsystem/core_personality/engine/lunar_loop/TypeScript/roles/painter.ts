@@ -60,7 +60,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> implements Pai
 	/** 提示词库（公用提示词 + 角色提示词） */
 	readonly prompts = new PainterPromptLibrary();
 	/**
-	 * 自定义角色库（SQLite knowledge.db → painter_characters 表）
+	 * 自定义角色库（SQLite character.db → painter_characters 表）
 	 *
 	 * 构造时先加载一次，供工具描述生成角色目录；每次创作任务开始时再刷新，
 	 * 避免启动时数据库未就绪或其它会话新增的角色在当前实例中不可见。

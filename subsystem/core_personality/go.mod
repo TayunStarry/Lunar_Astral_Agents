@@ -8,6 +8,7 @@ require (
 	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/LoggerGeneral v0.0.0
 	LunarSubsystem/LunarDecoder v0.0.0-00010101000000-000000000000
+	LunarSubsystem/WindowCapture v0.0.0
 	github.com/auuunya/go-element v1.0.1
 	github.com/chai2010/webp v1.4.0
 	github.com/charmbracelet/bubbles v1.0.0
@@ -71,3 +72,5 @@ replace LunarSubsystem/LoggerGeneral => ../logger_general
 replace LunarSubsystem/LunarDecoder => ../lunar_decoder
 
 replace LunarSubsystem/EndpointDocs => ../endpoint_docs
+
+replace LunarSubsystem/WindowCapture => ../window_capture

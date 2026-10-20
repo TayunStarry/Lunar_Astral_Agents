@@ -17,7 +17,7 @@ export function handlePortrait(host: PainterHost, args: PortraitParams): string 
 		console.log(`提示词引导系数: "${args.cfg_scale}"`)
 		/** 输出尺寸计划：立绘缺省竖版 2:3（Q版缺省 1:1），显式给 ratio 则以它为准 */
 		const plan = resolveDimensionPlan(args.ratio || preset.defaultRatio);
-		/** 迭代步数（0 表示交引擎按 sd_steps 处理） */
+		/** 迭代步数（0 表示交引擎按当前方案推荐步数处理，方案未配置时回退 sd_steps） */
 		const steps = normalizeSteps(args.steps, preset.label);
 		const fullPrompt = host.prompts.renderAppearance(preset.template, args, preset.outfit, preset.base, preset.gender);
 		return host.paint({

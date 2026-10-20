@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "核心人格 (Core Personality)",
-    "version": "2026.293.0748",
+    "version": "2026.293.2224",
     "x-service": "CorePersonality"
   },
   "servers": [
@@ -790,8 +790,8 @@
     },
     "/memory/": {
       "delete": {
-        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
-        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
         "operationId": "file.MemoryHandler_delete",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -802,8 +802,8 @@
         }
       },
       "get": {
-        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
-        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
         "operationId": "file.MemoryHandler_get",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -814,8 +814,8 @@
         }
       },
       "head": {
-        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
-        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
         "operationId": "file.MemoryHandler_head",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -826,8 +826,8 @@
         }
       },
       "options": {
-        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
-        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
         "operationId": "file.MemoryHandler_options",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -838,8 +838,8 @@
         }
       },
       "patch": {
-        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
-        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
         "operationId": "file.MemoryHandler_patch",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -850,8 +850,8 @@
         }
       },
       "post": {
-        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
-        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
         "operationId": "file.MemoryHandler_post",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -862,8 +862,8 @@
         }
       },
       "put": {
-        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
-        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
         "operationId": "file.MemoryHandler_put",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",

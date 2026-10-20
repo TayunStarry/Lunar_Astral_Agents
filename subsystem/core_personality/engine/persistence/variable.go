@@ -16,6 +16,10 @@ const (
 	StorageRootMultimedia = "multimedia"
 )
 
+// MemoryMediaSubdir 记忆库图片在 multimedia 下的专属子目录：
+// 图片实体统一落在 multimedia/memory/<集合名>/，与生成图、背景图、截图等隔离，便于清理。
+const MemoryMediaSubdir = "memory"
+
 // StorageRoots 内容仓库扫描根（顺序固定，便于日志与测试）
 var StorageRoots = []string{StorageRootDocuments, StorageRootAudios, StorageRootMultimedia}
 
@@ -28,14 +32,54 @@ const (
 // OriginStorageScan 启动扫描入库的来源标记
 const OriginStorageScan = "storage-scan"
 
-// v5 记忆库配置常量 — 文本/图片混合存储，仅内容嵌入向量
+// v5 记忆库配置常量 — 文本/图片/音频混合存储，仅内容嵌入向量
 const (
 	CurrentVersion       = 5    // 当前数据格式版本号（v5: 混合存储 + 仅内容嵌入）
-	DocumentsChunkSize   = 100  // 文档分块大小（条/块，文本与图片统一；100 条一块）
+	DocumentsChunkSize   = 100  // 文档分块大小（条/块，各类型统一；100 条一块）
 	MemoryDedupThreshold = 0.98 // 内容嵌入向量去重阈值（余弦相似度，判定重复记忆）
 	DocRankThreshold     = 0.30 // 文档内容余弦得分门槛（低于此值不返回）
 	MaxTagRetries        = 3    // 图片多模态标签生成最大重试次数
 )
+
+// 记忆类型 — 查询与列举时按类型过滤，不再按集合名过滤
+const (
+	MemoryTypeText  = "text"  // 文本记忆（对话原文、知识片段）
+	MemoryTypeImage = "image" // 图像记忆（表情包、截图、图片素材）
+	MemoryTypeAudio = "audio" // 音频记忆（语音、音乐、环境声）
+)
+
+// MemoryTypes 全部合法记忆类型（顺序固定，便于错误提示与遍历）
+var MemoryTypes = []string{MemoryTypeText, MemoryTypeImage, MemoryTypeAudio}
+
+// DefaultMemoryCollections 默认分组集合名 — 覆盖聊天记忆可能对应的方方面面。
+//
+// 集合不再承担“查询表”职责，只是内容归组：启动时确保这些组存在并逐一用集合名
+// 生成嵌入向量；入库时把内容向量与全部集合名向量比较，归入最相关的一组。
+var DefaultMemoryCollections = []string{
+	// 对话与人物
+	"日常闲聊",
+	"人物信息",
+	"关系互动",
+	"情感心情",
+	"兴趣爱好",
+	"偏好习惯",
+	"观点态度",
+	"动作行为",
+	// 经历与事务
+	"事件经历",
+	"计划日程",
+	"工作学习",
+	"知识见闻",
+	"地点场景",
+	// 媒体分组（按查询类型取用，集合本身只是语义分组）
+	"表情包",
+	"图片素材",
+	"截图",
+	"绘画作品",
+	"语音消息",
+	"音乐音频",
+	"环境声音",
+}
 
 // 图片识别取向常量 — 决定图片标签生成的描述角度与方式
 const (

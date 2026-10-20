@@ -28,7 +28,8 @@ export async function understandAnimatedImage(imageSource: any, cacheKey: string
 	/** 采样帧总数（仅用于日志） */
 	const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
 	console.log(`[感知者] 动态图抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
-	return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchFrames(groups), cacheKey);
+	// 动画链路走循环动画取向的提示词（与视频采样帧分流）
+	return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchAnimation(groups), cacheKey);
 }
 
 /**

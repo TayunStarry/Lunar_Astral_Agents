@@ -2258,7 +2258,7 @@ document.querySelectorAll('.source-tab').forEach(tab => {
     tab.addEventListener('click', () => setModuleSource(tab.dataset.source));
 });
 
-// 图标方式切换（留空 / 记忆库 stickers / 手动指定）
+// 图标方式切换（留空 / 记忆库表情包 / 手动指定）
 document.querySelectorAll('input[name="moduleIconMode"]').forEach(radio => {
     radio.addEventListener('change', () => {
         const mode = document.querySelector('input[name="moduleIconMode"]:checked').value;
@@ -2368,7 +2368,7 @@ async function aiGenerateModuleInfo() {
 }
 moduleAiGenBtn.addEventListener('click', aiGenerateModuleInfo);
 
-// ===== 记忆库 stickers 搜索（图标） =====
+// ===== 记忆库表情包搜索（图标） =====
 async function searchIconStickers() {
     const q = iconStickerQuery.value.trim();
     if (!q) {
@@ -2376,30 +2376,31 @@ async function searchIconStickers() {
         return;
     }
     iconStickerSearchBtn.disabled = true;
-    iconStickerStatus.textContent = '正在搜索记忆库 stickers...';
+    iconStickerStatus.textContent = '正在搜索记忆库表情包...';
     iconStickerResults.innerHTML = '';
     try {
-        const resp = await fetch('/memory/stickers/messages?query=' + encodeURIComponent(q) + '&top_k=12');
+        const resp = await fetch('/memory/messages?type=image&query=' + encodeURIComponent(q) + '&top_k=12');
         const payload = await resp.json();
         // 记忆库统一返回 { data: { results: [...] }, success }:结果嵌套在 data 中
         const data = payload ? (payload.data || payload) : null;
         const results = (data && data.results) || [];
         if (!results.length) {
-            iconStickerStatus.textContent = '记忆库 stickers 中未找到匹配图片，可换个描述试试';
+            iconStickerStatus.textContent = '记忆库表情包中未找到匹配图片，可换个描述试试';
             return;
         }
         iconStickerStatus.textContent = '找到 ' + results.length + ' 张，点击选择：';
         results.forEach(r => {
-            if (!r.image) return;
+            const image = r.url || r.base64;
+            if (!image) return;
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'sticker-option';
             const img = document.createElement('img');
-            img.src = r.image;
+            img.src = image;
             img.alt = r.content || 'sticker';
             btn.appendChild(img);
             btn.addEventListener('click', () => {
-                selectedStickerData = r.image;
+                selectedStickerData = image;
                 document.querySelectorAll('.sticker-option').forEach(o => o.classList.remove('selected'));
                 btn.classList.add('selected');
                 iconStickerStatus.textContent = '已选择一张 sticker 作为图标';
@@ -2407,7 +2408,7 @@ async function searchIconStickers() {
             iconStickerResults.appendChild(btn);
         });
     } catch (e) {
-        console.error('搜索 stickers 失败:', e);
+        console.error('搜索表情包失败:', e);
         iconStickerStatus.textContent = '搜索失败（记忆库可能未初始化）';
     } finally {
         iconStickerSearchBtn.disabled = false;

@@ -23,7 +23,7 @@
 		}
 	},
 	"system": {
-		"developer": true,
+		"developer": false,
 		"allow_lan": false,
 		"insecure_tls": false,
 		"console_log": false,
@@ -47,15 +47,8 @@
 		"video_input": "file",
 		"image_input": "url",
 		"vision_max_side": 1024,
-		"vision_cache_cap_mb": 512
-	},
-	"memory": {
-		"embedding_model": "system-embedding",
-		"embedding_url": "http://127.0.0.1:36789/v1",
-		"embedding_key": null,
-		"multimodal_model": "system-multimodal",
-		"multimodal_url": "http://127.0.0.1:36789/v1",
-		"multimodal_key": null
+		"vision_cache_cap_mb": 512,
+		"append_settings": []
 	},
 	"diffusion": {
 		"allow_diffusion": true,

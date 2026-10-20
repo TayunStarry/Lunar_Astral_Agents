@@ -22,7 +22,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("fileList", adapters.fileList)
 	vm.Set("saveDebugFile", adapters.saveDebugFile)
 
-	// 注册知识库操作适配器（SQLite 存储，经共享子系统 knowledge.db 通道）
+	// 注册知识条目操作适配器（SQLite 存储，经共享子系统并按逻辑表路由到对应领域库）
 	vm.Set("knowledgeLoad", adapters.knowledgeLoad)
 	vm.Set("knowledgeSave", adapters.knowledgeSave)
 
@@ -64,6 +64,8 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册base64编码解码适配器
 	vm.Set("atob", adapters.atob)
+	// 二进制 base64 解码：返回字节数组（atob 返回字符串，不能用于图片/音频）
+	vm.Set("base64Decode", adapters.base64Decode)
 	// 注册内容哈希适配器（SHA-256 前16位十六进制，与前端文件哈希命名一致）
 	vm.Set("hashBytes", adapters.hashBytes)
 
@@ -79,8 +81,11 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("memoryAddWithTags", adapters.memoryAddWithTags)
 	vm.Set("memoryQuery", adapters.memoryQuery)
 	vm.Set("memoryKeywordSearch", adapters.memoryKeywordSearch)
+	vm.Set("memoryGet", adapters.memoryGet)
+	vm.Set("memoryList", adapters.memoryList)
 	vm.Set("memoryDelete", adapters.memoryDelete)
 	vm.Set("memoryAddImage", adapters.memoryAddImage)
+	vm.Set("memoryAddAudio", adapters.memoryAddAudio)
 
 	// 注册TTS语音合成适配器
 	vm.Set("tts", adapters.textToSpeech)

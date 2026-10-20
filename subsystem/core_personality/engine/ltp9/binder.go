@@ -179,7 +179,7 @@ func bindFile(vm *goja.Runtime, p *plugin) *goja.Object {
 }
 
 // bindMemory memory.store/search/searchImage/storeImage/randomImage（allow-memory）。
-// 文本记忆为集合级管理，无按 id 单条读删；图片方法复用项目记忆库 stickers 集合。
+// 文本与图片记忆都按类型全局检索，不暴露集合名；集合只是内容自动归入的分组。
 func bindMemory(vm *goja.Runtime) *goja.Object {
 	m := vm.NewObject()
 	m.Set("store", func(v map[string]any) (any, error) { return memoryStore(v) })

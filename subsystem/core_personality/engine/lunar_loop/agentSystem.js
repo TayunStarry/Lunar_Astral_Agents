@@ -1157,8 +1157,12 @@ var agentSystem = (function (exports) {
         const name = path.slice(path.lastIndexOf('/') + 1);
         return name || '文件';
     }
-    function stripUserPrefix(text) {
-        return String(text || '').replace(/^\[用户: [^\]]*\]:\s*/, '');
+    function splitUserPrefix(text) {
+        const raw = String(text || '');
+        const match = /^\[用户:\s*([^\]]*)\]\s*[:：]\s*/u.exec(raw);
+        if (!match)
+            return { sender: '', text: raw };
+        return { sender: match[1].trim(), text: raw.slice(match[0].length) };
     }
     function guessImageMime(base64) {
         const head = String(base64 || '').slice(0, 16);
@@ -1182,10 +1186,12 @@ var agentSystem = (function (exports) {
         const data = match ? match[2] : raw;
         const contentType = match ? match[1] : (kind === 'voice' ? mime : guessImageMime(data));
         try {
-            const binary = atob(data);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++)
-                bytes[i] = binary.charCodeAt(i);
+            const [decoded, decodeErr] = base64Decode(data);
+            if (decodeErr || !decoded) {
+                console.warn('[对话缓存] base64 解码失败:', decodeErr);
+                return '';
+            }
+            const bytes = new Uint8Array(decoded);
             const extMap = {
                 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/bmp': 'bmp',
                 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/flac': 'flac', 'audio/ogg': 'ogg',
@@ -1205,10 +1211,68 @@ var agentSystem = (function (exports) {
         }
     }
 
+    function loadKnowledge(table) {
+        const [entries, error] = knowledgeLoad(table);
+        const map = new Map();
+        if (error || !Array.isArray(entries)) {
+            if (error)
+                console.error(`[知识库] 读取表 ${table} 失败:`, error);
+            return map;
+        }
+        for (const pair of entries) {
+            if (Array.isArray(pair) && pair.length >= 1 && typeof pair[0] === 'string') {
+                map.set(pair[0], typeof pair[1] === 'string' ? pair[1] : String(pair[1] ?? ''));
+            }
+        }
+        return map;
+    }
+    function saveKnowledge(table, map) {
+        const [ok, error] = knowledgeSave(table, [...map.entries()]);
+        if (error)
+            console.error(`[知识库] 写入表 ${table} 失败:`, error);
+        return !error && !!ok;
+    }
+    function getPromptFromKnowledge(key) {
+        try {
+            return loadKnowledge('video_summary').get(key) ?? null;
+        }
+        catch (error) {
+            console.error('[知识库] 读取视频摘要失败:', error);
+            return null;
+        }
+    }
+    function getPromptFromKnowledgeAny(keys) {
+        if (!keys.length)
+            return null;
+        try {
+            const map = loadKnowledge('video_summary');
+            for (const key of keys) {
+                const value = map.get(key);
+                if (typeof value === 'string' && value.trim())
+                    return value;
+            }
+            return null;
+        }
+        catch (error) {
+            console.error('[知识库] 读取媒体理解缓存失败:', error);
+            return null;
+        }
+    }
+    function savePromptToKnowledge(key, prompt) {
+        try {
+            return saveKnowledge('video_summary', loadKnowledge('video_summary').set(key, prompt));
+        }
+        catch (error) {
+            console.error('[知识库] 存储视频摘要失败:', error);
+            return false;
+        }
+    }
+
     const CACHE_FILE = 'database/messages.json';
     const MAX_CACHE_MESSAGES = 48;
     let cachedMessages = [];
     let lastSnapshot = '';
+    const animatedHistoryCache = new Map();
     function newId$1() {
         return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     }
@@ -1254,11 +1318,17 @@ var agentSystem = (function (exports) {
     function normalizeRecord(raw) {
         if (!raw || (raw.role !== 'user' && raw.role !== 'assistant'))
             return null;
+        let content = typeof raw.content === 'string' ? raw.content : '';
+        let sender = typeof raw.sender === 'string' ? raw.sender.trim() : '';
+        const parsed = splitUserPrefix(content);
+        if (!sender && parsed.sender)
+            sender = parsed.sender;
         return {
             id: typeof raw.id === 'string' && raw.id ? raw.id : newId$1(),
             role: raw.role,
             categories: Array.isArray(raw.categories) ? raw.categories.map(String) : ['text'],
-            content: typeof raw.content === 'string' ? raw.content : '',
+            content: content,
+            sender: sender || undefined,
             attachments: Array.isArray(raw.attachments) ? raw.attachments : undefined,
             imageSrc: typeof raw.imageSrc === 'string' ? raw.imageSrc : undefined,
             imageLabel: typeof raw.imageLabel === 'string' ? raw.imageLabel : undefined,
@@ -1270,17 +1340,71 @@ var agentSystem = (function (exports) {
             timestamp: Number(raw.timestamp) || Date.now(),
         };
     }
+    function animatedSummaryKeys(source) {
+        const raw = String(source || '');
+        if (!raw)
+            return [];
+        const normalize = (value) => String(value || '').split('?')[0].split('#')[0];
+        const vision = toVisionSource(raw);
+        const keys = new Set();
+        for (const value of [raw, vision, normalize(raw), normalize(vision)]) {
+            if (value)
+                keys.add(value);
+        }
+        const path = normalize(raw);
+        const marker = path.indexOf('/multimedia/');
+        if (marker >= 0) {
+            const rel = path.slice(marker + 1);
+            keys.add(rel);
+            keys.add('/file/read/' + rel);
+            keys.add('/file/miniature/' + rel);
+            keys.add('file://' + rel);
+            try {
+                const base = url()[0];
+                if (base) {
+                    keys.add(base + '/file/read/' + rel);
+                    keys.add(base + '/file/miniature/' + rel);
+                }
+            }
+            catch { }
+        }
+        return [...keys];
+    }
     function cachedToContext(record) {
         if (record.role === 'user') {
-            const text = stripUserPrefix(record.content);
+            const parsed = splitUserPrefix(record.content);
+            const sender = (record.sender || parsed.sender).trim();
+            const text = record.content;
+            const prefix = sender && !parsed.sender ? `[用户: ${sender}]: ` : '';
             const blocks = [];
             if (text)
-                blocks.push({ type: 'text', text });
+                blocks.push({ type: 'text', text: prefix + text });
+            else if (sender)
+                blocks.push({ type: 'text', text: `[用户: ${sender}]:` });
             for (const attachment of record.attachments || []) {
                 if (attachment.type === 'image') {
                     const vision = toVisionSource(attachment.src);
-                    if (vision)
-                        blocks.push({ type: 'image_url', image_url: { url: vision } });
+                    if (!vision)
+                        continue;
+                    const [animated, animatedError] = animatedHistoryCache.has(attachment.src)
+                        ? [animatedHistoryCache.get(attachment.src) === true, null]
+                        : isAnimatedImage(attachment.src);
+                    if (!animatedError && !animatedHistoryCache.has(attachment.src)) {
+                        animatedHistoryCache.set(attachment.src, animated);
+                    }
+                    if (animatedError) {
+                        blocks.push({ type: 'text', text: `[历史图片不可用：${attachment.label || fileNameOf(attachment.src)}]` });
+                        continue;
+                    }
+                    if (animated) {
+                        const summary = (getPromptFromKnowledgeAny(animatedSummaryKeys(attachment.src)) || '').trim();
+                        const text = summary
+                            ? `[动态图: ${summary.length > 1200 ? summary.slice(0, 1200) + '…' : summary}]`
+                            : '[动态图]';
+                        blocks.push({ type: 'text', text });
+                        continue;
+                    }
+                    blocks.push({ type: 'image_url', image_url: { url: vision } });
                 }
                 else if (attachment.type === 'video') {
                     const display = toDisplaySource(attachment.src);
@@ -1360,6 +1484,7 @@ var agentSystem = (function (exports) {
     function buildUserRecord(content) {
         const attachments = [];
         const texts = [];
+        let sender = '';
         let hasImage = false;
         let hasVoice = false;
         const pushAttachment = (type, source, label) => {
@@ -1368,17 +1493,22 @@ var agentSystem = (function (exports) {
                 return;
             attachments.push({ type, src, label: label || fileNameOf(src) });
         };
+        const pushText = (raw) => {
+            const parsed = splitUserPrefix(raw);
+            if (!sender && parsed.sender)
+                sender = parsed.sender;
+            if (!parsed.text || parsed.text === '[视频]' || parsed.text === '[语音]')
+                return;
+            texts.push(raw);
+        };
         if (typeof content === 'string')
-            texts.push(stripUserPrefix(content));
+            pushText(content);
         else if (Array.isArray(content)) {
             for (const item of content) {
                 if (!item)
                     continue;
                 if (item.type === 'text') {
-                    const text = stripUserPrefix(String(item.text || ''));
-                    if (!text || text === '[视频]' || text === '[语音]')
-                        continue;
-                    texts.push(text);
+                    pushText(String(item.text || ''));
                 }
                 else if (item.type === 'image_url') {
                     pushAttachment('image', item.image_url?.url || '');
@@ -1418,6 +1548,7 @@ var agentSystem = (function (exports) {
             role: 'user',
             categories: categories.length ? categories : ['text'],
             content: text,
+            sender: sender || undefined,
             attachments: attachments.length ? attachments : undefined,
             timestamp: Date.now(),
         };
@@ -1593,10 +1724,12 @@ var agentSystem = (function (exports) {
             const payload = base64.includes('base64,') ? base64.split('base64,')[1] : base64;
             if (!payload)
                 return '';
-            const binary = atob(payload);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++)
-                bytes[i] = binary.charCodeAt(i);
+            const [decoded, decodeErr] = base64Decode(payload);
+            if (decodeErr || !decoded) {
+                console.warn('[截图] base64 解码失败:', decodeErr);
+                return '';
+            }
+            const bytes = new Uint8Array(decoded);
             const ext = frame.format === 'jpg' || frame.format === 'jpeg' ? 'jpg' : 'png';
             const name = `multimedia/screenshot_${Date.now()}_${index}.${ext}`;
             const [, path, error] = saveFile(name, true, bytes);
@@ -1719,46 +1852,6 @@ var agentSystem = (function (exports) {
         }
     }
 
-    function loadKnowledge(table) {
-        const [entries, error] = knowledgeLoad(table);
-        const map = new Map();
-        if (error || !Array.isArray(entries)) {
-            if (error)
-                console.error(`[知识库] 读取表 ${table} 失败:`, error);
-            return map;
-        }
-        for (const pair of entries) {
-            if (Array.isArray(pair) && pair.length >= 1 && typeof pair[0] === 'string') {
-                map.set(pair[0], typeof pair[1] === 'string' ? pair[1] : String(pair[1] ?? ''));
-            }
-        }
-        return map;
-    }
-    function saveKnowledge(table, map) {
-        const [ok, error] = knowledgeSave(table, [...map.entries()]);
-        if (error)
-            console.error(`[知识库] 写入表 ${table} 失败:`, error);
-        return !error && !!ok;
-    }
-    function getPromptFromKnowledge(key) {
-        try {
-            return loadKnowledge('video_summary').get(key) ?? null;
-        }
-        catch (error) {
-            console.error('[知识库] 读取视频摘要失败:', error);
-            return null;
-        }
-    }
-    function savePromptToKnowledge(key, prompt) {
-        try {
-            return saveKnowledge('video_summary', loadKnowledge('video_summary').set(key, prompt));
-        }
-        catch (error) {
-            console.error('[知识库] 存储视频摘要失败:', error);
-            return false;
-        }
-    }
-
     function admitMedia(source, name, origin, kindHint) {
         if (!source)
             return null;
@@ -1830,7 +1923,7 @@ var agentSystem = (function (exports) {
         }
         const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
         console.log(`[感知者] 动态图抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
-        return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchFrames(groups), cacheKey);
+        return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchAnimation(groups), cacheKey);
     }
     async function replaceAnimatedImage(imageSource, handle) {
         const media = resolveAdmittedMedia(handle);
@@ -4000,29 +4093,7 @@ var agentSystem = (function (exports) {
         return [crystalTool];
     }
 
-    const STICKER_COLLECTION = 'stickers';
-    let stickerCollectionReady = false;
-    const ACTION_COLLECTION = 'actions';
-    let actionCollectionReady = false;
-    const LUNAR_MESSAGES_COLLECTION = 'lunar_messages';
-    const NON_CONVERSATION_COLLECTIONS = new Set([STICKER_COLLECTION, ACTION_COLLECTION]);
-    function listMemoryCollections() {
-        try {
-            if (!ensureMemoryReady())
-                return [];
-            const [names, error] = memoryListCollections();
-            if (error || !names) {
-                console.error('[记忆检索] 列出集合失败:', error?.message ?? String(error ?? '返回为空'));
-                return [];
-            }
-            return names.filter(name => !!name
-                && !NON_CONVERSATION_COLLECTIONS.has(name));
-        }
-        catch (error) {
-            console.error('[记忆检索] 列出集合抛异常:', error);
-            return [];
-        }
-    }
+    const ACTION_SOURCE = 'action';
     function normalizeTerms(terms) {
         return [...new Set((terms || []).map(term => String(term || '').trim().toLowerCase()).filter(Boolean))];
     }
@@ -4044,77 +4115,71 @@ var agentSystem = (function (exports) {
             return [];
         const mode = options.mode || 'vector';
         const safeLimit = Math.min(Math.max(Math.trunc(limit) || 8, 1), 30);
-        const collections = listMemoryCollections();
-        if (collections.length === 0)
-            return [];
         const filters = normalizeTerms(options.filters);
         const exclude = normalizeTerms(options.exclude);
-        const perCollection = Math.min(Math.max(safeLimit, 4), 30);
         const terms = mode === 'regex' ? [text] : text.split(/\s+/).filter(Boolean);
         if (terms.length === 0)
             return [];
-        const hits = [];
-        for (const collection of collections) {
-            try {
-                const [results, error] = mode === 'vector'
-                    ? memoryQuery(collection, text, perCollection)
-                    : memoryKeywordSearch(collection, terms, mode === 'regex', perCollection);
-                if (error || !results)
+        try {
+            const [results, error] = mode === 'vector'
+                ? memoryQuery(text, 'text', safeLimit)
+                : memoryKeywordSearch('text', terms, mode === 'regex', safeLimit);
+            if (error || !results) {
+                if (error)
+                    console.error('[记忆检索] 查询失败:', error?.message ?? String(error));
+                return [];
+            }
+            const hits = [];
+            for (const item of results) {
+                const content = String(item.content || '').trim();
+                if (!content)
                     continue;
-                for (const item of results) {
-                    const content = String(item.content || '').trim();
-                    if (!content)
-                        continue;
-                    if (!containsAll(content, filters))
-                        continue;
-                    if (containsAny(content, exclude))
-                        continue;
-                    hits.push({
-                        id: String(item.id || ''),
-                        collection,
-                        role: String(item.role || 'unknown'),
-                        content,
-                        similarity: Number(item.similarity) || 0,
-                        timestamp: item.timestamp,
-                    });
-                }
+                if (item.source === ACTION_SOURCE)
+                    continue;
+                if (!containsAll(content, filters))
+                    continue;
+                if (containsAny(content, exclude))
+                    continue;
+                hits.push({
+                    id: String(item.id || ''),
+                    type: String(item.type || 'text'),
+                    role: String(item.role || 'unknown'),
+                    content,
+                    similarity: Number(item.similarity) || 0,
+                    timestamp: item.timestamp,
+                    collection: item.collection,
+                    source: item.source,
+                });
             }
-            catch (error) {
-                console.error(`[记忆检索] 集合 ${collection} 查询异常:`, error);
+            const seen = new Set();
+            const unique = hits.filter(hit => {
+                if (seen.has(hit.content))
+                    return false;
+                seen.add(hit.content);
+                return true;
+            });
+            const top = unique.slice(0, safeLimit);
+            if (top.length > 0) {
+                console.log(`[记忆检索] 方式=${mode}，检索「${text.slice(0, 30)}」，返回 ${top.length} 条`);
             }
+            return top;
         }
-        if (mode === 'vector')
-            hits.sort((a, b) => b.similarity - a.similarity);
-        else
-            hits.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        const seen = new Set();
-        const unique = hits.filter(hit => {
-            if (seen.has(hit.content))
-                return false;
-            seen.add(hit.content);
-            return true;
-        });
-        const top = unique.slice(0, safeLimit);
-        if (top.length > 0) {
-            console.log(`[记忆检索] 方式=${mode}，检索「${text.slice(0, 30)}」，返回 ${top.length} 条`);
+        catch (error) {
+            console.error('[记忆检索] 查询异常:', error);
+            return [];
         }
-        return top;
     }
     function syncActionsToMemory(actionNames) {
         if (!actionNames || actionNames.length === 0)
             return false;
         try {
-            if (!actionCollectionReady) {
-                const [ready] = memoryInit(ACTION_COLLECTION);
-                if (!ready)
-                    return false;
-                actionCollectionReady = true;
-            }
+            if (!ensureMemoryReady())
+                return false;
             for (const name of actionNames) {
                 const trimmed = (name || '').trim();
                 if (!trimmed)
                     continue;
-                memoryAddWithTags(ACTION_COLLECTION, 'assistant', trimmed, [trimmed]);
+                memoryAddWithTags('assistant', trimmed, [trimmed, '动作'], ACTION_SOURCE);
             }
             return true;
         }
@@ -4127,10 +4192,11 @@ var agentSystem = (function (exports) {
         if (!text || !text.trim())
             return null;
         try {
-            const [results, error] = memoryQuery(ACTION_COLLECTION, text.trim(), 1);
+            const [results, error] = memoryQuery(text.trim(), 'text', 30);
             if (error || !results || results.length === 0)
                 return null;
-            return results[0].content || null;
+            const matched = results.find(item => item.source === ACTION_SOURCE && String(item.content || '').trim());
+            return matched ? String(matched.content).trim() : null;
         }
         catch (error) {
             console.error('[动作库] 匹配失败:', error);
@@ -4141,13 +4207,9 @@ var agentSystem = (function (exports) {
         if (!query || !query.trim())
             return null;
         try {
-            if (!stickerCollectionReady) {
-                const [ready] = memoryInit(STICKER_COLLECTION);
-                if (!ready)
-                    return null;
-                stickerCollectionReady = true;
-            }
-            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
+            if (!ensureMemoryReady())
+                return null;
+            const [results, error] = memoryQuery(query.trim(), 'image', 10);
             if (error || !results || results.length === 0)
                 return null;
             const item = results[RandomFloor(0, results.length - 1)];
@@ -4176,9 +4238,9 @@ var agentSystem = (function (exports) {
     function initMemory() {
         if (GlobalConfig.memoryReady)
             return;
-        const [_, err] = memoryInit('lunar_messages');
-        if (err)
-            console.error('记忆库初始化失败:', err);
+        const [ok, err] = memoryInit();
+        if (err || !ok)
+            console.error('记忆库初始化失败:', err ?? '返回失败');
         else
             GlobalConfig.memoryReady = true;
     }
@@ -4801,10 +4863,20 @@ var agentSystem = (function (exports) {
             .split('{lunar-appearance}').join(appearances.lunar)
             .split('{crystal-appearance}').join(appearances.crystal);
     }
+    function readAppendSettings() {
+        const settings = GlobalConfig.customConfig?.agent?.append_settings;
+        if (!Array.isArray(settings))
+            return [];
+        return settings
+            .map(line => String(line ?? '').replace(/\r\n?/g, '\n').trim())
+            .filter(line => line.length > 0);
+    }
     class DialogueRole extends ModelBuilder {
         descriptionRole;
         roleTag = "对话者";
+        basePrompt;
         async generateDialogue(cache) {
+            this.applyAppendSettings();
             this.toolRounds = 0;
             this.actionClaimGuarded = false;
             GlobalConfig.lastFailure = '';
@@ -4927,9 +4999,16 @@ var agentSystem = (function (exports) {
         async batchExecutionToolCall(state) {
             return executeToolCalls(this.messages, state);
         }
+        applyAppendSettings() {
+            const lines = readAppendSettings();
+            this.systemPrompt = lines.length > 0
+                ? this.basePrompt.replace(/\s*$/, '') + '\n' + lines.join('\n')
+                : this.basePrompt;
+        }
         constructor(descriptionRole, appearances) {
             super(composeDialoguePrompt(appearances));
             this.descriptionRole = descriptionRole;
+            this.basePrompt = this.systemPrompt;
         }
     }
 
@@ -4965,6 +5044,12 @@ var agentSystem = (function (exports) {
             return this.finalizeUnderstandings(understandings);
         }
         async watchFrames(groups) {
+            return this.watchGroupSequence(groups, 'video');
+        }
+        async watchAnimation(groups) {
+            return this.watchGroupSequence(groups, 'animation');
+        }
+        async watchGroupSequence(groups, mode) {
             if (groups.length === 0) {
                 console.warn('[感知者] 未收到任何采样帧分组');
                 return '';
@@ -4973,11 +5058,11 @@ var agentSystem = (function (exports) {
             if (watched.length < groups.length) {
                 console.log(`[感知者] 分组数 ${groups.length} 超过单次上限 ${this.MAX_SEGMENTS}，等距抽样观看 ${watched.length} 组`);
             }
-            console.log(`[感知者] 开始观看视频采样帧，共 ${watched.length} 个分组`);
+            console.log(`[感知者] 开始观看${mode === 'animation' ? '动画' : '视频'}采样帧，共 ${watched.length} 个分组`);
             const understandings = [];
             for (let index = 0; index < watched.length; index++) {
                 console.log(`[感知者] 观看第 ${index + 1}/${watched.length} 组（${watched[index].frames.length} 帧）`);
-                const understanding = await this.evaluateFrameGroup(watched[index], index + 1, watched.length);
+                const understanding = await this.evaluateFrameGroup(watched[index], index + 1, watched.length, mode);
                 if (understanding.trim().length > 0) {
                     understandings.push(understanding);
                     console.log(`[感知者] 第 ${index + 1} 组理解完成`);
@@ -5043,9 +5128,15 @@ var agentSystem = (function (exports) {
             }
             return '';
         }
-        async evaluateFrameGroup(group, index, total) {
+        frameGroupPrompt(mode, index, total) {
             const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
-            const prompt = `以下是同一段视频${position}按时间顺序抽取的采样帧序列，请按「片段理解任务」的格式输出这段视频的客观内容理解。`;
+            if (mode === 'animation') {
+                return `以下是一个短循环动画（GIF/动图）的采样帧${position}，按时间顺序抽取，整体时长通常只有几秒且首尾可能循环衔接。请重点还原：动画主体是谁；完整动作从什么状态开始、到什么状态结束；动作的幅度与节奏；以及表情、眼神、小物件位移等容易被忽略的细微变化。若多数画面几乎相同，请直接说明动画大部分时间处于静止，并指出真正发生变化的画面。请按「片段理解任务」的格式输出客观内容理解，不要逐帧罗列，画面之外的内容不要编造。`;
+            }
+            return `以下是一段较长视频${position}按时间顺序等距抽取的采样帧，帧间隔约 2 秒，是连续画面的关键切片而非全部画面。请基于这组切片还原该段时间线：场景与出场主体；动作与事件的先后顺序及因果（谁、在哪里、做了什么、引起什么变化）；镜头或视角是否发生切换。请按「片段理解任务」的格式输出客观内容理解，不要逐帧罗列，画面之外的内容不要编造。`;
+        }
+        async evaluateFrameGroup(group, index, total, mode) {
+            const prompt = this.frameGroupPrompt(mode, index, total);
             this.coverContext({
                 role: 'user',
                 content: [
@@ -5088,7 +5179,6 @@ var agentSystem = (function (exports) {
         }
     }
 
-    const MEMORY_COLLECTION = LUNAR_MESSAGES_COLLECTION;
     const RAG_TIMELINE_HARD_LIMIT = 2048;
     const RAG_PER_QUERY_TOP_K = 10;
     const RAG_MAX_RECORDS = 24;
@@ -5115,7 +5205,7 @@ var agentSystem = (function (exports) {
                     continue;
                 if (content.includes(SCHEDULE_TRIGGER_PREFIX))
                     continue;
-                const [, error] = memoryAdd(MEMORY_COLLECTION, message.role, content);
+                const [, error] = memoryAdd(message.role, content);
                 if (error)
                     console.error('[记忆] 写入记忆库失败:', error);
                 else

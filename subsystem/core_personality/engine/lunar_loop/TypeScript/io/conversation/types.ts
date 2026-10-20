@@ -13,6 +13,8 @@ export interface CachedMessage {
 	role: 'user' | 'assistant';
 	categories: string[];
 	content: string;
+	/** 用户消息的发送者名字（私聊/前端用户名），载入上下文时还原 `[用户: 名字]:` 前缀 */
+	sender?: string;
 	attachments?: CachedAttachment[];
 	imageSrc?: string;
 	imageLabel?: string;

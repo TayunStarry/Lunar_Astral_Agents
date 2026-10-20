@@ -101,9 +101,15 @@ function buildActionsPanel(msg) {
     return panel;
 }
 
+/** 仅用于前端展示：隐藏缓存正文里的 `[用户: 名字]:` 前缀（模型上下文仍保留） */
+function stripUserPrefix(text) {
+    return String(text || '').replace(/^\[用户:\s*[^\]]*\]\s*[:：]\s*/u, '');
+}
+
 function computeSearchText(msg) {
     const parts = [];
-    if (msg.content) parts.push(msg.content);
+    if (msg.sender) parts.push(msg.sender);
+    if (msg.content) parts.push(msg.role === 'user' ? stripUserPrefix(msg.content) : msg.content);
     if (msg.imageLabel) parts.push(msg.imageLabel);
     if (msg.abcNotation) parts.push(msg.abcNotation);
     if (msg.attachments && msg.attachments.length) {
@@ -120,8 +126,8 @@ function renderMessageElement(msg) {
     el.dataset.searchText = computeSearchText(msg);
     if (msg.categories && msg.categories.includes('action')) el.classList.add('action-message');
 
-    // 用户气泡名显示配置的用户名（默认「子幽」）；文本内容仍不带用户名前缀
-    const displayName = msg.role === 'user' ? backendUserName : ASSISTANT_NAME;
+    // 用户气泡名优先用缓存里的实际发送者（QQ 私聊昵称 / 前端配置名）；正文不带前缀
+    const displayName = msg.role === 'user' ? (msg.sender || backendUserName) : ASSISTANT_NAME;
     const header = document.createElement('div');
     header.className = 'message-header';
     header.innerHTML = `
@@ -167,8 +173,8 @@ function renderMessageElement(msg) {
 
     messageArea.appendChild(el);
 
-    // 用户消息：文件引用渲染为可点击按钮，其余文本按 Markdown 渲染
-    if (msg.role === 'user' && msg.content) return fillUserMessageContent(el, msg.content);
+    // 用户消息：文件引用渲染为可点击按钮，其余文本按 Markdown 渲染（展示时隐藏发送者前缀）
+    if (msg.role === 'user' && msg.content) return fillUserMessageContent(el, stripUserPrefix(msg.content));
     // 助手消息：正文已被服务端置换为句柄 + 文件名，连同收录图标一起展示
     if (msg.content) return fillMarkdownContent(el, msg.content);
     return Promise.resolve(el);

@@ -37,7 +37,7 @@
 | 创作音乐、演奏、写曲子 | `dispatch_musician` |
 | 看当前屏幕、截屏 | `screenshot` |
 | 查看已有资料、用户之前发过的文件 | `list_resources` → `outline_resource` → `read_resource`；跨资料先用 `search_resources` |
-| 回忆某个用户以前说过什么、以前聊过什么 | `search_memory`（记忆库跨集合检索，不是资源检索） |
+| 回忆某个用户以前说过什么、以前聊过什么 | `search_memory`（记忆库全局检索，返回文本记忆，不是资源检索） |
 | 查看可引用的图片句柄、历史图片 | `list_images` |
 | 看图片细节、问图上内容 | `describe_images` |
 | 定时提醒、日程安排（创建/修改/删除/查询计划） | `schedule`（`action`=create/edit/delete/query；查询可带 `keywords` 数组与 `date`/`scope` 时间范围） |

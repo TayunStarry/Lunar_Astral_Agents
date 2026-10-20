@@ -11,15 +11,87 @@ import (
 	"image"
 	"image/color"
 	"image/gif"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
 
 	mmmodule "CorePersonality/engine/multimodal"
+	persist "CorePersonality/engine/persistence"
 	"LunarSubsystem/GeneralConfig"
 
 	"github.com/dop251/goja"
 )
+
+// TestBase64DecodePreservesBinaryBytes 截图/图片落盘必须走字节解码：
+// atob 返回 Go 字符串，goja 按 UTF-8 转换会把 PNG 头 0x89 等非法字节替换成
+// U+FFFD，再按 charCodeAt 还原就变成 0xFD，最终写出损坏的 PNG。
+func TestBase64DecodePreservesBinaryBytes(t *testing.T) {
+	vm := goja.New()
+	rt := &Runtime{runtime: vm}
+	vm.Set("decode", rt.base64Decode)
+	// 1x1 PNG，首四字节应为 89 50 4E 47
+	const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+	v, err := vm.RunString(`(() => {
+		const [buffer, decodeErr] = decode("` + png + `");
+		if (decodeErr) return false;
+		const bytes = new Uint8Array(buffer);
+		return bytes.length > 8
+			&& bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47;
+	})()`)
+	if err != nil {
+		t.Fatalf("执行失败: %v", err)
+	}
+	if !v.ToBoolean() {
+		t.Fatalf("base64Decode 未保留 PNG 原始字节: %v", v.Export())
+	}
+}
+
+// TestSaveFileWithBase64DecodeRoundTrip 复现截图落盘链路：
+// base64Decode → Uint8Array → saveFile，落盘后必须仍是可解码的 PNG。
+func TestSaveFileWithBase64DecodeRoundTrip(t *testing.T) {
+	tmp := t.TempDir()
+	origLocal := *GeneralConfig.LocalDir
+	origArchive := *GeneralConfig.ArchiveDBPath
+	*GeneralConfig.LocalDir = tmp
+	*GeneralConfig.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	t.Cleanup(func() {
+		_ = persist.CloseArchiveDB()
+		*GeneralConfig.LocalDir = origLocal
+		*GeneralConfig.ArchiveDBPath = origArchive
+	})
+
+	vm := goja.New()
+	rt := &Runtime{runtime: vm}
+	vm.Set("base64Decode", rt.base64Decode)
+	vm.Set("saveFile", rt.saveFile)
+
+	const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP8zwACTGCSAQANHQEDgslx/wAAAABJRU5ErkJggg=="
+	v, err := vm.RunString(`(() => {
+		const [buffer, decodeErr] = base64Decode("` + pngBase64 + `");
+		if (decodeErr) return decodeErr.message;
+		const bytes = new Uint8Array(buffer);
+		const [, path, saveErr] = saveFile("multimedia/screenshot_regression.png", true, bytes);
+		return saveErr ? saveErr.message : path;
+	})()`)
+	if err != nil {
+		t.Fatalf("执行落盘链路失败: %v", err)
+	}
+	path := v.String()
+	if path == "" {
+		t.Fatal("saveFile 未返回路径")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("读取落盘文件失败: %v", err)
+	}
+	if len(data) < 8 || string(data[:8]) != "\x89PNG\r\n\x1a\n" {
+		t.Fatalf("落盘文件不是合法 PNG 头: %x", data[:min(8, len(data))])
+	}
+	if _, err := png.Decode(bytes.NewReader(data)); err != nil {
+		t.Fatalf("落盘 PNG 无法解码: %v", err)
+	}
+}
 
 // TestResolveImageBytesStripsServiceURLQueryAndDetectsAnimated
 // 断言「.png 后缀的 GIF + 带 tag 查询串的视觉 URL」仍能被识别为动态图。

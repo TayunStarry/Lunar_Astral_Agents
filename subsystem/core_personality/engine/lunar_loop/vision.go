@@ -92,18 +92,18 @@ func VisionReadBlob(relPath, tag string, side int) ([]byte, string, error) {
 	}
 	if cached {
 		// 缓存命中：续期 used_at（LRU 淘汰依据，最近读取的最后淘汰）
-		filemodule.ArchiveDatabase.VisionCacheTouch(contentHash, side)
+		filemodule.VisionCacheTouch(contentHash, side)
 		return data, mime, nil
 	}
 	// 新构建副本：簿记入表，随后按容量上限做 LRU 淘汰（副本为派生数据，淘汰可随时重建）
-	_ = filemodule.ArchiveDatabase.VisionCachePut(filemodule.VisionCacheEntry{
+	_ = filemodule.VisionCachePut(filemodule.VisionCacheEntry{
 		ContentHash: contentHash,
 		Side:        side,
 		Tag:         tag,
 		CachePath:   cacheRel,
 		Bytes:       int64(len(data)),
 	})
-	if removed, freed := filemodule.ArchiveDatabase.VisionCacheEvict(int64(*GeneralConfig.VisionCacheCapMB) << 20); removed > 0 {
+	if removed, freed := filemodule.VisionCacheEvict(int64(*GeneralConfig.VisionCacheCapMB) << 20); removed > 0 {
 		fmt.Printf("[视觉缓存] 容量超限，已淘汰 %d 个副本，释放 %d 字节\n", removed, freed)
 	}
 	return data, mime, nil

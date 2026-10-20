@@ -222,7 +222,7 @@ const ns = database.namespace("myplugin")   // { query, exec, transaction, migra
 ns.query("SELECT * FROM t")
 ```
 
-接入项目 SQLite（mattn/go-sqlite3）。共享库为 `local_data/database/knowledge.db`（WAL 模式）；
+接入项目 SQLite（mattn/go-sqlite3）。共享库为 `local_data/database/knowledge.db`（WAL 模式；只放用户/插件自建表，内建缓存在 media/web/text/character 领域库，见 `docs/adr/0009`）；
 命名空间库为 `local_data/database/<name>.db`（每库自动建 `_migrations` 迁移记录表）。
 
 ### 5.4 向量记忆库 `memory`（allow-memory）
@@ -230,12 +230,12 @@ ns.query("SELECT * FROM t")
 ```js
 memory.store({ content, tags? })        // 写入 → { success, id }
 memory.search({ query, limit? })        // 检索 → { success, results: [{ content, similarity }] }（limit 默认 5，上限 50）
-memory.searchImage(query, { limit? })   // 图片语义检索 → { success, results: [{ image, similarity }] }
+memory.searchImage(query, { limit? })   // 图片语义检索 → { success, results: [{ url|base64, similarity }] }
 memory.storeImage(base64)               // 添加图片（标签由记忆库 LLM 自动生成）→ { success, id }
-memory.randomImage(query?)              // 按语义随机返回一张 → { success, image }
+memory.randomImage(query?)              // 按语义随机返回一张 → { success, url|base64 }
 ```
 
-- 文本集合 `ltp9_memory` 惰性初始化；图片复用项目记忆库 `stickers`（image 型）集合，为集合级管理，不提供按 id 单条读删。
+- 记忆库启动时一次性加载全部集合；文本与图片查询都只指定返回类型（text / image），集合是内容自动归入的语义分组，不再按集合名读写。
 
 ### 5.5 文件 `file`（allow-file）
 
@@ -464,7 +464,7 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 |------|------|------|
 | goja 运行时 / 事件循环 | `goja_nodejs/eventloop` | 每插件 `eventloop.NewEventLoop()`（自带定时器） |
 | 加解密 | `subsystem/lunar_decoder` | `encoding.lunarEncoder/lunarDecoder` 与 permissions.key 同源 |
-| 记忆库 / 数据库 | 项目 FileManager/module、SQLite（mattn/go-sqlite3） | `memory.*` / `database.*`（`api_database.go`：共享库 + 命名空间独立库）；图片记忆复用 `stickers` 集合 |
+| 记忆库 / 数据库 | 项目 FileManager/module、SQLite（mattn/go-sqlite3） | `memory.*` / `database.*`（`api_database.go`：共享库 + 命名空间独立库）；记忆按类型全局检索，集合为自动归组 |
 | 同步 `http` / `fetch` | `net/http` | `api_net.go` 共用 `doLTP9Fetch`（参照 lunar_astral engine.syncFetch 的同步方案） |
 | WebSocket 客户端 | `github.com/gorilla/websocket` | `api_ws.go` |
 | LLM / 嵌入 | lunar_config.json 的 `agent.multimodal_*` / `agent.embedding_*` | `agent.chat` / `agent.embed` |

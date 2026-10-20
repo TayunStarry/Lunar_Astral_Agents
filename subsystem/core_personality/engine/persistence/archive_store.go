@@ -6,7 +6,7 @@ package persistence
 // 明确不存：正文内容（在内容仓库里）、向量（在记忆库里）。
 //
 // 序号分配规则（ADR「双身份」）：序号是持久化主键，永不复用。
-// 进程启动时从 resources 表重建计数器（_meta 表记录 next_seq），
+// 进程启动时从 resources 表重建计数器（MAX(seq)），
 // 因此 @I.007 在重启后仍指向同一资源。
 
 import (
@@ -101,7 +101,7 @@ var (
 	archiveInitMu sync.Mutex
 	// archiveMu 串行化序号分配与目录写入，避免并发下句柄重号
 	archiveMu sync.Mutex
-	// archiveSeqCache 各类型码的下一个可用序号缓存（启动时从 _meta 重建）
+	// archiveSeqCache 各类型码的下一个可用序号缓存（启动时从 resources 表重建）
 	archiveSeqCache = map[string]int64{}
 	// archiveSeqLoaded 序号缓存是否已从库中重建
 	archiveSeqLoaded bool
@@ -170,6 +170,8 @@ func (d *ArchiveDB) init(dbPath string) error {
 		return err
 	}
 	d.initialized = true
+	// 历史版本把视觉副本簿记放在 archive.db：搬到 media.db（备份失败则保留旧表待下次重试）
+	d.migrateLegacyVisionCache(dbPath)
 	return nil
 }
 
@@ -218,27 +220,17 @@ func (d *ArchiveDB) ensureSchema() error {
 			FOREIGN KEY(resource_id) REFERENCES resources(id) ON DELETE CASCADE
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_sections_resource ON resource_sections(resource_id, ordinal)`,
-		`CREATE TABLE IF NOT EXISTS _meta (
-			key   TEXT PRIMARY KEY,
-			value TEXT NOT NULL DEFAULT ''
-		)`,
-		// 视觉读取副本缓存表（/file/miniature 缩放副本的簿记；副本本体在 multimedia/vision/）
-		// used_at 驱动 LRU 淘汰（容量超限时按最久未用清理，副本为派生数据可随时重建）
-		`CREATE TABLE IF NOT EXISTS vision_cache (
-			content_hash TEXT NOT NULL,
-			side         INTEGER NOT NULL,
-			tag          TEXT NOT NULL DEFAULT '',
-			cache_path   TEXT NOT NULL DEFAULT '',
-			bytes        INTEGER NOT NULL DEFAULT 0,
-			created_at   INTEGER NOT NULL DEFAULT 0,
-			used_at      INTEGER NOT NULL DEFAULT 0,
-			PRIMARY KEY (content_hash, side)
-		)`,
+		// 注意：视觉副本缓存（vision_cache）已迁到 media.db（见 domain_db.go）。
+		// 本库只保留资源名录自身的表：句柄、元数据、段落结构。
 	}
 	for _, stmt := range stmts {
 		if _, err := d.db.Exec(stmt); err != nil {
 			return fmt.Errorf("资源目录建表失败: %v", err)
 		}
+	}
+	// 清理历史遗留的 _meta 空表：序号缓存实际从 resources.MAX(seq) 重建，该表已无用途
+	if _, err := d.db.Exec(`DROP TABLE IF EXISTS _meta`); err != nil {
+		LoggerGeneral.Warn("Persistence", "清理历史 _meta 表失败: %v", err)
 	}
 	// 兼容既有库：老版本没有 blob_owned 列，缺失时补上（ALTER 失败仅代表列已存在）
 	// 必须先补齐列，后面的历史去重查询会读取 archiveResourceColumns。

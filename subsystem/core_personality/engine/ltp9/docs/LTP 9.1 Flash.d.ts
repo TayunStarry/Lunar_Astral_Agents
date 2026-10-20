@@ -423,7 +423,7 @@ export const memory: {
      */
     searchImage(query: string, opts?: { limit?: number }): { success: boolean; results?: Array<{ image: string; similarity: number }>; error?: string }
     /**
-     * 往 stickers 集合添加一张图片（base64；标签由记忆库 LLM 自动生成）
+     * 添加一张图片记忆（base64；标签由记忆库 LLM 自动生成，内容自动归组）
      * 
      * @param image 待添加的图片 base64
      */

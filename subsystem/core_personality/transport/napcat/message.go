@@ -596,6 +596,59 @@ func resolveImageURL(imageData ImageData) string {
 	return ""
 }
 
+// admitForwardImage 把合并转发内的图片收进统一资源归档层并返回持久句柄。
+//
+// 合并转发与普通消息不同：普通图片会作为多模态内容项直接进入思考链，而转发内的图片
+// 只需要“可回引”的句柄。此处必须同时兼容两种来源形态：
+//   - 远程直链（image.url）：按 url 来源下载；
+//   - 仅本地文件引用（image.file）：get_image 下载后得到 data URI，必须按 data 来源解码，
+//     不能把 data: 当成 http URL 去请求——那会直接失败并退化成 [图片]。
+//
+// 直链下载失败时再尝试用 file 引用兜底，避免 QQ CDN 地址过期导致整条转发图全部丢失。
+func admitForwardImage(imageData ImageData) (string, bool) {
+	candidates := make([]string, 0, 2)
+	if imgURL := resolveImageURL(imageData); imgURL != "" {
+		candidates = append(candidates, imgURL)
+	}
+	// 直链存在时 resolveImageURL 不会读取 file；补一份本地下载结果作为兜底
+	if imageData.URL != "" && imageData.File != "" && !strings.HasPrefix(imageData.File, "http://") && !strings.HasPrefix(imageData.File, "https://") {
+		if raw, err := getImageContent(imageData.File); err == nil && len(raw) > 0 {
+			mimeType := sniffImageMIME(raw)
+			if mimeType == "" {
+				mimeType = "image/png"
+			}
+			candidates = append(candidates, "data:"+mimeType+";base64,"+base64.StdEncoding.EncodeToString(raw))
+		}
+	}
+
+	for _, source := range candidates {
+		sourceKind := file.SourceKindURL
+		if strings.HasPrefix(source, "data:") {
+			sourceKind = file.SourceKindData
+		}
+		// 归档层按「建议文件名」的扩展名推断类型：data URI 与无扩展名的 QQ CDN
+		// 直链都必须补一个图片扩展名，否则会被当成文档（或直接失败退化成 [图片]）。
+		name := forwardImageName(source)
+		// 转发图只为还原对话记录服务：ephemeral 保留等级，配额吃紧时优先回收本体，
+		// 句柄降级为描述后依然可引用；同图重复转发按内容去重，不重复占句柄。
+		res, err := file.ResourceAdmit(file.AdmitInput{
+			SourceKind: sourceKind,
+			Source:     source,
+			Name:       name,
+			Origin:     "channel",
+			Retain:     file.RetainEphemeral,
+			Dedup:      true,
+		})
+		if err == nil && res.Handle != "" {
+			return res.Handle, true
+		}
+		if err != nil {
+			LoggerGeneral.SubWarn("LunarCore", "Napcat", "合并转发图片入库失败（%s）: %v", sourceKind, err)
+		}
+	}
+	return "", false
+}
+
 // resolveVideoSource 获取视频的可访问地址（优先 url，其次通过 get_file 下载）
 func resolveVideoSource(videoData VideoData) string {
 	if videoData.URL != "" {
@@ -775,6 +828,46 @@ func sniffImageMIME(data []byte) string {
 	}
 }
 
+// dataURIExt 从 data:image/... URI 的 MIME 推断扩展名（未知时回退 .png）
+func dataURIExt(dataURI string) string {
+	meta := dataURI
+	if end := strings.IndexAny(meta, ";,"); end >= 0 {
+		meta = meta[:end]
+	}
+	switch strings.ToLower(strings.TrimPrefix(meta, "data:")) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "image/bmp":
+		return ".bmp"
+	default:
+		return ".png"
+	}
+}
+
+// forwardImageName 为转发图片生成带图片扩展名的建议文件名。
+//
+// QQ CDN 直链经常没有扩展名；如果没有扩展名，归档层会按文档处理。
+// 这里未知格式一律先用 .jpg，归档层随后会按文件头嗅探把 GIF/WebP 等纠正过来。
+func forwardImageName(source string) string {
+	if strings.HasPrefix(source, "data:") {
+		return "forward" + dataURIExt(source)
+	}
+	pathPart := source
+	if cut := strings.IndexAny(pathPart, "?#"); cut >= 0 {
+		pathPart = pathPart[:cut]
+	}
+	switch ext := strings.ToLower(filepath.Ext(pathPart)); ext {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp":
+		return "forward" + ext
+	default:
+		return "forward.jpg"
+	}
+}
+
 // extractJsonCardTitle 从 JSON 卡片数据中提取标题（小程序 / 分享卡片 / 邀请等）
 func extractJsonCardTitle(data string) string {
 	var payload map[string]any
@@ -899,21 +992,11 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment, res
 			registered := false
 			var imageData ImageData
 			if resolveImages && json.Unmarshal(segment.Data, &imageData) == nil {
-				if imgURL := resolveImageURL(imageData); imgURL != "" {
-					// 转发图收进统一资源归档层，正文内嵌**持久句柄**（重启后仍可解析）。
-					// 用 ephemeral 保留等级：这类图只为还原对话记录服务，配额吃紧时优先回收本体，
-					// 句柄降级为描述后依然可引用。
-					if res, err := file.ResourceAdmit(file.AdmitInput{
-						SourceKind: file.SourceKindURL,
-						Source:     imgURL,
-						Origin:     "channel",
-						Retain:     file.RetainEphemeral,
-					}); err == nil && res.Handle != "" {
-						sb.WriteString("[")
-						sb.WriteString(res.Handle)
-						sb.WriteString("]")
-						registered = true
-					}
+				if handle, ok := admitForwardImage(imageData); ok {
+					sb.WriteString("[")
+					sb.WriteString(handle)
+					sb.WriteString("]")
+					registered = true
 				}
 			}
 			if !registered {

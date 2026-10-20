@@ -125,9 +125,14 @@ function persistScreenshot(frame: ResizeImageResult, index: number): string {
 		const base64 = String(frame.base64 || '');
 		const payload = base64.includes('base64,') ? base64.split('base64,')[1] : base64;
 		if (!payload) return '';
-		const binary = atob(payload);
-		const bytes = new Uint8Array(binary.length);
-		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		// 必须用 base64Decode 取字节：atob 返回字符串，二进制里的非 UTF-8 字节会被
+		// 替换成 U+FFFD，再按 charCodeAt 写盘就变成 0xFD，PNG 直接损坏。
+		const [decoded, decodeErr] = base64Decode(payload);
+		if (decodeErr || !decoded) {
+			console.warn('[截图] base64 解码失败:', decodeErr);
+			return '';
+		}
+		const bytes = new Uint8Array(decoded);
 		const ext = frame.format === 'jpg' || frame.format === 'jpeg' ? 'jpg' : 'png';
 		const name = `multimedia/screenshot_${Date.now()}_${index}.${ext}`;
 		const [, path, error] = saveFile(name, true, bytes);

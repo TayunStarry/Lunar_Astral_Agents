@@ -80,9 +80,6 @@ var outboundMu sync.RWMutex
 // agentInvoker 前端智能体调用实现（agent.synergy 真实通道，由宿主注入）。
 var agentInvoker func(appID, instruction string) (string, error)
 
-// StickerCollection LTP9 图片记忆集合名（image 型集合，复用项目记忆库的 stickers 约定）。
-const StickerCollection = "stickers"
-
 // ==== 蓝图执行器全局 ====
 
 // bpDefaultMaxCalls 单次运行默认最大节点执行数量（对齐前端默认值，limit 节点可动态调整）。

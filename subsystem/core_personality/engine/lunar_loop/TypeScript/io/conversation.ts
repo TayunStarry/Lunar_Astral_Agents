@@ -10,7 +10,7 @@
 //   - 月华自己输出的图片只给前端看，不载回上下文。
 
 import type { CachedAttachment, CachedMessage } from './conversation/types';
-import { fileNameOf, localPathToReadURL, saveBase64Media, stripUserPrefix, toDisplaySource } from './conversation/codec';
+import { fileNameOf, localPathToReadURL, saveBase64Media, splitUserPrefix, toDisplaySource } from './conversation/codec';
 import { appendCachedMessage, persistConversation } from './conversation/store';
 
 export { initConversationCache, MAX_CACHE_MESSAGES, persistConversation } from './conversation/store';
@@ -24,6 +24,7 @@ function newId(): string {
 function buildUserRecord(content: any): CachedMessage | null {
 	const attachments: CachedAttachment[] = [];
 	const texts: string[] = [];
+	let sender = '';
 	let hasImage = false;
 	let hasVoice = false;
 
@@ -33,15 +34,21 @@ function buildUserRecord(content: any): CachedMessage | null {
 		attachments.push({ type, src, label: label || fileNameOf(src) });
 	};
 
-	if (typeof content === 'string') texts.push(stripUserPrefix(content));
+	const pushText = (raw: string): void => {
+		const parsed = splitUserPrefix(raw);
+		if (!sender && parsed.sender) sender = parsed.sender;
+		// 前端为媒体附加的占位符不进入展示正文；有正文时保留原始前缀，
+		// 缓存与模型历史都不再丢失发送者。
+		if (!parsed.text || parsed.text === '[视频]' || parsed.text === '[语音]') return;
+		texts.push(raw);
+	};
+
+	if (typeof content === 'string') pushText(content);
 	else if (Array.isArray(content)) {
 		for (const item of content as any[]) {
 			if (!item) continue;
 			if (item.type === 'text') {
-				const text = stripUserPrefix(String(item.text || ''));
-				// 前端为媒体附加的占位符不进入展示正文
-				if (!text || text === '[视频]' || text === '[语音]') continue;
-				texts.push(text);
+				pushText(String(item.text || ''));
 			}
 			else if (item.type === 'image_url') {
 				pushAttachment('image', item.image_url?.url || '');
@@ -77,6 +84,7 @@ function buildUserRecord(content: any): CachedMessage | null {
 		role: 'user',
 		categories: categories.length ? categories : ['text'],
 		content: text,
+		sender: sender || undefined,
 		attachments: attachments.length ? attachments : undefined,
 		timestamp: Date.now(),
 	};

@@ -3,13 +3,10 @@ import { SCHEDULE_TRIGGER_PREFIX } from '../tools/schedule/defs';
 import {
 	ensureMemoryReady,
 	extractMemoryText,
-	LUNAR_MESSAGES_COLLECTION,
 	searchMemoryGlobal
 } from '../capabilities/memory';
 import { interactEvent } from '../capabilities/ltp-event';
 
-/** 长期记忆集合名 */
-const MEMORY_COLLECTION = LUNAR_MESSAGES_COLLECTION;
 /** 记忆时间线硬切断长度上限（按行移除超限行） */
 const RAG_TIMELINE_HARD_LIMIT = 2048;
 /** 每条用户消息查询记忆库时返回的相关度最高的记录数 */
@@ -61,7 +58,7 @@ function memoryQueryText(message: string): string {
  *
  * 主动检索已交给对话者的 `search_memory` 工具；本类只保留两项**不依赖 LLM** 的职责：
  *  1. 记忆写入：把对话者淘汰的缓冲消息整理后写入长期记忆库；
- *  2. 自动背景：每轮跨集合检索，并按时间顺序拼接为时间线注入对话上下文。
+ *  2. 自动背景：每轮全局检索文本记忆，并按时间顺序拼接为时间线注入对话上下文。
  *
  * 不再调用 LLM 做摘要——检索不准时，摘要只会把无关碎片写成一段看似有用的噪音；
  * 需要更多信息时，对话者可以自己调用 `search_memory` 定向查询原文。
@@ -87,8 +84,8 @@ export class MemorizerRole {
 			if (!content || content.length <= 5) continue;
 			// 过滤计划表触发的自动消息（统一前缀），避免写入长期记忆
 			if (content.includes(SCHEDULE_TRIGGER_PREFIX)) continue;
-			/** 逐个写入记忆库 */
-			const [, error] = memoryAdd(MEMORY_COLLECTION, message.role, content);
+			/** 逐个写入记忆库（内容自动归入最相关的分组集合） */
+			const [, error] = memoryAdd(message.role, content);
 			if (error) console.error('[记忆] 写入记忆库失败:', error);
 			else written++;
 		}
@@ -142,14 +139,14 @@ export class MemorizerRole {
 		return timeline;
 	}
 
-	/** 跨集合检索长期记忆（按内容去重 → 相似度降序 → 取前若干条） */
+	/** 跨集合检索长期文本记忆（按内容去重 → 相似度降序 → 取前若干条） */
 	private retrieveRagRecords(userMessages: string[]): RagRecord[] {
 		// 去重 + 去掉群聊前缀 + 限制查询条数：每条查询都会触发嵌入调用，不能随消息数量无限增长
 		const queries = [...new Set(userMessages.map(text => memoryQueryText(text)).filter(text => text.length > 0))].slice(-RAG_MAX_QUERIES);
 		/** 所有查询结果汇总（含相似度分数） */
 		const allResults: RagRecord[] = [];
 		for (const query of queries) {
-			// 跨集合检索：同时覆盖聊天记忆与其它对话类集合，而不是只在 lunar_messages 里碰运气
+			// 全局检索：在所有集合中查文本记忆，不再依赖固定集合名
 			for (const hit of searchMemoryGlobal(query, RAG_PER_QUERY_TOP_K)) {
 				// 弱命中不进入时间线：它们只会污染上下文
 				if (hit.similarity < RAG_MIN_SIMILARITY) continue;

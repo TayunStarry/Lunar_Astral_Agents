@@ -44,7 +44,7 @@ export function handleGroupPhoto(host: PainterHost, args: GroupPhotoParams): str
 		const useReference = !!host.referenceImage;
 		// 有参考图时比例随参考图；无参考图时按绘制者指定的比例预设（缺省 1:1）
 		const plan = useReference ? host.planFor() : resolveDimensionPlan(args.ratio);
-		/** 迭代步数（0 表示交引擎按 sd_steps 处理） */
+		/** 迭代步数（0 表示交引擎按当前方案推荐步数处理，方案未配置时回退 sd_steps） */
 		const steps = normalizeSteps(args.steps, '合照');
 		const imageParams: GenerateImageParams = {
 			prompt: fullPrompt,

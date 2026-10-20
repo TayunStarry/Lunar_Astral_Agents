@@ -1,51 +1,32 @@
 package WebLTP
 
-// Web-LTP 页面摘要缓存 — SQLite（github.com/mattn/go-sqlite3，与 StarLTP 同驱动）。
+// Web-LTP 页面摘要缓存 — SQLite（与共享存储层同驱动）。
 // 目的：同一网页的情报只摘要一次，后续检索直接复用，减少多模态摘要调用消耗。
 // 策略：以规范化 URL 为键存「标题/域名/摘要/检索词提示/入库时间」；
 //   - 命中且未超过 TTL（默认 7 天）→ 跳过访问与摘要，直接复用；
 //   - 命中但超过 TTL → 视为未命中，照常访问网页并用新摘要覆写旧行；
 //   - 未命中 → 访问并写入。
-// 打开失败或摘要为空/过短的页面不写缓存。数据库统一落在共享知识库
-// GeneralConfig.KnowledgeDBPath（默认 LocalDir/database/knowledge.db，表 web_ltp_page_cache），
-// 不保留旧版本缓存存储的迁移策略。
+// 打开失败或摘要为空/过短的页面不写缓存。数据库落在网络检索领域库
+// GeneralConfig.WebDBPath（默认 LocalDir/database/web.db，表 web_ltp_page_cache），
+// 与知识库 knowledge.db 分离；表结构由 persistence 领域库统一建好，本包不重复建表。
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
-	_ "github.com/mattn/go-sqlite3"
+	"CorePersonality/engine/persistence"
 )
 
-// pageCachePath 缓存数据库路径（与共享知识库同库：GeneralConfig.KnowledgeDBPath，
-// 默认 LocalDir/database/knowledge.db）
-func pageCachePath() string {
-	return *GeneralConfig.KnowledgeDBPath
-}
-
-// openPageCache 打开（必要时创建）缓存数据库
-func openPageCache(path string, ttl time.Duration) (*PageCache, error) {
+// openPageCache 取得网络检索缓存库连接（懒打开、幂等建表）。
+// 连接由 persistence 统一持有，PageCache 只借用，不负责关闭。
+func openPageCache(ttl time.Duration) (*PageCache, error) {
 	if ttl <= 0 {
 		ttl = 7 * 24 * time.Hour
 	}
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=10000&_journal_mode=WAL")
+	db, err := persistence.EnsureWebDB()
 	if err != nil {
-		return nil, fmt.Errorf("打开缓存数据库失败: %w", err)
-	}
-	const schema = `CREATE TABLE IF NOT EXISTS web_ltp_page_cache (
-		url        TEXT PRIMARY KEY,
-		title      TEXT NOT NULL DEFAULT '',
-		domain     TEXT NOT NULL DEFAULT '',
-		summary    TEXT NOT NULL DEFAULT '',
-		query_hint TEXT NOT NULL DEFAULT '',
-		fetched_at INTEGER NOT NULL
-	);`
-	if _, err := db.Exec(schema); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("初始化缓存表失败: %w", err)
+		return nil, fmt.Errorf("打开网络检索缓存数据库失败: %w", err)
 	}
 	return &PageCache{db: db, ttl: ttl}, nil
 }
@@ -92,9 +73,9 @@ func (c *PageCache) put(rawURL, title, domain, summary, queryHint string) {
 	}
 }
 
-// close 关闭数据库连接
+// close 释放句柄引用（连接归 persistence 领域库管理，不在此关闭）
 func (c *PageCache) close() {
-	if c != nil && c.db != nil {
-		c.db.Close()
+	if c != nil {
+		c.db = nil
 	}
 }

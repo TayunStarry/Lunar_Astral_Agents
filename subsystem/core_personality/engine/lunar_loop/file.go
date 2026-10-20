@@ -4,6 +4,7 @@ import (
 	module "CorePersonality/engine/persistence"
 	"CorePersonality/prompts"
 	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/base64"
 	"fmt"
@@ -51,6 +52,13 @@ func (class *Runtime) saveFile(call goja.FunctionCall) goja.Value {
 		}
 	default:
 		return class.runtime.ToValue([]any{"", "", fmt.Errorf("不支持的文件数据类型")})
+	}
+
+	// 必须在 SaveFileEx 创建临时文件之前初始化资源目录：否则初始化扫描会把
+	// 刚创建的临时文件登记成正式实体，最终返回一个临时文件名（甚至已被删除）。
+	// 初始化失败不阻断保存：SaveFileEx 会退回“只落盘、不登记句柄”。
+	if archiveErr := module.EnsureArchiveInitialized(); archiveErr != nil {
+		LoggerGeneral.Warn("LunarCore", "资源目录初始化失败，保存文件继续但不登记句柄: %v", archiveErr)
 	}
 
 	fileName, path, err := module.SaveFile(fileName, overwrite, reader)

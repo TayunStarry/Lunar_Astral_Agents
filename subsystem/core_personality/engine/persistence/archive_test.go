@@ -21,15 +21,17 @@ import (
 	"LunarSubsystem/GeneralConfig"
 )
 
-// setupArchiveTest 在临时目录中准备隔离的资源目录与内容仓库
+// setupArchiveTest 在临时目录中准备隔离的资源目录、媒体派生库与内容仓库
 func setupArchiveTest(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
 	// 覆盖全局配置指向临时目录（测试结束后由 defer 还原）
 	origLocal := *GeneralConfig.LocalDir
 	origArchive := *GeneralConfig.ArchiveDBPath
+	origMedia := *GeneralConfig.MediaDBPath
 	*GeneralConfig.LocalDir = tmp
 	*GeneralConfig.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	*GeneralConfig.MediaDBPath = filepath.Join(tmp, "database", "media.db")
 	// 重置单例，保证每个测试从干净状态开始
 	ArchiveDatabase = nil
 	archiveSeqLoaded = false
@@ -37,8 +39,10 @@ func setupArchiveTest(t *testing.T) string {
 	t.Cleanup(func() {
 		// 先关闭 SQLite 连接，否则 Windows 上临时目录无法删除
 		_ = CloseArchiveDB()
+		_ = CloseDomainDBs()
 		*GeneralConfig.LocalDir = origLocal
 		*GeneralConfig.ArchiveDBPath = origArchive
+		*GeneralConfig.MediaDBPath = origMedia
 		ArchiveDatabase = nil
 		archiveSeqLoaded = false
 		archiveSeqCache = map[string]int64{}

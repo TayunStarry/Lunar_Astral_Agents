@@ -70,7 +70,7 @@ globalThis.setDiffusionScheme = (name) => {
 	return name === 'turbo' || name === 'quality' ? [name, null] : ['', new Error('未知的绘图模型方案')];
 };
 globalThis.getDiffusionScheme = () => ['quality', null];
-// 自定义角色库桩：用内存表模拟 SQLite knowledge.db 的 painter_characters 表
+// 自定义角色库桩：用内存表模拟 SQLite character.db 的 painter_characters 表
 const knowledgeTables = new Map();
 globalThis.knowledgeLoad = (table) => [Array.from(knowledgeTables.get(table) || []), null];
 globalThis.knowledgeSave = (table, entries) => {

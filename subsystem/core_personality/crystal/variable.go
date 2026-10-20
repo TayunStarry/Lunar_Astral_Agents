@@ -5,15 +5,6 @@ import (
 	"time"
 )
 
-// ==== 记忆库自动初始化默认值 ====
-// 与月华的 TypeScript 默认值保持一致
-const (
-	// DefaultMemoryModelName 默认嵌入模型名
-	DefaultMemoryModelName = "system-embedding"
-	// DefaultMemoryCollection 记忆库前端操作的固定集合名
-	DefaultMemoryCollection = "lunar_messages"
-)
-
 // ==== 全局变量 ====
 
 // ==== LTPX 待定调用（前端包经 /ws 派发、回执经 /ltpx/result 回填） ====

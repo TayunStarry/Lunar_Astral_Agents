@@ -53,13 +53,32 @@ function composeDialoguePrompt(appearances: SisterAppearances): string {
         .split('{crystal-appearance}').join(appearances.crystal);
 }
 
+/**
+ * 读取 `agent.append_settings`：每项即一行追加设定。
+ *
+ * 未配置、非数组或全为空白时返回空数组；调用方据此**完全不改动**提示词，
+ * 因此不会留下空标题或多余空行。
+ */
+function readAppendSettings(): string[] {
+    const settings = GlobalConfig.customConfig?.agent?.append_settings;
+    if (!Array.isArray(settings)) return [];
+    return settings
+        .map(line => String(line ?? '').replace(/\r\n?/g, '\n').trim())
+        .filter(line => line.length > 0);
+}
+
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
     /** 智能体角色标签（TUI 实况屏显示） */
     protected roleTag: string = "对话者";
 
+    /** 内置提示词原文（已填充外观占位，不含追加设定） */
+    private readonly basePrompt: string;
+
     /** 生成聊天对话（一次应答周期的入口） */
     public async generateDialogue(cache: ChatCache): Promise<void> {
+        // 每轮都按当前配置重建提示词：配置异步加载完成前也不会漏掉追加设定
+        this.applyAppendSettings();
         /**
          * 每次「新的应答周期」都重置工具轮次计数。
          *
@@ -276,8 +295,22 @@ export class DialogueRole extends ModelBuilder {
         return executeToolCalls(this.messages, state);
     }
 
+    /**
+     * 把「追加设定」逐行拼到系统提示词末尾。
+     *
+     * 只改系统提示词，不动历史上下文；配置为空时恢复为内置提示词原文，
+     * 因此运行期即使配置被清空也不会残留上一次的追加内容。
+     */
+    private applyAppendSettings(): void {
+        const lines = readAppendSettings();
+        this.systemPrompt = lines.length > 0
+            ? this.basePrompt.replace(/\s*$/, '') + '\n' + lines.join('\n')
+            : this.basePrompt;
+    }
+
     /** 构造函数 */
     public constructor(private descriptionRole: ModelBuilder, appearances: SisterAppearances) {
         super(composeDialoguePrompt(appearances));
+        this.basePrompt = this.systemPrompt;
     }
 }

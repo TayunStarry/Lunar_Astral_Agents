@@ -67,7 +67,7 @@ var SystemEndpoints = []SystemEndpoint{
 
 	// ==================== 知识库与记忆库 ====================
 	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
-	{Path: "/memory/", Handler: file.MemoryHandler, Method: "ANY", Description: "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
+	{Path: "/memory/", Handler: file.MemoryHandler, Method: "ANY", Description: "记忆库（全局类型化读写/条目列举/分组集合管理/重建）"},
 
 	// ==================== 截图与图像处理 ====================
 	{Path: "/capture", Handler: image.HandleCapture, Method: "ANY", Description: "统一截图（auto/window/fullscreen/display/region）"},

@@ -1,9 +1,9 @@
 package multimodal
 
-// animated_select.go 动态图理解帧选择
+// animated_select.go 动态图理解帧选择（数量骨架 · 回退路径）
 //
-// 目标：让模型在有限帧数内优先看懂「开头发生了什么」，同时仍能看到中段与结尾。
-// 选择规则（按总帧数自适应，总量恒 <= AnimatedMaxUnderstandFrames）：
+// 本文件只保留不依赖帧内容的纯数量骨架：分析通道（animated_analyze.go /
+// animated_smart.go）不可用时的兜底。策略为「开头稠密、结尾稀疏」的加权分组：
 //
 //	<= 64 帧     全部提交
 //	65 ~ 128    16 帧一组，取 4 组

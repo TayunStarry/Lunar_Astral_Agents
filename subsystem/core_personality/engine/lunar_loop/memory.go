@@ -10,55 +10,35 @@ import (
 	"github.com/dop251/goja"
 )
 
-// memory.go 记忆库适配器 v2 — 标签向量中介检索架构
+// memory.go 记忆库适配器 v3 — 分组集合 + 全局类型化检索
 //
-// 桥接 goja JS 运行时与自实现的记忆库（subsystem/storage/module）。
-// JS 侧通过 memoryInit/memoryAdd/memoryQuery/memoryDelete/memoryAddImage 调用，
+// 桥接 goja JS 运行时与自实现的记忆库（engine/persistence）。
+// JS 侧通过 memoryInit/memoryAdd/memoryQuery/memoryAddImage 等调用，
 // 由 create.go 中的 vm.Set 注册到全局作用域。
 //
-// v5 变更：
-//   - memoryInit 仅需 collectionName 一个参数；文本/图片记忆混合存储，不再区分集合类型
-//   - memoryQueryImage 已移除（统一到 memoryQuery）
-//   - memoryAddImage 简化为 2 必选参数 + 2 可选识别取向参数（LLM 自动生成标签）
+// v3 变更：
+//   - 集合不再由调用方指定：入库时按内容与集合名向量的相关性自动归组
+//   - 查询只指定返回类型（text / image / audio），跨全部集合检索
+//   - memoryInit 不再接收集合名，启动时一次性加载全部集合
+//   - 新增 memoryGet（按 ID）/ memoryList（逐条列举）与 memoryAddAudio
 
-// memoryInit 初始化记忆库实例并创建/打开指定集合（文本与图片混合存储）
-// 模型配置全部从 lunar_config.json 的 memory 配置组读取
+// memoryInit 初始化记忆库实例（加载全部集合、补齐默认分组与集合名向量）
+// 模型配置与月华共用 agent.embedding_* / agent.multimodal_*
 func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 1 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInit 参数不足, 需 1 个: collectionName")})
-	}
+	// 确保全局 MemoryDB 实例已初始化（幂等，若宿主已初始化则复用）
+	module.InitMemoryDB(*GeneralConfig.MemoryDBDir)
 
-	collectionName, _ := call.Argument(0).Export().(string)
-
-	// 确保全局 MemoryDB 实例已初始化（幂等，若 crystal_astral 已初始化则复用）
-	module.InitMemoryDB("local_data/database/memory")
-
-	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务，模型配置从 config 模块读取）
 	if err := module.MemoryInitInstance(); err != nil {
 		LoggerGeneral.Error("LunarCore", "记忆库实例初始化失败: %v", err)
-		return class.runtime.ToValue([]any{false, err})
-	}
-
-	// 第二步：创建/打开集合（嵌入模型名从 memory.embedding_model 配置读取）
-	ctx := context.Background()
-	modelName := *GeneralConfig.MemoryEmbeddingModel
-	if err := module.CollectionInit(ctx, collectionName, modelName); err != nil {
-		LoggerGeneral.Error("LunarCore", "集合 [%s] 创建失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
 	return class.runtime.ToValue([]any{true, nil})
 }
 
-// memoryListCollections 列出记忆库全部集合名。
-//
-// 供智能体做跨集合检索：先取集合清单，再逐个集合调用 memoryQuery，
-// 这样「群里谁之前说过什么」可以同时命中聊天记忆与其它知识集合，
-// 而不是只在固定的 lunar_messages 集合里碰运气。
-//
-// 返回: [集合名数组, error]
+// memoryListCollections 列出记忆库全部分组集合名（管理/调试用途，不参与检索参数）
 func (class *Runtime) memoryListCollections(call goja.FunctionCall) goja.Value {
-	module.InitMemoryDB("local_data/database/memory")
+	module.InitMemoryDB(*GeneralConfig.MemoryDBDir)
 	if err := module.MemoryInitInstance(); err != nil {
 		LoggerGeneral.Error("LunarCore", "记忆库实例初始化失败: %v", err)
 		return class.runtime.ToValue([]any{nil, err})
@@ -66,44 +46,42 @@ func (class *Runtime) memoryListCollections(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{module.MemoryListCollections(), nil})
 }
 
-// memoryAdd 添加消息到指定集合（同步阻塞，等待 LLM 标签生成完成）
-// 参数: collectionName, role, content
+// memoryAdd 添加文本消息（内容自动归入最相关的分组集合）
+// 参数: role, content
 func (class *Runtime) memoryAdd(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 3 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAdd 参数不足, 需 3 个: collectionName, role, content")})
+	if len(call.Arguments) < 2 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAdd 参数不足, 需 2 个: role, content")})
 	}
 
-	collectionName, _ := call.Argument(0).Export().(string)
-	role, _ := call.Argument(1).Export().(string)
-	content, _ := call.Argument(2).Export().(string)
+	role, _ := call.Argument(0).Export().(string)
+	content, _ := call.Argument(1).Export().(string)
 
 	ctx := context.Background()
-	id, err := module.MemoryAddMessage(ctx, collectionName, role, content)
+	id, err := module.MemoryAddMessage(ctx, role, content)
 	if err != nil {
-		LoggerGeneral.Error("LunarCore", "集合 [%s] 添加消息失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "添加文本记忆失败: %v", err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
 	return class.runtime.ToValue([]any{id, nil})
 }
 
-// memoryAddWithTags 添加消息到指定集合，携带调用方提供的显式标签（跳过 LLM 标签生成）
-// 参数: collectionName, role, content, tags(字符串数组)
-// 返回: [id, error]；tags 为空时返回错误
+// memoryAddWithTags 添加文本消息，携带调用方提供的显式标签与来源标记
+// 参数: role, content, tags(字符串数组), source(可空)
+// 返回: [id, error]；tags 为空时按正文嵌入
 func (class *Runtime) memoryAddWithTags(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 4 {
-		return class.runtime.ToValue([]any{false, fmt.Errorf("memoryAddWithTags 参数不足, 需 4 个: collectionName, role, content, tags")})
+	if len(call.Arguments) < 3 {
+		return class.runtime.ToValue([]any{false, fmt.Errorf("memoryAddWithTags 参数不足, 需 3 个: role, content, tags")})
 	}
 
-	collectionName, _ := call.Argument(0).Export().(string)
-	role, _ := call.Argument(1).Export().(string)
-	content, _ := call.Argument(2).Export().(string)
+	role, _ := call.Argument(0).Export().(string)
+	content, _ := call.Argument(1).Export().(string)
 
 	// 解析 tags 字符串数组
-	exportedTags := call.Argument(3).Export()
+	exportedTags := call.Argument(2).Export()
 	rawTags, ok := exportedTags.([]any)
 	if !ok {
-		return class.runtime.ToValue([]any{false, fmt.Errorf("memoryAddWithTags 第 4 个参数需为字符串数组 tags")})
+		return class.runtime.ToValue([]any{false, fmt.Errorf("memoryAddWithTags 第 3 个参数需为字符串数组 tags")})
 	}
 	tags := make([]string, 0, len(rawTags))
 	for _, t := range rawTags {
@@ -112,51 +90,50 @@ func (class *Runtime) memoryAddWithTags(call goja.FunctionCall) goja.Value {
 		}
 	}
 
-	if len(collectionName) == 0 || len(tags) == 0 {
-		return class.runtime.ToValue([]any{false, fmt.Errorf("memoryAddWithTags 需提供集合名与至少一个标签")})
+	source := ""
+	if len(call.Arguments) > 3 {
+		source, _ = call.Argument(3).Export().(string)
 	}
 
 	ctx := context.Background()
-	id, err := module.MemoryAddMessageWithTags(ctx, collectionName, role, content, tags)
+	id, err := module.MemoryAddMessageWithTags(ctx, role, content, tags, source)
 	if err != nil {
-		LoggerGeneral.Error("LunarCore", "集合 [%s] 添加消息(显式标签)失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "添加文本记忆(显式标签)失败: %v", err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
 	return class.runtime.ToValue([]any{id, nil})
 }
 
-// memoryQuery 查询指定集合的相关消息（text 和 image 统一）
-// 参数: collectionName, queryText, topK
+// memoryQuery 跨全部集合检索指定类型的相关记忆
+// 参数: queryText, mediaType(text/image/audio), topK
 func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 3 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryQuery 参数不足, 需 3 个: collectionName, queryText, topK")})
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryQuery 参数不足, 需 3 个: queryText, mediaType, topK")})
 	}
 
-	collectionName, _ := call.Argument(0).Export().(string)
-	queryText, _ := call.Argument(1).Export().(string)
+	queryText, _ := call.Argument(0).Export().(string)
+	mediaType, _ := call.Argument(1).Export().(string)
 	topK := int(call.Argument(2).ToInteger())
 
 	ctx := context.Background()
-	results, err := module.MemoryQueryMessagesWithContent(ctx, collectionName, queryText, topK)
+	results, err := module.MemoryQuery(ctx, queryText, mediaType, topK)
 	if err != nil {
-		LoggerGeneral.Error("LunarCore", "集合 [%s] 查询消息失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "查询记忆失败（类型 %s）: %v", mediaType, err)
 		return class.runtime.ToValue([]any{nil, err})
 	}
 
-	resultObjs := memoryResultsToObjects(results)
-
-	return class.runtime.ToValue([]any{resultObjs, nil})
+	return class.runtime.ToValue([]any{memoryResultsToObjects(results), nil})
 }
 
-// memoryKeywordSearch 关键词/正则检索指定集合（不调用嵌入服务）
-// 参数: collectionName, terms(字符串数组), useRegex(bool), limit
+// memoryKeywordSearch 跨全部集合按关键词/正则检索指定类型的记忆（不调用嵌入服务）
+// 参数: mediaType, terms(字符串数组), useRegex(bool), limit
 func (class *Runtime) memoryKeywordSearch(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 4 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryKeywordSearch 参数不足, 需 4 个: collectionName, terms, useRegex, limit")})
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryKeywordSearch 参数不足, 需 4 个: mediaType, terms, useRegex, limit")})
 	}
 
-	collectionName, _ := call.Argument(0).Export().(string)
+	mediaType, _ := call.Argument(0).Export().(string)
 	rawTerms, ok := call.Argument(1).Export().([]any)
 	if !ok {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryKeywordSearch 第 2 个参数需为字符串数组 terms")})
@@ -170,12 +147,51 @@ func (class *Runtime) memoryKeywordSearch(call goja.FunctionCall) goja.Value {
 	useRegex := call.Argument(2).ToBoolean()
 	limit := int(call.Argument(3).ToInteger())
 
-	results, err := module.MemoryKeywordSearch(collectionName, terms, useRegex, limit)
+	results, err := module.MemoryKeywordSearch(mediaType, terms, useRegex, limit)
 	if err != nil {
-		LoggerGeneral.Error("LunarCore", "集合 [%s] 关键词检索失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "记忆关键词检索失败（类型 %s）: %v", mediaType, err)
 		return class.runtime.ToValue([]any{nil, err})
 	}
 	return class.runtime.ToValue([]any{memoryResultsToObjects(results), nil})
+}
+
+// memoryGet 按 ID 返回一条记忆（跨全部集合查找）
+// 参数: id
+func (class *Runtime) memoryGet(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryGet 参数不足, 需 1 个: id")})
+	}
+	id, _ := call.Argument(0).Export().(string)
+
+	result, err := module.MemoryGetEntry(id)
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+	objects := memoryResultsToObjects([]module.MemoryQueryResult{*result})
+	if len(objects) == 0 {
+		return class.runtime.ToValue([]any{nil, nil})
+	}
+	return class.runtime.ToValue([]any{objects[0], nil})
+}
+
+// memoryList 逐条列举记忆条目（跨全部集合）
+// 参数: mediaType(空=全部类型), limit(<=0 返回全部), offset(可空)
+func (class *Runtime) memoryList(call goja.FunctionCall) goja.Value {
+	mediaType := ""
+	if len(call.Arguments) > 0 {
+		mediaType, _ = call.Argument(0).Export().(string)
+	}
+	limit := 0
+	if len(call.Arguments) > 1 {
+		limit = int(call.Argument(1).ToInteger())
+	}
+	offset := 0
+	if len(call.Arguments) > 2 {
+		offset = int(call.Argument(2).ToInteger())
+	}
+
+	entries, _ := module.MemoryListEntries(mediaType, offset, limit)
+	return class.runtime.ToValue([]any{memoryResultsToObjects(entries), nil})
 }
 
 // memoryResultsToObjects 把记忆查询结果映射为 JS 可读对象
@@ -184,71 +200,93 @@ func memoryResultsToObjects(results []module.MemoryQueryResult) []map[string]any
 	for _, r := range results {
 		obj := map[string]any{
 			"id":         r.ID,
+			"type":       r.Type,
 			"role":       r.Role,
+			"collection": r.Collection,
 			"similarity": r.Similarity,
+		}
+		if r.Source != "" {
+			obj["source"] = r.Source
 		}
 		if r.Timestamp != 0 {
 			obj["timestamp"] = r.Timestamp
 		}
+		if r.Content != "" {
+			obj["content"] = r.Content
+		}
 		if r.URL != "" {
 			obj["url"] = r.URL
-		} else if r.Base64 != "" {
+		}
+		if r.Base64 != "" {
 			// 历史数据兼容：旧记忆仍内联 base64
 			obj["base64"] = r.Base64
-		} else {
-			obj["content"] = r.Content
 		}
 		objects = append(objects, obj)
 	}
 	return objects
 }
 
-// memoryDelete 从指定集合删除消息
-// 参数: collectionName, id
+// memoryDelete 按 ID 删除记忆（跨全部集合查找）
+// 参数: id
 func (class *Runtime) memoryDelete(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 2 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryDelete 参数不足, 需 2 个: collectionName, id")})
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryDelete 参数不足, 需 1 个: id")})
 	}
-
-	collectionName, _ := call.Argument(0).Export().(string)
-	id, _ := call.Argument(1).Export().(string)
+	id, _ := call.Argument(0).Export().(string)
 
 	ctx := context.Background()
-	err := module.MemoryDeleteMessage(ctx, collectionName, id)
-	if err != nil {
-		LoggerGeneral.Error("LunarCore", "集合 [%s] 删除消息失败: %v", collectionName, err)
+	if err := module.MemoryDeleteMessage(ctx, id); err != nil {
+		LoggerGeneral.Error("LunarCore", "删除记忆失败: %v", err)
 		return class.runtime.ToValue([]any{false, err})
 	}
-
 	return class.runtime.ToValue([]any{true, nil})
 }
 
-// memoryAddImage 向 image 类型集合添加图片文档（LLM 自动生成标签）
-// 参数: collectionName, base64Image, [orientation, custom]
+// memoryAddImage 添加图片记忆（LLM 自动生成标签并归组）
+// 参数: base64Image, [orientation, custom]
 func (class *Runtime) memoryAddImage(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 2 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAddImage 参数不足, 需 2 个: collectionName, base64Image")})
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAddImage 参数不足, 需 1 个: base64Image")})
 	}
 
-	collectionName, _ := call.Argument(0).Export().(string)
-	base64Image, _ := call.Argument(1).Export().(string)
+	base64Image, _ := call.Argument(0).Export().(string)
 
 	// 可选参数：识别取向与自定义参考文本（不传时默认自动处理）
 	orientation := ""
 	custom := ""
-	if len(call.Arguments) > 2 {
-		orientation, _ = call.Argument(2).Export().(string)
+	if len(call.Arguments) > 1 {
+		orientation, _ = call.Argument(1).Export().(string)
 	}
-	if len(call.Arguments) > 3 {
-		custom, _ = call.Argument(3).Export().(string)
+	if len(call.Arguments) > 2 {
+		custom, _ = call.Argument(2).Export().(string)
 	}
 
 	ctx := context.Background()
-	id, err := module.MemoryAddImage(ctx, collectionName, base64Image, orientation, custom)
+	id, err := module.MemoryAddImage(ctx, base64Image, orientation, custom)
 	if err != nil {
-		LoggerGeneral.Error("LunarCore", "图片集合 [%s] 添加图片失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "添加图片记忆失败: %v", err)
 		return class.runtime.ToValue([]any{nil, err})
 	}
+	return class.runtime.ToValue([]any{id, nil})
+}
 
+// memoryAddAudio 添加音频记忆（按描述文本归组）
+// 参数: base64Audio, description
+func (class *Runtime) memoryAddAudio(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAddAudio 参数不足, 需 1 个: base64Audio")})
+	}
+	base64Audio, _ := call.Argument(0).Export().(string)
+	description := ""
+	if len(call.Arguments) > 1 {
+		description, _ = call.Argument(1).Export().(string)
+	}
+
+	ctx := context.Background()
+	id, err := module.MemoryAddAudio(ctx, base64Audio, description)
+	if err != nil {
+		LoggerGeneral.Error("LunarCore", "添加音频记忆失败: %v", err)
+		return class.runtime.ToValue([]any{nil, err})
+	}
 	return class.runtime.ToValue([]any{id, nil})
 }

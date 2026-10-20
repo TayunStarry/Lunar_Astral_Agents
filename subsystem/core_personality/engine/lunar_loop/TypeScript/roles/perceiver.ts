@@ -64,7 +64,7 @@ export class PerceiverRole extends ModelBuilder {
 	}
 
 	/**
-	 * 观看序列帧（图片序列帧解读模式，主入口）
+	 * 观看视频采样帧（视频的序列帧解读模式）
 	 *
 	 * 与 watchVideo 同构，区别仅在每组内容以「N 张 base64 采样帧」提交而非单个 file:// 视频引用，
 	 * 因此不依赖服务端解码视频文件（供不支持 file:// 的架构使用）。
@@ -74,6 +74,31 @@ export class PerceiverRole extends ModelBuilder {
 	 * @returns 视频内容理解文本（拼接或摘要），全部失败时为空字符串
 	 */
 	public async watchFrames(groups: MediaFrameGroup[]): Promise<string> {
+		return this.watchGroupSequence(groups, 'video');
+	}
+
+	/**
+	 * 观看循环动画（GIF/动图的序列帧解读模式）
+	 *
+	 * 动画时长通常只有几秒且会循环播放，理解目标与长视频不同：
+	 * 起止状态、完整动作过程与细微变化，而非长时间线叙事。
+	 * 提示词与视频采样帧分流（见 frameGroupPrompt），汇总规则一致。
+	 *
+	 * @param groups 采样帧分组列表（动态图链路恒为单分组）
+	 * @returns 动画内容理解文本（拼接或摘要），全部失败时为空字符串
+	 */
+	public async watchAnimation(groups: MediaFrameGroup[]): Promise<string> {
+		return this.watchGroupSequence(groups, 'animation');
+	}
+
+	/**
+	 * 序列帧分组的共用观看流程：等距抽样 → 逐组推理 → 汇总
+	 *
+	 * @param groups 采样帧分组列表
+	 * @param mode 提示词取向：video=长时间线叙事还原，animation=循环动作还原
+	 * @returns 内容理解文本（拼接或摘要），全部失败时为空字符串
+	 */
+	private async watchGroupSequence(groups: MediaFrameGroup[], mode: 'video' | 'animation'): Promise<string> {
 		if (groups.length === 0) {
 			console.warn('[感知者] 未收到任何采样帧分组');
 			return '';
@@ -84,14 +109,14 @@ export class PerceiverRole extends ModelBuilder {
 		if (watched.length < groups.length) {
 			console.log(`[感知者] 分组数 ${groups.length} 超过单次上限 ${this.MAX_SEGMENTS}，等距抽样观看 ${watched.length} 组`);
 		}
-		console.log(`[感知者] 开始观看视频采样帧，共 ${watched.length} 个分组`);
+		console.log(`[感知者] 开始观看${mode === 'animation' ? '动画' : '视频'}采样帧，共 ${watched.length} 个分组`);
 
 		/** 所有分组的内容理解 */
 		const understandings: string[] = [];
 
 		for (let index = 0; index < watched.length; index++) {
 			console.log(`[感知者] 观看第 ${index + 1}/${watched.length} 组（${watched[index].frames.length} 帧）`);
-			const understanding = await this.evaluateFrameGroup(watched[index], index + 1, watched.length);
+			const understanding = await this.evaluateFrameGroup(watched[index], index + 1, watched.length, mode);
 			if (understanding.trim().length > 0) {
 				understandings.push(understanding);
 				console.log(`[感知者] 第 ${index + 1} 组理解完成`);
@@ -199,17 +224,37 @@ export class PerceiverRole extends ModelBuilder {
 	}
 
 	/**
+	 * 序列帧分组的任务提示词（视频与动画分流）
+	 *
+	 * 输出格式与约束由系统提示（perceiverRole.md）的「片段理解任务」定义，
+	 * 这里只注入与媒体形态匹配的观看目标：
+	 *   - video：等距切片还原长时间线 —— 因果顺序、镜头切换，防止逐帧流水账；
+	 *   - animation：短循环动画 —— 起止状态、动作全程、细微变化与静止段说明。
+	 *
+	 * @param mode 提示词取向
+	 * @param index 分组序号（从1开始）
+	 * @param total 分组总数
+	 */
+	private frameGroupPrompt(mode: 'video' | 'animation', index: number, total: number): string {
+		const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
+		if (mode === 'animation') {
+			return `以下是一个短循环动画（GIF/动图）的采样帧${position}，按时间顺序抽取，整体时长通常只有几秒且首尾可能循环衔接。请重点还原：动画主体是谁；完整动作从什么状态开始、到什么状态结束；动作的幅度与节奏；以及表情、眼神、小物件位移等容易被忽略的细微变化。若多数画面几乎相同，请直接说明动画大部分时间处于静止，并指出真正发生变化的画面。请按「片段理解任务」的格式输出客观内容理解，不要逐帧罗列，画面之外的内容不要编造。`;
+		}
+		return `以下是一段较长视频${position}按时间顺序等距抽取的采样帧，帧间隔约 2 秒，是连续画面的关键切片而非全部画面。请基于这组切片还原该段时间线：场景与出场主体；动作与事件的先后顺序及因果（谁、在哪里、做了什么、引起什么变化）；镜头或视角是否发生切换。请按「片段理解任务」的格式输出客观内容理解，不要逐帧罗列，画面之外的内容不要编造。`;
+	}
+
+	/**
 	 * 观看一组采样帧并生成内容理解（失败自动重试一次）
 	 *
 	 * @param group 采样帧分组（同一时间窗内按时间顺序的帧）
 	 * @param index 分组序号（从1开始）
 	 * @param total 分组总数
+	 * @param mode 提示词取向：video=视频切片，animation=循环动画
 	 * @returns 该分组的内容理解文本，失败时为空字符串
 	 */
-	private async evaluateFrameGroup(group: MediaFrameGroup, index: number, total: number): Promise<string> {
-		/** 构建提示词：任务格式与行为准则由系统提示（perceiverRole.md）定义 */
-		const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
-		const prompt = `以下是同一段视频${position}按时间顺序抽取的采样帧序列，请按「片段理解任务」的格式输出这段视频的客观内容理解。`;
+	private async evaluateFrameGroup(group: MediaFrameGroup, index: number, total: number, mode: 'video' | 'animation'): Promise<string> {
+		/** 构建提示词：任务格式与行为准则由系统提示（perceiverRole.md）定义，观看目标由 mode 分流 */
+		const prompt = this.frameGroupPrompt(mode, index, total);
 
 		// 覆写上下文：文本提示词 + 各采样帧（base64 data URI，无需服务端解码视频）
 		this.coverContext({

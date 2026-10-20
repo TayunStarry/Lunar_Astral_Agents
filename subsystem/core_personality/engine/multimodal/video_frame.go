@@ -9,7 +9,7 @@ package multimodal
 //  2. 序列帧解读链路（VideoToFrames / AnimatedImageToFrames）
 //     —— 供不支持 llama-server 「媒体目录 + file:// 引用」机制的架构（如云端 OpenAI 兼容 API）使用：
 //     本地抽帧为 base64 图片序列，以多个 image_url 提交，无需服务端解码视频文件。
-//     采样网格与分组刻意与 file 模式对齐（0.5fps / 60s 一段），保证两种模式的视觉 token 量级一致。
+//     采样网格与分组刻意与 file 模式对齐（1fps / 80s 一段），保证两种模式的视觉 token 量级一致。
 
 import (
 	"LunarSubsystem/GeneralConfig"
@@ -106,8 +106,8 @@ func FormatSeconds(t float64) string {
 }
 
 // frameSampleTimes 生成分组 [start, end) 内的采样时间点：
-// 以 AnimatedSampleFps（0.5fps，与 llama-server 的 --video-fps 一致）为网格步长，
-// 与 file 模式由服务端抽帧的时间点分布保持同构（60 秒分组 ≈ 30 帧）。
+// 以 AnimatedSampleFps（1fps，与 llama-server 的 --video-fps 一致）为网格步长，
+// 与 file 模式由服务端抽帧的时间点分布保持同构（80 秒分组 = 80 帧）。
 func frameSampleTimes(start float64, end float64) []float64 {
 	span := end - start
 	if span <= 0 {
@@ -148,7 +148,7 @@ func extractFrames(localPath string, times []float64, quality int) []MediaFrame 
 //
 // 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径。
 // 分组与 file 模式的 MediaSegment 一致（每 MediaChunkSeconds 秒一组），
-// 组内按 AnimatedSampleFps 采样网格抽帧，宽高不超过 MaxMediaWidth，JPEG 编码为 data URI。
+// 组内按 AnimatedSampleFps 采样网格抽帧，长边不超过 MaxMediaWidth，JPEG 编码为 data URI。
 // 不写媒体目录（无需服务端解码视频），全部产物均在内存中返回。
 func VideoToFrames(inputFile string) ([]MediaFrameGroup, error) {
 	localPath, cleanup, err := localizeVideoSource(inputFile)
@@ -193,8 +193,8 @@ func VideoToFrames(inputFile string) ([]MediaFrameGroup, error) {
 // AnimatedImageToFrames 动态图 → 智能筛选后的图片帧序列（单分组，<= 64 帧）
 //
 // 不再把动态图转码为慢放视频，也不盲目均匀抽帧：
-// 先用 ffprobe 取总帧数，再按「开头稠密、结尾稀疏」的分组规则选出至多 64 帧，
-// 通过 ffmpeg select 只解码这些帧（长边约束到 AnimatedFrameMaxDim）。
+// 先经分析通道做循环裁剪、运动窗口识别与近重复去重（animated_smart.go），
+// 再通过 ffmpeg select 只解码选中的帧（长边约束到 AnimatedFrameMaxDim）。
 func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 	if len(imgData) == 0 {
 		return nil, fmt.Errorf("动态图数据为空")
@@ -218,12 +218,28 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 	if probeErr != nil {
 		LoggerGeneral.Warn("MultimodalAnalysis", "动态图帧数探测失败(%v)，回退为解码全部帧", probeErr)
 	}
-	// 探测失败时先解码全部帧，再用实际帧数做同样的选择
 	totalFrames := probe.Frames
 	if totalFrames <= 0 {
-		totalFrames = 2048 // 安全上限；极端长动画会被截断，但不会无限占用磁盘
+		totalFrames = animatedAnalyzeCap // 安全上限；极端长动画会被截断，但不会无限占用磁盘
 	}
-	indices := SelectAnimatedFrameIndices(totalFrames)
+
+	// 分析通道：全部帧缩略为 32×32 灰度网格，派生帧差与感知哈希，
+	// 支撑循环裁剪、运动窗口加密与近重复去重；失败时退回均匀骨架选帧。
+	analysis, analyzeErr := analyzeAnimatedFrames(tempFile, totalFrames)
+	if analyzeErr != nil {
+		LoggerGeneral.Warn("MultimodalAnalysis", "动态图逐帧分析失败(%v)，回退为均匀骨架选帧", analyzeErr)
+	}
+	useSmart := analyzeErr == nil && len(analysis.Grids) > 0
+	strategy := "均匀骨架"
+	var indices []int
+	framesTotal := probe.Frames
+	if useSmart {
+		indices = SelectSmartAnimatedFrames(analysis)
+		framesTotal = len(analysis.Grids)
+		strategy = "循环/运动感知"
+	} else {
+		indices = SelectAnimatedFrameIndices(totalFrames)
+	}
 	if len(indices) == 0 {
 		return nil, fmt.Errorf("动态图未解析出可理解帧")
 	}
@@ -236,8 +252,10 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 
 	pattern := filepath.Join(tmpDir, "frame-%03d.jpg")
 	vf := fmt.Sprintf("scale='min(%d,iw)':-2", AnimatedFrameMaxDim)
-	// 总帧数已知：只解码选中的帧区间；探测失败时解码前 2048 帧再在内存中选择
-	if probeErr == nil && probe.Frames > 0 {
+	// 帧数已知（分析通道实测或探测成功）时用 select 表达式精确解码；
+	// 否则解码前 animatedAnalyzeCap 帧再在内存中筛选
+	knownCount := useSmart || (probeErr == nil && probe.Frames > 0)
+	if knownCount {
 		vf = fmt.Sprintf("select='%s',%s", buildAnimatedSelectExpr(indices), vf)
 	}
 	args := ffmpeg.KwArgs{
@@ -246,7 +264,7 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 		"qscale:v": "2",
 		"loglevel": "error",
 	}
-	if probeErr == nil && probe.Frames > 0 {
+	if knownCount {
 		args["frames:v"] = strconv.Itoa(len(indices))
 	} else {
 		args["frames:v"] = strconv.Itoa(totalFrames)
@@ -264,13 +282,13 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 		return nil, fmt.Errorf("动态图未解码出可用帧")
 	}
 	sort.Strings(files)
-	// 探测失败时 ffmpeg 已输出全部帧，这里按同一规则补做选择
-	if probeErr != nil || probe.Frames <= 0 {
+	// 双重失败（无分析、无探测）时 ffmpeg 已输出全部帧，这里按同一规则补做选择
+	if !knownCount {
 		files = selectFileSubset(files, SelectAnimatedFrameIndices(len(files)))
 	}
 
 	// 输出帧数与选中下标数量一致时，时间标签可按原始位置换算；否则退化为序号
-	exactMapping := len(files) == len(indices)
+	exactMapping := len(files) == len(indices) && framesTotal > 0 && probe.Duration > 0
 	frames := make([]MediaFrame, 0, len(files))
 	for i, file := range files {
 		data, readErr := os.ReadFile(file)
@@ -278,8 +296,8 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 			continue
 		}
 		timePoint := float64(i)
-		if exactMapping && probeErr == nil && probe.Frames > 0 && probe.Duration > 0 {
-			timePoint = probe.Duration * float64(indices[i]) / float64(probe.Frames)
+		if exactMapping {
+			timePoint = probe.Duration * float64(indices[i]) / float64(framesTotal)
 		}
 		frames = append(frames, MediaFrame{
 			Image: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data),
@@ -290,8 +308,8 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 		return nil, fmt.Errorf("动态图未解码出可用帧")
 	}
 
-	LoggerGeneral.Info("MultimodalAnalysis", "AnimatedImageToFrames: %s(%d bytes, 共 %d 帧) → 解读 %d 帧（长边≤%d，开头稠密）",
-		format, len(imgData), probe.Frames, len(frames), AnimatedFrameMaxDim)
+	LoggerGeneral.Info("MultimodalAnalysis", "AnimatedImageToFrames: %s(%d bytes, 共 %d 帧) → 解读 %d 帧（长边≤%d，%s）",
+		format, len(imgData), framesTotal, len(frames), AnimatedFrameMaxDim, strategy)
 	return []MediaFrameGroup{{Start: 0, End: probe.Duration, Frames: frames}}, nil
 }
 

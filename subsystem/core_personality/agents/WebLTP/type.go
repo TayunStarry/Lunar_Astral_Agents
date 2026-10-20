@@ -61,7 +61,7 @@ type Config struct {
 	PageScrollCaptures    int    `json:"page_scroll_captures"`    // 单个结果页滚动截图张数上限（仅页面文本很少时启用）
 	SummaryMaxChars       int    `json:"summary_max_chars"`       // 单页情报摘要的硬切断字符数（≤4096）
 	MaxRunSeconds         int    `json:"max_run_seconds"`         // 单次运行的总时长软上限（秒），超时后以已采集信息收尾
-	CacheEnabled          *bool  `json:"cache_enabled"`           // 是否启用页面摘要缓存（SQLite，knowledge.db 的 web_ltp_page_cache 表）。
+	CacheEnabled          *bool  `json:"cache_enabled"`           // 是否启用页面摘要缓存（SQLite，web.db 的 web_ltp_page_cache 表）。
 	CacheTTLDays          int    `json:"cache_ttl_days"`          // 页面摘要缓存有效期（天），超过后重新访问网页并用新摘要覆写
 
 	VisionMinChars int `json:"vision_min_chars"` // 正文少于该字数时才启用视觉理解（默认 240）

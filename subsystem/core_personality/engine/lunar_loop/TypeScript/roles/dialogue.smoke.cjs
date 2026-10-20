@@ -242,6 +242,18 @@ check('系统提示已注入姐妹外观',
 	check('QQ 来源的快速应答 auto=true（不占应答份额）',
 		ackPushed.length === 1 && ackPushed[0].auto === true, JSON.stringify(ackPushed));
 
+	// ==== 10. 追加设定：逐行拼在提示词末尾；空配置不残留 ====
+	GlobalConfig.customConfig = { agent: { append_settings: ['喜欢猫', '讨厌被叫 AI'] } };
+	const appendRole = new DialogueRole(new ModelBuilder('描述者桩'), { lunar: '月华外观', crystal: '琉璃外观' });
+	appendRole.applyAppendSettings();
+	check('追加设定逐行附加到提示词末尾',
+		appendRole.systemPrompt.endsWith('喜欢猫\n讨厌被叫 AI'), JSON.stringify(appendRole.systemPrompt.slice(-40)));
+	GlobalConfig.customConfig = { agent: {} };
+	appendRole.applyAppendSettings();
+	check('未配置追加设定时不残留内容',
+		!appendRole.systemPrompt.includes('喜欢猫') && !appendRole.systemPrompt.includes('追加设定'),
+		JSON.stringify(appendRole.systemPrompt.slice(-40)));
+
 	fs.rmSync(OUT, { recursive: true, force: true });
 	console.log(failures === 0 ? '\n全部通过' : '\n' + failures + ' 项失败');
 	process.exit(failures === 0 ? 0 : 1);

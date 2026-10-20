@@ -1,8 +1,8 @@
 /**
  * 自定义角色库（SQLite 持久化）
  *
- * 存储复用共享知识库通道 `knowledgeLoad / knowledgeSave`：
- * 实际落盘在 `local_data/database/knowledge.db` 的 `painter_characters` 表，
+ * 存储复用共享知识条目通道 `knowledgeLoad / knowledgeSave`：
+ * 实际落盘在 `local_data/database/character.db` 的 `painter_characters` 表，
  * 每行 key=角色名、value=角色档案 JSON。这样绘制者创建的角色在重启后仍然可用，
  * 也能被立绘与合照两个工具共同引用。
  *

@@ -39,7 +39,7 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 	if !d.memoryInitialized {
 		return nil, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	embeddingURL := *GeneralConfig.MemoryEmbeddingURL
+	embeddingURL := *GeneralConfig.AgentEmbeddingURL
 	if embeddingURL == "" {
 		return nil, fmt.Errorf("嵌入服务 base_url 未配置")
 	}
@@ -63,8 +63,8 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if *GeneralConfig.MemoryEmbeddingKey != "" {
-		req.Header.Set("Authorization", "Bearer "+*GeneralConfig.MemoryEmbeddingKey)
+	if *GeneralConfig.AgentEmbeddingKey != "" {
+		req.Header.Set("Authorization", "Bearer "+*GeneralConfig.AgentEmbeddingKey)
 	}
 
 	resp, err := d.httpClient.Do(req)
@@ -131,10 +131,11 @@ func (d *MemoryDB) embedQuery(ctx context.Context, model string, text string) ([
 
 // chatRequest OpenAI 兼容 /v1/chat/completions 请求体
 type chatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature float32       `json:"temperature,omitempty"`
+	Model              string         `json:"model"`
+	Messages           []chatMessage  `json:"messages"`
+	MaxTokens          int            `json:"max_tokens,omitempty"`
+	Temperature        float32        `json:"temperature,omitempty"`
+	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 }
 
 // chatMessage 聊天消息
@@ -170,7 +171,8 @@ type chatChoice struct {
 
 // chatMessageResp 聊天响应消息
 type chatMessageResp struct {
-	Content string `json:"content"`
+	Content          string `json:"content"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
 }
 
 // generateTags 调用 LLM 为内容生成中文标签，返回标签数组
@@ -179,7 +181,7 @@ type chatMessageResp struct {
 // 图片默认(auto)模式使用单轮调用，prompt 内同时覆盖情绪/文本(OCR)/人物特征/种类/色彩/姿态等维度
 // 最多重试 MaxTagRetries 次，全部失败则返回错误
 func (d *MemoryDB) generateTags(ctx context.Context, content string, isImage bool, orientation string, custom string) ([]string, error) {
-	if *GeneralConfig.MemoryMultimodalURL == "" {
+	if *GeneralConfig.AgentMultimodalURL == "" {
 		return nil, fmt.Errorf("LLM 服务 base_url 未配置")
 	}
 
@@ -241,7 +243,7 @@ func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage
 // generateTagsFromMedia 动态图标签生成：mediaRefs 为感知者式采样帧引用
 // （file 模式为慢放视频的 file:// 引用、frames 模式为图片序列帧 data URI），最多重试 MaxTagRetries 次
 func (d *MemoryDB) generateTagsFromMedia(ctx context.Context, mediaRefs []string, orientation string, custom string) ([]string, error) {
-	if *GeneralConfig.MemoryMultimodalURL == "" {
+	if *GeneralConfig.AgentMultimodalURL == "" {
 		return nil, fmt.Errorf("LLM 服务 base_url 未配置")
 	}
 
@@ -263,8 +265,12 @@ func (d *MemoryDB) generateTagsFromMedia(ctx context.Context, mediaRefs []string
 	return nil, fmt.Errorf("动态图标签生成失败（已重试 %d 次）: %w", MaxTagRetries, lastErr)
 }
 
+// 动态图标签只抽少量代表帧提交：帧数过多会让多模态请求体过大、推理模型把
+// token 预算耗在逐帧描述上，最终 content 为空。8 帧足以覆盖首尾与动作关键节点。
+const maxTagFrames = 8
+
 // generateTagsFromMediaOnce 单次动态图标签生成：
-// user 消息含 N 条采样帧引用（image_url 形式：file 模式为 file:// 视频引用，由服务端自动抽帧；
+// user 消息含少量采样帧引用（image_url 形式：file 模式为 file:// 视频引用，由服务端自动抽帧；
 // frames 模式为图片序列帧 data URI）与文本说明，综合动作过程与画面内容生成标签
 func (d *MemoryDB) generateTagsFromMediaOnce(ctx context.Context, mediaRefs []string, orientation string, custom string) ([]string, error) {
 	// 动态图按识别取向定制系统提示词，并追加帧序列说明
@@ -276,9 +282,10 @@ func (d *MemoryDB) generateTagsFromMediaOnce(ctx context.Context, mediaRefs []st
 			"请综合各帧的画面内容与帧间的动作/变化过程生成标签，标签需覆盖动作与过程维度。",
 	}
 
-	parts := make([]chatContentPart, 0, len(mediaRefs)+1)
+	refs := sampleMediaRefs(mediaRefs, maxTagFrames)
+	parts := make([]chatContentPart, 0, len(refs)+1)
 	parts = append(parts, chatContentPart{Type: "text", Text: "以下是同一段动画按时间顺序抽取的采样帧，请综合动作过程与画面内容生成标签，以JSON数组格式返回"})
-	for _, ref := range mediaRefs {
+	for _, ref := range refs {
 		parts = append(parts, chatContentPart{Type: "image_url", ImageURL: &imageURL{URL: ref}})
 	}
 
@@ -291,14 +298,18 @@ func (d *MemoryDB) generateTagsFromMediaOnce(ctx context.Context, mediaRefs []st
 
 // postTagRequest 发送标签生成请求并解析响应（消息构造与请求执行解耦，供静态/动态图分支复用）
 func (d *MemoryDB) postTagRequest(ctx context.Context, messages []chatMessage) ([]string, error) {
-	llmURL := *GeneralConfig.MemoryMultimodalURL
+	llmURL := *GeneralConfig.AgentMultimodalURL
 	apiURL := strings.TrimRight(llmURL, "/") + "/chat/completions"
 
 	reqBody := chatRequest{
-		Model:       *GeneralConfig.MemoryMultimodalModel,
+		Model:       *GeneralConfig.AgentMultimodalModel,
 		Messages:    messages,
-		MaxTokens:   200,
+		MaxTokens:   512,
 		Temperature: 0.3,
+		// 标签生成只需要一段 JSON，不需要思考过程。Gemma-4 等推理模型默认会先输出
+		// 很长的 reasoning_content，max_tokens 被思考耗尽后 content 为空，表现为
+		// 「LLM 返回空内容」并让动态图标签重试 3 次。显式关闭思考可稳定拿到标签。
+		ChatTemplateKwargs: map[string]any{"enable_thinking": false},
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)
@@ -311,8 +322,8 @@ func (d *MemoryDB) postTagRequest(ctx context.Context, messages []chatMessage) (
 		return nil, fmt.Errorf("创建 LLM 请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if *GeneralConfig.MemoryMultimodalKey != "" {
-		req.Header.Set("Authorization", "Bearer "+*GeneralConfig.MemoryMultimodalKey)
+	if *GeneralConfig.AgentMultimodalKey != "" {
+		req.Header.Set("Authorization", "Bearer "+*GeneralConfig.AgentMultimodalKey)
 	}
 
 	resp, err := d.httpClient.Do(req)
@@ -345,6 +356,9 @@ func (d *MemoryDB) postTagRequest(ctx context.Context, messages []chatMessage) (
 
 	rawContent := strings.TrimSpace(chatResp.Choices[0].Message.Content)
 	if rawContent == "" {
+		if reasoning := strings.TrimSpace(chatResp.Choices[0].Message.ReasoningContent); reasoning != "" {
+			return nil, fmt.Errorf("LLM 返回空内容（仅推理内容: %s）", truncateForLog(reasoning, 120))
+		}
 		return nil, fmt.Errorf("LLM 返回空内容")
 	}
 

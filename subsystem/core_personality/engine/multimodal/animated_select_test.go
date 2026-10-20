@@ -21,10 +21,12 @@ func TestAnimatedImageToFramesSmoke(t *testing.T) {
 	var buf bytes.Buffer
 	palette := color.Palette{color.Black, color.White, color.RGBA{R: 255, A: 255}}
 	animation := &gif.GIF{LoopCount: 1}
+	// 画布 100×64：条纹位置 0..79 全程在画面内且互不重复，
+	// 避免条纹移出后尾帧退化为重复画面被感知去重收敛
 	for i := 0; i < 80; i++ {
-		frame := image.NewPaletted(image.Rect(0, 0, 64, 64), palette)
+		frame := image.NewPaletted(image.Rect(0, 0, 100, 64), palette)
 		for y := 0; y < 64; y++ {
-			for x := 0; x < 64; x++ {
+			for x := 0; x < 100; x++ {
 				if x >= i && x < i+16 {
 					frame.SetColorIndex(x, y, 2)
 				} else {
@@ -35,7 +37,7 @@ func TestAnimatedImageToFramesSmoke(t *testing.T) {
 		animation.Image = append(animation.Image, frame)
 		animation.Delay = append(animation.Delay, 5)
 	}
-	animation.Config = image.Config{ColorModel: palette, Width: 64, Height: 64}
+	animation.Config = image.Config{ColorModel: palette, Width: 100, Height: 64}
 	if err := gif.EncodeAll(&buf, animation); err != nil {
 		t.Fatalf("生成测试 GIF 失败: %v", err)
 	}

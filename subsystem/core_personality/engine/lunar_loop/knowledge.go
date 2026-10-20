@@ -1,7 +1,9 @@
 package lunarloop
 
-// 知识库存储：SQLite（local_data/database/knowledge.db，经共享子系统 FileManager/module 的
-// 知识条目通道 KnowledgeLoadEntries / KnowledgeReplaceEntries，与琉璃 /knowledge/ 端点同库）。
+// 知识条目存储：SQLite（经共享子系统 persistence 的知识条目通道
+// KnowledgeLoadEntries / KnowledgeReplaceEntries，与琉璃 /knowledge/ 端点同源）。
+// 逻辑表按领域落库：video_summary → media.db，file_mapping → text.db，
+// painter_characters → character.db，其余用户/插件表 → knowledge.db。
 // goja 全局签名保持不变（TypeScript 侧零改动）：
 //   knowledgeLoad(table)           → [entries, error]  entries 为 [[key,text],...]
 //   knowledgeSave(table, entries)  → [bool, error]     全表替换语义

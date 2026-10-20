@@ -74,7 +74,7 @@ function renderFileRefChips() {
 
 // ---------- 消息增删 ----------
 async function copyMessage(msg) {
-    let text = msg.content || '';
+    let text = msg.role === 'user' ? stripUserPrefix(msg.content) : (msg.content || '');
     if (!text && msg.imageSrc) text = msg.imageSrc;
     if (!text && msg.abcNotation) text = msg.abcNotation;
     const ok = await copyToClipboard(text);

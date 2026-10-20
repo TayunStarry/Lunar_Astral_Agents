@@ -264,7 +264,8 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 		batchSize = bs
 	}
 
-	// 尺寸与步数缺省交给扩散模块按配置默认值（sd_image_size / sd_steps）归一化：
+	// 尺寸与步数缺省交给扩散模块归一化：步数优先取当前方案推荐步数，
+	// 方案未配置 steps 时才回退 sd_steps；尺寸回退 sd_image_size。
 	// 传 0 表示"未指定"，避免在此处写死一套与配置不一致的默认值。
 	// 注意：goja 导出的数值类型可能是 float64 / int64 / int，必须逐类型接受 ——
 	// 只认 float64 会让边长静默变 0，引擎随即退回默认方形，参考图比例被悄悄丢弃。
@@ -396,6 +397,10 @@ func (class *Runtime) upscaleImage(call goja.FunctionCall) goja.Value {
 
 // atob 适配TypeScript调用的base64解码功能，处理base64编码的字符串并返回解码结果
 // 返回值: string 解码后的字符串
+//
+// 注意：返回的是 Go 字符串，goja 会按 UTF-8 转成 JS 字符串；二进制数据中的
+// 非法 UTF-8 字节会被替换，因此**图片/音频等二进制内容不要用 atob**，
+// 应改用 base64Decode 取字节数组。
 func (class *Runtime) atob(call goja.FunctionCall) goja.Value {
 	input := call.Argument(0).String()
 
@@ -405,6 +410,21 @@ func (class *Runtime) atob(call goja.FunctionCall) goja.Value {
 		panic(class.runtime.NewGoError(err))
 	}
 	return class.runtime.ToValue(string(decoded))
+}
+
+// base64Decode 适配 TypeScript 的二进制 base64 解码：返回字节数组，而不是字符串。
+//
+// 背景：atob 返回 Go string，goja 按 UTF-8 转 JS 字符串时会把 PNG/JPEG 中的
+// 非法 UTF-8 字节替换成 U+FFFD；调用方再用 charCodeAt 还原就会得到 0xFD，
+// 落盘后图片损坏。二进制内容必须走这个入口。
+// 返回值: [ArrayBuffer, error]
+func (class *Runtime) base64Decode(call goja.FunctionCall) goja.Value {
+	input := strings.TrimSpace(call.Argument(0).String())
+	decoded, err := base64.StdEncoding.DecodeString(input)
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+	return class.runtime.ToValue([]any{class.runtime.NewArrayBuffer(decoded), nil})
 }
 
 // hashBytes 适配TypeScript调用的内容哈希计算：对字节数据计算 SHA-256，截取前 16 位十六进制

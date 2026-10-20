@@ -53,7 +53,7 @@ func Run(instruction string) (string, error) {
 	// 3. 打开页面摘要缓存（SQL；不可用时为 nil，get/put 均兼容空值，全部实时访问）
 	var cache *PageCache
 	if cfg.cacheEnabled() {
-		if pc, perr := openPageCache(pageCachePath(), time.Duration(cfg.CacheTTLDays)*24*time.Hour); perr == nil {
+		if pc, perr := openPageCache(time.Duration(cfg.CacheTTLDays) * 24 * time.Hour); perr == nil {
 			cache = pc
 			defer pc.close()
 		} else {
@@ -256,7 +256,7 @@ func captureDirForReport(saver *shotSaver) string {
 	return saver.dir
 }
 
-// LocalDirForData 本地数据根目录（截图保存基于 LocalDir；页面摘要缓存已统一到 knowledge.db）
+// LocalDirForData 本地数据根目录（截图保存基于 LocalDir；页面摘要缓存已独立到 web.db）
 func LocalDirForData() string {
 	p := *localDirFlag()
 	if p == "" {

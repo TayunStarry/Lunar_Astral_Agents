@@ -20,7 +20,7 @@
 
 	<!-- 主布局：左侧 45% 管理操作 + 右侧记忆列表 -->
 	<main class="main-layout">
-		<!-- 左侧：集合管理 → 记忆导入 -->
+		<!-- 左侧：分组管理 → 记忆导入 -->
 		<section class="panel input-panel">
 			<header class="panel-header">
 				<span class="panel-title"><i class="fas fa-brain"></i> 记忆库管理</span>
@@ -31,18 +31,18 @@
 				</div>
 			</header>
 			<div class="panel-body input-body">
-				<!-- 集合管理 -->
+				<!-- 分组管理 -->
 				<div class="input-section collection-section">
 					<div class="subsection-header">
-						<span class="panel-title"><i class="fas fa-database"></i> 集合管理</span>
-						<button class="btn-glass btn-sm btn-clear" id="refreshCollectionsBtn" title="刷新集合"><i class="fas fa-rotate"></i> 刷新</button>
+						<span class="panel-title"><i class="fas fa-database"></i> 分组管理</span>
+						<button class="btn-glass btn-sm btn-clear" id="refreshCollectionsBtn" title="刷新分组"><i class="fas fa-rotate"></i> 刷新</button>
 					</div>
 					<div class="collection-add-row">
-						<input type="text" id="newCollectionInput" placeholder="新集合名称，如 my_memory" autocomplete="off" spellcheck="false">
+						<input type="text" id="newCollectionInput" placeholder="新分组名称，如 旅行回忆" autocomplete="off" spellcheck="false">
 						<button class="btn-glass btn-glass-primary btn-sm" id="addCollectionBtn"><i class="fas fa-plus"></i> 新增</button>
 					</div>
 					<div class="list-scroll collection-list" id="collectionList">
-						<div class="list-empty">暂无集合。</div>
+						<div class="list-empty">暂无分组。</div>
 					</div>
 				</div>
 
@@ -52,7 +52,7 @@
 				<div class="input-section import-section">
 					<div class="subsection-header">
 						<span class="panel-title"><i class="fas fa-file-import"></i> 记忆导入</span>
-						<span class="char-count" id="importTarget"></span>
+						<span class="char-count" id="importTarget">自动归组</span>
 					</div>
 					<!-- 导入类型切换 -->
 					<div class="mode-toggle-group" id="importToggleGroup">
@@ -72,7 +72,7 @@
 						</div>
 						<div class="form-row">
 							<label class="form-label">标签</label>
-							<input type="text" id="tagInput" placeholder="可选，多个用逗号分隔，如 高兴, 旅行" autocomplete="off">
+							<input type="text" id="tagInput" placeholder="可选，多个用逗号分隔；只参与嵌入与归组，不写入正文" autocomplete="off">
 						</div>
 						<textarea id="textContentInput" class="import-textarea" rows="4" placeholder="输入记忆文本内容…" spellcheck="false"></textarea>
 						<button class="btn-glass btn-glass-primary btn-full" id="importTextBtn"><i class="fas fa-cloud-arrow-up"></i> 导入文本记忆</button>
@@ -109,7 +109,7 @@
 
 					<div class="input-hint">
 						<i class="fas fa-circle-info"></i>
-						文本记忆：带标签导入时标签会并入记忆内容参与向量化；图片记忆：摘要由多模态模型按所选倾向自动生成并作为标签参与向量化；条目改写仅修改内容数据，不改变已有嵌入向量。
+						新版记忆库：导入不再选择分组，内容会与全部分组名向量比较后自动归入最相关的一组。文本标签只参与嵌入与归组，不写进正文；图片摘要由多模态模型按所选倾向生成并作为标签参与向量化；条目改写仅修改文本内容，不改变已有嵌入向量。
 					</div>
 				</div>
 			</div>
@@ -127,7 +127,12 @@
 			<div class="panel-body output-body">
 				<!-- 查询栏 -->
 				<div class="query-row">
-					<input type="text" id="queryInput" placeholder="输入查询文本，按嵌入向量检索当前集合…" autocomplete="off" spellcheck="false">
+					<select id="queryTypeSelect" class="form-select query-type" title="查询只指定返回类型，不再指定分组">
+						<option value="text">文本</option>
+						<option value="image">图像</option>
+						<option value="audio">音频</option>
+					</select>
+					<input type="text" id="queryInput" placeholder="跨全部分组检索记忆…" autocomplete="off" spellcheck="false">
 					<label class="query-topk" title="返回最相似的结果数量">TopK
 						<input type="number" id="topKInput" min="1" max="100" value="10">
 					</label>
@@ -136,7 +141,7 @@
 				</div>
 
 				<div class="card-grid" id="cardGrid">
-					<div class="list-empty" id="cardEmpty">请先在左侧选择一个集合。</div>
+					<div class="list-empty" id="cardEmpty">正在加载全部记忆…</div>
 				</div>
 				<div class="list-actions">
 					<button class="btn-glass btn-sm hidden" id="loadMoreBtn"><i class="fas fa-circle-down"></i> 加载更多</button>
@@ -146,19 +151,14 @@
 		</section>
 	</main>
 
-	<!-- 改写弹窗 -->
+	<!-- 改写弹窗（仅文本条目） -->
 	<div class="modal-mask hidden" id="editModal">
 		<div class="modal-box">
-			<div class="modal-title"><i class="fas fa-pen"></i> 改写记忆条目</div>
+			<div class="modal-title"><i class="fas fa-pen"></i> 改写文本条目</div>
 			<div class="modal-meta" id="editMeta"></div>
 			<!-- 文本改写 -->
 			<div id="editTextWrap">
 				<textarea id="editTextContent" class="import-textarea" rows="6" spellcheck="false"></textarea>
-			</div>
-			<!-- 图片改写 -->
-			<div id="editImageWrap" class="hidden">
-				<div class="edit-image-preview"><img id="editImagePreview" alt="当前图片"></div>
-				<button class="btn-glass btn-full" id="editImagePickBtn"><i class="fas fa-image"></i> 选择新图片替换（不改向量与标签）</button>
 			</div>
 			<div class="modal-btns">
 				<button class="btn-glass" id="editCancelBtn"><i class="fas fa-xmark"></i> 取消</button>

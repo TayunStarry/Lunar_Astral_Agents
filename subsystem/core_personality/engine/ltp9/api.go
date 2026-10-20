@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	module "CorePersonality/engine/persistence"
 	"LunarSubsystem/GeneralConfig"
@@ -90,81 +89,62 @@ func enginePublish(from *plugin, topic string, payload any) {
 	}
 }
 
-// ==== 图片记忆 memory.searchImage/storeImage/randomImage（allow-memory，复用项目记忆库 stickers 集合） ====
+// ==== 图片记忆 memory.searchImage/storeImage/randomImage（allow-memory，全局图像类型检索） ====
 
-// stickerColOnce / stickerColErr 惰性确保表情包集合（image 型）就绪。
-var (
-	stickerColOnce sync.Once
-	stickerColErr  error
-)
-
-// ensureStickerCollection 确保项目记忆库与 stickers 集合（image 型）可访问。
-func ensureStickerCollection() error {
-	stickerColOnce.Do(func() {
-		if err := ensureMemory(); err != nil {
-			stickerColErr = err
-			return
-		}
-		if module.MemoryGetCollectionInfo(StickerCollection) == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			stickerColErr = module.CollectionInit(ctx, StickerCollection, *GeneralConfig.AgentEmbeddingModel)
-		}
-	})
-	return stickerColErr
-}
-
-// memorySearchImage 基于查询文本从 stickers 集合检索图片，返回 { image, similarity } 列表。
+// memorySearchImage 基于查询文本在全部集合中检索图像类型记忆，返回 { image, similarity } 列表。
 func memorySearchImage(query string, limit int) (any, error) {
-	if err := ensureStickerCollection(); err != nil {
+	if err := ensureMemory(); err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
 	if strings.TrimSpace(query) == "" {
 		return rwResult{Success: false, Error: "query 必填"}, nil
 	}
-	results, err := module.MemoryQueryMessagesWithContent(context.Background(), StickerCollection, query, limit)
+	results, err := module.MemoryQuery(context.Background(), query, module.MemoryTypeImage, limit)
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
 	out := make([]map[string]any, 0, len(results))
 	for _, r := range results {
 		item := map[string]any{"similarity": r.Similarity}
-		// 新记忆只存 URL；历史记忆仍可能只有内联 base64
+		// 新记忆只存 URL；历史记忆仍可能只有内联 base64。
+		// image 为历史字段名，与 url/base64 同时返回以兼容旧插件。
 		if r.URL != "" {
 			item["url"] = r.URL
+			item["image"] = r.URL
 		} else {
 			item["base64"] = r.Base64
+			item["image"] = r.Base64
 		}
 		out = append(out, item)
 	}
 	return map[string]any{"success": true, "results": out}, nil
 }
 
-// memoryStoreImage 往 stickers 集合添加一张图片（base64）。标签由记忆库多模态模型生成。
+// memoryStoreImage 添加一张图片（base64）。标签由记忆库多模态模型生成，内容自动归组。
 func memoryStoreImage(image string) (any, error) {
-	if err := ensureStickerCollection(); err != nil {
+	if err := ensureMemory(); err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
 	if strings.TrimSpace(image) == "" {
 		return rwResult{Success: false, Error: "image 必填"}, nil
 	}
-	id, err := module.MemoryAddImage(context.Background(), StickerCollection, image, "auto", "")
+	id, err := module.MemoryAddImage(context.Background(), image, "auto", "")
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
 	return map[string]any{"success": true, "id": id}, nil
 }
 
-// memoryRandomImage 基于查询文本随机返回一张图片；query 为空时按通用语义检索。
+// memoryRandomImage 基于查询文本随机返回一张图像类型记忆；query 为空时按通用语义检索。
 func memoryRandomImage(query string) (any, error) {
-	if err := ensureStickerCollection(); err != nil {
+	if err := ensureMemory(); err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
 	q := query
 	if strings.TrimSpace(q) == "" {
 		q = "general"
 	}
-	results, err := module.MemoryQueryMessagesWithContent(context.Background(), StickerCollection, q, 3)
+	results, err := module.MemoryQuery(context.Background(), q, module.MemoryTypeImage, 3)
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
@@ -173,10 +153,10 @@ func memoryRandomImage(query string) (any, error) {
 	}
 	pick := results[rand.Intn(len(results))]
 	if pick.URL != "" {
-		return map[string]any{"success": true, "url": pick.URL}, nil
+		return map[string]any{"success": true, "url": pick.URL, "image": pick.URL}, nil
 	}
 	// 历史记忆兼容：仅当没有 URL 时回退内联 base64
-	return map[string]any{"success": true, "base64": pick.Base64}, nil
+	return map[string]any{"success": true, "base64": pick.Base64, "image": pick.Base64}, nil
 }
 
 // ==== 跨包调用 callFunction ====
@@ -259,33 +239,20 @@ func fileDelete(p *plugin, path string) (any, error) {
 	return rwResult{Success: true}, nil
 }
 
-// ==== 记忆库 memory.store/search（接入项目 FileManager 记忆库） ====
-
-// ltp9MemoryCollection LTP9 记忆库使用的集合名。
-const ltp9MemoryCollection = "ltp9_memory"
+// ==== 记忆库 memory.store/search（接入项目记忆库，全局类型化检索） ====
 
 var memoryOnce sync.Once
 var memoryErr error
 
-// ensureMemory 惰性初始化项目记忆库实例并确保 ltp9 集合存在。
+// ensureMemory 惰性初始化项目记忆库实例（启动时一次性加载全部集合）。
 func ensureMemory() error {
 	memoryOnce.Do(func() {
 		// 若宿主尚未初始化全局记忆库，则自建实例（baseDir 沿用项目 MemoryDBDir），
 		// 使 engine.memory 在引擎自足场景下也能工作，而不仅依赖宿主预先 InitMemoryDB。
 		if !module.IsMemoryInitialized() {
 			module.InitMemoryDB(*GeneralConfig.MemoryDBDir)
-			if err := module.MemoryInitInstance(); err != nil {
-				memoryErr = err
-				return
-			}
 		}
-		if module.MemoryGetCollectionInfo(ltp9MemoryCollection) == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if err := module.CollectionInit(ctx, ltp9MemoryCollection, *GeneralConfig.AgentEmbeddingModel); err != nil {
-				memoryErr = err
-			}
-		}
+		memoryErr = module.MemoryInitInstance()
 	})
 	return memoryErr
 }
@@ -294,9 +261,9 @@ func memoryStore(v map[string]any) (any, error) {
 	if err := ensureMemory(); err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
-	// v5: 图片记忆 —— base64 字段走多模态标签理解嵌入
+	// 图片记忆 —— base64 字段走多模态标签理解嵌入，内容自动归组
 	if b64, hasB64 := v["base64"].(string); hasB64 && strings.TrimSpace(b64) != "" {
-		id, err := module.MemoryAddImage(context.Background(), ltp9MemoryCollection, b64, "auto", "")
+		id, err := module.MemoryAddImage(context.Background(), b64, "auto", "")
 		if err != nil {
 			return rwResult{Success: false, Error: err.Error()}, nil
 		}
@@ -314,15 +281,15 @@ func memoryStore(v map[string]any) (any, error) {
 			}
 		}
 	}
-	// 文本记忆：有预设标签则以标签文本嵌入，无标签回退为正文全文嵌入
-	id, err := module.MemoryAddMessageWithTags(context.Background(), ltp9MemoryCollection, "ltp9", content, tags)
+	// 文本记忆：有预设标签则以标签文本嵌入，无标签回退为正文全文嵌入；内容自动归组
+	id, err := module.MemoryAddMessageWithTags(context.Background(), "ltp9", content, tags, "")
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
 	return map[string]any{"success": true, "id": id}, nil
 }
 
-// memorySearch 按语义检索记忆，返回 { success, results: [MemoryHit] }（Result 统一风格）；
+// memorySearch 按语义检索指定类型记忆（默认文本），返回 { success, results: [MemoryHit] }（Result 统一风格）；
 // 命中按相似度降序，基础设施错误不再抛异常。
 func memorySearch(v map[string]any) (any, error) {
 	if err := ensureMemory(); err != nil {
@@ -333,13 +300,25 @@ func memorySearch(v map[string]any) (any, error) {
 	if n, ok := v["limit"].(int64); ok && n > 0 && n <= 50 {
 		limit = int(n)
 	}
-	results, err := module.MemoryQueryMessagesWithContent(context.Background(), ltp9MemoryCollection, query, limit)
+	mediaType := module.MemoryTypeText
+	if rawType, ok := v["type"].(string); ok && strings.TrimSpace(rawType) != "" {
+		normalized, err := module.NormalizeMemoryType(rawType)
+		if err != nil {
+			return rwResult{Success: false, Error: err.Error()}, nil
+		}
+		mediaType = normalized
+	}
+	results, err := module.MemoryQuery(context.Background(), query, mediaType, limit)
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
 	out := make([]map[string]any, 0, len(results))
 	for _, r := range results {
-		out = append(out, map[string]any{"content": r.Content, "similarity": r.Similarity})
+		item := map[string]any{"content": r.Content, "similarity": r.Similarity, "type": r.Type, "collection": r.Collection}
+		if r.URL != "" {
+			item["url"] = r.URL
+		}
+		out = append(out, item)
 	}
 	return map[string]any{"success": true, "results": out}, nil
 }

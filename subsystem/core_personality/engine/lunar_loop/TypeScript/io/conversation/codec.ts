@@ -61,9 +61,25 @@ export function fileNameOf(source: string): string {
 	return name || '文件';
 }
 
-/** 去掉发送给模型时附加的用户名前缀（缓存展示用） */
-export function stripUserPrefix(text: string): string {
-	return String(text || '').replace(/^\[用户: [^\]]*\]:\s*/, '');
+/** 用户名前缀拆分结果 */
+export interface SplitUserPrefix {
+	/** 前缀中的用户名；没有前缀时为空串 */
+	sender: string;
+	/** 去掉前缀后的正文 */
+	text: string;
+}
+
+/**
+ * 拆出私聊/前端消息开头的 `[用户: 名字]: ` 前缀。
+ *
+ * 群聊消息形如 `[群聊: …][用户: …]: 正文`，不以 `[用户:` 开头，因此不会被拆开，
+ * 群名与人名继续保留在正文里。
+ */
+export function splitUserPrefix(text: string): SplitUserPrefix {
+	const raw = String(text || '');
+	const match = /^\[用户:\s*([^\]]*)\]\s*[:：]\s*/u.exec(raw);
+	if (!match) return { sender: '', text: raw };
+	return { sender: match[1].trim(), text: raw.slice(match[0].length) };
 }
 
 /** 按 base64 头部猜图片 MIME（用于无 data URI 前缀的表情包/截图） */
@@ -90,9 +106,14 @@ export function saveBase64Media(base64: string, mime: string, kind: string): str
 	const data = match ? match[2] : raw;
 	const contentType = match ? match[1] : (kind === 'voice' ? mime : guessImageMime(data));
 	try {
-		const binary = atob(data);
-		const bytes = new Uint8Array(binary.length);
-		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+		// 必须用 base64Decode 取字节：atob 返回字符串，二进制里的非 UTF-8 字节会被
+		// 替换成 U+FFFD，再按 charCodeAt 写盘就变成 0xFD，图片/音频直接损坏。
+		const [decoded, decodeErr] = base64Decode(data);
+		if (decodeErr || !decoded) {
+			console.warn('[对话缓存] base64 解码失败:', decodeErr);
+			return '';
+		}
+		const bytes = new Uint8Array(decoded);
 		const extMap: Record<string, string> = {
 			'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/bmp': 'bmp',
 			'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/flac': 'flac', 'audio/ogg': 'ogg',
