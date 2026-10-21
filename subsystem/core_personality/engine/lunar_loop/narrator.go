@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	proxy "CorePersonality/engine/console/proxy"
-	ttsrouter "CorePersonality/engine/tts_router"
+	broadcaster "CorePersonality/engine/broadcaster"
 	"CorePersonality/transport/ws"
 
 	"github.com/dop251/goja"
@@ -18,7 +18,7 @@ func lunarFrontendOnline() bool {
 }
 
 // textToSpeech 适配TypeScript调用的文本转语音功能
-// 接收文本参数，经统一 TTS 路由（按 tts.engine 配置选择引擎）合成音频，
+// 接收文本参数，经统一播报链路（/broadcaster，按 tts.engine 配置选择引擎）合成音频，
 // Base64编码后通过WebSocket广播至所有客户端
 // 返回值: [string, Error | null] 包含合成结果的元组，[音频Base64编码, 错误信息]
 func (class *Runtime) textToSpeech(call goja.FunctionCall) goja.Value {
@@ -39,8 +39,8 @@ func (class *Runtime) textToSpeech(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("月华前端不在线且HTTPS代理未启用，跳过TTS合成")})
 	}
 
-	// 解析可选参数（采样控制仅 Qwen 引擎生效，其余引擎忽略）
-	req := ttsrouter.TTSRequest{
+	// 解析可选参数（采样控制仅 Qwen 引擎生效，其余引擎按能力矩阵忽略）
+	req := broadcaster.TTSRequest{
 		Text:              text,
 		Temperature:       0.8,
 		TopK:              50,
@@ -82,8 +82,8 @@ func (class *Runtime) textToSpeech(call goja.FunctionCall) goja.Value {
 		}
 	}
 
-	// 执行TTS合成（统一路由按配置引擎分发）
-	audioData, err := ttsrouter.SynthesizeBase64(req)
+	// 执行TTS合成（统一播报链路按配置引擎分发）
+	audioData, err := broadcaster.SynthesizeBase64(req)
 	if err != nil {
 		logger.Error("LunarCore", "TTS合成失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})

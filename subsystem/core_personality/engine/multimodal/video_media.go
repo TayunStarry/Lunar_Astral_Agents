@@ -15,9 +15,9 @@ import (
 
 // MediaChunkSeconds 单个媒体片段的最大时长（秒）。
 // llama-server 按视频抽帧频率（--video-fps，配置 1fps）抽取视觉 token，
-// 80 秒片段 = 80 帧；长边 ≤640 的单帧实测 Gemma 多模态约 106~171 token，
-// 单片段视觉开销 ≤13.7k，叠加提示词与输出后仍落在 20480 上下文内。
-const MediaChunkSeconds = 80.0
+// 60 秒片段 = 60 帧（1fps 下正好 1 分钟）；长边 ≤640 的单帧实测 Gemma 多模态约
+// 106~171 token，单片段视觉开销 ≤10.3k，叠加提示词与输出后仍落在 20480 上下文内。
+const MediaChunkSeconds = 60.0
 
 // MaxMediaWidth 媒体片段的最大长边（像素，宽或高均受限）。
 // llama-server 的多模态批处理要求非因果注意力块整体落入单个 ubatch，

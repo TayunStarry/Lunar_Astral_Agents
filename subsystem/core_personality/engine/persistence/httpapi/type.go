@@ -31,7 +31,7 @@ type memoryAddRequest struct {
 	Base64                 string   `json:"base64,omitempty"`                  // 图片/音频 base64 数据
 	Description            string   `json:"description,omitempty"`             // 音频记忆描述（用于嵌入与归组）
 	Tags                   []string `json:"tags,omitempty"`                    // 文本记忆显式标签（以标签文本嵌入）
-	Source                 string   `json:"source,omitempty"`                  // 写入来源标记（如 action）
+	Source                 string   `json:"source,omitempty"`                  // 写入来源标记（插件 / 内部调用）
 	RecognitionOrientation string   `json:"recognition_orientation,omitempty"` // 图片识别取向标识（auto/emotion/text/color/appearance/species/posture/custom）
 	RecognitionCustom      string   `json:"recognition_custom,omitempty"`      // 自定义识别取向参考文本（仅 custom 使用）
 }
@@ -77,11 +77,12 @@ type memoryStatsData struct {
 }
 
 type memoryQueryData struct {
-	Query      string              `json:"query"`
-	Type       string              `json:"type"`
-	TopK       int                 `json:"top_k"`
-	Results    []memoryMessageData `json:"results"`
-	TotalFound int                 `json:"total_found"`
+	Query       string              `json:"query"`
+	Type        string              `json:"type"`
+	TopK        int                 `json:"top_k"`
+	ForceGlobal bool                `json:"force_global"` // 是否强制全局检索（false=快速检索）
+	Results     []memoryMessageData `json:"results"`
+	TotalFound  int                 `json:"total_found"`
 }
 
 // memoryCollectionInfo 集合信息（分组）

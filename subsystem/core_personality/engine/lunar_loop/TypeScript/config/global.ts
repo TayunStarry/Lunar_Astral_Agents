@@ -14,7 +14,7 @@ export class GlobalConfig {
 	public static unreadRecords: PostMessage[] = [];
 	/** 未读上下文（宿主统一时序队列：文本与视频/音频URL内容项按到达顺序混排） */
 	public static unreadContext: PostMessage[] = [];
-	/** 是否正在思考中 */
+	/** 对话模型是否正在跑；为 true 时下一个 tick 直接跳过 */
 	public static reasoningInProgress: boolean = false;
 	/** 本轮思考链是否已经发过高耗时任务的快速应答（一轮仅一次） */
 	public static fastAckSent: boolean = false;

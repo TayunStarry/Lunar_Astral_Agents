@@ -67,23 +67,6 @@
 		"sd_steps": 40,
 		"sd_image_size": 1024
 	},
-	"bridging": {
-		"bridging_type": "napcat",
-		"bridging_path": "ws://localhost:4567",
-		"bridging_token": "ItlC2Nc1DfICVYq5",
-		"bridging_users": [
-			1965304849,
-			1628993759,
-			3970426755,
-			262221051,
-			906314036,
-			710834920
-		],
-		"bridging_group_keywords": [
-			"月华"
-		],
-		"bridging_group_trigger_probability": 0.2
-	},
 	"tts": {
 		"engine": "Qwen",
 		"-enumerate": [

@@ -28,6 +28,14 @@ local_data/documents/
 local_data/models/
 local_data/cache/
 database/
+
+## 敏感凭证与平台私有配置（B 站 / QQ；绝不入库、不上传）
+local_data/bilibili_config.json
+local_data/bilibili_account.json
+local_data/bilibili_life.json
+local_data/napcat_config.json
+docs/plans/cookies*.txt
+local_data/bili_login_qr.png
 bin/
 
 ## 系统文件

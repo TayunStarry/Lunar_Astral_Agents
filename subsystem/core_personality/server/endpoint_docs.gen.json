@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "核心人格 (Core Personality)",
-    "version": "2026.293.2224",
+    "version": "2026.295.0041",
     "x-service": "CorePersonality"
   },
   "servers": [
@@ -87,6 +87,148 @@
         "description": "随机背景图片",
         "operationId": "file.RandomBackgroundHandler",
         "x-handler": "file.RandomBackgroundHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/broadcaster/activate": {
+      "post": {
+        "summary": "显式激活播报引擎（预加载/切换槽位，body: engine）",
+        "description": "显式激活播报引擎（预加载/切换槽位，body: engine）",
+        "operationId": "broadcaster.ActivateHandler",
+        "x-handler": "broadcaster.ActivateHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/broadcaster/capabilities": {
+      "get": {
+        "summary": "播报引擎能力矩阵（各引擎参数支持范围与专属端点声明）",
+        "description": "播报引擎能力矩阵（各引擎参数支持范围与专属端点声明）",
+        "operationId": "broadcaster.CapabilitiesHandler",
+        "x-handler": "broadcaster.CapabilitiesHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/broadcaster/kokoro/dict": {
+      "delete": {
+        "summary": "Kokoro 读音词典管理（自动激活 Kokoro 槽位）",
+        "description": "Kokoro 读音词典管理（自动激活 Kokoro 槽位）",
+        "operationId": "broadcaster.KokoroDictHandler_delete",
+        "x-handler": "broadcaster.KokoroDictHandler",
+        "x-method": "GET/POST/DELETE",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "Kokoro 读音词典管理（自动激活 Kokoro 槽位）",
+        "description": "Kokoro 读音词典管理（自动激活 Kokoro 槽位）",
+        "operationId": "broadcaster.KokoroDictHandler_get",
+        "x-handler": "broadcaster.KokoroDictHandler",
+        "x-method": "GET/POST/DELETE",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "Kokoro 读音词典管理（自动激活 Kokoro 槽位）",
+        "description": "Kokoro 读音词典管理（自动激活 Kokoro 槽位）",
+        "operationId": "broadcaster.KokoroDictHandler_post",
+        "x-handler": "broadcaster.KokoroDictHandler",
+        "x-method": "GET/POST/DELETE",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/broadcaster/kokoro/dict/guess": {
+      "get": {
+        "summary": "Kokoro 读音查询（自动激活 Kokoro 槽位）",
+        "description": "Kokoro 读音查询（自动激活 Kokoro 槽位）",
+        "operationId": "broadcaster.KokoroDictGuessHandler",
+        "x-handler": "broadcaster.KokoroDictGuessHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/broadcaster/kokoro/voices": {
+      "get": {
+        "summary": "Kokoro 音色列表（自动激活 Kokoro 槽位）",
+        "description": "Kokoro 音色列表（自动激活 Kokoro 槽位）",
+        "operationId": "broadcaster.KokoroVoicesHandler",
+        "x-handler": "broadcaster.KokoroVoicesHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/broadcaster/omnivoice/languages": {
+      "get": {
+        "summary": "OmniVoice 支持的语言列表（自动激活 OmniVoice 槽位）",
+        "description": "OmniVoice 支持的语言列表（自动激活 OmniVoice 槽位）",
+        "operationId": "broadcaster.OmniVoiceLanguagesHandler",
+        "x-handler": "broadcaster.OmniVoiceLanguagesHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/broadcaster/release": {
+      "post": {
+        "summary": "显式卸载在位播报引擎（幂等）",
+        "description": "显式卸载在位播报引擎（幂等）",
+        "operationId": "broadcaster.ReleaseHandler",
+        "x-handler": "broadcaster.ReleaseHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/broadcaster/status": {
+      "get": {
+        "summary": "播报引擎槽位观测（在位引擎/状态机/最近活动；零副作用）",
+        "description": "播报引擎槽位观测（在位引擎/状态机/最近活动；零副作用）",
+        "operationId": "broadcaster.StatusHandler",
+        "x-handler": "broadcaster.StatusHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/broadcaster/synthesize": {
+      "post": {
+        "summary": "语音合成统一入口（engine 参数选引擎 Qwen/Kokoro/OmniVoice，缺省 tts.engine 配置；引擎槽位单载自动切换）",
+        "description": "语音合成统一入口（engine 参数选引擎 Qwen/Kokoro/OmniVoice，缺省 tts.engine 配置；引擎槽位单载自动切换）",
+        "operationId": "broadcaster.SynthesizeHandler",
+        "x-handler": "broadcaster.SynthesizeHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -620,96 +762,6 @@
         }
       }
     },
-    "/kokoro/dict": {
-      "delete": {
-        "summary": "Kokoro 读音词典管理",
-        "description": "Kokoro 读音词典管理",
-        "operationId": "crystal.KokoroHandler(KokoroTTS.DictHandler)_delete",
-        "x-handler": "crystal.KokoroHandler(KokoroTTS.DictHandler)",
-        "x-method": "GET/POST/DELETE",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      },
-      "get": {
-        "summary": "Kokoro 读音词典管理",
-        "description": "Kokoro 读音词典管理",
-        "operationId": "crystal.KokoroHandler(KokoroTTS.DictHandler)_get",
-        "x-handler": "crystal.KokoroHandler(KokoroTTS.DictHandler)",
-        "x-method": "GET/POST/DELETE",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      },
-      "post": {
-        "summary": "Kokoro 读音词典管理",
-        "description": "Kokoro 读音词典管理",
-        "operationId": "crystal.KokoroHandler(KokoroTTS.DictHandler)_post",
-        "x-handler": "crystal.KokoroHandler(KokoroTTS.DictHandler)",
-        "x-method": "GET/POST/DELETE",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/kokoro/dict/guess": {
-      "get": {
-        "summary": "Kokoro 读音查询",
-        "description": "Kokoro 读音查询",
-        "operationId": "crystal.KokoroHandler(KokoroTTS.GuessDictHandler)",
-        "x-handler": "crystal.KokoroHandler(KokoroTTS.GuessDictHandler)",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/kokoro/health": {
-      "get": {
-        "summary": "Kokoro 引擎健康检查",
-        "description": "Kokoro 引擎健康检查",
-        "operationId": "crystal.KokoroHandler(KokoroTTS.HealthHandler)",
-        "x-handler": "crystal.KokoroHandler(KokoroTTS.HealthHandler)",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/kokoro/tts": {
-      "post": {
-        "summary": "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）",
-        "description": "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）",
-        "operationId": "crystal.KokoroHandler(KokoroTTS.TTSHandler)",
-        "x-handler": "crystal.KokoroHandler(KokoroTTS.TTSHandler)",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/kokoro/voices": {
-      "get": {
-        "summary": "Kokoro 音色列表",
-        "description": "Kokoro 音色列表",
-        "operationId": "crystal.KokoroHandler(KokoroTTS.VoicesHandler)",
-        "x-handler": "crystal.KokoroHandler(KokoroTTS.VoicesHandler)",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/load/application": {
       "post": {
         "summary": "加载应用",
@@ -790,8 +842,8 @@
     },
     "/memory/": {
       "delete": {
-        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
-        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
         "operationId": "file.MemoryHandler_delete",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -802,8 +854,8 @@
         }
       },
       "get": {
-        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
-        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
         "operationId": "file.MemoryHandler_get",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -814,8 +866,8 @@
         }
       },
       "head": {
-        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
-        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
         "operationId": "file.MemoryHandler_head",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -826,8 +878,8 @@
         }
       },
       "options": {
-        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
-        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
         "operationId": "file.MemoryHandler_options",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -838,8 +890,8 @@
         }
       },
       "patch": {
-        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
-        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
         "operationId": "file.MemoryHandler_patch",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -850,8 +902,8 @@
         }
       },
       "post": {
-        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
-        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
         "operationId": "file.MemoryHandler_post",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -862,8 +914,8 @@
         }
       },
       "put": {
-        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
-        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
+        "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
+        "description": "记忆库（全局类型化读写/条目列举/分组集合管理/重建；messages 支持 force_global 强制全局检索）",
         "operationId": "file.MemoryHandler_put",
         "x-handler": "file.MemoryHandler",
         "x-method": "ANY",
@@ -880,45 +932,6 @@
         "description": "通用页面操作智能体脚本（Mini-LTP）",
         "operationId": "crystal.MiniLTPAgentHandler",
         "x-handler": "crystal.MiniLTPAgentHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/omnivoice/health": {
-      "get": {
-        "summary": "OmniVoice 引擎健康检查",
-        "description": "OmniVoice 引擎健康检查",
-        "operationId": "crystal.OmniVoiceHandler(OmniVoiceTTS.HealthHandler)",
-        "x-handler": "crystal.OmniVoiceHandler(OmniVoiceTTS.HealthHandler)",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/omnivoice/langs": {
-      "get": {
-        "summary": "OmniVoice 支持的语言列表",
-        "description": "OmniVoice 支持的语言列表",
-        "operationId": "crystal.OmniVoiceHandler(OmniVoiceTTS.LanguagesHandler)",
-        "x-handler": "crystal.OmniVoiceHandler(OmniVoiceTTS.LanguagesHandler)",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/omnivoice/tts": {
-      "post": {
-        "summary": "OmniVoice 语音合成（ref_audio+ref_text 声音克隆 / instruct 属性设计）",
-        "description": "OmniVoice 语音合成（ref_audio+ref_text 声音克隆 / instruct 属性设计）",
-        "operationId": "crystal.OmniVoiceHandler(OmniVoiceTTS.TTSHandler)",
-        "x-handler": "crystal.OmniVoiceHandler(OmniVoiceTTS.TTSHandler)",
         "responses": {
           "200": {
             "description": "成功"
@@ -965,32 +978,6 @@
         }
       }
     },
-    "/qwen/health": {
-      "get": {
-        "summary": "Qwen 引擎健康检查（加载状态与最近合成时间）",
-        "description": "Qwen 引擎健康检查（加载状态与最近合成时间）",
-        "operationId": "ttsrouter.QwenHealthHandler",
-        "x-handler": "ttsrouter.QwenHealthHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/qwen/tts": {
-      "post": {
-        "summary": "Qwen 语音合成（参考音频声音克隆；强制 Qwen 引擎，不随 tts.engine 配置漂移）",
-        "description": "Qwen 语音合成（参考音频声音克隆；强制 Qwen 引擎，不随 tts.engine 配置漂移）",
-        "operationId": "ttsrouter.QwenTTSHandler",
-        "x-handler": "ttsrouter.QwenTTSHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/resize": {
       "post": {
         "summary": "图片缩放",
@@ -1023,19 +1010,6 @@
         "description": "统一键鼠操作共享模块",
         "operationId": "crystal.SharedInputHandler",
         "x-handler": "crystal.SharedInputHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/tts": {
-      "post": {
-        "summary": "TTS语音合成（统一参数样式，按请求 engine 覆写或 tts.engine 配置分发：Qwen/Kokoro/OmniVoice）",
-        "description": "TTS语音合成（统一参数样式，按请求 engine 覆写或 tts.engine 配置分发：Qwen/Kokoro/OmniVoice）",
-        "operationId": "ttsrouter.TTSDispatchHandler",
-        "x-handler": "ttsrouter.TTSDispatchHandler",
         "responses": {
           "200": {
             "description": "成功"

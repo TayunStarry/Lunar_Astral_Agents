@@ -1,4 +1,4 @@
-var agentSystem = (function (exports) {
+var lunarBundle = (function (exports) {
     'use strict';
 
     class GlobalConfig {
@@ -631,6 +631,22 @@ var agentSystem = (function (exports) {
     GlobalConfig.LTPfunction.set('list_images', handleListImages$1);
     GlobalConfig.LTPfunction.set('describe_images', handleDescribeImages);
 
+    function interactEvent(topic, payload) {
+        try {
+            const resultJSON = ltpInteractEvent(topic, JSON.stringify(payload ?? {}));
+            if (!resultJSON)
+                return {};
+            const res = JSON.parse(resultJSON);
+            if (res && res.returned && res.return !== null && res.return !== undefined) {
+                return { return: res.return };
+            }
+        }
+        catch (e) {
+            console.error('LTPX 事件交互失败:', e);
+        }
+        return {};
+    }
+
     const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
     const SCHEDULE_OVERDUE_ABANDON_MS = 30 * 60 * 1000;
     const PRESET_DAILY_TASKS = [
@@ -1096,6 +1112,15 @@ var agentSystem = (function (exports) {
             saveSchedulesToDisk(scheduleCache);
         }
         return executed;
+    }
+    function flushDueScheduleItems() {
+        const due = checkDueItems();
+        for (const item of due) {
+            const feedback = interactEvent('execution_schedule_before', { plan: item.content }).return;
+            const content = (feedback && typeof feedback.plan === 'string') ? feedback.plan : item.content;
+            GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${content}` });
+        }
+        return due;
     }
     initSchedules();
     GlobalConfig.LTPfunction.set('schedule', handleSchedule);
@@ -1750,6 +1775,7 @@ var agentSystem = (function (exports) {
         roleTag = "月华";
         enableTools = true;
         reasoningStrength = "low";
+        disableThinking = false;
         messages = [];
         ragMessages = [];
         runtimeMessages = [];
@@ -1814,7 +1840,8 @@ var agentSystem = (function (exports) {
                 tools: toolCall,
                 tool_choice: 'auto',
                 chat_template_kwargs: {
-                    reasoning_strength: this.reasoningStrength
+                    reasoning_strength: this.reasoningStrength,
+                    ...(this.disableThinking ? { enable_thinking: false } : {})
                 }
             };
             if (!this.enableTools || toolCall.length === 0) {
@@ -3147,22 +3174,6 @@ var agentSystem = (function (exports) {
         return entries.join('；');
     }
 
-    function interactEvent(topic, payload) {
-        try {
-            const resultJSON = ltpInteractEvent(topic, JSON.stringify(payload ?? {}));
-            if (!resultJSON)
-                return {};
-            const res = JSON.parse(resultJSON);
-            if (res && res.returned && res.return !== null && res.return !== undefined) {
-                return { return: res.return };
-            }
-        }
-        catch (e) {
-            console.error('LTPX 事件交互失败:', e);
-        }
-        return {};
-    }
-
     function collectPaintingDetail(toolCall, paintings) {
         try {
             const args = typeof toolCall.function.arguments === 'string'
@@ -4093,7 +4104,6 @@ var agentSystem = (function (exports) {
         return [crystalTool];
     }
 
-    const ACTION_SOURCE = 'action';
     function normalizeTerms(terms) {
         return [...new Set((terms || []).map(term => String(term || '').trim().toLowerCase()).filter(Boolean))];
     }
@@ -4122,7 +4132,7 @@ var agentSystem = (function (exports) {
             return [];
         try {
             const [results, error] = mode === 'vector'
-                ? memoryQuery(text, 'text', safeLimit)
+                ? memoryQuery(text, 'text', safeLimit, options.forceGlobal === true)
                 : memoryKeywordSearch('text', terms, mode === 'regex', safeLimit);
             if (error || !results) {
                 if (error)
@@ -4133,8 +4143,6 @@ var agentSystem = (function (exports) {
             for (const item of results) {
                 const content = String(item.content || '').trim();
                 if (!content)
-                    continue;
-                if (item.source === ACTION_SOURCE)
                     continue;
                 if (!containsAll(content, filters))
                     continue;
@@ -4169,47 +4177,13 @@ var agentSystem = (function (exports) {
             return [];
         }
     }
-    function syncActionsToMemory(actionNames) {
-        if (!actionNames || actionNames.length === 0)
-            return false;
-        try {
-            if (!ensureMemoryReady())
-                return false;
-            for (const name of actionNames) {
-                const trimmed = (name || '').trim();
-                if (!trimmed)
-                    continue;
-                memoryAddWithTags('assistant', trimmed, [trimmed, '动作'], ACTION_SOURCE);
-            }
-            return true;
-        }
-        catch (error) {
-            console.error('[动作库] 动作组入库失败:', error);
-            return false;
-        }
-    }
-    function queryBestAction(text) {
-        if (!text || !text.trim())
-            return null;
-        try {
-            const [results, error] = memoryQuery(text.trim(), 'text', 30);
-            if (error || !results || results.length === 0)
-                return null;
-            const matched = results.find(item => item.source === ACTION_SOURCE && String(item.content || '').trim());
-            return matched ? String(matched.content).trim() : null;
-        }
-        catch (error) {
-            console.error('[动作库] 匹配失败:', error);
-            return null;
-        }
-    }
     async function queryEmotionSticker(query) {
         if (!query || !query.trim())
             return null;
         try {
             if (!ensureMemoryReady())
                 return null;
-            const [results, error] = memoryQuery(query.trim(), 'image', 10);
+            const [results, error] = memoryQuery(query.trim(), 'image', 10, true);
             if (error || !results || results.length === 0)
                 return null;
             const item = results[RandomFloor(0, results.length - 1)];
@@ -5021,6 +4995,7 @@ var agentSystem = (function (exports) {
         MAX_ATTEMPTS = 2;
         constructor() {
             super(fileView('prompts/perceiverRole.md')[0]);
+            this.disableThinking = true;
         }
         async watchVideo(mediaUrls) {
             if (mediaUrls.length === 0) {
@@ -5042,6 +5017,15 @@ var agentSystem = (function (exports) {
                 }
             }
             return this.finalizeUnderstandings(understandings);
+        }
+        async watchOneClip(mediaUrl) {
+            if (!mediaUrl) {
+                console.warn('[感知者] 未收到视频切片');
+                return '';
+            }
+            console.log('[感知者] 开始观看 1 个切片（生活链 · 单次调用）');
+            const understanding = (await this.evaluateSegment(mediaUrl, 1, 1)).trim();
+            return understanding;
         }
         async watchFrames(groups) {
             return this.watchGroupSequence(groups, 'video');
@@ -5569,26 +5553,8 @@ var agentSystem = (function (exports) {
         dialogueRole.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
     }
 
-    const FALLBACK_ACTIONS = ['荡秋千', '翻花绳'];
-    function getAvailableActionNames() {
-        try {
-            const raw = getAvailableActions();
-            if (!raw || raw === '{}')
-                return FALLBACK_ACTIONS;
-            const parsed = JSON.parse(raw);
-            if (parsed.actions && Array.isArray(parsed.actions) && parsed.actions.length > 0) {
-                return parsed.actions.map(item => item.name);
-            }
-        }
-        catch {
-        }
-        return FALLBACK_ACTIONS;
-    }
     async function performMatchedAction(query) {
-        const actionNames = getAvailableActionNames();
-        if (!syncActionsToMemory(actionNames))
-            return;
-        const bestAction = queryBestAction(query);
+        const bestAction = matchAction(String(query || '').trim());
         if (!bestAction)
             return;
         const pos = getAgentPosition();
@@ -5619,15 +5585,6 @@ var agentSystem = (function (exports) {
                 console.log('收到音频: ' + message.audio_url?.url);
         }
     }
-    function resetAgentState() {
-        descriptionRole.coverContext([]);
-        dialogueRole.coverContext([]);
-        painterRole.coverContext([]);
-        musicianRole.coverContext([]);
-        perceiverRole.coverContext([]);
-        painterRole.resetReference();
-        GlobalConfig.unreadContext = [];
-    }
 
     async function createChatMessage() {
         const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
@@ -5635,14 +5592,29 @@ var agentSystem = (function (exports) {
         return GlobalConfig.finalResponse;
     }
     const FAILURE_REPLY = '刚才有点走神，你再说一遍好吗？';
-    async function thoughtLoopTickEvent() {
+    async function dialogueTick() {
         if (GlobalConfig.reasoningInProgress)
             return;
+        let incoming = [];
+        try {
+            flushDueScheduleItems();
+            incoming = pullContext();
+            if (incoming.length === 0 && GlobalConfig.unreadContext.length === 0)
+                return;
+            GlobalConfig.reasoningInProgress = true;
+            await runDialogueTurn(incoming);
+        }
+        catch (e) {
+            console.error('[对话链] tick 异常:', e);
+        }
+        finally {
+            GlobalConfig.reasoningInProgress = false;
+        }
+    }
+    async function runDialogueTurn(incoming) {
         GlobalConfig.fastAckSent = false;
         GlobalConfig.turnFromQQ = false;
         try {
-            GlobalConfig.reasoningInProgress = true;
-            const incoming = pullContext();
             for (const message of incoming) {
                 if (message.source === 'qq')
                     GlobalConfig.turnFromQQ = true;
@@ -5651,12 +5623,6 @@ var agentSystem = (function (exports) {
             guardASRUnload();
             const messageLength = GlobalConfig.unreadContext.length;
             if (messageLength === 0) {
-                checkDueItems().forEach(item => {
-                    const feedback = interactEvent('execution_schedule_before', { plan: item.content }).return;
-                    const content = (feedback && typeof feedback.plan === 'string') ? feedback.plan : item.content;
-                    GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${content}` });
-                });
-                GlobalConfig.reasoningInProgress = false;
                 return;
             }
             updatePreviousMemories();
@@ -5703,20 +5669,20 @@ var agentSystem = (function (exports) {
             const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
             if (readErr)
                 console.error('读取提示音失败:', readErr);
-            console.error('思考链异常:', `${error?.message ?? error}`, ' || ', error?.stack ?? '');
+            console.error('对话链异常:', `${error?.message ?? error}`, ' || ', error?.stack ?? '');
             pushAssistantContext('text', randomDefaultMessage(), promptSound);
-            resetAgentState();
         }
         finally {
-            GlobalConfig.reasoningInProgress = false;
             persistConversation();
         }
     }
 
-    fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
+    fetchDocumentCallback('lunar_config.json').then(content => {
+        GlobalConfig.customConfig = content;
+    });
     bindDumpBridge();
     initConversationCache(messages => dialogueRole.coverContext(messages));
-    setInterval(() => thoughtLoopTickEvent(), 1000);
+    setInterval(() => { void dialogueTick(); }, 1000);
 
     exports.LiteImageFile = LiteImageFile;
     exports.descriptionRole = descriptionRole;

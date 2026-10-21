@@ -38,42 +38,12 @@ type Engine struct {
 	espeakAvailable bool
 }
 
-// TTSRequest 语音合成请求
-type TTSRequest struct {
-	// Text 要合成的文本
-	Text string `json:"text"`
-	// Voice 音色名称（如 zf_001 / zm_031 / af_maple），为空则使用默认音色
-	Voice string `json:"voice,omitempty"`
-	// Mix 音色混合列表（≥2 个时启用音色融合，优先级高于 Voice）
-	Mix []MixVoice `json:"mix,omitempty"`
-	// Speed 语速倍率（0.5 ~ 2.0），默认为 1.0
-	Speed float32 `json:"speed,omitempty"`
-	// Lang 语言强制指定（zh / en / auto），默认为 auto 自动识别
-	Lang string `json:"lang,omitempty"`
-}
-
 // MixVoice 音色混合分量
 type MixVoice struct {
 	// Voice 音色名称
 	Voice string `json:"voice"`
 	// Weight 融合权重（相对权重，引擎自动归一化；省略或为 0 时按等权处理）
 	Weight float64 `json:"weight,omitempty"`
-}
-
-// TTSResponse 语音合成响应
-type TTSResponse struct {
-	// Success 是否成功
-	Success bool `json:"success"`
-	// Audio base64 编码的 WAV 音频数据
-	Audio string `json:"audio,omitempty"`
-	// Phonemes 合成使用的音素序列（调试用）
-	Phonemes string `json:"phonemes,omitempty"`
-	// Voice 实际使用的音色名称
-	Voice string `json:"voice,omitempty"`
-	// SampleRate 音频采样率
-	SampleRate int `json:"sample_rate"`
-	// Error 错误信息
-	Error string `json:"error,omitempty"`
 }
 
 // VoiceInfo 音色信息

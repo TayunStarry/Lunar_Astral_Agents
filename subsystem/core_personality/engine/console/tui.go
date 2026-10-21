@@ -383,6 +383,15 @@ func (m *appModel) handleGlobalKey(key tea.KeyMsg) (bool, tea.Cmd) {
 		}
 		return true, m.switchScreen(delta)
 	}
+	// PgUp/PgDn 作为「快速换页」：按侧栏顺序切上一屏/下一屏，无需先回主菜单。
+	// 屏内翻页改由 Ctrl+U / Ctrl+D 承担（见 list.go 的 scrollKey / listNavKey）。
+	if (k == "pgup" || k == "pgdown") && !m.inputFocused() {
+		delta := 1
+		if k == "pgup" {
+			delta = -1
+		}
+		return true, m.switchScreen(delta)
+	}
 	return false, nil
 }
 

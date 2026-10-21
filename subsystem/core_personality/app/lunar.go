@@ -17,8 +17,8 @@ import (
 )
 
 // assembleLunar 装配月华人格局的生产者部分：模型代理、绘图协处理器与 QQ 桥接。
-// TTS 引擎不再于装配期 eager 初始化：三引擎均由 engine/tts_router 惰性加载
-// （首次合成请求时加载，5 分钟无调用自动卸载）。
+// TTS 引擎不再于装配期 eager 初始化：三引擎均由统一播报链路 engine/broadcaster
+// 单载槽位管理（首次合成请求时加载，5 分钟无调用自动卸载）。
 // JavaScript 智能体运行时（思考循环）属消费层，由 startLunarAgent 在装配末段启动。
 func assembleLunar() error {
 	// ==== MIME 类型映射 ====

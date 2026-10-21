@@ -1,91 +1,16 @@
 package KokoroTTS
 
 import (
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 )
 
-// TTSHandler 语音合成接口
-func TTSHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req TTSRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(TTSResponse{Success: false, Error: "无效的请求格式"})
-		return
-	}
-
-	// WithEngine 读锁钉住引擎：合成期间引擎不会被闲置卸载守护销毁
-	var samples []float32
-	var phonemes string
-	werr := WithEngine(func(engine *Engine) error {
-		var err error
-		samples, phonemes, err = engine.Synthesize(req.Text, req.Voice, req.Speed, req.Lang, req.Mix)
-		return err
-	})
-	if werr != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(TTSResponse{Success: false, Error: werr.Error()})
-		return
-	}
-
-	wav := EncodePCMToWAV(samples, SampleRate)
-	audioBase64 := base64.StdEncoding.EncodeToString(wav)
-
-	voice := req.Voice
-	if voice == "" {
-		voice = defaultVoiceName
-	}
-	if len(req.Mix) > 0 {
-		// 混合音色的显示名（按归一化比例回显）：zf_001×38%+zm_031×62%
-		var total float64
-		for _, m := range req.Mix {
-			w := m.Weight
-			if w < 0 {
-				w = 0
-			}
-			total += w
-		}
-		var parts []string
-		if total <= 0 {
-			// 引擎等权混合
-			for _, m := range req.Mix {
-				parts = append(parts, fmt.Sprintf("%s×%.0f%%", m.Voice, 100.0/float64(len(req.Mix))))
-			}
-		} else {
-			for _, m := range req.Mix {
-				pct := 100.0 * m.Weight / total
-				parts = append(parts, fmt.Sprintf("%s×%.0f%%", m.Voice, pct))
-			}
-		}
-		voice = "mix:" + strings.Join(parts, "+")
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(TTSResponse{
-		Success:    true,
-		Audio:      audioBase64,
-		Phonemes:   phonemes,
-		Voice:      voice,
-		SampleRate: SampleRate,
-	})
-}
+// ==== 引擎侧能力接口（经统一播报链路 engine/broadcaster 暴露） ====
+//
+// 引擎包不再持有直连 HTTP 合成端点：合成一律走 /broadcaster/synthesize 统一入口；
+// 本文件仅保留引擎专属能力处理器（音色表 / 读音词典），由 broadcaster 的
+// /broadcaster/kokoro/* 端点在完成槽位对齐后委托调用，响应形状保持原样。
 
 // VoicesHandler 音色列表接口
 func VoicesHandler(w http.ResponseWriter, r *http.Request) {
@@ -102,23 +27,6 @@ func VoicesHandler(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"voices":  engine.ListVoices(),
 		"count":   len(engine.voiceOrder),
-	})
-}
-
-// HealthHandler 健康检查接口
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	engine := GetEngine()
-	if engine == nil {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{"status": "not_ready", "service": "kokoro-tts"})
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "ok",
-		"service": "kokoro-tts",
-		"voices":  len(engine.voiceOrder),
 	})
 }
 

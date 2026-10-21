@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"CorePersonality/crystal"
+	broadcaster "CorePersonality/engine/broadcaster"
 	"CorePersonality/engine/lunar_loop"
 	file "CorePersonality/engine/persistence"
-	"CorePersonality/engine/tts_router"
 	"CorePersonality/server"
 	"CorePersonality/transport/enginebus"
 	"CorePersonality/transport/napcat"
@@ -89,9 +89,9 @@ func Assemble() {
 		return ws.Instance != nil && ws.Instance.ChannelBusCount(ws.DefaultBusChannel) > 0
 	})
 
-	// ==== TTS 闲置卸载守护：三引擎 5 分钟无合成调用即卸载模型占用 ====
-	// 引擎本体在首次合成请求时惰性加载（engine/tts_router），本守护只负责闲置回收。
-	ttsrouter.StartIdleUnloader()
+	// ==== TTS 闲置卸载守护：在位引擎 5 分钟无合成调用即卸载模型占用 ====
+	// 引擎本体在首次合成请求时经统一播报链路（engine/broadcaster）惰性加载，本守护只负责闲置回收。
+	broadcaster.StartIdleUnloader()
 
 	// ==== 入站消费：ltp9/* 调试信封交由 LTP9 引擎处理 ====
 	ws.Instance.SubscribeInbound("ltp9", crystal.HandleInbound)

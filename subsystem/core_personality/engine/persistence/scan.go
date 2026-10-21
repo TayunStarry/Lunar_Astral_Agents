@@ -37,7 +37,7 @@ func SyncStorageHandles() error {
 func syncStorageHandles() error {
 	localDir := filepath.Clean(*GeneralConfig.LocalDir)
 	present := map[string]bool{}
-	scanned, cleaned := 0, 0
+	scanned, cleaned, skippedDerived := 0, 0, 0
 
 	for _, root := range StorageRoots {
 		rootAbs := filepath.Join(localDir, root)
@@ -51,6 +51,13 @@ func syncStorageHandles() error {
 				return nil
 			}
 			rel = filepath.ToSlash(rel)
+			// 派生缓存（multimedia/vision、multimedia/footage）不入句柄索引：
+			// 它们可随时重建，且与源文件同哈希时会被去重当成重复实体删掉。
+			// 不记入 present，历史遗留的目录行会在下面的清理段一并移除（只删行，不删文件）。
+			if IsDerivedStoragePath(rel) {
+				skippedDerived++
+				return nil
+			}
 			present[rel] = true
 			if syncErr := syncFileHandle(rel, path); syncErr != nil {
 				LoggerGeneral.SubWarn("Persistence", "Scan", "扫描登记失败(%s): %v", rel, syncErr)
@@ -95,7 +102,8 @@ func syncStorageHandles() error {
 		cleaned += removed
 	}
 
-	LoggerGeneral.Info("Persistence", "内容仓库句柄同步完成：登记 %d 个实体，清理 %d 个失效/重复项", scanned, cleaned)
+	LoggerGeneral.Info("Persistence", "内容仓库句柄同步完成：登记 %d 个实体，清理 %d 个失效/重复项，跳过 %d 个派生缓存文件（不入索引）",
+		scanned, cleaned, skippedDerived)
 	return nil
 }
 
@@ -130,7 +138,7 @@ func syncFileHandle(rel, abs string) error {
 	}
 
 	// 内容哈希唯一：扫描到同哈希的第二份实体时，按路径优先级决定保留哪一份。
-	// 生成目录/集合子目录 > audios|multimedia 根目录 > multimedia/vision 派生缓存。
+	// 生成目录/集合子目录 > audios|multimedia 根目录；vision/footage 派生缓存不参与索引。
 	if IsMediaExtension(ext) && hash != "" {
 		if existing, ok := FindActiveResourceByHash(kind, hash); ok && existing.BlobPath != rel {
 			if preferNewPath(rel, existing.BlobPath) {
@@ -185,6 +193,17 @@ func syncFileHandle(rel, abs string) error {
 func IsStoragePath(rel string) bool {
 	rel = strings.TrimPrefix(filepath.ToSlash(rel), "/")
 	for _, root := range StorageRoots {
+		if rel == root || strings.HasPrefix(rel, root+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// IsDerivedStoragePath 判断相对路径是否位于派生缓存子树（不参与句柄索引）
+func IsDerivedStoragePath(rel string) bool {
+	rel = normalizeRel(rel)
+	for _, root := range DerivedStorageRoots {
 		if rel == root || strings.HasPrefix(rel, root+"/") {
 			return true
 		}

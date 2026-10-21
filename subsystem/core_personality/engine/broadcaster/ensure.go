@@ -1,4 +1,4 @@
-package ttsrouter
+package broadcaster
 
 import (
 	"fmt"
@@ -13,11 +13,11 @@ import (
 	logger "LunarSubsystem/LoggerGeneral"
 )
 
-// ==== 引擎惰性加载（统一管理三个 TTS 引擎的加载点） ====
+// ==== 引擎加载器（槽位专属：仅由 slot.go 的 loadEngine 分发调用） ====
 //
-// 全部引擎均为惰性加载：首次合成请求到达时才加载模型；引擎包内部
-// 支持 5 分钟闲置自动卸载（lifecycle.go 守护触发），卸载后由本文件的
-// Ensure* 在下一次请求时重新加载。
+// 模型加载发生在槽位切换序列内（ensureSlot），引擎包自身保持「失败不锁死、
+// 下次调用重试」的惰性语义。加载参数（模型目录/参考音频基目录）在此集中解析，
+// 引擎包不感知宿主目录布局。
 
 // localData 以可执行文件目录为基准解析本地数据目录（绝对路径）
 func localData() string {
@@ -42,7 +42,7 @@ func resolveAssetPath(p string) string {
 	return p
 }
 
-// EnsureQwen 惰性加载 Qwen TTS 引擎：模型目录固定，参考音频取配置（缺省月华模板音色）
+// EnsureQwen 加载 Qwen TTS 引擎：模型目录固定，参考音频取配置（缺省月华模板音色）
 func EnsureQwen() error {
 	modelDir := filepath.Join(localData(), "models", qwenModelDirName)
 	refAudio := *GeneralConfig.TTSRefAudio
@@ -52,13 +52,13 @@ func EnsureQwen() error {
 	return qwentts.EnsureLoaded(modelDir, resolveAssetPath(refAudio))
 }
 
-// EnsureKokoro 惰性加载 Kokoro 引擎：模型目录固定，onnxruntime.dll 随模型目录放置。
+// EnsureKokoro 加载 Kokoro 引擎：模型目录固定，onnxruntime.dll 随模型目录放置。
 // 保留 panic 防护（onnx 回调路径的 panic 会击穿普通错误返回），异常落盘日志。
 func EnsureKokoro() (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("Kokoro 引擎初始化 panic: %v\n%s", r, debug.Stack())
-			logger.Error("TTS-Router", "%v", err)
+			logger.Error(logModule, "%v", err)
 			writeEngineInitError("kokoro_init_error.log", fmt.Sprintf("panic: %v\n%s", r, debug.Stack()))
 		}
 	}()
@@ -75,13 +75,13 @@ func EnsureKokoro() (err error) {
 	)
 }
 
-// EnsureOmniVoice 惰性加载 OmniVoice 引擎：模型目录固定；
+// EnsureOmniVoice 加载 OmniVoice 引擎：模型目录固定；
 // 注入参考音频相对路径的解析基目录（兼容 "./audios/x.wav" 等写法）
 func EnsureOmniVoice() (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("OmniVoice 引擎初始化 panic: %v\n%s", r, debug.Stack())
-			logger.Error("TTS-Router", "%v", err)
+			logger.Error(logModule, "%v", err)
 			writeEngineInitError("omnivoice_init_error.log", fmt.Sprintf("panic: %v\n%s", r, debug.Stack()))
 		}
 	}()

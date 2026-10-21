@@ -23,7 +23,7 @@ import (
 
 const (
 	// AnimatedSampleFps 视频采样网格步长（1fps），需与 models.ini 的 --video-fps 保持一致；
-	// 80 秒分组 = 80 帧，长边 ≤640 时单帧 ≤171 token，单组 ≤13.7k，适配 20480 上下文
+	// 60 秒分组 = 60 帧，长边 ≤640 时单帧 ≤171 token，单组 ≤10.3k，适配 20480 上下文
 	AnimatedSampleFps = 1.0
 	// AnimatedFrameMaxDim 动态图序列帧的最大边长（约束视觉 token 量）
 	AnimatedFrameMaxDim = 640

@@ -4,6 +4,7 @@ import (
 	"CorePersonality/engine/lunar_loop/container"
 	"LunarSubsystem/LoggerGeneral"
 	"fmt"
+	"time"
 
 	"github.com/dop251/goja"
 )
@@ -71,6 +72,8 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册消息操作适配器（pullContext 为统一时序队列：文本与视频/音频URL混排）
 	vm.Set("pullContext", adapters.pullContext)
+	// 未读条数（只读，不消费）：生活链进入闸门用
+	vm.Set("unreadCount", adapters.unreadCount)
 	vm.Set("pushContext", adapters.pushContext)
 	vm.Set("pushImage", adapters.pushImage)
 
@@ -116,6 +119,8 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册引擎桥接适配器
 	vm.Set("sendToEngine", adapters.sendToEngine)
 	vm.Set("getAvailableActions", adapters.getAvailableActions)
+	// 动作词表进程内匹配（animation_list 缓存 + 嵌入索引；不写记忆库）
+	vm.Set("matchAction", adapters.matchAction)
 }
 
 // ensureRuntime 确保 goja 运行时存在（幂等；重载后重新创建）
@@ -142,13 +147,43 @@ func runAgentScript() error {
 	systemJSContent := string(agentSystemJS)
 
 	var runErr error
+	// 自愈入口自检结果：宿主重载时靠 agentSystem.snapshotContext / restoreContext 抢救上下文
+	var rescueReady bool
+	// 等闭包真的跑完：eventloop 的 RunOnLoop 是**异步入队**（addAuxJob），
+	// 不等待就立刻读 runErr/rescueReady，读到的永远是零值——
+	// 上一版正是因此把"脚本执行失败"吞掉、又在启动时误报"上下文抢救入口不可用"。
+	done := make(chan struct{})
 	if !container.RunOnLoop(func(vm *goja.Runtime) {
+		defer close(done)
 		_, runErr = vm.RunString(systemJSContent)
+		if runErr != nil {
+			return
+		}
+		// 这两个函数不是 bundle 的导出，而是 roles/index.ts 用
+		// `globalThis.agentSystem = Object.assign(...)` 挂到宿主全局上的。
+		// 历史上打包产物的 `var agentSystem = (function(){})()` 会在脚本末尾把这坨覆盖掉，
+		// 表现为 reload.go 每次取快照都拿到 undefined、上下文静默丢失。
+		// 所以在启动时就探一次，别等重载时才发现。
+		probe, probeErr := vm.RunString(
+			`typeof globalThis.agentSystem === 'object' && globalThis.agentSystem !== null &&` +
+				` typeof globalThis.agentSystem.snapshotContext === 'function' &&` +
+				` typeof globalThis.agentSystem.restoreContext === 'function'`)
+		rescueReady = probeErr == nil && probe != nil && probe.ToBoolean()
 	}) {
 		return fmt.Errorf("goja 运行时未初始化，无法执行 agentSystem.js")
 	}
+	select {
+	case <-done:
+	case <-time.After(60 * time.Second):
+		return fmt.Errorf("执行 agentSystem.js 超时（事件循环 60 秒内没有执行到脚本）")
+	}
 	if runErr != nil {
 		return fmt.Errorf("执行 agentSystem.js 代码失败: %w", runErr)
+	}
+	if !rescueReady {
+		LoggerGeneral.Warn(lunarCoreModule,
+			"上下文抢救入口不可用（agentSystem.snapshotContext / restoreContext）：引擎重载将只保证「能继续想」，上下文会丢失。"+
+				"检查打包产物的 rollup --name 是否被改成 agentSystem（它会覆盖 roles/index.ts 挂的宿主全局）")
 	}
 	// 脚本执行成功：标记智能体就绪（数据导出等宿主侧入口据此判断可用性）
 	agentReady.Store(true)

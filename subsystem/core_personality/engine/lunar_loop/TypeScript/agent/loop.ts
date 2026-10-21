@@ -1,8 +1,7 @@
 import { GlobalConfig } from '../config/global';
 import { ChatCache } from '../config/config';
-import { PostMessage } from '../config/model';
-import { checkDueItems } from '../tools/schedule/index';
-import { SCHEDULE_TRIGGER_PREFIX } from '../tools/schedule/defs';
+import { MultimodalMessage, PostMessage } from '../config/model';
+import { flushDueScheduleItems } from '../tools/schedule/index';
 import { parseContent, cleanTextForTTS } from '../text/index';
 import { dialogueRole, randomDefaultMessage } from '../roles/index';
 import { interactEvent } from '../capabilities/ltp-event';
@@ -11,7 +10,7 @@ import { persistConversation, pushAssistantContext, pushAssistantImage } from '.
 import { guardASRUnload } from './turn/guards';
 import { updatePreviousMemories } from './turn/memory';
 import { performMatchedAction } from './turn/actions';
-import { resetAgentState, writeMessage } from './turn/messages';
+import { writeMessage } from './turn/messages';
 
 /** 创建聊天消息 */
 async function createChatMessage(): Promise<string> {
@@ -26,19 +25,37 @@ async function createChatMessage(): Promise<string> {
 /** 应答失败时对用户说的话 */
 const FAILURE_REPLY = '刚才有点走神，你再说一遍好吗？';
 
-/** 思考循环事件 */
-export async function thoughtLoopTickEvent(): Promise<void> {
-    // 如果正在思考中，直接返回
+/**
+ * 每秒对话链 tick：计划表到期项 + 未读消息，二者有一就处理。
+ *
+ * reasoningInProgress 由这里统一持有：模型回合期间为 true，回合结束（含异常）复位。
+ */
+export async function dialogueTick(): Promise<void> {
     if (GlobalConfig.reasoningInProgress) return;
-    // 新一轮思考链：快速应答与来源标记都从零开始
+    let incoming: MultimodalMessage[] = [];
+    try {
+        // 计划表到期项先转成对话输入；它不属于生活链
+        flushDueScheduleItems();
+        incoming = pullContext();
+        if (incoming.length === 0 && GlobalConfig.unreadContext.length === 0) return;
+        GlobalConfig.reasoningInProgress = true;
+        await runDialogueTurn(incoming);
+    }
+    catch (e) {
+        console.error('[对话链] tick 异常:', e);
+    }
+    finally {
+        GlobalConfig.reasoningInProgress = false;
+    }
+}
+
+/** 对话链一次完整回合（由 dialogueTick 在持有 reasoningInProgress 时调用） */
+export async function runDialogueTurn(incoming: MultimodalMessage[]): Promise<void> {
+    // 新一轮对话链：快速应答与来源标记都从零开始
     GlobalConfig.fastAckSent = false;
     GlobalConfig.turnFromQQ = false;
-    // 思考循环开始
     try {
-        // 标记为思考中
-        GlobalConfig.reasoningInProgress = true;
         // 拉取外部消息；QQ 适配器消息带 source=qq，用于快速应答的应答份额判定
-        const incoming = pullContext();
         for (const message of incoming) {
             if ((message as { source?: string }).source === 'qq') GlobalConfig.turnFromQQ = true;
             writeMessage(message.role, message.content);
@@ -49,18 +66,7 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         const messageLength = GlobalConfig.unreadContext.length;
         // 如果消息长度为0，跳过当前循环
         if (messageLength === 0) {
-            // 检查计划表到期项，将到期计划内容写入上下文
-            checkDueItems().forEach(
-                item => {
-                    // 事件 -> 执行计划前：推送到期计划，插件可经 return.plan 改写计划内容
-                    const feedback: { plan?: string } = interactEvent('execution_schedule_before', { plan: item.content }).return;
-                    const content = (feedback && typeof feedback.plan === 'string') ? feedback.plan : item.content;
-                    GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${content}` })
-                }
-            );
-            // 标记为思考完成
-            GlobalConfig.reasoningInProgress = false;
-            // 进入下一次循环
+            // 计划表到期项由统一调度器在选链前 flush，这里不再重复消费
             return;
         }
         // 更新远期记忆摘要
@@ -92,12 +98,12 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         if (!validMessage.length) throw new Error('清洗后的文本为空');
         /** 整段正文（未切片，保留原始排版） */
         const replyText = displayText.trim() || validMessage;
-        // 如果解析出行动区内容：动作组入库 → 文本与动作库匹配 → 执行最高匹配度动作（附带小幅随机位移）
+        // 如果解析出行动区内容：在引擎 animation_list 缓存中匹配动作 → 执行最高匹配度动作（附带小幅随机位移）
         if (actionBlocks.length) {
             // 事件 -> 做出行动前：推送行动块，插件可经 return.actions 改写匹配参考文本
             const feedback: { actions?: string[] } = interactEvent('take_action_before', { actions: actionBlocks }).return;
             const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
-            // 以行动区内容为匹配参考文本（为空时回退正文），与动作库匹配后执行最高匹配度动作
+            // 以行动区内容为匹配参考文本（为空时回退正文），在动作词表中匹配后执行最高匹配度动作
             await performMatchedAction(actBlocks.join(' ').trim() || validMessage);
             // 从记忆库匹配表情包并推送图片数据
             pushAssistantImage([await queryEmotionSticker(validMessage)], true);
@@ -131,16 +137,12 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         // 如果读取提示音失败，打印错误信息
         if (readErr) console.error('读取提示音失败:', readErr);
         // 打印错误信息（Go 侧 error 需要先转成可读文本，否则只留一句 [object Object]）
-        console.error('思考链异常:', `${(error as Error)?.message ?? error}`, ' || ', (error as Error)?.stack ?? '');
+        console.error('对话链异常:', `${(error as Error)?.message ?? error}`, ' || ', (error as Error)?.stack ?? '');
         // 推送兜底消息
         pushAssistantContext('text', randomDefaultMessage(), promptSound);
-        // 重置智能体状态
-        resetAgentState();
     }
     finally {
-        // 思考中标记必须在**任何**退出路径上复位。
-        GlobalConfig.reasoningInProgress = false;
-        // 本轮结束后把近期记忆同步到缓存文件（推送时已写过一次，这里兜底空应答/异常路径）
+        // 闸门由统一调度器复位；这里只做本轮收尾
         persistConversation();
     }
 }

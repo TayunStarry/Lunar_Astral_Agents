@@ -6,7 +6,8 @@ import (
 
 // ==================== 桥接器配置类型 ====================
 
-// BridgingConfig 桥接器配置，从 lunar_config.json 的 bridging 组读取
+// BridgingConfig 桥接器配置，默认从 napcat_config.json 读取
+// （旧版 lunar_config.json 的 bridging 组仅作升级兼容）
 type BridgingConfig struct {
 	BridgingType                    string   `json:"bridging_type"`
 	BridgingPath                    string   `json:"bridging_path"`

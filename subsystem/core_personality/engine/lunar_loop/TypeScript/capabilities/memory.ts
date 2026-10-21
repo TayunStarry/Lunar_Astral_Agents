@@ -6,9 +6,6 @@ import { saveBase64Media } from '../io/conversation/codec';
 /** 记忆类型：文本 / 图像 / 音频（查询只按类型过滤，不再按集合名过滤） */
 export type MemoryMediaType = 'text' | 'image' | 'audio';
 
-/** 动作记忆的来源标记：写入时打标，动作匹配时优先取这一类文本记忆 */
-const ACTION_SOURCE = 'action';
-
 /** 跨集合记忆检索命中 */
 export interface MemorySearchHit {
     /** 记忆文档 ID */
@@ -25,7 +22,7 @@ export interface MemorySearchHit {
     timestamp?: number;
     /** 内容自动归入的分组集合名 */
     collection?: string;
-    /** 写入来源标记（如 action） */
+    /** 写入来源标记（插件 / 内部调用等） */
     source?: string;
 }
 
@@ -40,6 +37,14 @@ export interface MemorySearchOptions {
     filters?: string[];
     /** 命中任意一个就排除的过滤词 */
     exclude?: string[];
+    /**
+     * 强制全局检索：跳过「集合名向量」快速路由，扫描全部集合。
+     *
+     * 默认 false = 快速检索：先查与查询含义最匹配的集合，命中后再查第 2~5 匹配的集合，
+     * 首集合未命中则回退扫描其余全部集合。表情包这类稀疏媒体应显式打开，
+     * 否则条目可能落在未被路由到的集合里而“查不到”。
+     */
+    forceGlobal?: boolean;
 }
 
 /** 规整过滤词：去空白、小写、去重 */
@@ -67,9 +72,12 @@ function containsAny(content: string, terms: string[]): boolean {
  * 集合清单属于实现细节，不暴露给模型：调用方只说「查什么、怎么查、过滤什么、要几条」。
  * 月华思维链里的记忆引用固定为文本类型；表情包等图像记忆走 queryEmotionSticker。
  *
+ * 向量模式默认走快速检索（集合名向量路由）；关键词/正则模式不调用嵌入服务，
+ * 本来就扫描全部集合，forceGlobal 对它们没有额外影响。
+ *
  * @param query 正向检索词（向量模式的语义查询 / 关键词模式的空格分词 / 正则模式的表达式）
  * @param limit 返回条数上限（默认 8，最大 30）
- * @param options 检索方式与过滤词
+ * @param options 检索方式、过滤词与是否强制全局
  * @returns 命中条目（向量模式按相似度降序，关键词/正则模式按时间倒序）
  */
 export function searchMemoryGlobal(
@@ -90,7 +98,7 @@ export function searchMemoryGlobal(
 
     try {
         const [results, error] = mode === 'vector'
-            ? memoryQuery(text, 'text', safeLimit)
+            ? memoryQuery(text, 'text', safeLimit, options.forceGlobal === true)
             : memoryKeywordSearch('text', terms, mode === 'regex', safeLimit);
         if (error || !results) {
             if (error) console.error('[记忆检索] 查询失败:', error?.message ?? String(error));
@@ -102,8 +110,6 @@ export function searchMemoryGlobal(
             const content = String(item.content || '').trim();
             // 纯媒体记忆没有正文，跳过（文本类型查询理论上不会返回）
             if (!content) continue;
-            // 动作记忆是内部执行数据，不进入面向用户的聊天记忆检索
-            if (item.source === ACTION_SOURCE) continue;
             if (!containsAll(content, filters)) continue;
             if (containsAny(content, exclude)) continue;
             hits.push({
@@ -137,48 +143,18 @@ export function searchMemoryGlobal(
     }
 }
 
-/** 将动作组逐个写入动作记忆（源标记 action；相同/相近文本由记忆库去重），返回是否就绪 */
-export function syncActionsToMemory(actionNames: string[]): boolean {
-    if (!actionNames || actionNames.length === 0) return false;
-    try {
-        if (!ensureMemoryReady()) return false;
-        // 逐个动作名入库：动作名与「动作」标签共同决定嵌入与归组，重复写入被去重机制忽略
-        for (const name of actionNames) {
-            const trimmed = (name || '').trim();
-            if (!trimmed) continue;
-            memoryAddWithTags('assistant', trimmed, [trimmed, '动作'], ACTION_SOURCE);
-        }
-        return true;
-    }
-    catch (error) {
-        console.error('[动作库] 动作组入库失败:', error);
-        return false;
-    }
-}
-
-/** 将文本与动作记忆执行一次匹配，返回最高匹配度的动作名（无结果或失败时返回 null） */
-export function queryBestAction(text: string): string | null {
-    if (!text || !text.trim()) return null;
-    try {
-        // 全局文本检索：只在 source=action 的条目里取最佳匹配，避免把普通聊天文本当作动作名
-        const [results, error] = memoryQuery(text.trim(), 'text', 30);
-        if (error || !results || results.length === 0) return null;
-        const matched = results.find(item => item.source === ACTION_SOURCE && String(item.content || '').trim());
-        return matched ? String(matched.content).trim() : null;
-    }
-    catch (error) {
-        console.error('[动作库] 匹配失败:', error);
-        return null;
-    }
-}
-
-/** 基于查询文本从图像类型记忆中检索表情包，返回图片 URL；无结果或失败时返回 null */
+/**
+ * 基于查询文本从图像类型记忆中检索表情包，返回图片 URL；无结果或失败时返回 null。
+ *
+ * 强制全局检索：表情包/截图/图片素材分属不同集合，快速路由可能只查到一个集合，
+ * 导致明明有可用的表情包却返回空。
+ */
 export async function queryEmotionSticker(query: string): Promise<string | null> {
     if (!query || !query.trim()) return null;
     try {
         if (!ensureMemoryReady()) return null;
-        /** 查询图像类型记忆（跨全部集合） */
-        const [results, error] = memoryQuery(query.trim(), 'image', 10);
+        /** 查询图像类型记忆（跨全部集合，稀疏媒体必须全局） */
+        const [results, error] = memoryQuery(query.trim(), 'image', 10, true);
         if (error || !results || results.length === 0) return null;
         /** 在查询结果中随机选择一个结果（图片记忆 url 字段） */
         const item = results[RandomFloor(0, results.length - 1)];

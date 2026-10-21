@@ -602,7 +602,7 @@ function createCard(entry) {
         ? new Date(entry.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })
         : '早前记录';
     const typeIcon = isImage ? 'fa-image' : (isAudio ? 'fa-volume-high' : 'fa-font');
-    const canEdit = entryType === 'text' && entry.source !== 'action';
+    const canEdit = entryType === 'text';
     const editBtn = canEdit
         ? '<button class="icon-btn warn" data-act="edit" title="改写文本内容（不重算向量）"><i class="fas fa-pen"></i></button>'
         : '';

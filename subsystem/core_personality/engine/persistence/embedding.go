@@ -125,6 +125,29 @@ func (d *MemoryDB) embedQuery(ctx context.Context, model string, text string) ([
 	return d.embedText(ctx, model, "Instruct: "+queryInstruction+"\nQuery:"+text)
 }
 
+// ==== 记忆库之外的嵌入入口 ====
+//
+// 记忆库是嵌入配置（agent.embedding_*）的持有者，但嵌入本身并不等于“写记忆”。
+// 动作匹配这类进程内索引需要同一套向量空间，又不该把数据写进记忆库，因此
+// 这里提供只读的嵌入入口：调用方自己持有索引与生命周期。
+//
+// embeddingOnlyClient 供这类调用复用的 HTTP 客户端（http.Client 并发安全）。
+var embeddingOnlyClient = &http.Client{Timeout: 120 * time.Second}
+
+// EmbedDocumentTexts 用当前嵌入模型嵌入一组文档文本（document 语义：裸文本）。
+//
+// 与记忆库内容向量保持同一向量空间；不读写任何集合/文档。
+func EmbedDocumentTexts(ctx context.Context, texts []string) ([][]float32, error) {
+	db := &MemoryDB{memoryInitialized: true, httpClient: embeddingOnlyClient}
+	return db.embedTexts(ctx, currentMemoryEmbeddingModel(), texts)
+}
+
+// EmbedQueryText 用当前嵌入模型嵌入查询文本（query 语义：带检索指令前缀）。
+func EmbedQueryText(ctx context.Context, text string) ([]float32, error) {
+	db := &MemoryDB{memoryInitialized: true, httpClient: embeddingOnlyClient}
+	return db.embedQuery(ctx, currentMemoryEmbeddingModel(), text)
+}
+
 // =============================================================================
 // v2 LLM 标签生成 — 调用 /v1/chat/completions 自动生成中文标签
 // =============================================================================

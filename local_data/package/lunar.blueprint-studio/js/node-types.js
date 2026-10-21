@@ -302,7 +302,7 @@ const NODES = {
     },
     qwen_tts: {
         label: 'Qwen 语音合成', icon: 'fa-music', color: '#f59e0b',
-        desc: 'engine：调用 qwenTTS（经月华 /qwen/tts 专用端点合成，锁定 Qwen 音色）返回 base64 WAV 音频；需月华服务在线；<文本>可来自上游',
+        desc: 'engine：调用 qwenTTS（经月华 /broadcaster/synthesize 统一播报链路合成，engine=Qwen 锁定音色）返回 base64 WAV 音频；需月华服务在线；<文本>可来自上游',
         ins: [{ k: 'text', label: '文本' }], out: { k: 'audio', label: '音频(base64)', kind: 'audio' },
         fields: [
             { key: 'text', label: '合成文本', type: 'textarea', rows: 2, def: '你好，星月智能！' },

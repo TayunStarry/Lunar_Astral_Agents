@@ -1124,7 +1124,7 @@ async function streamAssistantReply(modelName, allMessages) {
     return st;
 }
 
-// ===== 琉璃语音播报：流式正文显示完成后，仅对正文部分经 /tts（统一 TTS，按配置引擎）合成并播放 =====
+// ===== 琉璃语音播报：流式正文显示完成后，仅对正文部分经 /broadcaster/synthesize（统一播报链路，按配置引擎）合成并播放 =====
 // 参考音频（音色来源）：相对 local_data 目录；Qwen/OmniVoice 用于声音克隆，Kokoro 不支持参考音频会自动忽略
 const TTS_REF_AUDIO = 'local_data/audios/crystal-template.wav';
 let ttsPlayback = null; // 当前正在播放的琉璃语音（新回复播放前先停止上一段）
@@ -1154,7 +1154,7 @@ function extractSpeechText(content) {
 // 合成/播放任一环节失败均立即回调 onPlayStart，保证聊天正文不会被阻塞丢失。
 async function speakAssistantText(text, onPlayStart) {
     try {
-        const res = await fetch('/tts', {
+        const res = await fetch('/broadcaster/synthesize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text, ref_audio: TTS_REF_AUDIO })

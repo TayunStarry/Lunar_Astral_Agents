@@ -1,23 +1,10 @@
-// Package ttsrouter 月华语音合成统一路由：把统一参数样式的合成请求分发到
-// Qwen / Kokoro / OmniVoice 引擎执行。
-//
-// 职责边界：
-//   - 参数层面统一：TTSRequest 为唯一请求形态；配置文件「tts」节仅作默认值来源，
-//     请求携带的参数（含 engine 覆写）一律优先于配置；
-//   - 执行层面适配：各 synth* 按引擎自身格式构造请求，引擎不支持的参数自动忽略
-//     （如 Kokoro 不支持参考音频）；
-//   - 生命周期托管：引擎惰性加载（ensure.go）+ 5 分钟闲置自动卸载（lifecycle.go）。
-//
-// 所有月华侧 TTS 调用路径（/tts 端点、JS 运行时 textToSpeech 绑定、LTP9 包工具）
-// 均收敛到本包；切换引擎默认改配置，也可按请求携带 engine 参数临时覆写。
-package ttsrouter
+package broadcaster
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
+	"time"
 
 	KokoroTTS "CorePersonality/engine/kokoro_tts"
 	OmniVoiceTTS "CorePersonality/engine/omnivoice_tts"
@@ -25,68 +12,40 @@ import (
 	"LunarSubsystem/GeneralConfig"
 )
 
-// TTSDispatchHandler 月华 /tts 统一入口：按请求 engine 覆写值分发到所选引擎，
-// 未携带或取值非法时回退 tts.engine 配置。需要随配置切换引擎的调用方使用本端点；
-// 明确锁定引擎的场景请用 /qwen/tts、/kokoro/tts、/omnivoice/tts 专用端点。
-func TTSDispatchHandler(w http.ResponseWriter, r *http.Request) {
-	req, ok := serveTTSPOST(w, r)
-	if !ok {
-		return
-	}
-	payload, status := Synthesize(req)
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(payload)
-}
+// ==== 统一合成执行层 ====
+//
+// Synthesize 是播报链路的唯一合成入口（HTTP 端点与进程内调用共用）：
+//   1. resolveEngine  解析本次调用的引擎（请求覆写 → tts.engine 配置）；
+//   2. ensureSlot     槽位对齐——目标引擎未在位时执行「卸载在位 → 加载目标」热切换，
+//      合成与切换共用 slotMu 串行化：在位引擎合成进行中，切换请求自然等待其完毕；
+//   3. synth*         引擎适配执行，统一参数按引擎格式转换，不支持的参数自动忽略。
+//
+// 全部成功响应统一携带 engine 与 elapsed_ms 字段；引擎特有字段（voice/phonemes 等）
+// 按引擎能力追加，完整参数支持范围见 capabilities 矩阵。
 
-// serveTTSPOST 统一端点与专用端点共享的 HTTP 前置处理：
-// CORS/方法守卫 + 统一参数解析 + text 非空校验。
-// 通过校验时返回解析后的请求；失败时已写好响应并返回 false。
-func serveTTSPOST(w http.ResponseWriter, r *http.Request) (TTSRequest, bool) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return TTSRequest{}, false
-	}
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return TTSRequest{}, false
-	}
-
-	var req TTSRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{"success": false, "error": "无效的请求格式"})
-		return TTSRequest{}, false
-	}
-	if strings.TrimSpace(req.Text) == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{"success": false, "error": "文本内容不能为空"})
-		return TTSRequest{}, false
-	}
-	return req, true
-}
-
-// Synthesize 按引擎执行统一参数合成，返回响应载荷与 HTTP 状态码（进程内调用复用）。
-// 引擎优先取请求携带的 engine 覆写值；空或非法取值回退 tts.engine 配置。
+// Synthesize 按统一参数执行合成，返回响应载荷与 HTTP 状态码
 func Synthesize(req TTSRequest) (map[string]any, int) {
-	engine := *GeneralConfig.TTSEngine
-	switch req.Engine {
-	case "Qwen", "Kokoro", "OmniVoice":
-		engine = req.Engine
+	engine := resolveEngine(req.Engine)
+
+	slotMu.Lock()
+	defer slotMu.Unlock()
+
+	// 槽位对齐：单载语义——本次调用选中的引擎必须是在位的唯一引擎
+	if err := ensureSlot(engine); err != nil {
+		return errPayload(err.Error()), http.StatusInternalServerError
 	}
-	// 配置校验（init.go）保证枚举合法，default 兜底按 Qwen 处理
-	switch engine {
-	case "Kokoro":
-		return synthKokoro(req)
-	case "OmniVoice":
-		return synthOmniVoice(req)
-	default:
-		return synthQwen(req)
+
+	setSlot(engine, int32(stateSynthesizing))
+	start := time.Now()
+	payload, status := synthesizeWithEngine(engine, req)
+	setSlot(engine, int32(stateReady))
+	slotLastUseUnix.Store(nowUnix())
+
+	if status == http.StatusOK {
+		payload["engine"] = engine
+		payload["elapsed_ms"] = time.Since(start).Milliseconds()
 	}
+	return payload, status
 }
 
 // SynthesizeBase64 进程内合成入口：返回 base64 WAV 音频（月华 JS 运行时 textToSpeech 绑定使用）
@@ -103,7 +62,24 @@ func SynthesizeBase64(req TTSRequest) (string, error) {
 	return audio, nil
 }
 
-// ==== 引擎适配执行层 ====
+// synthesizeWithEngine 引擎分发（槽位已对齐、slotMu 持有中调用）
+func synthesizeWithEngine(engine string, req TTSRequest) (map[string]any, int) {
+	switch engine {
+	case EngineKokoro:
+		return synthKokoro(req)
+	case EngineOmniVoice:
+		return synthOmniVoice(req)
+	default:
+		return synthQwen(req)
+	}
+}
+
+// errPayload 统一错误响应载荷
+func errPayload(msg string) map[string]any {
+	return map[string]any{"success": false, "error": msg}
+}
+
+// ==== 参数回退辅助 ====
 
 // firstNonEmpty 返回第一个非空字符串（请求参数优先，配置默认值兜底）
 func firstNonEmpty(values ...string) string {
@@ -124,13 +100,11 @@ func ptrOr[T any](req *T, def T) T {
 	return def
 }
 
+// ==== 引擎适配器 ====
+
 // synthQwen Qwen 适配：统一参数 → Qwen 请求（保留采样控制与合成缓存）。
 // Qwen 支持参考音频声音克隆；voice/speed/mix 等音色参数被忽略。
 func synthQwen(req TTSRequest) (map[string]any, int) {
-	if err := EnsureQwen(); err != nil {
-		return errPayload("Qwen 引擎加载失败: " + err.Error()), http.StatusInternalServerError
-	}
-
 	qreq := qwentts.TTSRequest{
 		Text:              req.Text,
 		RefAudio:          resolveAssetPath(firstNonEmpty(req.RefAudio, *GeneralConfig.TTSRefAudio)),
@@ -153,26 +127,26 @@ func synthQwen(req TTSRequest) (map[string]any, int) {
 // synthKokoro Kokoro 适配：统一参数 → Kokoro 请求。
 // Kokoro 不支持参考音频：RefAudio/RefText 被丢弃；音色由 Voice/Mix 决定。
 func synthKokoro(req TTSRequest) (map[string]any, int) {
-	if err := EnsureKokoro(); err != nil {
-		return errPayload("Kokoro 引擎加载失败: " + err.Error()), http.StatusInternalServerError
-	}
-
 	voice := firstNonEmpty(req.Voice, *GeneralConfig.TTSVoice)
 	speed := ptrOr(req.Speed, float32(*GeneralConfig.TTSSpeed))
 	lang := firstNonEmpty(req.Lang, *GeneralConfig.TTSLang)
 	mix := req.Mix
 	if len(mix) == 0 && len(GeneralConfig.TTSMix) > 0 {
 		for _, m := range GeneralConfig.TTSMix {
-			mix = append(mix, KokoroTTS.MixVoice{Voice: m.Voice, Weight: m.Weight})
+			mix = append(mix, MixEntry{Voice: m.Voice, Weight: m.Weight})
 		}
 	}
+	var kmix []KokoroTTS.MixVoice
+	for _, m := range mix {
+		kmix = append(kmix, KokoroTTS.MixVoice{Voice: m.Voice, Weight: m.Weight})
+	}
 
-	// WithEngine 读锁钉住引擎：合成期间不会被闲置卸载守护销毁
+	// WithEngine 读锁钉住引擎：合成期间引擎不会被卸载
 	var samples []float32
 	var phonemes string
 	err := KokoroTTS.WithEngine(func(engine *KokoroTTS.Engine) error {
 		var serr error
-		samples, phonemes, serr = engine.Synthesize(req.Text, voice, speed, lang, mix)
+		samples, phonemes, serr = engine.Synthesize(req.Text, voice, speed, lang, kmix)
 		return serr
 	})
 	if err != nil {
@@ -192,13 +166,9 @@ func synthKokoro(req TTSRequest) (map[string]any, int) {
 // synthOmniVoice OmniVoice 适配：统一参数 → OmniVoice 请求。
 // 支持参考音频+参考文本声音克隆，或 instruct 属性关键词设计音色（二者互斥）。
 func synthOmniVoice(req TTSRequest) (map[string]any, int) {
-	if err := EnsureOmniVoice(); err != nil {
-		return errPayload("OmniVoice 引擎加载失败: " + err.Error()), http.StatusInternalServerError
-	}
-
 	seed := ptrOr(req.Seed, *GeneralConfig.TTSSeed)
 
-	// WithEngine 读锁钉住引擎：合成期间不会被闲置卸载守护销毁
+	// WithEngine 读锁钉住引擎：合成期间引擎不会被卸载
 	var samples []float32
 	err := OmniVoiceTTS.WithEngine(func(engine *OmniVoiceTTS.Engine) error {
 		var serr error
@@ -231,9 +201,4 @@ func synthOmniVoice(req TTSRequest) (map[string]any, int) {
 		"voice":       voice,
 		"sample_rate": OmniVoiceTTS.SampleRate,
 	}, http.StatusOK
-}
-
-// errPayload 统一错误响应载荷
-func errPayload(msg string) map[string]any {
-	return map[string]any{"success": false, "error": msg}
 }

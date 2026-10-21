@@ -107,7 +107,7 @@ func FormatSeconds(t float64) string {
 
 // frameSampleTimes 生成分组 [start, end) 内的采样时间点：
 // 以 AnimatedSampleFps（1fps，与 llama-server 的 --video-fps 一致）为网格步长，
-// 与 file 模式由服务端抽帧的时间点分布保持同构（80 秒分组 = 80 帧）。
+// 与 file 模式由服务端抽帧的时间点分布保持同构（60 秒分组 = 60 帧）。
 func frameSampleTimes(start float64, end float64) []float64 {
 	span := end - start
 	if span <= 0 {

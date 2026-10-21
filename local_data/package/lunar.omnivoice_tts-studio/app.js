@@ -1,6 +1,6 @@
 // ============================================================
 // 『 星月智能 』OmniVoice 语音合成工作台
-// 左右双栏 · 属性设计 / 声音克隆 · 同源 /omnivoice/* 端点
+// 左右双栏 · 属性设计 / 声音克隆 · 同源 /broadcaster/* 统一播报链路
 // ============================================================
 
 // ===== DOM 引用聚合 =====
@@ -48,8 +48,10 @@ const state = {
     health: null,
 };
 
-// ===== 端点（琉璃内嵌引擎，同源调用） =====
-function apiUrl(path) { return '/omnivoice/' + path; }
+// ===== 端点（统一播报链路，同源调用） =====
+const BROADCASTER_SYNTHESIZE = '/broadcaster/synthesize';
+const BROADCASTER_ACTIVATE = '/broadcaster/activate';
+const OMNIVOICE_LANGUAGES = '/broadcaster/omnivoice/languages';
 
 // ===== Toast 提示 =====
 let toastTimer = null;
@@ -169,20 +171,24 @@ function updateInstructPreview() {
 }
 
 // ===== 引擎健康检测 =====
+// 统一播报链路语义：显式激活 OmniVoice 槽位（首次加载需数秒~数十秒）后读取槽位快照
 async function refreshHealth() {
     try {
-        const resp = await fetch(apiUrl('health'));
+        const resp = await fetch(BROADCASTER_ACTIVATE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ engine: 'OmniVoice' }),
+        });
         const data = await resp.json();
         state.health = data;
-        if (data.loaded) {
+        const slot = data.slot || {};
+        if (data.success && slot.engine === 'OmniVoice') {
             el.engineDot.className = 'fas fa-circle ready';
-            el.engineText.textContent = `引擎就绪${data.version ? ' · ' + data.version : ''}`;
+            el.engineText.textContent = `引擎就绪${slot.version ? ' · ' + slot.version : ''}`;
+            el.aboutVersion.textContent = slot.version || '—';
         } else {
-            el.engineDot.className = 'fas fa-circle';
-            el.engineText.textContent = '引擎未加载（首次合成时将自动初始化，约需数秒~数十秒）';
+            throw new Error(data.error || '引擎激活失败');
         }
-        el.aboutVersion.textContent = data.version || '—';
-        el.aboutLangCount.textContent = data.languages || '—';
         await loadLanguages();
         el.synthBtn.disabled = false;
         el.cloneSynthBtn.disabled = !state.uploadedRefAudioPath;
@@ -196,9 +202,12 @@ async function refreshHealth() {
 // ===== 语言列表 =====
 async function loadLanguages() {
     try {
-        const resp = await fetch(apiUrl('langs'));
+        const resp = await fetch(OMNIVOICE_LANGUAGES);
         const data = await resp.json();
         if (!data.success || !Array.isArray(data.languages)) return;
+
+        // 关于栏：支持语言数（引擎专属端点随响应返回 count）
+        el.aboutLangCount.textContent = data.count || '—';
 
         // 语言下拉：auto + 全量（名称显示，id 传参）
         el.langSelect.innerHTML = '<option value="">自动识别</option>';
@@ -319,10 +328,10 @@ async function synthesize(cloneMode) {
     startWaveAnimation();
 
     try {
-        const resp = await fetch(apiUrl('tts'), {
+        const resp = await fetch(BROADCASTER_SYNTHESIZE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ ...body, engine: 'OmniVoice' }),
         });
         const data = await resp.json();
         if (!data.success) throw new Error(data.error || '合成失败');

@@ -106,7 +106,10 @@ func (class *Runtime) memoryAddWithTags(call goja.FunctionCall) goja.Value {
 }
 
 // memoryQuery 跨全部集合检索指定类型的相关记忆
-// 参数: queryText, mediaType(text/image/audio), topK
+// 参数: queryText, mediaType(text/image/audio), topK, forceGlobal(可选)
+//
+// forceGlobal 缺省 false：走「集合名向量」快速检索（先查最相近集合，必要时回退全量）；
+// 传 true 时扫描全部集合，用于表情包这类稀疏数据，确保不漏。
 func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 3 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryQuery 参数不足, 需 3 个: queryText, mediaType, topK")})
@@ -115,9 +118,15 @@ func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {
 	queryText, _ := call.Argument(0).Export().(string)
 	mediaType, _ := call.Argument(1).Export().(string)
 	topK := int(call.Argument(2).ToInteger())
+	forceGlobal := false
+	if len(call.Arguments) > 3 {
+		forceGlobal = call.Argument(3).ToBoolean()
+	}
 
 	ctx := context.Background()
-	results, err := module.MemoryQuery(ctx, queryText, mediaType, topK)
+	results, err := module.MemoryQueryWithOptions(ctx, queryText, mediaType, topK, module.MemoryQueryOptions{
+		ForceGlobal: forceGlobal,
+	})
 	if err != nil {
 		LoggerGeneral.Error("LunarCore", "查询记忆失败（类型 %s）: %v", mediaType, err)
 		return class.runtime.ToValue([]any{nil, err})

@@ -389,8 +389,14 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// force_global=1 时跳过「集合名向量」快速路由，扫描全部集合（确保不漏）
+	forceGlobal := false
+	if v := strings.TrimSpace(r.URL.Query().Get("force_global")); v != "" {
+		forceGlobal = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	}
 	ctx := context.Background()
-	messages, err := persistence.MemoryQuery(ctx, queryText, mediaType, topK)
+	messages, err := persistence.MemoryQueryWithOptions(ctx, queryText, mediaType, topK,
+		persistence.MemoryQueryOptions{ForceGlobal: forceGlobal})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 查询失败: %v", err))
 		return
@@ -412,14 +418,16 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	LoggerGeneral.Info("FileManager", "全局查询完成（类型 %s）, 查询: %s, 结果数: %d", mediaType, queryText, len(results))
+	LoggerGeneral.Info("FileManager", "全局查询完成（类型 %s，%s）, 查询: %s, 结果数: %d",
+		mediaType, memoryQueryModeText(forceGlobal), queryText, len(results))
 
 	writeSuccess(w, memoryQueryData{
-		Query:      queryText,
-		Type:       mediaType,
-		TopK:       topK,
-		Results:    results,
-		TotalFound: len(results),
+		Query:       queryText,
+		Type:        mediaType,
+		TopK:        topK,
+		ForceGlobal: forceGlobal,
+		Results:     results,
+		TotalFound:  len(results),
 	})
 }
 
@@ -687,6 +695,14 @@ func handleMemoryClearCollection(w http.ResponseWriter, r *http.Request, collect
 // =============================================================================
 // 辅助函数
 // =============================================================================
+
+// memoryQueryModeText 把检索范围选项转成日志里的可读文案
+func memoryQueryModeText(forceGlobal bool) string {
+	if forceGlobal {
+		return "全局检索"
+	}
+	return "快速检索"
+}
 
 // getStringField 从 map[string]interface{} 安全获取字符串字段
 func getStringField(m map[string]interface{}, key string) string {

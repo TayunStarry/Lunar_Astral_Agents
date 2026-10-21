@@ -230,6 +230,15 @@ declare global {
      */
     function pullContext(): MultimodalMessage[];
     /**
+     * 未读消息条数（只读，不消费队列）
+     *
+     * 生活链调度用：必须查宿主队列而不是 `pullContext()`——后者会把消息取走，
+     * 等于替对话链消费了本轮消息。
+     *
+     * @returns 宿主统一未读队列当前长度
+     */
+    function unreadCount(): number;
+    /**
      * 推送上下文
      * 
      * @param {string} msgType 消息类型（text=文本 / music=乐谱 / action=动作）
@@ -274,6 +283,16 @@ declare global {
      *                   引擎未就绪或缓存为空时返回 "{}"
      */
     function getAvailableActions(): string;
+    /**
+     * 在引擎 animation_list 缓存中为动作文本匹配最合适的动作名
+     *
+     * 匹配在 Go 侧完成：动作词表只存在于 AnimationListCache，不写记忆库。
+     * 语义匹配优先；嵌入不可用时退回字面包含匹配。
+     *
+     * @param {string} query 动作/情绪文本（如“轻轻晃了晃脑袋”）
+     * @returns {string} 动作名；没有可匹配动作时返回空串
+     */
+    function matchAction(query: string): string;
     /** 记忆库条目（查询/列举/按 ID 读取共用） */
     interface MemoryEntry {
         /** 条目 ID */
@@ -284,7 +303,7 @@ declare global {
         role: string;
         /** 内容所属分组集合名 */
         collection?: string;
-        /** 写入来源标记（如 action） */
+        /** 写入来源标记（插件 / 内部调用等） */
         source?: string;
         /** 文本内容（音频记忆为描述） */
         content?: string;
@@ -330,7 +349,7 @@ declare global {
      *
      * @param {string[]} tags 显式标签数组（以标签文本计算嵌入与归组）
      *
-     * @param {string} [source] 来源标记（如 action），用于内部区分动作记忆
+     * @param {string} [source] 来源标记（插件 / 内部调用等），仅作溯源信息
      *
      * @returns {[string, Error | null]} 包含操作结果的元组，[文档ID, 错误信息]
      */
@@ -338,15 +357,20 @@ declare global {
     /**
      * 在全部集合中检索指定类型的相关记忆
      *
+     * 默认快速检索：先查与查询含义最匹配的集合（集合名向量），命中后再查第 2~5
+     * 匹配的集合；首集合未命中则回退扫描其余全部集合。
+     *
      * @param {string} queryText 查询文本
      *
      * @param {string} mediaType 返回类型：text / image / audio
      *
      * @param {number} topK 返回的最相关结果数量
      *
+     * @param {boolean} [forceGlobal] 强制全局检索（跳过集合名路由，扫描全部集合）
+     *
      * @returns {[MemoryEntry[], Error | null]} 包含查询结果的元组，结果按相似度降序排列
      */
-    function memoryQuery(queryText: string, mediaType: string, topK: number): [MemoryEntry[], Error | null];
+    function memoryQuery(queryText: string, mediaType: string, topK: number, forceGlobal?: boolean): [MemoryEntry[], Error | null];
     /**
      * 在全部集合中按关键词 / 正则检索指定类型的记忆（不调用嵌入服务）
      *

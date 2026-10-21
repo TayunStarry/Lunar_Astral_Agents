@@ -99,7 +99,9 @@ func memorySearchImage(query string, limit int) (any, error) {
 	if strings.TrimSpace(query) == "" {
 		return rwResult{Success: false, Error: "query 必填"}, nil
 	}
-	results, err := module.MemoryQuery(context.Background(), query, module.MemoryTypeImage, limit)
+	// 图片记忆分散在表情包/截图/图片素材等集合，稀疏媒体必须全局检索
+	results, err := module.MemoryQueryWithOptions(context.Background(), query, module.MemoryTypeImage, limit,
+		module.MemoryQueryOptions{ForceGlobal: true})
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
@@ -144,7 +146,8 @@ func memoryRandomImage(query string) (any, error) {
 	if strings.TrimSpace(q) == "" {
 		q = "general"
 	}
-	results, err := module.MemoryQuery(context.Background(), q, module.MemoryTypeImage, 3)
+	results, err := module.MemoryQueryWithOptions(context.Background(), q, module.MemoryTypeImage, 3,
+		module.MemoryQueryOptions{ForceGlobal: true})
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
@@ -308,7 +311,10 @@ func memorySearch(v map[string]any) (any, error) {
 		}
 		mediaType = normalized
 	}
-	results, err := module.MemoryQuery(context.Background(), query, mediaType, limit)
+	// 插件可选择 force_global=true 跳过快速路由（稀疏数据、需要确保不漏时）
+	forceGlobal, _ := v["force_global"].(bool)
+	results, err := module.MemoryQueryWithOptions(context.Background(), query, mediaType, limit,
+		module.MemoryQueryOptions{ForceGlobal: forceGlobal})
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}

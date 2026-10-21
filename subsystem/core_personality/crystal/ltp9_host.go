@@ -18,10 +18,8 @@ import (
 	"strings"
 	"time"
 
-	KokoroTTS "CorePersonality/engine/kokoro_tts"
+	broadcaster "CorePersonality/engine/broadcaster"
 	StarLTP "CorePersonality/engine/ltp9"
-	OmniVoiceTTS "CorePersonality/engine/omnivoice_tts"
-	ttsrouter "CorePersonality/engine/tts_router"
 	"CorePersonality/transport/ws"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
@@ -102,22 +100,14 @@ func ltp9HostTestAction(action string, m map[string]any, ack func(any, error)) {
 
 	switch action {
 	case "kokoro_tts":
-		// Kokoro 语音合成：text → base64 WAV 音频（voice/speed/lang 可选，mix 可多音色混合）
+		// Kokoro 语音合成：text → 经 broadcaster 统一播报链路（engine=Kokoro）合成 base64 WAV
+		// （voice/speed/lang 可选，mix 可多音色混合；工具名沿用 kokoro_tts 以兼容既有 LTP 配置）
 		text := asString("text")
 		if text == "" {
 			ack(nil, fmt.Errorf("kokoro_tts 需提供 text"))
 			return
 		}
-		if err := ttsrouter.EnsureKokoro(); err != nil {
-			ack(nil, err)
-			return
-		}
-		keng := KokoroTTS.GetEngine()
-		if keng == nil {
-			ack(nil, fmt.Errorf("Kokoro 引擎未就绪"))
-			return
-		}
-		var mix []KokoroTTS.MixVoice
+		var mix []broadcaster.MixEntry
 		if raw, ok := m["mix"].([]any); ok {
 			for _, item := range raw {
 				if im, ok := item.(map[string]any); ok {
@@ -127,86 +117,71 @@ func ltp9HostTestAction(action string, m map[string]any, ack func(any, error)) {
 						w = f
 					}
 					if mv != "" {
-						mix = append(mix, KokoroTTS.MixVoice{Voice: mv, Weight: w})
+						mix = append(mix, broadcaster.MixEntry{Voice: mv, Weight: w})
 					}
 				}
 			}
 		}
-		var samples []float32
-		var phonemes string
-		serr := KokoroTTS.WithEngine(func(keng *KokoroTTS.Engine) error {
-			var e2 error
-			samples, phonemes, e2 = keng.Synthesize(text, asString("voice"), float32(asFloat("speed")), asString("lang"), mix)
-			return e2
-		})
-		if serr != nil {
-			ack(nil, serr)
+		req := broadcaster.TTSRequest{
+			Text:   text,
+			Engine: broadcaster.EngineKokoro,
+			Voice:  asString("voice"),
+			Lang:   asString("lang"),
+			Mix:    mix,
+		}
+		if f := asFloat("speed"); f > 0 {
+			speed := float32(f)
+			req.Speed = &speed
+		}
+		payload, status := broadcaster.Synthesize(req)
+		if status != http.StatusOK {
+			msg, _ := payload["error"].(string)
+			ack(nil, fmt.Errorf("%s", ltp9FirstNonEmpty(msg, "Kokoro 合成失败")))
 			return
 		}
-		ack(map[string]any{
-			"success":     true,
-			"audio":       base64.StdEncoding.EncodeToString(KokoroTTS.EncodePCMToWAV(samples, KokoroTTS.SampleRate)),
-			"phonemes":    phonemes,
-			"voice":       asString("voice"),
-			"sample_rate": KokoroTTS.SampleRate,
-		}, nil)
+		ack(payload, nil)
 	case "omnivoice_tts":
-		// OmniVoice 语音合成：text → base64 WAV 音频（lang/instruct 可选；
-		// ref_audio+ref_text 声音克隆；seed 固定可复现）
+		// OmniVoice 语音合成：text → 经 broadcaster 统一播报链路（engine=OmniVoice）合成 base64 WAV
+		// （lang/instruct 可选；ref_audio+ref_text 声音克隆；seed 固定可复现）
 		text := asString("text")
 		if text == "" {
 			ack(nil, fmt.Errorf("omnivoice_tts 需提供 text"))
 			return
 		}
-		if err := ttsrouter.EnsureOmniVoice(); err != nil {
-			ack(nil, err)
+		req := broadcaster.TTSRequest{
+			Text:     text,
+			Engine:   broadcaster.EngineOmniVoice,
+			Lang:     asString("lang"),
+			Instruct: asString("instruct"),
+			RefAudio: asString("ref_audio"),
+			RefText:  asString("ref_text"),
+		}
+		if f := asFloat("seed"); f > 0 {
+			seed := uint64(f)
+			req.Seed = &seed
+		}
+		payload, status := broadcaster.Synthesize(req)
+		if status != http.StatusOK {
+			msg, _ := payload["error"].(string)
+			ack(nil, fmt.Errorf("%s", ltp9FirstNonEmpty(msg, "OmniVoice 合成失败")))
 			return
 		}
-		var seed uint64
-		if f, ok := m["seed"].(float64); ok && f > 0 {
-			seed = uint64(f)
-		}
-		var samples []float32
-		serr := OmniVoiceTTS.WithEngine(func(oeng *OmniVoiceTTS.Engine) error {
-			var e2 error
-			samples, e2 = oeng.Synthesize(OmniVoiceTTS.TTSRequest{
-				Text:     text,
-				Lang:     asString("lang"),
-				Instruct: asString("instruct"),
-				RefAudio: asString("ref_audio"),
-				RefText:  asString("ref_text"),
-				Seed:     seed,
-			})
-			return e2
-		})
-		if serr != nil {
-			ack(nil, serr)
-			return
-		}
-		ack(map[string]any{
-			"success":     true,
-			"audio":       base64.StdEncoding.EncodeToString(OmniVoiceTTS.EncodePCMToWAV(samples, OmniVoiceTTS.SampleRate)),
-			"sample_rate": OmniVoiceTTS.SampleRate,
-		}, nil)
+		ack(payload, nil)
 	case "qwen_tts":
-		// 语音合成：text → 经 /qwen/tts 专用端点强制 Qwen 引擎合成 base64 音频
-		// （工具名沿用 qwen_tts 以兼容既有 LTP 配置；蓝图节点明确锁定 Qwen 音色，
-		// 不随 tts.engine 配置漂移）
+		// 语音合成：text → 经 broadcaster 统一播报链路（engine=Qwen）合成 base64 音频
+		// （工具名沿用 qwen_tts 以兼容既有 LTP 配置；蓝图节点明确锁定 Qwen 音色）
 		text := asString("text")
 		if text == "" {
 			ack(nil, fmt.Errorf("qwen_tts 需提供 text"))
 			return
 		}
-		// 进程内直调 Qwen 专用端点（请求字段与统一参数样式一致）
-		reqBody, _ := json.Marshal(map[string]any{"text": text, "ref_audio": asString("ref_audio")})
-		status, data := invokeEndpoint(ttsrouter.QwenTTSHandler, http.MethodPost, "/qwen/tts", reqBody)
-		var parsed map[string]any
-		if json.Unmarshal(data, &parsed) == nil && parsed != nil {
-			parsed["status"] = status
-			ack(parsed, nil)
-			return
-		}
-		ack(map[string]any{"status": status, "body": string(data)}, nil)
+		payload, status := broadcaster.Synthesize(broadcaster.TTSRequest{
+			Text:     text,
+			Engine:   broadcaster.EngineQwen,
+			RefAudio: asString("ref_audio"),
+		})
+		payload["status"] = status
+		ack(payload, nil)
 	case "qwen_asr":
 		// 语音识别：base64 音频 → 经月华 system-asr（Qwen3-ASR）HTTP 接口转写为文本
 		// wav/mp3/flac/ogg 由 llama-server 音频解码器直接识别；其他格式先经 ffmpeg 转为 16kHz 单声道 WAV

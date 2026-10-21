@@ -1,6 +1,6 @@
 package OmniVoiceTTS
 
-// ==== HTTP 请求/响应 ====
+// ==== 请求/响应 ====
 
 // TTSRequest 语音合成请求
 type TTSRequest struct {
@@ -20,38 +20,10 @@ type TTSRequest struct {
 	DisablePostproc bool `json:"disable_postproc,omitempty"`
 }
 
-// TTSResponse 语音合成响应
-type TTSResponse struct {
-	// Success 是否成功
-	Success bool `json:"success"`
-	// Audio base64 编码的 WAV 音频
-	Audio string `json:"audio,omitempty"`
-	// Error 错误信息
-	Error string `json:"error,omitempty"`
-	// Voice 实际使用的音色（回显）
-	Voice string `json:"voice,omitempty"`
-	// SampleRate 输出采样率（24000）
-	SampleRate int `json:"sample_rate,omitempty"`
-}
-
 // LanguageEntry 支持的语言条目
 type LanguageEntry struct {
 	// Id 语言 id（传给 TTSRequest.Lang）
 	Id string `json:"id"`
 	// Name 语言显示名
 	Name string `json:"name"`
-}
-
-// HealthResponse 健康检查响应
-type HealthResponse struct {
-	// Status 服务状态
-	Status string `json:"status"`
-	// Service 服务名
-	Service string `json:"service"`
-	// Loaded 引擎是否已加载
-	Loaded bool `json:"loaded"`
-	// Version 引擎构建版本（git hash + 日期）
-	Version string `json:"version,omitempty"`
-	// Languages 支持的语言数
-	Languages int `json:"languages"`
 }

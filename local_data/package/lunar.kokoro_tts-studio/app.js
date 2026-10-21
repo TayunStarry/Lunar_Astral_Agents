@@ -89,9 +89,9 @@ const state = {
 // ==== 常量 ====
 const SAMPLE_VOICE_TEXT = '你好，欢迎使用星月智能语音助手。';
 
-// 拼接 /kokoro/* 同源端点（琉璃内嵌引擎，直接同源调用）
+// 拼接 /broadcaster/kokoro/* 同源端点（统一播报链路的 Kokoro 专属能力，直接同源调用）
 function kokoroUrl(path) {
-    return '/kokoro/' + path;
+    return '/broadcaster/kokoro/' + path;
 }
 
 // 音色分组（前缀 -> 标签页 key / 语言徽标）
@@ -305,10 +305,10 @@ async function synthesizeSpeech(voiceOverride, textOverride) {
     startWaveform();
 
     try {
-        const res = await fetch(kokoroUrl('tts'), {
+        const res = await fetch('/broadcaster/synthesize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, voice, speed, lang }),
+            body: JSON.stringify({ text, voice, speed, lang, engine: 'Kokoro' }),
         });
         const result = await res.json();
         if (result.success && result.audio) {
@@ -743,10 +743,10 @@ async function synthesizeMixSpeech() {
     startWaveform();
 
     try {
-        const res = await fetch(kokoroUrl('tts'), {
+        const res = await fetch('/broadcaster/synthesize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, mix, speed, lang }),
+            body: JSON.stringify({ text, mix, speed, lang, engine: 'Kokoro' }),
         });
         const result = await res.json();
         if (result.success && result.audio) {

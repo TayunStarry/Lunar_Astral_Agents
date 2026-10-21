@@ -64,6 +64,37 @@ func TestBundlePromptReferencesAreEmbedded(t *testing.T) {
 	}
 }
 
+// 打包产物的 IIFE 全局名不得叫 agentSystem。
+//
+// 为什么值得单独钉住：rollup 的 `--name agentSystem` 会生成顶层
+// `var agentSystem = (function (exports) { … })({})`，这段赋值在脚本**末尾**执行，
+// 会把 roles/index.ts 通过 `globalThis.agentSystem = Object.assign(…)` 挂上去的
+// 角色实例与自愈入口（snapshotContext / restoreContext）整个覆盖掉。
+// 后果不是崩溃而是**静默降级**：reload.go 每次「重载前抢救上下文」都拿到 undefined，
+// 上下文白丢，只留一条容易被忽略的警告。静态钉住 globals 名字最省事。
+func TestBundleIIFENameDoesNotShadowAgentSystem(t *testing.T) {
+	bundle := string(agentSystemJS)
+	head := strings.TrimLeft(bundle, " \t\r\n")
+	const expected = "var lunarBundle = (function (exports)"
+	if !strings.HasPrefix(head, expected) {
+		preview := head
+		if len(preview) > 80 {
+			preview = preview[:80]
+		}
+		t.Fatalf("打包产物开头不是 %q；实际前 80 字符：%q\n"+
+			"（npm run server.side 的 rollup --name 必须叫 lunarBundle，不能叫 agentSystem）", expected, preview)
+	}
+	if re := regexp.MustCompile(`(?m)^var agentSystem\b`); re.MatchString(bundle) {
+		t.Fatal("打包产物里出现了顶层 `var agentSystem`：它会覆盖 roles/index.ts 挂到 globalThis.agentSystem 的自愈入口")
+	}
+	// 反向确认宿主全局挂载还在（roles/index.ts 的 Object.assign 不能被删掉）
+	for _, marker := range []string{"snapshotContext", "restoreContext", "randomDefaultMessage"} {
+		if !strings.Contains(bundle, marker) {
+			t.Fatalf("打包产物里缺少 %q：roles/index.ts 的宿主全局挂载可能被删掉了", marker)
+		}
+	}
+}
+
 // fileView 的虚拟路径分派必须只接受已知前缀，且已知前缀必须能真正取到内容。
 //
 // 这条守的是 TypeScript ←→ Go 的隐式契约：TS 侧按 `prompts/xxx.md` 取值，

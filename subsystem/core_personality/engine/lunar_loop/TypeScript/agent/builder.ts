@@ -10,6 +10,8 @@ export class ModelBuilder {
 	protected enableTools: boolean = true;
 	/** 推理强度 */
 	protected reasoningStrength: string = "low";
+	/** 是否彻底关闭思考（感知者这类“描述画面”的角色不需要 reasoning） */
+	protected disableThinking: boolean = false;
 	/** 消息列表 */
 	public messages: PostMessage[] = [];
 	/** RAG消息列表 */
@@ -93,14 +95,16 @@ export class ModelBuilder {
 			...this.messages
 		];
 		/** 构建发给推理模型的请求体 */
-		const requestBody = {
+		const requestBody: Record<string, any> = {
 			model: GlobalConfig.MultimodalName,
 			messages: rawMessages,
 			stream: true,
 			tools: toolCall,
 			tool_choice: 'auto',
 			chat_template_kwargs: {
-				reasoning_strength: this.reasoningStrength
+				reasoning_strength: this.reasoningStrength,
+				// Qwen 系模板的开关；感知者不思考，避免 reasoning_content 自我循环
+				...(this.disableThinking ? { enable_thinking: false } : {})
 			}
 		};
 		// 如果禁用工具调用或没有工具调用，删除 tool_choice 和 tools 字段

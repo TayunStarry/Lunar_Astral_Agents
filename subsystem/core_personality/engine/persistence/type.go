@@ -81,7 +81,7 @@ type MemoryQueryResult struct {
 	URL        string  `json:"url,omitempty"`        // 媒体读取地址（multimedia|audios/<集合名> 下的文件）
 	Base64     string  `json:"base64,omitempty"`     // 旧版图片内联数据（仅历史数据兼容）
 	Collection string  `json:"collection,omitempty"` // 内容所属分组集合名
-	Source     string  `json:"source,omitempty"`     // 写入来源标记（如 action；普通对话为空）
+	Source     string  `json:"source,omitempty"`     // 写入来源标记（插件 / 内部调用；普通对话为空）
 	Similarity float32 `json:"similarity"`           // 内容向量余弦相似度
 	Timestamp  int64   `json:"timestamp,omitempty"`  // 入库时间 Unix 秒级时间戳，旧数据无此字段
 }
@@ -99,6 +99,16 @@ type DocumentEntry struct {
 	Timestamp  int64  `json:"timestamp,omitempty"`  // 入库时间 Unix 秒级时间戳，旧数据无此字段
 }
 
+// MemoryQueryOptions 记忆向量检索选项
+type MemoryQueryOptions struct {
+	// ForceGlobal 强制全局检索：跳过「集合名向量」快速路由，扫描全部集合。
+	//
+	// 默认 false（快速检索）：先查与查询含义最接近的集合；命中则再查第 2~5 近的
+	// 集合，首集合未命中则回退扫描其余全部集合。集合越多，快速检索省下的全量
+	// 向量比较越多；需要“确保不漏”时（如表情包等稀疏媒体）显式打开本项。
+	ForceGlobal bool
+}
+
 // Document 统一文档结构（文本 / 图片 / 音频记忆共用，混合存储在同一个集合）
 // content 与 url 二选一：文本记忆 content 存储文本内容、url 为空；
 // 媒体记忆 url 指向 multimedia|audios/<集合名>/ 下的实体文件、content 通常为空。
@@ -111,7 +121,7 @@ type Document struct {
 	Content   string `json:"content,omitempty"`   // 文本内容，文本记忆使用
 	URL       string `json:"url,omitempty"`       // 媒体读取地址（multimedia|audios/<集合名> 下的文件）
 	Base64    string `json:"base64,omitempty"`    // 旧版图片内联数据（仅历史数据兼容）
-	Source    string `json:"source,omitempty"`    // 写入来源标记（如 action），用于内部区分动作记忆
+	Source    string `json:"source,omitempty"`    // 写入来源标记（插件 / 内部调用），仅作溯源信息
 	Timestamp int64  `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳
 	// Embedding 文档内容嵌入向量，json:"-" 使其不随文档持久化，
 	// 单独存储于 embeddings_NNNN.json 切片文件（见 embeddingRecord）

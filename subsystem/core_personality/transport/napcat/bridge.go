@@ -9,22 +9,39 @@ import (
 	"time"
 )
 
-// LoadBridgingConfig 从配置文件加载桥接器配置
+// LoadBridgingConfig 从配置文件加载桥接器配置。
+//
+// 支持两种文件形态：
+//   - 专用 napcat_config.json：根对象直接就是 BridgingConfig（新默认）；
+//   - 旧版 lunar_config.json：配置位于 {"bridging": {...}} 组（升级兼容）。
 func LoadBridgingConfig(configPath string) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
 
-	// 桥接配置位于 lunar_config.json 的 bridging 组（与服务器运行配置分离）
-	var raw struct {
-		Bridging BridgingConfig `json:"bridging"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(data, &root); err != nil {
 		return err
 	}
-
-	bridgeConfig = raw.Bridging
+	// 专用文件：根上有 bridging_type
+	if _, ok := root["bridging_type"]; ok {
+		var direct BridgingConfig
+		if err := json.Unmarshal(data, &direct); err != nil {
+			return err
+		}
+		bridgeConfig = direct
+		return nil
+	}
+	// 旧版：{"bridging": {...}}
+	if raw, ok := root["bridging"]; ok {
+		var legacy BridgingConfig
+		if err := json.Unmarshal(raw, &legacy); err != nil {
+			return err
+		}
+		bridgeConfig = legacy
+		return nil
+	}
 	return nil
 }
 

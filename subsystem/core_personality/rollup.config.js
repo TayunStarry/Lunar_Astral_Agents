@@ -23,8 +23,11 @@ export default [
 				 * 'umd' - 通用模块定义, 以对 CommonJS, AMD 和浏览器全局变量的工作进行兼容
 				 */
 				format: 'iife',
-				// IIFE 格式需要全局变量名, 用于包裹所有导出
-				name: 'agentSystem',
+				// IIFE 格式需要全局变量名, 用于包裹所有导出。
+				// 不能叫 agentSystem：roles/index.ts 会把角色实例与自愈入口挂到
+				// globalThis.agentSystem，顶层的 `var agentSystem = ...` 会在脚本末尾
+				// 把这份挂载整个覆盖掉（表现为上下文抢救静默失效）。
+				name: 'lunarBundle',
 				// 启用源码映射
 				sourcemap: false,
 				/*

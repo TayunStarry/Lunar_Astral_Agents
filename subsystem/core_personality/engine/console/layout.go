@@ -22,7 +22,8 @@ func kh(key, label string) keyHint { return keyHint{key: key, label: label} }
 // 右侧状态争宽），全局键写进帮助页才既完整又不挤掉当前屏真正的操作提示。
 var globalKeys = []keyHint{
 	kh("↑/↓ k/j", "移动选择"),
-	kh("PgUp/PgDn", "翻页（日志 / 列表）"),
+	kh("PgUp/PgDn", "快速换页（切上一屏 / 下一屏）"),
+	kh("Ctrl+U/Ctrl+D", "屏内翻页（日志 / 列表）"),
 	kh("Home/End g/G", "跳到首 / 尾"),
 	kh("Enter", "确认 / 进入"),
 	kh("Esc", "返回主菜单"),

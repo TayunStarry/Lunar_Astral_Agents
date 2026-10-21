@@ -19,6 +19,10 @@ export class PerceiverRole extends ModelBuilder {
 
 	constructor() {
 		super(fileView('prompts/perceiverRole.md')[0]);
+		// 感知者是“看画面→按格式记录”，不需要思维链。
+		// 之前保持 thinking 时，模型会在 reasoning_content 里反复描述同一帧，
+		// TUI 看到的就是感知者思考死循环；这里直接关闭思考。
+		this.disableThinking = true;
 	}
 
 	/**
@@ -61,6 +65,26 @@ export class PerceiverRole extends ModelBuilder {
 		}
 
 		return this.finalizeUnderstandings(understandings);
+	}
+
+	/**
+	 * 只看一个切片（生活链专用）
+	 *
+	 * 与 watchVideo 的区别：不拼接、不做超长摘要，因此**只调用一次模型**
+	 * （失败时 evaluateSegment 内部会重试一次，属于异常兜底）。
+	 * 生活链一轮只允许一次模型调用，必须走这个入口，不能走 watchVideo。
+	 *
+	 * @param mediaUrl 单个切片引用（file://<文件名>）
+	 * @returns 该切片的内容理解；失败时为空字符串
+	 */
+	public async watchOneClip(mediaUrl: string): Promise<string> {
+		if (!mediaUrl) {
+			console.warn('[感知者] 未收到视频切片');
+			return '';
+		}
+		console.log('[感知者] 开始观看 1 个切片（生活链 · 单次调用）');
+		const understanding = (await this.evaluateSegment(mediaUrl, 1, 1)).trim();
+		return understanding;
 	}
 
 	/**

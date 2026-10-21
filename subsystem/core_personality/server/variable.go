@@ -2,13 +2,11 @@ package server
 
 import (
 	"CorePersonality/crystal"
-	KokoroTTS "CorePersonality/engine/kokoro_tts"
 	media "CorePersonality/engine/media/httpapi"
 	"CorePersonality/engine/model/llama"
 	image "CorePersonality/engine/multimodal/httpapi"
-	OmniVoiceTTS "CorePersonality/engine/omnivoice_tts"
 	file "CorePersonality/engine/persistence/httpapi"
-	ttsrouter "CorePersonality/engine/tts_router"
+	broadcaster "CorePersonality/engine/broadcaster"
 	"CorePersonality/lunar"
 	"net/http"
 )
@@ -95,19 +93,19 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/proxy/models", Handler: crystal.ModelsProxyHandler, Method: "POST", Description: "模型查询代理"},
 	{Path: "/proxy/chat", Handler: crystal.ChatProxyHandler, Method: "POST", Description: "对话代理"},
 
-	// ==================== 语音合成（统一路由 + 引擎专用端点） ====================
-	// /tts 优先按请求 engine 覆写、缺省回退 tts.engine 配置分发；明确锁定引擎的场景用 /qwen、/kokoro、/omnivoice 专用端点
-	{Path: "/tts", Handler: ttsrouter.TTSDispatchHandler, Method: "POST", Description: "TTS语音合成（统一参数样式，按请求 engine 覆写或 tts.engine 配置分发：Qwen/Kokoro/OmniVoice）"},
-	{Path: "/qwen/tts", Handler: ttsrouter.QwenTTSHandler, Method: "POST", Description: "Qwen 语音合成（参考音频声音克隆；强制 Qwen 引擎，不随 tts.engine 配置漂移）"},
-	{Path: "/qwen/health", Handler: ttsrouter.QwenHealthHandler, Method: "GET", Description: "Qwen 引擎健康检查（加载状态与最近合成时间）"},
-	{Path: "/kokoro/tts", Handler: crystal.KokoroHandler(KokoroTTS.TTSHandler), Method: "POST", Description: "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）"},
-	{Path: "/kokoro/voices", Handler: crystal.KokoroHandler(KokoroTTS.VoicesHandler), Method: "GET", Description: "Kokoro 音色列表"},
-	{Path: "/kokoro/dict", Handler: crystal.KokoroHandler(KokoroTTS.DictHandler), Method: "GET/POST/DELETE", Description: "Kokoro 读音词典管理"},
-	{Path: "/kokoro/dict/guess", Handler: crystal.KokoroHandler(KokoroTTS.GuessDictHandler), Method: "GET", Description: "Kokoro 读音查询"},
-	{Path: "/kokoro/health", Handler: crystal.KokoroHandler(KokoroTTS.HealthHandler), Method: "GET", Description: "Kokoro 引擎健康检查"},
-	{Path: "/omnivoice/tts", Handler: crystal.OmniVoiceHandler(OmniVoiceTTS.TTSHandler), Method: "POST", Description: "OmniVoice 语音合成（ref_audio+ref_text 声音克隆 / instruct 属性设计）"},
-	{Path: "/omnivoice/langs", Handler: crystal.OmniVoiceHandler(OmniVoiceTTS.LanguagesHandler), Method: "GET", Description: "OmniVoice 支持的语言列表"},
-	{Path: "/omnivoice/health", Handler: crystal.OmniVoiceHandler(OmniVoiceTTS.HealthHandler), Method: "GET", Description: "OmniVoice 引擎健康检查"},
+	// ==================== 语音播报（Broadcaster 统一链路） ====================
+	// 全部 TTS 调用强制收敛到 /broadcaster 端点族：唯一合成入口按请求 engine 参数
+	// （缺省 tts.engine 配置，默认 Qwen）选引擎；引擎槽位单载管理——目标引擎未在位时
+	// 自动执行「等待在位合成完毕 → 卸载 → 加载 → 合成」热切换。
+	{Path: "/broadcaster/synthesize", Handler: broadcaster.SynthesizeHandler, Method: "POST", Description: "语音合成统一入口（engine 参数选引擎 Qwen/Kokoro/OmniVoice，缺省 tts.engine 配置；引擎槽位单载自动切换）"},
+	{Path: "/broadcaster/status", Handler: broadcaster.StatusHandler, Method: "GET", Description: "播报引擎槽位观测（在位引擎/状态机/最近活动；零副作用）"},
+	{Path: "/broadcaster/activate", Handler: broadcaster.ActivateHandler, Method: "POST", Description: "显式激活播报引擎（预加载/切换槽位，body: engine）"},
+	{Path: "/broadcaster/release", Handler: broadcaster.ReleaseHandler, Method: "POST", Description: "显式卸载在位播报引擎（幂等）"},
+	{Path: "/broadcaster/capabilities", Handler: broadcaster.CapabilitiesHandler, Method: "GET", Description: "播报引擎能力矩阵（各引擎参数支持范围与专属端点声明）"},
+	{Path: "/broadcaster/kokoro/voices", Handler: broadcaster.KokoroVoicesHandler, Method: "GET", Description: "Kokoro 音色列表（自动激活 Kokoro 槽位）"},
+	{Path: "/broadcaster/kokoro/dict", Handler: broadcaster.KokoroDictHandler, Method: "GET/POST/DELETE", Description: "Kokoro 读音词典管理（自动激活 Kokoro 槽位）"},
+	{Path: "/broadcaster/kokoro/dict/guess", Handler: broadcaster.KokoroDictGuessHandler, Method: "GET", Description: "Kokoro 读音查询（自动激活 Kokoro 槽位）"},
+	{Path: "/broadcaster/omnivoice/languages", Handler: broadcaster.OmniVoiceLanguagesHandler, Method: "GET", Description: "OmniVoice 支持的语言列表（自动激活 OmniVoice 槽位）"},
 
 	// ==================== LTPX 工具包调度 ====================
 	// 同时作为进程内 Broker 的 HTTP 调试入口

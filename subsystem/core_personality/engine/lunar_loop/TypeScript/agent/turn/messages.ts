@@ -34,17 +34,3 @@ export function writeMessage(role: PostMessageRole, content: any) {
 		else if (message.type === 'audio_url') console.log('收到音频: ' + message.audio_url?.url);
 	}
 }
-
-/** 错误累积达阈值后重置智能体状态 */
-export function resetAgentState(): void {
-	// 清空全部子智能体的messages
-	descriptionRole.coverContext([]);
-	dialogueRole.coverContext([]);
-	painterRole.coverContext([]);
-	musicianRole.coverContext([]);
-	perceiverRole.coverContext([]);
-	// 清空绘图者的参考图状态（每次创作任务开工时也会自清，这里兜住异常路径）
-	painterRole.resetReference();
-	// 清空主智能体的统一未读队列
-	GlobalConfig.unreadContext = [];
-}

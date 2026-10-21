@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 
+	"CorePersonality/agents/BilibiliLife"
 	"CorePersonality/engine/console"
 	"CorePersonality/engine/lunar_loop"
 	module "CorePersonality/engine/multimodal"
@@ -98,6 +99,10 @@ func WireTUIEngineHooks() {
 			return lunarloop.ReloadMoonEngine(reason)
 		},
 	)
+
+	// 生活链已从 goja 层移除：TUI 的“开始刷视频”直接启动 Go 真实浏览器模块。
+	// 模块在后台 goroutine 里跑完整流程，TUI 只收受理回执，不阻塞。
+	console.SetBilibiliLifeHook(BilibiliLife.Start)
 }
 
 // callDumpHandler 进程内直调导出端点处理器并解析回执

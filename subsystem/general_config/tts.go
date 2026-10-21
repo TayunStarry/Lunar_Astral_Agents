@@ -5,8 +5,8 @@ import "flag"
 // ==== 月华语音合成（TTS）全局配置 ====
 //
 // 引擎选择与统一效果参数，默认值经 lunar_config.json 的 tts 节覆盖（见 init.go）。
-// 参数层面统一：所有引擎共用同一套字段；执行层面由 engine/tts_router 按引擎自身
-// 格式适配，引擎不支持的参数（如 Kokoro 不支持参考音频）自动忽略。
+// 参数层面统一：所有引擎共用同一套字段；执行层面由 engine/broadcaster 统一播报
+// 链路按引擎自身格式适配，引擎不支持的参数（如 Kokoro 不支持参考音频）自动忽略。
 
 var (
 	// TTSEngine 语音合成引擎枚举（Qwen / Kokoro / OmniVoice）

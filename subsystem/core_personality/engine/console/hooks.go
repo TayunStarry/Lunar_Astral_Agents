@@ -259,3 +259,31 @@ func reloadMoonEngine(reason string) error {
 	}
 	return hook(reason)
 }
+
+// ==== B 站真实浏览器生活钩子 ====
+//
+// TUI 只负责发起；真正的浏览器登录、选片、观看、评论、动态都在宿主 Go 模块里完成。
+// 钩子返回一句可直接显示的状态说明；执行过程通过引擎日志屏展示。
+
+var (
+	biliLifeHookMu sync.RWMutex
+	biliLifeHook   func() (string, error)
+)
+
+// SetBilibiliLifeHook 注入“开始刷视频”能力（宿主在 TUI 启动前调用；nil 表示不支持）
+func SetBilibiliLifeHook(start func() (string, error)) {
+	biliLifeHookMu.Lock()
+	defer biliLifeHookMu.Unlock()
+	biliLifeHook = start
+}
+
+// startBilibiliLife 请求宿主启动一次 B 站生活（未注入时返回 errNotWired）
+func startBilibiliLife() (string, error) {
+	biliLifeHookMu.RLock()
+	hook := biliLifeHook
+	biliLifeHookMu.RUnlock()
+	if hook == nil {
+		return "", errNotWired
+	}
+	return hook()
+}

@@ -5,7 +5,8 @@ package persistence
 // 句柄体系要求「同一内容哈希只对应一份实体」：
 //   - 生成目录 / 集合子目录：优先级最高
 //   - audios、multimedia 根目录：优先级次之（重复时优先舍弃）
-//   - multimedia/vision 派生缓存：优先级最低（可重建）
+//   - 派生缓存（multimedia/vision、multimedia/footage）：不入索引，只清历史目录行，
+//     绝不删除副本文件——副本由引擎缓存表引用，可重建但删除会影响正在进行的读取
 //
 // 启动建表后、目录扫描后都会执行一次收敛，删除重复文件与重复目录行，
 // 保留优先级最高的那一份；同优先级时保留最早分配的句柄（编号稳定）。
@@ -53,6 +54,13 @@ func (d *ArchiveDB) DedupeDuplicateHashes() (int, error) {
 		}
 		for _, res := range list {
 			if res.ID == canonical.ID {
+				continue
+			}
+			// 派生缓存不在句柄体系内：只清历史目录行，副本文件留给缓存表按 LRU 管理。
+			if IsDerivedStoragePath(res.BlobPath) {
+				if err := d.DeleteResource(res.ID); err == nil {
+					removed++
+				}
 				continue
 			}
 			// 同一实体路径只删目录行；不同路径且位于内容仓库树内才删除重复文件。

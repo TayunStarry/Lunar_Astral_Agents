@@ -16,7 +16,7 @@ func keyMsg(s string) tea.KeyMsg {
 
 // 覆盖：引擎屏在「宿主未接入自愈钩子」时也要给出明确结论，而不是一片空白。
 //
-// 该屏的存在意义是「思维链停摆时的现场急救台」：如果连"当前构建不支持重载"都不说，
+// 该屏的存在意义是「对话链停摆时的现场急救台」：如果连"当前构建不支持重载"都不说，
 // 用户只会看到一个没有按钮的页面，仍然只能去重启程序。
 func TestEngineScreenWithoutHooks(t *testing.T) {
 	SetEngineHooks(nil, nil)
@@ -59,10 +59,69 @@ func TestEngineScreenShowsStatus(t *testing.T) {
 	m.width, m.height = 120, 40
 	m.screen = screenEngine
 	out := m.View()
-	for _, want := range []string{"运行时", "智能体脚本", "重载次数", "3 次", "连续失败", "自动重载", "开启", "R"} {
+	for _, want := range []string{"运行时", "智能体脚本", "重载次数", "3 次", "连续失败", "自动重载", "开启", "r", "b"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("状态表缺少 %q:\n%s", want, out)
 		}
+	}
+}
+
+// 覆盖：键位必须**小写可用**。
+//
+// 这是实测踩过的坑：终端无修饰键时给的是 "r" / "b"，而本页曾只绑大写 "R"，
+// 于是重载与强制生活全都是"按了没反应"，且界面上还写着大写，用户不会想到要按 Shift。
+func TestEngineScreenAcceptsLowercaseKeys(t *testing.T) {
+	var reloaded []string
+	SetEngineHooks(func() EngineStatus {
+		return EngineStatus{RuntimeReady: true, AgentReady: true}
+	}, func(reason string) error {
+		reloaded = append(reloaded, reason)
+		return nil
+	})
+	defer SetEngineHooks(nil, nil)
+
+	var triggered int
+	SetBilibiliLifeHook(func() (string, error) {
+		triggered++
+		return "已启动 B 站生活（测试）", nil
+	})
+	defer SetBilibiliLifeHook(nil)
+
+	m := newAppModel()
+	m.width, m.height = 120, 34
+	m.screen = screenEngine
+
+	// 小写 r：等同于大写 R，进入重载中
+	model, cmd := m.updateEngine(keyMsg("r"))
+	m = model.(appModel)
+	if !m.engine.busy || cmd == nil {
+		t.Fatalf("小写 r 应触发重载: busy=%v cmd=%v", m.engine.busy, cmd == nil)
+	}
+	if _, ok := cmd().(engineDoneMsg); !ok {
+		t.Fatal("重载命令应产出 engineDoneMsg")
+	}
+	if len(reloaded) != 1 {
+		t.Fatalf("宿主重载钩子应被调用一次，实得 %d", len(reloaded))
+	}
+
+	// 小写 b：启动 B 站生活，并立刻给出可见反馈
+	model, cmd = m.updateEngine(keyMsg("b"))
+	m = model.(appModel)
+	if cmd == nil {
+		t.Fatal("小写 b 应返回启动命令")
+	}
+	if !strings.Contains(m.engine.biliMsg, "正在启动") {
+		t.Fatalf("按下后应立即给出反馈，实得 %q", m.engine.biliMsg)
+	}
+	msg, ok := cmd().(biliLifeStartedMsg)
+	if !ok {
+		t.Fatal("启动命令应产出 biliLifeStartedMsg")
+	}
+	if msg.err != nil || !strings.Contains(msg.detail, "已启动") {
+		t.Fatalf("回执异常: err=%v detail=%q", msg.err, msg.detail)
+	}
+	if triggered != 1 {
+		t.Fatalf("宿主启动钩子应被调用一次，实得 %d", triggered)
 	}
 }
 

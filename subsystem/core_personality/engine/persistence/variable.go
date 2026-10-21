@@ -23,6 +23,20 @@ const MemoryMediaSubdir = "memory"
 // StorageRoots 内容仓库扫描根（顺序固定，便于日志与测试）
 var StorageRoots = []string{StorageRootDocuments, StorageRootAudios, StorageRootMultimedia}
 
+// DerivedStorageRoots 内容仓库内的「派生缓存」子树（相对 LocalDir）。
+//
+// 这些目录里的文件由引擎按内容寻址生成、可随时重建，不是用户资料：
+//   - multimedia/vision：视觉读取副本（缩放 + 句柄叠印），按原图内容哈希缓存；
+//   - multimedia/footage：视频解读切片（ffmpeg 按时长分段），按源视频内容哈希缓存。
+//
+// 句柄体系只为「月华需要长期找到并引用的资料」服务；派生缓存既不需要被引用，
+// 又会与源文件形成同内容哈希的重复实体（扫描去重甚至会删掉缓存副本），
+// 因此它们**不进入**句柄索引：不登记、不分配序号，历史遗留的目录行在启动同步时清理。
+var DerivedStorageRoots = []string{
+	StorageRootMultimedia + "/vision",
+	StorageRootMultimedia + "/footage",
+}
+
 // 句柄体系错误语义（调用方与 HTTP 层按同一组文案透出）
 const (
 	ErrHandleInvalid = "句柄无效,文件不存在"
@@ -39,6 +53,10 @@ const (
 	MemoryDedupThreshold = 0.98 // 内容嵌入向量去重阈值（余弦相似度，判定重复记忆）
 	DocRankThreshold     = 0.30 // 文档内容余弦得分门槛（低于此值不返回）
 	MaxTagRetries        = 3    // 图片多模态标签生成最大重试次数
+
+	// MemoryFastSearchCollectionLimit 快速检索的集合范围上限（含最相近的那个）
+	// 首集合命中后只补查第 2~5 近的集合；首集合未命中则回退扫描其余全部集合。
+	MemoryFastSearchCollectionLimit = 5
 )
 
 // 记忆类型 — 查询与列举时按类型过滤，不再按集合名过滤

@@ -7,6 +7,7 @@ import (
 	"LunarSubsystem/LoggerGeneral"
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -268,6 +269,16 @@ func (class *Runtime) doStreamingChat(req *http.Request, role string, promptEsti
 	console.StreamBegin(role)
 	start := time.Now()
 
+	// SSE 不能无限挂着：模型偶发重复生成时，scanner 会一直读下去，
+	// 上层看到的就是“感知者卡死”。用 sync-fetch-timeout（默认 300 秒）做整体截止。
+	deadline := time.Duration(*GeneralConfig.SyncFetchTimeout) * time.Second
+	if deadline <= 0 {
+		deadline = 5 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	defer cancel()
+	req = req.WithContext(ctx)
+
 	req.Header.Set("Accept", "text/event-stream")
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -340,6 +351,10 @@ func (class *Runtime) doStreamingChat(req *http.Request, role string, promptEsti
 	}
 	if err := scanner.Err(); err != nil {
 		LoggerGeneral.SubWarn(lunarCoreModule, lunarJavaScriptSub, "流式响应中断: %v", err)
+	}
+	if ctx.Err() == context.DeadlineExceeded {
+		LoggerGeneral.SubWarn(lunarCoreModule, lunarJavaScriptSub,
+			"流式模型调用超过 %s，已强制结束（role=%s）", deadline, role)
 	}
 
 	// 顺序要紧：工具调用必须先归到「本次模型调用」这一轮里，再结束该轮。

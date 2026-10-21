@@ -184,7 +184,7 @@ func ResourceAdmit(in AdmitInput) (AdmitResult, error) {
 	}
 
 	// 3.5 媒体内容哈希唯一：命中既有实体时，只有「新落点优先级更高」才继续写入
-	//     （生成目录 > audios/multimedia 根目录 > multimedia/vision 派生缓存）；
+	//     （生成目录 > audios/multimedia 根目录；vision/footage 派生缓存不入索引）；
 	//     否则直接复用既有句柄与路径。MustStore 不能制造同哈希的第二份实体。
 	//     文本类不参与内容去重 —— 它们以原文件名为业务身份，由步骤 5.5 按路径复用。
 	if IsMediaExtension(ext) {

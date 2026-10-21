@@ -4,15 +4,12 @@ import (
 	logger "LunarSubsystem/LoggerGeneral"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -195,16 +192,6 @@ type TTSRequest struct {
 	Threads int32 `json:"threads,omitempty"`
 	// DisableCache 用于禁用缓存映射机制
 	DisableCache bool `json:"disable_cache,omitempty"`
-}
-
-// TTSResponse 用于存储TTS响应
-type TTSResponse struct {
-	// Success 用于存储是否成功
-	Success bool `json:"success"`
-	// Audio 用于存储音频文件路径
-	Audio string `json:"audio,omitempty"`
-	// Error 用于存储错误信息
-	Error string `json:"error,omitempty"`
 }
 
 func (c *speakerEmbedCache) init() {
@@ -634,7 +621,7 @@ func putUint32LE(b []byte, v uint32) {
 	b[3] = byte(v >> 24)
 }
 
-// SynthesizeWithCache 带缓存的合成入口（供 tts_router 按统一参数调用）
+// SynthesizeWithCache 带缓存的合成入口（供统一播报链路 engine/broadcaster 按统一参数调用）
 func SynthesizeWithCache(req *TTSRequest) (string, error) {
 	return synthesizeWithCache(req)
 }
@@ -681,138 +668,4 @@ func synthesizeWithCache(req *TTSRequest) (string, error) {
 
 	logger.Info("QWEN-TTS", "合成完成: [%s] 采样数: %d", req.Text, len(samples))
 	return audioBase64, nil
-}
-
-func TTSHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req TTSRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		logger.Error("QWEN-TTS", "解析TTS请求失败: %v", err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(TTSResponse{
-			Success: false,
-			Error:   "无效的请求格式",
-		})
-		return
-	}
-
-	if req.Text == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(TTSResponse{
-			Success: false,
-			Error:   "文本内容不能为空",
-		})
-		return
-	}
-
-	audioBase64, err := synthesizeWithCache(&req)
-	if err != nil {
-		logger.Error("QWEN-TTS", "合成失败: [%s] %v", req.Text, err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(TTSResponse{
-			Success: false,
-			Error:   err.Error(),
-		})
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(TTSResponse{
-		Success: true,
-		Audio:   audioBase64,
-	})
-}
-
-func UploadHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	if r.Method != "POST" {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	r.ParseMultipartForm(32 << 20)
-
-	file, header, err := r.FormFile("audio")
-	if err != nil {
-		logger.Error("QWEN-TTS", "解析上传文件失败: %v", err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "无法获取上传文件",
-		})
-		return
-	}
-	defer file.Close()
-
-	ext := filepath.Ext(header.Filename)
-	if ext == "" {
-		ext = ".wav"
-	}
-
-	uploadDir := "./local_data/audios"
-	os.MkdirAll(uploadDir, 0755)
-
-	tempPath := filepath.Join(uploadDir, "ref_"+fmt.Sprintf("%d_%d", os.Getpid(), time.Now().UnixNano())+ext)
-
-	outFile, err := os.Create(tempPath)
-	if err != nil {
-		logger.Error("QWEN-TTS", "创建文件失败: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "保存文件失败",
-		})
-		return
-	}
-	defer outFile.Close()
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, _ := file.Read(buf)
-		if n == 0 {
-			break
-		}
-		outFile.Write(buf[:n])
-	}
-
-	absPath, _ := filepath.Abs(tempPath)
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"path":    absPath,
-		"name":    header.Filename,
-	})
-}
-
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "ok",
-		"service": "simple-tts",
-		"port":    36365,
-	})
 }

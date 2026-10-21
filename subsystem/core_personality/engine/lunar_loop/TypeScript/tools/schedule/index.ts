@@ -3,8 +3,9 @@
 // ============================================================
 
 import { GlobalConfig } from '../../config/global';
+import { interactEvent } from '../../capabilities/ltp-event';
 import type { ScheduleItem } from './defs';
-import { scheduleTools, PRESET_DAILY_TASKS, SCHEDULE_OVERDUE_ABANDON_MS } from './defs';
+import { scheduleTools, PRESET_DAILY_TASKS, SCHEDULE_OVERDUE_ABANDON_MS, SCHEDULE_TRIGGER_PREFIX } from './defs';
 import { normalizeTime, dailyTaskTime, formatDate } from './time';
 import { loadSchedulesFromDisk, saveSchedulesToDisk } from './store';
 import { querySchedules } from './query';
@@ -292,6 +293,26 @@ export function checkDueItems(): ScheduleItem[] {
 }
 
 // ==== 模块级注册 ====
+
+/**
+ * 消费到期计划项并把它们推进未读上下文
+ *
+ * 为什么单独抽出来：`checkDueItems()` 会**改盘**（一次性任务删除、每日任务标记今日已完成），
+ * 所以每个 tick 只能调用一次。它只在对话链的空消息分支里调用；生活链不再整体让位，
+ * 因此计划表到期项始终由对话链 tick 正常消费，不会被生活链压住。
+ *
+ * @returns 本次被消费的计划项
+ */
+export function flushDueScheduleItems(): ScheduleItem[] {
+	const due = checkDueItems();
+	for (const item of due) {
+		// 事件 -> 执行计划前：推送到期计划，插件可经 return.plan 改写计划内容
+		const feedback: { plan?: string } = interactEvent('execution_schedule_before', { plan: item.content }).return;
+		const content = (feedback && typeof feedback.plan === 'string') ? feedback.plan : item.content;
+		GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${content}` });
+	}
+	return due;
+}
 
 // 初始化计划表缓存
 initSchedules();

@@ -186,6 +186,9 @@ func windowLines(lines []string, offset, height int, follow bool) ([]string, int
 // scrollKey 行窗口滚动键：返回新的 offset、follow 与是否消费该键。
 // 跟随态视作停在底部（offset=maxOff），因此从「跟随」按上翻页是从底部起算，
 // 而不是跳到顶部；滚到底部自动恢复跟随，向上滚动即暂停跟随（便于回看）。
+//
+// 翻页键为 Ctrl+U / Ctrl+D：PgUp/PgDn 已被全局占用为「快速换页」（切屏）。
+// 这里仍保留 pgup/pgdown 分支，供输入框聚焦等全局键让位的场景使用。
 func scrollKey(offset int, key string, total, height int, follow bool) (int, bool, bool) {
 	maxOff := maxInt(0, total-height)
 	if follow {
@@ -195,14 +198,14 @@ func scrollKey(offset int, key string, total, height int, follow bool) (int, boo
 	switch key {
 	case "up", "k":
 		return clampInt(offset-1, 0, maxOff), false, true
-	case "pgup":
+	case "pgup", "ctrl+u":
 		return clampInt(offset-step, 0, maxOff), false, true
 	case "home", "g":
 		return 0, false, true
 	case "down", "j":
 		next := clampInt(offset+1, 0, maxOff)
 		return next, next >= maxOff, true
-	case "pgdown":
+	case "pgdown", "ctrl+d":
 		next := clampInt(offset+step, 0, maxOff)
 		return next, next >= maxOff, true
 	case "end", "G":
@@ -237,7 +240,7 @@ func navAlias(key string) string {
 	return key
 }
 
-// listNavKey 列表通用导航键：↑/↓（k/j）单步、PgUp/PgDn 翻页、Home/End（g/G）首尾。
+// listNavKey 列表通用导航键：↑/↓（k/j）单步、Ctrl+U/Ctrl+D 翻页、Home/End（g/G）首尾。
 // 返回新的下标与是否消费该键：单步遵循 wrap（首尾循环），翻页与首尾键不循环。
 func listNavKey(cur int, key string, n, page int, wrap bool) (int, bool) {
 	switch key {
@@ -245,9 +248,9 @@ func listNavKey(cur int, key string, n, page int, wrap bool) (int, bool) {
 		return listMove(cur, -1, n, wrap), true
 	case "down", "j":
 		return listMove(cur, 1, n, wrap), true
-	case "pgup":
+	case "pgup", "ctrl+u":
 		return listMove(cur, -maxInt(1, page), n, false), true
-	case "pgdown":
+	case "pgdown", "ctrl+d":
 		return listMove(cur, maxInt(1, page), n, false), true
 	case "home", "g":
 		return listMove(0, 0, n, false), true
@@ -300,9 +303,9 @@ func (p *textPane) key(k string, height int) bool {
 		p.offset -= 1
 	case "down", "j":
 		p.offset += 1
-	case "pgup":
+	case "pgup", "ctrl+u":
 		p.offset -= step
-	case "pgdown":
+	case "pgdown", "ctrl+d":
 		p.offset += step
 	case "home", "g":
 		p.offset = 0

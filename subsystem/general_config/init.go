@@ -132,8 +132,8 @@ type ModelConfig struct {
 		VideoInput string `json:"video_input"`
 	} `json:"multimodal"`
 	// 月华语音合成（TTS）：引擎选择 + 统一效果参数。
-	// 参数层面统一：各引擎共用同一套字段；执行层面由 tts_router 按引擎自身格式适配，
-	// 引擎不支持的参数（如 Kokoro 不支持参考音频）自动忽略。
+	// 参数层面统一：各引擎共用同一套字段；执行层面由 engine/broadcaster 统一播报
+	// 链路按引擎自身格式适配，引擎不支持的参数（如 Kokoro 不支持参考音频）自动忽略。
 	TTS struct {
 		Engine          string        `json:"engine"`                     // 引擎枚举：Qwen / Kokoro / OmniVoice（默认 Qwen）
 		RefAudio        string        `json:"ref_audio"`                  // 参考音频路径（Qwen/OmniVoice 声音克隆；Kokoro 忽略）

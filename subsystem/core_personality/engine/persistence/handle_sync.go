@@ -23,6 +23,11 @@ func RegisterPath(rel string) (canonicalRel string, handle string, err error) {
 	if !IsStoragePath(rel) {
 		return rel, "", nil
 	}
+	// 派生缓存（视觉副本 / 视频切片）不参与句柄体系：可重建、无需引用，
+	// 且与源文件同哈希时会被去重逻辑当成「重复实体」误删。
+	if IsDerivedStoragePath(rel) {
+		return rel, "", nil
+	}
 	if err := EnsureArchiveInitialized(); err != nil {
 		return rel, "", nil
 	}
@@ -62,6 +67,11 @@ func FindActiveResourceByHash(kind, hash string) (ArchiveResource, bool) {
 	}
 	existing, ok := ArchiveDatabase.FindResourceByHash(kind, hash)
 	if !ok {
+		return ArchiveResource{}, false
+	}
+	// 派生缓存里的历史目录行不算「可复用实体」：只清目录行，绝不把源文件迁移进缓存目录
+	if IsDerivedStoragePath(existing.BlobPath) {
+		_ = ArchiveDatabase.DeleteResource(existing.ID)
 		return ArchiveResource{}, false
 	}
 	abs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(existing.BlobPath))
@@ -205,12 +215,12 @@ func RewriteHandlesForMove(oldRel, newRel string) {
 //
 //   - 生成目录 / 集合目录等子目录：2（最高）
 //   - audios / multimedia 根目录：1（与生成目录同内容时优先舍弃）
-//   - multimedia/vision 派生缓存：0（最低，随时可重建）
+//   - 派生缓存（vision / footage）：0（最低，随时可重建；正常不会进入索引）
 //
 // 文本类不参与哈希去重，优先级不适用于它们。
 func pathPriority(rel string) int {
 	rel = normalizeRel(rel)
-	if strings.HasPrefix(rel, StorageRootMultimedia+"/vision/") {
+	if IsDerivedStoragePath(rel) {
 		return 0
 	}
 	if isRootMediaPath(rel) {

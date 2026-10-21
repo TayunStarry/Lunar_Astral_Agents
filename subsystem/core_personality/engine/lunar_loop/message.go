@@ -146,6 +146,14 @@ func UnreadCount() int {
 	return len(UnreadContext)
 }
 
+// unreadCount 绑定：unreadCount() → 宿主统一未读队列长度（只读，不消费）
+//
+// 生活链调度用：必须查队列长度而不是调 pullContext()——后者会把消息取走，
+// 等于替对话链消费了本轮消息。
+func (class *Runtime) unreadCount(goja.FunctionCall) goja.Value {
+	return class.runtime.ToValue(UnreadCount())
+}
+
 // pullContext 拉取上下文消息（统一时序队列：文本与视频/音频URL混排，拉取即清空）
 func (class *Runtime) pullContext() goja.Value {
 	// 拉取全部未读消息
