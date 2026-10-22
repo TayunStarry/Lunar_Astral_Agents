@@ -1,6 +1,6 @@
 import { ToolCall } from '../config/tool';
 import { GlobalConfig } from '../config/global';
-import { ResourceEntry, ResourceSection } from '../config/resource';
+import { ResourceEntry } from '../config/resource';
 import {
 	KIND_LABELS,
 	formatHandle,
@@ -32,14 +32,11 @@ import { describeResource, inspectTextResource } from '../capabilities/describe'
 //   @D.003|§4 / |L120-168        章节 / 行区间锚点
 //   @D.003&帮我概括结构          句柄 + 自然语言需求（& 只按第一个切分）
 //
-// 旧的 list_resources / read_resource / inspect_resource / outline_resource /
-// search_resources 仍保留 handler 注册，供旧打包产物与历史调用兼容；
-// 它们不再出现在对话者的工具清单里。
+// 旧的 list_resources / read_resource / search_resources 仍保留 handler 注册，
+// 供旧打包产物与历史调用兼容；它们不再出现在对话者的工具清单里。
 
 /** 单次读取返回的字符上限（与 Go 侧 MaxReadBytes 同量级，避免一次读入撑爆上下文） */
 const READ_CHAR_BUDGET = 12000;
-/** 落选资源的展示条数上限 */
-const OUTLINE_PREVIEW_LIMIT = 60;
 
 /** 资源类型码的中文标签 */
 function kindLabel(kind: string): string {
@@ -271,78 +268,6 @@ async function handleReadResource(args?: Record<string, any> | string): Promise<
 	return finishBlocks(blocks, missing);
 }
 
-/** 旧工具别名：inspect_resource（仅历史兼容） */
-async function handleInspectResource(args?: Record<string, any> | string): Promise<string[]> {
-	const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
-	const handle = String(parsed.handle || '').trim();
-	const request = String(parsed.request || '').trim();
-	const parsedHandle = parseHandle(handle);
-	if (!parsedHandle) return ['请提供文本资源句柄，例如 "@D.003"', ''];
-	const normalized = formatHandle(parsedHandle);
-	if (parsedHandle.kind !== 'D' && parsedHandle.kind !== 'T') {
-		return [`${normalized} 是${kindLabel(parsedHandle.kind)}，不是文本资源；图片/视频/动图请用 use_resource 取描述`, ''];
-	}
-	const entry = getResourceEntry(normalized);
-	if (!entry) return [`【${normalized}】\n${HANDLE_INVALID_NOTICE}。请用 browse_resources 确认可用句柄`, ''];
-	if (entry.state === 'lost') {
-		deleteResource(normalized);
-		return [`【${normalized}｜${entry.title || entry.name}】\n${LOST_FILE_NOTICE}`, ''];
-	}
-	const answer = inspectTextResource(normalized, request);
-	if (!answer) {
-		return [`【${normalized}｜${entry.title || entry.name}】\n探查失败：描述者没有给出答复，可以直接用 use_resource 取正文`, ''];
-	}
-	return [`【${normalized}｜${entry.title || entry.name}】\n${answer}`, ''];
-}
-
-/** 旧工具别名：outline_resource（仅历史兼容） */
-async function handleOutlineResource(args?: Record<string, any> | string): Promise<string[]> {
-	const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
-	const handle = String(parsed.handle || '').trim();
-	const parsedHandle = parseHandle(handle);
-	if (!parsedHandle) return ['请提供文档句柄，例如 "@D.003"', ''];
-	const normalized = formatHandle(parsedHandle);
-
-	const entry = getResourceEntry(normalized);
-	if (!entry) return [`【${normalized}】\n${HANDLE_INVALID_NOTICE}。请用 browse_resources 确认可用句柄`, ''];
-	if (entry.state === 'lost') {
-		deleteResource(normalized);
-		return [`【${normalized}｜${entry.title || entry.name}】\n${LOST_FILE_NOTICE}`, ''];
-	}
-	if (entry.kind !== 'D' && entry.kind !== 'T') {
-		return [`${normalized} 是${kindLabel(entry.kind)}，没有段落大纲；图片/视频/音频请用 use_resource 取描述`, ''];
-	}
-
-	// 大纲走 Go 侧段落表（缺失且在位时现场补建）
-	const before = listResources(entry.kind, 1000).find(item => item.seq === entry.seq);
-	const sections = outlineFor(normalized);
-	if (sections.length === 0) {
-		return [`${normalized}（${entry.title || entry.name}）没有可用的段落结构，可用 use_resource 直接读取全文`, ''];
-	}
-	const lines = sections.slice(0, OUTLINE_PREVIEW_LIMIT).map(section => {
-		const anchor = sectionHandle('D', entry.seq, section.ordinal);
-		const label = section.path || section.title || `第 ${section.ordinal} 段`;
-		const level = section.level > 0 ? `${'#'.repeat(section.level)} ` : '';
-		return `${anchor} ${level}${label}（第 ${section.line_start}-${section.line_end} 行，${section.chars} 字）`;
-	});
-	const head = `【${normalized}｜${entry.title || entry.name}｜共 ${before?.section_count ?? sections.length} 节${before?.state === 'active' ? '' : '，正文已回收'}】`;
-	const tail = sections.length > OUTLINE_PREVIEW_LIMIT ? `\n（仅显示前 ${OUTLINE_PREVIEW_LIMIT} 节，共 ${sections.length} 节）` : '';
-	return [`${head}\n${lines.join('\n')}${tail}\n\n读取某一节：use_resource({"handles":["${sectionHandle('D', entry.seq, sections[0].ordinal)}"]})`, ''];
-}
-
-/** 取资源大纲（内部封装，失败返回空数组） */
-function outlineFor(handle: string): ResourceSection[] {
-	try {
-		const [sections, , error] = resourceOutline(handle);
-		if (error || !sections) return [];
-		return sections;
-	}
-	catch (error) {
-		console.error('[资源工具] 读大纲失败:', error);
-		return [];
-	}
-}
-
 /** JSON 解析容错（模型偶发传入非 JSON 字符串） */
 function safeParse(text: string): Record<string, any> {
 	try {
@@ -426,6 +351,4 @@ GlobalConfig.LTPfunction.set('browse_resources', handleBrowseResources);
 // 历史别名：旧打包产物 / 旧提示词仍可能按旧名调用（不出现在新工具清单）
 GlobalConfig.LTPfunction.set('list_resources', handleListResources);
 GlobalConfig.LTPfunction.set('read_resource', handleReadResource);
-GlobalConfig.LTPfunction.set('inspect_resource', handleInspectResource);
-GlobalConfig.LTPfunction.set('outline_resource', handleOutlineResource);
 GlobalConfig.LTPfunction.set('search_resources', handleSearchResources);

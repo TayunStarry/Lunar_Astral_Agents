@@ -8,18 +8,18 @@ import { IMAGE_WINDOW_SIZE, sanitizeImageDesc } from '../capabilities/image-tag'
 import { getResourceEntry } from '../capabilities/resource';
 import { describeResource } from '../capabilities/describe';
 import { getCrystalRemoteTools } from '../capabilities/ltpx';
+import { loadCustomCharacters } from '../capabilities/character';
 import { agentControlTools } from '../tools/agent-control';
 import { memoryTools } from '../tools/memory';
 import { resourceTools } from '../tools/resource';
 import { scheduleTools } from '../tools/schedule/defs';
-import { screenshotTools } from '../tools/screenshot';
 import { describeError, notifyAgentSuccess, reportAgentFailure } from './dialogue/errors';
 import { applyModelResponse } from './dialogue/response';
 import { demoteOverflowImagesIn } from './dialogue/history';
 import { executeToolCalls } from './dialogue/tool-calls';
 
 /** 对话者固有工具（除琉璃聚合工具外全部固定不变，定义随本模块静态聚合） */
-const dialogueBaseTools: ToolCall[] = [...agentControlTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
+const dialogueBaseTools: ToolCall[] = [...agentControlTools, ...memoryTools, ...resourceTools, ...scheduleTools];
 
 /** 单次应答允许的工具调用轮次上限（防御模型在工具调用间自循环） */
 const MAX_TOOL_ROUNDS = 5;
@@ -38,19 +38,51 @@ export interface SisterAppearances {
     crystal: string;
 }
 
+/** 内置家人角色名：自定义角色与它们重名时不再重复注入 */
+const BUILTIN_CHARACTER_NAMES = new Set(['月华', '琉璃']);
+
+/**
+ * 构建「朋友样貌」段落
+ *
+ * 数据来自绘制者的自定义角色库（character.db 的 painter_characters 表）：
+ * 有自定义角色就返回整段（含标题），一个都没有时返回空串，
+ * 由调用方连同标题与占位行一起移除，避免提示词里留下空段落。
+ */
+function buildFriendsAppearanceSection(): string {
+	const lines: string[] = [];
+	const characters = [...loadCustomCharacters().entries()]
+		.sort((a, b) => a[0].localeCompare(b[0], 'zh-CN'));
+	for (const [name, profile] of characters) {
+		if (BUILTIN_CHARACTER_NAMES.has(name)) continue;
+		const appearance = String(profile.appearance || '').trim();
+		if (!appearance) continue;
+		lines.push(`- ${name}：${appearance}`);
+	}
+	return lines.length > 0 ? `## 朋友样貌\n\n${lines.join('\n')}\n` : '';
+}
+
+/** 注入朋友样貌：没有自定义角色时连标题带占位行一起移除 */
+function applyFriendsAppearance(prompt: string): string {
+	const section = buildFriendsAppearanceSection();
+	if (!section) return prompt.replace(/\n?\{friends-appearance\}\n?/, '\n');
+	return prompt.replace('{friends-appearance}', section);
+}
+
 /**
  * 组装对话者系统提示词：把绘制者已解析的姐妹基础外观填入占位符
  *
  * 外观数据来自 prompts/painterCharacters.md 的「基础外观」节，
  * 与绘制者共用同一份提示词，改外观只需维护该文件。
+ * 自定义角色（朋友样貌）来自绘制者的角色库，无自定义角色时不留下标题。
  *
  * @param appearances 姐妹基础外观
  * @returns 补全后的系统提示词
  */
 function composeDialoguePrompt(appearances: SisterAppearances): string {
-    return fileView('prompts/dialogueRole.md')[0]
-        .split('{lunar-appearance}').join(appearances.lunar)
-        .split('{crystal-appearance}').join(appearances.crystal);
+	const prompt = fileView('prompts/dialogueRole.md')[0]
+		.split('{lunar-appearance}').join(appearances.lunar)
+		.split('{crystal-appearance}').join(appearances.crystal);
+	return applyFriendsAppearance(prompt);
 }
 
 /**
@@ -72,8 +104,8 @@ export class DialogueRole extends ModelBuilder {
     /** 智能体角色标签（TUI 实况屏显示） */
     protected roleTag: string = "对话者";
 
-    /** 内置提示词原文（已填充外观占位，不含追加设定） */
-    private readonly basePrompt: string;
+    /** 姐妹基础外观（用于每轮重建系统提示词） */
+    private readonly appearances: SisterAppearances;
 
     /** 生成聊天对话（一次应答周期的入口） */
     public async generateDialogue(cache: ChatCache): Promise<void> {
@@ -273,19 +305,22 @@ export class DialogueRole extends ModelBuilder {
     /**
      * 把「追加设定」逐行拼到系统提示词末尾。
      *
+     * 每轮都重建基础提示词：绘制者随时可能新建自定义角色，
+     * 「朋友样貌」需要在下一次应答就反映出来；没有自定义角色时该段落整体缺席。
      * 只改系统提示词，不动历史上下文；配置为空时恢复为内置提示词原文，
      * 因此运行期即使配置被清空也不会残留上一次的追加内容。
      */
     private applyAppendSettings(): void {
         const lines = readAppendSettings();
+        const base = composeDialoguePrompt(this.appearances);
         this.systemPrompt = lines.length > 0
-            ? this.basePrompt.replace(/\s*$/, '') + '\n' + lines.join('\n')
-            : this.basePrompt;
+            ? base.replace(/\s*$/, '') + '\n' + lines.join('\n')
+            : base;
     }
 
     /** 构造函数 */
     public constructor(appearances: SisterAppearances) {
         super(composeDialoguePrompt(appearances));
-        this.basePrompt = this.systemPrompt;
+        this.appearances = appearances;
     }
 }

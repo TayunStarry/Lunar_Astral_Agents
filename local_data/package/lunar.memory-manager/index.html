@@ -121,6 +121,7 @@
 				<span class="panel-title"><i class="fas fa-layer-group"></i> 记忆条目</span>
 				<div class="panel-header-right">
 					<span class="char-count" id="listStats"></span>
+					<button class="btn-glass btn-sm hidden" id="fuseSelectedBtn" title="把选中的高相似文本记忆合并为一条"><i class="fas fa-code-merge"></i> 融合选中</button>
 					<button class="btn-glass btn-sm btn-clear" id="clearListBtn" title="清空列表显示"><i class="fas fa-broom"></i> 清空显示</button>
 				</div>
 			</header>
@@ -163,6 +164,34 @@
 			<div class="modal-btns">
 				<button class="btn-glass" id="editCancelBtn"><i class="fas fa-xmark"></i> 取消</button>
 				<button class="btn-glass btn-glass-primary" id="editSaveBtn"><i class="fas fa-floppy-disk"></i> 保存改写</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- 权重融合弹窗（仅文本记忆） -->
+	<div class="modal-mask hidden" id="fuseModal">
+		<div class="modal-box">
+			<div class="modal-title"><i class="fas fa-code-merge"></i> 权重融合</div>
+			<div class="modal-meta" id="fuseMeta"></div>
+			<div class="form-row">
+				<label class="form-label">相似度阈值</label>
+				<input type="number" id="fuseThresholdInput" min="0.5" max="1" step="0.01" value="0.90">
+			</div>
+			<div class="form-row">
+				<label class="form-label">合并方式</label>
+				<select id="fuseStrategySelect" class="form-select">
+					<option value="auto">自动（短内容拼接，长内容交给模型）</option>
+					<option value="concat">仅拼接去重</option>
+					<option value="model">模型整合</option>
+				</select>
+			</div>
+			<div class="input-hint">
+				<i class="fas fa-circle-info"></i>
+				只处理文本记忆：达到阈值的条目会被合并为一条并重新生成嵌入向量，原条目删除。图片/音频记忆不会参与，也不会被删除。
+			</div>
+			<div class="modal-btns">
+				<button class="btn-glass" id="fuseCancelBtn"><i class="fas fa-xmark"></i> 取消</button>
+				<button class="btn-glass btn-glass-primary" id="fuseStartBtn"><i class="fas fa-code-merge"></i> 开始融合</button>
 			</div>
 		</div>
 	</div>

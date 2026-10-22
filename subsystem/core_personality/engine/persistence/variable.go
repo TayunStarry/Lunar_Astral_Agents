@@ -66,6 +66,27 @@ const (
 	MemoryTypeAudio = "audio" // 音频记忆（语音、音乐、环境声）
 )
 
+// 记忆权重融合（把超高相似度的文本条目合并为一条整合记忆）参数
+const (
+	// MemoryFuseDefaultThreshold 默认相似度阈值（余弦）；同簇条目与该簇代表条目需达到此值
+	MemoryFuseDefaultThreshold = 0.90
+	// MemoryFuseMinThreshold 允许的最小阈值，低于此值会被夹回默认值（避免把无关记忆混在一起）
+	MemoryFuseMinThreshold = 0.50
+	// MemoryFuseAutoModelChars auto 策略下改用模型整合的正文字符数门槛
+	MemoryFuseAutoModelChars = 600
+	// MemoryFuseMaxCandidates 单次融合允许扫描的文本条目上限（O(n²) 相似度比较的保护阈值）
+	MemoryFuseMaxCandidates = 2000
+	// MemoryFuseMaxContentChars 送入模型整合时单条内容的最大字符数
+	MemoryFuseMaxContentChars = 1500
+)
+
+// 记忆融合策略
+const (
+	MemoryFuseStrategyAuto   = "auto"   // 短内容直接拼接，长内容交给模型整合
+	MemoryFuseStrategyConcat = "concat" // 总是拼接去重
+	MemoryFuseStrategyModel  = "model"  // 总是调用模型整合
+)
+
 // MemoryTypes 全部合法记忆类型（顺序固定，便于错误提示与遍历）
 var MemoryTypes = []string{MemoryTypeText, MemoryTypeImage, MemoryTypeAudio}
 

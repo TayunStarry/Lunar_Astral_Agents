@@ -325,6 +325,17 @@ body {
 
 .icon-btn:hover { color: var(--danger); border-color: var(--danger); }
 .icon-btn.warn:hover { color: var(--accent-warm); border-color: var(--accent-warm); }
+.icon-btn.merge:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 卡片勾选框（权重融合选中用） */
+.card-select {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
 
 /* ===== 导入表单 ===== */
 .mode-toggle-group {

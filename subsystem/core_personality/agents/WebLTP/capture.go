@@ -8,6 +8,7 @@ package WebLTP
 // 其余场合只做文本提取，避免无意义的截图与视觉模型开销。
 
 import (
+	"CorePersonality/engine/multimodal"
 	"LunarSubsystem/BrowserClient"
 	"bytes"
 	"encoding/json"
@@ -21,13 +22,17 @@ import (
 	"time"
 )
 
-// shotCapture 会话窗口截图：PrintWindow 内容优先、纯色/失败时自动回退屏幕客户区，
-// 具体 GDI 生命周期与空图判定由 WindowCapture 统一实现，这里只做 JPEG 编码。
+// shotCapture 会话窗口截图：统一走 engine 主线的窗口截图机制
+// （PrintWindow 内容优先、纯色/失败时自动回退屏幕客户区），这里只做 JPEG 编码。
 func shotCapture(sess *BrowserClient.WebViewSession, quality int) ([]byte, error) {
 	if quality <= 0 || quality > 100 {
 		quality = 85
 	}
-	img, err := sess.ClientScreenshot()
+	hwnd, err := sess.WindowHandle()
+	if err != nil {
+		return nil, fmt.Errorf("会话窗口截图失败: %w", err)
+	}
+	img, err := multimodal.CaptureWindowRGBA(hwnd, true)
 	if err != nil {
 		return nil, fmt.Errorf("会话窗口截图失败: %w", err)
 	}

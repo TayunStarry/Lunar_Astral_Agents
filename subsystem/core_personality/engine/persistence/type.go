@@ -109,6 +109,44 @@ type MemoryQueryOptions struct {
 	ForceGlobal bool
 }
 
+// MemoryFuseOptions 权重融合参数（仅作用于文本记忆）
+type MemoryFuseOptions struct {
+	// Threshold 同簇相似度阈值（余弦，0~1）；<=0 或低于下限时用默认值
+	Threshold float32
+	// Strategy 合并策略：auto（短拼接/长模型）、concat（拼接去重）、model（模型整合）
+	Strategy string
+	// Role 合并后条目的角色；为空时取簇内出现最多的角色
+	Role string
+}
+
+// MemoryFuseGroup 一组被合并的条目
+type MemoryFuseGroup struct {
+	// IDs 被合并（并删除）的原条目 ID
+	IDs []string `json:"ids"`
+	// Similarity 簇内最低相似度（相对簇代表条目）
+	Similarity float32 `json:"similarity"`
+	// Content 合并后的正文
+	Content string `json:"content"`
+	// Role 合并后条目角色
+	Role string `json:"role"`
+	// NewID 新建的整合条目 ID
+	NewID string `json:"new_id"`
+	// Strategy 实际使用的合并方式：concat / model
+	Strategy string `json:"strategy"`
+}
+
+// MemoryFuseResult 权重融合结果
+type MemoryFuseResult struct {
+	Collection     string            `json:"collection"`
+	CandidateCount int               `json:"candidate_count"` // 参与扫描的文本条目数
+	GroupCount     int               `json:"group_count"`     // 实际合并的簇数
+	CreatedCount   int               `json:"created_count"`   // 新建整合条目数
+	RemovedCount   int               `json:"removed_count"`   // 删除的原条目数
+	SkippedMedia   int               `json:"skipped_media"`   // 因非文本/无正文被跳过的条目数
+	Threshold      float32           `json:"threshold"`
+	Groups         []MemoryFuseGroup `json:"groups"`
+}
+
 // Document 统一文档结构（文本 / 图片 / 音频记忆共用，混合存储在同一个集合）
 // content 与 url 二选一：文本记忆 content 存储文本内容、url 为空；
 // 媒体记忆 url 指向 multimedia|audios/<集合名>/ 下的实体文件、content 通常为空。

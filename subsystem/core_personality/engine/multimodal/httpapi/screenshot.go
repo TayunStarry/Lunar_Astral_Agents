@@ -25,6 +25,9 @@ func HandleCapture(w http.ResponseWriter, r *http.Request) {
 			req.Mode = module.CaptureMode(m)
 		}
 		req.DisplayIndex, _ = strconv.Atoi(q.Get("display_index"))
+		req.WindowHandle, _ = strconv.ParseUint(q.Get("window_handle"), 10, 64)
+		req.WindowTitle = q.Get("window_title")
+		req.ClientArea, _ = strconv.ParseBool(q.Get("client_area"))
 		req.OffsetX, _ = strconv.Atoi(q.Get("offset_x"))
 		req.OffsetY, _ = strconv.Atoi(q.Get("offset_y"))
 		req.Width, _ = strconv.Atoi(q.Get("width"))

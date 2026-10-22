@@ -101,6 +101,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册截图子系统适配器
 	vm.Set("screenshotCapture", adapters.screenshotCapture)
 	vm.Set("screenshotGetDisplays", adapters.screenshotGetDisplays)
+	vm.Set("screenshotListWindows", adapters.screenshotListWindows)
 
 	// 注册 LTPX 远程（琉璃）工具链协调函数
 	vm.Set("getLTPXRemoteStatus", adapters.getLTPXRemoteStatusForJS)

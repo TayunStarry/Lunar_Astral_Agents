@@ -2,7 +2,7 @@ import type { FileListItem, ProxyFetchConfig } from './config/config';
 import type { MediaSegment, MediaFrameGroup, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult } from './config/image';
 import type { MultimodalMessage } from './config/model';
 import type { TTSParams } from './config/tool';
-import type { ScreenshotParams } from './config/screenshot';
+import type { ScreenshotParams, CaptureWindowInfo } from './config/screenshot';
 
 declare global {
     /**
@@ -477,6 +477,15 @@ declare global {
      * @returns {[Array<{index: number, x: number, y: number, width: number, height: number}>, Error | null]} 包含显示器信息的元组，[显示器列表, 错误信息]
      */
     function screenshotGetDisplays(): [Array<{ index: number; x: number; y: number; width: number; height: number }>, Error | null];
+    /**
+     * 枚举可作为截图目标的可见顶层窗口
+     *
+     * 返回的窗口含标题/类名/进程/矩形/客户区尺寸/是否最小化/是否焦点，
+     * 供截图者按自然语言要求精确定位「选定窗口」。
+     *
+     * @returns {[CaptureWindowInfo[], Error | null]} [窗口列表, 错误信息]
+     */
+    function screenshotListWindows(): [CaptureWindowInfo[], Error | null];
     /**
      * 获取琉璃（远程 LTPX）聚合工具链
      * 启动与每次工具调用后调用：进程内直读工具链并写入内部缓存，返回聚合工具与可调用应用清单

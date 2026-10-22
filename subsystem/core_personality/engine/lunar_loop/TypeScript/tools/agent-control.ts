@@ -3,16 +3,17 @@ import { GlobalConfig } from '../config/global';
 import { resolveImageRef } from '../capabilities/image-tag';
 import type { PainterRole } from '../roles/painter';
 import type { MusicianRole } from '../roles/musician';
+import type { ScreenshoterRole } from '../roles/screenshoter';
 
 // ==== 智能体控制工具 ====
 // 工具定义导出为常量（对话者聚合），处理函数经 LTPfunction 分发；
 // 子智能体实例由 roles/index.ts 经 registerAgentTargets 注入（避免 tool → roles 静态循环引用）
 
 /** 已注入的子智能体实例（roles/index.ts 模块初始化时注入） */
-let agentTargets: { painterRole: PainterRole; musicianRole: MusicianRole } | null = null;
+let agentTargets: { painterRole: PainterRole; musicianRole: MusicianRole; screenshoterRole: ScreenshoterRole } | null = null;
 
 /** 注入子智能体实例（roles/index.ts 模块初始化时调用一次） */
-export function registerAgentTargets(targets: { painterRole: PainterRole; musicianRole: MusicianRole }): void {
+export function registerAgentTargets(targets: { painterRole: PainterRole; musicianRole: MusicianRole; screenshoterRole: ScreenshoterRole }): void {
     agentTargets = targets;
 }
 
@@ -55,6 +56,23 @@ export const agentControlTools: ToolCall[] = [
 					}
 				},
 				required: ["description"]
+			}
+		}
+	},
+	{
+		type: "function",
+		function: {
+			name: "dispatch_screenshoter",
+			description: "把截图诉求交给截图者子智能体。截图者理解自然语言要求并精确取景，支持全屏、指定显示器、指定窗口（含被其他窗口遮挡但未最小化的窗口）、窗口内相对区域、绝对屏幕坐标区域；截图会直接展示给用户，同时把主图回传给你查看。用户要求看屏幕、截某个窗口、截某块区域时调用它。",
+			parameters: {
+				type: "object",
+				properties: {
+					requirement: {
+						type: "string",
+						description: "截图要求，保留用户原话里的关键细节：截哪个窗口（标题/应用名）、截哪块区域（上下左右/坐标）、全屏还是单屏。例如「截一下 Chrome 窗口」「截屏幕右下角任务栏」「把微信聊天窗口上半部分截给我」"
+					}
+				},
+				required: ["requirement"]
 			}
 		}
 	}
@@ -118,8 +136,29 @@ async function handleDispatchMusician(args?: Record<string, any> | string): Prom
 	return [result, ''];
 }
 
+/** 处理截图者调度工具 */
+async function handleDispatchScreenshoter(args?: Record<string, any> | string): Promise<string[]> {
+	const { requirement } = parseArgs(args);
+
+	if (!requirement || typeof requirement !== 'string' || requirement.trim().length === 0) {
+		return ['截图任务调度失败：截图要求不能为空，请说明要截哪个窗口或哪块区域', ''];
+	}
+
+	if (!agentTargets?.screenshoterRole) {
+		return ['截图任务调度失败：截图者子智能体未就绪，请稍后重试', ''];
+	}
+
+	console.log(`[智能体控制] 调度截图者: ${requirement.trim()}`);
+	const result = await agentTargets.screenshoterRole.createCreativeWork(requirement.trim());
+	// 主图随工具结果一起回传：对话者把图片注入上下文后能直接看到画面并据此回答
+	const image = agentTargets.screenshoterRole.takePrimaryImage();
+	console.log(`[智能体控制] 截图者完成: ${result}${image ? '（含主图）' : ''}`);
+	return [result, image];
+}
+
 // ==== 模块级注册 ====
 
 // 注册智能体控制工具处理函数到 LTPfunction 映射表（工具定义由对话者聚合，不再入公共数组）
 GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
 GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
+GlobalConfig.LTPfunction.set('dispatch_screenshoter', handleDispatchScreenshoter);

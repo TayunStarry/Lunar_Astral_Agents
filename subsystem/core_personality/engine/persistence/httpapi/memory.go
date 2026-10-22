@@ -31,6 +31,7 @@ import (
 //	POST   /memory/messages             添加记忆（type=text/image/audio，内容自动归组）
 //	DELETE /memory/messages             按 id 删除记忆
 //	GET    /memory/entries              逐条列举（id=按 ID；type/offset/limit；limit=0 全部）
+//	POST   /memory/fuse                 权重融合（把集合内超高相似度的文本条目合并为一条并重算向量）
 //	POST   /memory/{name}               创建/打开集合（兼容旧路径）
 //	DELETE /memory/{name}               删除集合
 //	GET    /memory/{name}/stats         集合统计
@@ -72,6 +73,9 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		case "entries":
 			handleMemoryEntries(w, r)
+			return
+		case "fuse":
+			handleMemoryFuse(w, r)
 			return
 		default:
 			// 兼容旧路径：POST/DELETE /memory/{name}
@@ -552,6 +556,43 @@ func memoryEntryOf(entry *persistence.MemoryQueryResult) memoryMessageData {
 		Similarity: entry.Similarity,
 		Timestamp:  entry.Timestamp,
 	}
+}
+
+// handleMemoryFuse POST /memory/fuse — 权重融合（相似文本条目合并 + 重算向量）
+func handleMemoryFuse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
+		return
+	}
+
+	var req memoryFuseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 无效的请求参数")
+		return
+	}
+	req.Collection = strings.TrimSpace(req.Collection)
+	if req.Collection == "" {
+		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> collection 不能为空")
+		return
+	}
+
+	// 融合涉及逐条嵌入与可选的模型整合，给足超时；调用方断开连接时同步取消
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+
+	result, err := persistence.MemoryFuseEntries(ctx, req.Collection, req.IDs, persistence.MemoryFuseOptions{
+		Threshold: float32(req.Threshold),
+		Strategy:  req.Strategy,
+		Role:      req.Role,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 权重融合失败: %v", err))
+		return
+	}
+
+	LoggerGeneral.Info("FileManager", "权重融合完成 [%s]：扫描 %d 条，合并 %d 组，删除 %d 条，新增 %d 条",
+		result.Collection, result.CandidateCount, result.GroupCount, result.RemovedCount, result.CreatedCount)
+	writeSuccess(w, result)
 }
 
 // handleMemoryDocuments GET /memory/{name}/documents — 集合内文档分页（管理用途）

@@ -40,6 +40,16 @@ type memoryDeleteRequest struct {
 	ID string `json:"id"`
 }
 
+// memoryFuseRequest 权重融合请求（只作用于文本记忆）
+// collection 必填；ids 为空表示扫描整个集合，非空时只融合勾选的条目。
+type memoryFuseRequest struct {
+	Collection string   `json:"collection"`          // 目标集合名
+	IDs        []string `json:"ids,omitempty"`       // 要融合的条目 ID（空=整个集合）
+	Threshold  float64  `json:"threshold,omitempty"` // 相似度阈值（0~1，默认 0.90）
+	Strategy   string   `json:"strategy,omitempty"`  // auto / concat / model
+	Role       string   `json:"role,omitempty"`      // 合并后角色（空=取簇内多数）
+}
+
 // memoryInitRequest v2 实例初始化请求
 // 模型配置已迁移至 config 模块（lunar_config.json），此请求体不再需要模型参数
 // 保留结构体以兼容前端可能发送的空请求体

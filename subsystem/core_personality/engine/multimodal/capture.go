@@ -14,13 +14,16 @@ import (
 // Capture 统一截图入口：按 CaptureRequest 的 mode 执行截图并返回结构化结果
 //
 // 优先级路由规则：
-//   - auto：焦点窗口优先；识别失败降级为多屏拼接全屏
-//   - window：强制焦点窗口，识别失败直接报错
+//   - auto：目标窗口（显式句柄/标题，缺省为焦点窗口）优先；识别失败降级为多屏拼接全屏
+//   - window：强制目标窗口，识别失败直接报错
 //   - fullscreen：多屏拼接全屏
-//   - display：指定显示器
+//   - display：指定显示器（display_index=-1 表示全部显示器拼接）
 //   - region：绝对屏幕坐标区域
 //
-// 坐标覆盖：mode 为 auto/window 且 Width>0 && Height>0 时，
+// 目标窗口识别顺序：WindowHandle > WindowTitle（标题包含匹配）> 当前焦点窗口。
+// 目标窗口走 WindowCapture 的 PrintWindow 渲染，因此被遮挡（未最小化）也能拿到画面。
+//
+// 坐标覆盖：目标窗口模式下 Width>0 && Height>0 时，
 // 按窗口相对偏移 (OffsetX, OffsetY) + 区域大小 (Width, Height) 精准截取子区域。
 func Capture(req CaptureRequest) (CaptureResult, error) {
 	// 频率限制
@@ -40,16 +43,17 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	}
 
 	var (
-		img         *image.RGBA
-		usedMode    CaptureMode
-		windowTitle string
-		displayIdx  int
-		err         error
+		img          *image.RGBA
+		usedMode     CaptureMode
+		windowTitle  string
+		windowHandle uint64
+		displayIdx   int
+		err          error
 	)
 
 	switch req.Mode {
 	case ModeAuto, ModeWindow:
-		img, windowTitle, err = captureFocusedWindow(req)
+		img, windowTitle, windowHandle, err = captureTargetWindow(req)
 		if err != nil {
 			if req.Mode == ModeWindow {
 				return CaptureResult{}, err
@@ -57,7 +61,7 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 			// auto 降级为多屏拼接全屏
 			img, err = screenshotAllDisplaysOptimized()
 			if err != nil {
-				return CaptureResult{}, fmt.Errorf("焦点窗口截图失败，全屏降级也失败: %v", err)
+				return CaptureResult{}, fmt.Errorf("窗口截图失败，全屏降级也失败: %v", err)
 			}
 			usedMode = ModeFullscreen
 		} else {
@@ -111,22 +115,36 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 		Mode:         usedMode,
 		DisplayIndex: displayIdx,
 		WindowTitle:  windowTitle,
+		WindowHandle: windowHandle,
 	}, nil
 }
 
-// captureFocusedWindow 捕获焦点窗口，含窗口相对精准区域覆盖
-func captureFocusedWindow(req CaptureRequest) (*image.RGBA, string, error) {
-	if req.Width > 0 && req.Height > 0 {
-		// 坐标覆盖：窗口相对精准区域
-		return captureForegroundWindowRegion(req.OffsetX, req.OffsetY, req.Width, req.Height)
-	}
-	return captureForegroundWindow()
+// ListWindows 枚举可作为截图目标的可见顶层窗口（Windows 平台）。
+// 最小化窗口也会列出，但 capture 时会被明确拒绝，便于智能体提示用户先恢复窗口。
+func ListWindows() ([]WindowInfo, error) {
+	return listWindows()
 }
 
-// captureDisplay 捕获指定显示器
+// captureTargetWindow 解析目标窗口并截图（含窗口相对精准区域覆盖）
+func captureTargetWindow(req CaptureRequest) (*image.RGBA, string, uint64, error) {
+	hwnd, title, err := resolveTargetWindow(req.WindowTitle, req.WindowHandle)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	img, err := captureTargetWindowArea(hwnd, req.ClientArea, req.OffsetX, req.OffsetY, req.Width, req.Height)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	return img, title, uint64(hwnd), nil
+}
+
+// captureDisplay 捕获指定显示器；index<0 时返回全部显示器拼接
 func captureDisplay(index int) (*image.RGBA, error) {
+	if index < 0 {
+		return screenshotAllDisplaysOptimized()
+	}
 	n := screenshot.NumActiveDisplays()
-	if index < 0 || index >= n {
+	if index >= n {
 		return nil, fmt.Errorf("无效的显示器索引: %d（共 %d 个显示器）", index, n)
 	}
 	return screenshot.CaptureDisplay(index)

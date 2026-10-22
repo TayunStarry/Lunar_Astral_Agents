@@ -7,7 +7,6 @@
 // ---------- 工具模块副作用：向 GlobalConfig 注册 LTPfunction（工具定义由对话者静态聚合） ----------
 import '../tools/agent-control';
 import '../tools/schedule/index';
-import '../tools/screenshot';
 // ---------- 聚合导出（保持原公共 API） ----------
 export { painterRole, musicianRole, memorizerRole, randomDefaultMessage } from '../roles/index';
 export { LiteImageFile } from '../capabilities/media';

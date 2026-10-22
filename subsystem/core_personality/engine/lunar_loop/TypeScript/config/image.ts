@@ -38,6 +38,16 @@ export interface ResizeImageResult {
 	width: number;
 	/** 缩放后的图片高度 */
 	height: number;
+	/** 截图实际采用的模式（仅截图结果携带） */
+	mode?: string;
+	/** 截图实际捕获的窗口标题（仅截图结果携带） */
+	window_title?: string;
+	/** 截图实际捕获的窗口句柄（仅截图结果携带） */
+	window_handle?: number;
+	/** 截图原始宽度（缩放前，仅截图结果携带） */
+	source_width?: number;
+	/** 截图原始高度（缩放前，仅截图结果携带） */
+	source_height?: number;
 }
 
 /** 缩放图片返回类型：静态图返回单元素数组，动态图(GIF/APNG/WebP帧数>2)返回多帧数组 */

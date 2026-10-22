@@ -437,13 +437,30 @@ var lunarBundle = (function (exports) {
                     required: ["description"]
                 }
             }
+        },
+        {
+            type: "function",
+            function: {
+                name: "dispatch_screenshoter",
+                description: "把截图诉求交给截图者子智能体。截图者理解自然语言要求并精确取景，支持全屏、指定显示器、指定窗口（含被其他窗口遮挡但未最小化的窗口）、窗口内相对区域、绝对屏幕坐标区域；截图会直接展示给用户，同时把主图回传给你查看。用户要求看屏幕、截某个窗口、截某块区域时调用它。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        requirement: {
+                            type: "string",
+                            description: "截图要求，保留用户原话里的关键细节：截哪个窗口（标题/应用名）、截哪块区域（上下左右/坐标）、全屏还是单屏。例如「截一下 Chrome 窗口」「截屏幕右下角任务栏」「把微信聊天窗口上半部分截给我」"
+                        }
+                    },
+                    required: ["requirement"]
+                }
+            }
         }
     ];
-    function parseArgs$1(args) {
+    function parseArgs$2(args) {
         return typeof args === 'string' ? JSON.parse(args) : (args || {});
     }
     async function handleDispatchPainter(args) {
-        const { description, reference_tag } = parseArgs$1(args);
+        const { description, reference_tag } = parseArgs$2(args);
         if (!description || typeof description !== 'string' || description.trim().length === 0) {
             return ['绘画任务调度失败：创作描述不能为空，请提供具体的绘画需求', ''];
         }
@@ -467,7 +484,7 @@ var lunarBundle = (function (exports) {
         return [result, ''];
     }
     async function handleDispatchMusician(args) {
-        const { description } = parseArgs$1(args);
+        const { description } = parseArgs$2(args);
         if (!description || typeof description !== 'string' || description.trim().length === 0) {
             return ['音乐任务调度失败：创作描述不能为空，请提供具体的音乐需求', ''];
         }
@@ -479,8 +496,23 @@ var lunarBundle = (function (exports) {
         console.log(`[智能体控制] 演奏者完成: ${result}`);
         return [result, ''];
     }
+    async function handleDispatchScreenshoter(args) {
+        const { requirement } = parseArgs$2(args);
+        if (!requirement || typeof requirement !== 'string' || requirement.trim().length === 0) {
+            return ['截图任务调度失败：截图要求不能为空，请说明要截哪个窗口或哪块区域', ''];
+        }
+        if (!agentTargets?.screenshoterRole) {
+            return ['截图任务调度失败：截图者子智能体未就绪，请稍后重试', ''];
+        }
+        console.log(`[智能体控制] 调度截图者: ${requirement.trim()}`);
+        const result = await agentTargets.screenshoterRole.createCreativeWork(requirement.trim());
+        const image = agentTargets.screenshoterRole.takePrimaryImage();
+        console.log(`[智能体控制] 截图者完成: ${result}${image ? '（含主图）' : ''}`);
+        return [result, image];
+    }
     GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
     GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
+    GlobalConfig.LTPfunction.set('dispatch_screenshoter', handleDispatchScreenshoter);
 
     function interactEvent(topic, payload) {
         try {
@@ -815,11 +847,11 @@ var lunarBundle = (function (exports) {
         }
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, execute);
     }
-    function parseArgs(args) {
+    function parseArgs$1(args) {
         return typeof args === 'string' ? JSON.parse(args) : (args || {});
     }
     async function handleCreate(args) {
-        const { time, content } = parseArgs(args);
+        const { time, content } = parseArgs$1(args);
         if (!time || time.trim().length === 0) {
             return ['创建计划项失败：执行时间不能为空，请提供有效的时间点', ''];
         }
@@ -844,7 +876,7 @@ var lunarBundle = (function (exports) {
         return [`计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`, ''];
     }
     async function handleEdit(args) {
-        const { id, time, content } = parseArgs(args);
+        const { id, time, content } = parseArgs$1(args);
         if (!id || id.trim().length === 0) {
             return ['编辑计划项失败：计划项ID不能为空，请先用 action=query 查询获取有效ID', ''];
         }
@@ -874,7 +906,7 @@ var lunarBundle = (function (exports) {
         return [`计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`, ''];
     }
     async function handleDelete(args) {
-        const { id } = parseArgs(args);
+        const { id } = parseArgs$1(args);
         if (!id || id.trim().length === 0) {
             return ['删除计划项失败：计划项ID不能为空', ''];
         }
@@ -892,13 +924,13 @@ var lunarBundle = (function (exports) {
         return [`计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`, ''];
     }
     async function handleSchedule(args) {
-        const { action } = parseArgs(args);
+        const { action } = parseArgs$1(args);
         switch (String(action || '').trim()) {
             case 'create': return handleCreate(args);
             case 'edit': return handleEdit(args);
             case 'delete': return handleDelete(args);
             case 'query': {
-                const { keywords, date, scope } = parseArgs(args);
+                const { keywords, date, scope } = parseArgs$1(args);
                 return querySchedules(scheduleCache, keywords, date, scope);
             }
             default:
@@ -975,652 +1007,6 @@ var lunarBundle = (function (exports) {
     }
     initSchedules();
     GlobalConfig.LTPfunction.set('schedule', handleSchedule);
-
-    const VISION_READ_PATH = '/file/miniature/';
-    const FILE_READ_PATH = '/file/read/';
-    function pathPartOf(source) {
-        return String(source || '').split('?')[0].split('#')[0];
-    }
-    function toDisplaySource(source) {
-        const raw = String(source || '');
-        if (!raw)
-            return '';
-        if (raw.startsWith('data:') || raw.startsWith('blob:'))
-            return raw;
-        const path = pathPartOf(raw);
-        const localIndex = path.indexOf(FILE_READ_PATH);
-        if (localIndex >= 0)
-            return path.slice(localIndex);
-        const visionIndex = path.indexOf(VISION_READ_PATH);
-        if (visionIndex >= 0) {
-            return FILE_READ_PATH + path.slice(visionIndex + VISION_READ_PATH.length);
-        }
-        if (path.startsWith('multimedia/'))
-            return FILE_READ_PATH + path;
-        return raw;
-    }
-    function toVisionSource(source) {
-        const raw = String(source || '');
-        if (!raw || raw.startsWith('data:') || raw.startsWith('blob:'))
-            return '';
-        const path = pathPartOf(raw);
-        const visionIndex = path.indexOf(VISION_READ_PATH);
-        if (visionIndex >= 0)
-            return url()[0] + path.slice(visionIndex);
-        const readIndex = path.indexOf(FILE_READ_PATH);
-        if (readIndex >= 0) {
-            const rel = path.slice(readIndex + FILE_READ_PATH.length);
-            if (!rel.startsWith('multimedia/'))
-                return '';
-            return `${url()[0]}${VISION_READ_PATH}${rel}`;
-        }
-        if (path.startsWith('multimedia/'))
-            return `${url()[0]}${VISION_READ_PATH}${path}`;
-        return '';
-    }
-    function localPathToReadURL(source) {
-        if (!source)
-            return '';
-        const normalized = String(source).replace(/\\/g, '/').split('?')[0];
-        const marker = normalized.toLowerCase().lastIndexOf('/multimedia/');
-        const rel = marker >= 0
-            ? normalized.slice(marker + 1)
-            : (normalized.toLowerCase().startsWith('multimedia/') ? normalized : '');
-        return rel ? FILE_READ_PATH + rel : '';
-    }
-    function fileNameOf(source) {
-        const path = pathPartOf(String(source || ''));
-        const name = path.slice(path.lastIndexOf('/') + 1);
-        return name || '文件';
-    }
-    function splitUserPrefix(text) {
-        const raw = String(text || '');
-        const match = /^\[用户:\s*([^\]]*)\]\s*[:：]\s*/u.exec(raw);
-        if (!match)
-            return { sender: '', text: raw };
-        return { sender: match[1].trim(), text: raw.slice(match[0].length) };
-    }
-    function guessImageMime(base64) {
-        const head = String(base64 || '').slice(0, 16);
-        if (head.startsWith('/9j/'))
-            return 'image/jpeg';
-        if (head.startsWith('iVBOR'))
-            return 'image/png';
-        if (head.startsWith('R0lG'))
-            return 'image/gif';
-        if (head.startsWith('UklGR'))
-            return 'image/webp';
-        if (head.startsWith('Qk'))
-            return 'image/bmp';
-        return 'image/png';
-    }
-    function saveBase64Media(base64, mime, kind) {
-        const raw = String(base64 || '');
-        if (!raw)
-            return '';
-        const match = /^data:([^;,]+);base64,(.*)$/s.exec(raw);
-        const data = match ? match[2] : raw;
-        const contentType = match ? match[1] : (kind === 'voice' ? mime : guessImageMime(data));
-        try {
-            const [decoded, decodeErr] = base64Decode(data);
-            if (decodeErr || !decoded) {
-                console.warn('[对话缓存] base64 解码失败:', decodeErr);
-                return '';
-            }
-            const bytes = new Uint8Array(decoded);
-            const extMap = {
-                'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/bmp': 'bmp',
-                'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/flac': 'flac', 'audio/ogg': 'ogg',
-            };
-            const ext = extMap[contentType] || 'bin';
-            const name = `multimedia/${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-            const [, , error] = saveFile(name, true, bytes);
-            if (error) {
-                console.warn('[对话缓存] 媒体落盘失败:', error);
-                return raw.startsWith('data:') ? raw : '';
-            }
-            return FILE_READ_PATH + name;
-        }
-        catch (error) {
-            console.warn('[对话缓存] 媒体解码失败:', error);
-            return '';
-        }
-    }
-
-    function loadKnowledge(table) {
-        const [entries, error] = knowledgeLoad(table);
-        const map = new Map();
-        if (error || !Array.isArray(entries)) {
-            if (error)
-                console.error(`[知识库] 读取表 ${table} 失败:`, error);
-            return map;
-        }
-        for (const pair of entries) {
-            if (Array.isArray(pair) && pair.length >= 1 && typeof pair[0] === 'string') {
-                map.set(pair[0], typeof pair[1] === 'string' ? pair[1] : String(pair[1] ?? ''));
-            }
-        }
-        return map;
-    }
-    function saveKnowledge(table, map) {
-        const [ok, error] = knowledgeSave(table, [...map.entries()]);
-        if (error)
-            console.error(`[知识库] 写入表 ${table} 失败:`, error);
-        return !error && !!ok;
-    }
-    function getPromptFromKnowledge(key) {
-        try {
-            return loadKnowledge('video_summary').get(key) ?? null;
-        }
-        catch (error) {
-            console.error('[知识库] 读取视频摘要失败:', error);
-            return null;
-        }
-    }
-    function getPromptFromKnowledgeAny(keys) {
-        if (!keys.length)
-            return null;
-        try {
-            const map = loadKnowledge('video_summary');
-            for (const key of keys) {
-                const value = map.get(key);
-                if (typeof value === 'string' && value.trim())
-                    return value;
-            }
-            return null;
-        }
-        catch (error) {
-            console.error('[知识库] 读取媒体理解缓存失败:', error);
-            return null;
-        }
-    }
-    function savePromptToKnowledge(key, prompt) {
-        try {
-            return saveKnowledge('video_summary', loadKnowledge('video_summary').set(key, prompt));
-        }
-        catch (error) {
-            console.error('[知识库] 存储视频摘要失败:', error);
-            return false;
-        }
-    }
-
-    const CACHE_FILE = 'database/messages.json';
-    const MAX_CACHE_MESSAGES = 48;
-    let cachedMessages = [];
-    let lastSnapshot = '';
-    const animatedHistoryCache = new Map();
-    function newId$1() {
-        return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    }
-    function trimCache() {
-        if (cachedMessages.length > MAX_CACHE_MESSAGES)
-            cachedMessages = cachedMessages.slice(-MAX_CACHE_MESSAGES);
-    }
-    function repairHandleImageURL(source) {
-        const match = /^\/file\/read\/(@[DIVAT]\.\d{3,})\/?$/.exec(String(source || ''));
-        if (!match)
-            return source;
-        try {
-            const [resource, error] = resourceRead(match[1], 1);
-            if (!error && resource && !resource.lost && resource.blob_path)
-                return '/file/read/' + resource.blob_path;
-        }
-        catch (error) {
-            console.warn('[对话缓存] 句柄图片地址修复失败:', error);
-        }
-        return source;
-    }
-    function appendCachedMessage(record) {
-        cachedMessages.push(record);
-        trimCache();
-    }
-    function persistConversation() {
-        trimCache();
-        const text = JSON.stringify(cachedMessages);
-        if (text === lastSnapshot)
-            return;
-        try {
-            const [, , error] = saveFile(CACHE_FILE, true, text);
-            if (error) {
-                console.warn('[对话缓存] 写入失败:', error);
-                return;
-            }
-            lastSnapshot = text;
-        }
-        catch (error) {
-            console.warn('[对话缓存] 写入异常:', error);
-        }
-    }
-    function normalizeRecord(raw) {
-        if (!raw || (raw.role !== 'user' && raw.role !== 'assistant'))
-            return null;
-        let content = typeof raw.content === 'string' ? raw.content : '';
-        let sender = typeof raw.sender === 'string' ? raw.sender.trim() : '';
-        const parsed = splitUserPrefix(content);
-        if (!sender && parsed.sender)
-            sender = parsed.sender;
-        return {
-            id: typeof raw.id === 'string' && raw.id ? raw.id : newId$1(),
-            role: raw.role,
-            categories: Array.isArray(raw.categories) ? raw.categories.map(String) : ['text'],
-            content: content,
-            sender: sender || undefined,
-            attachments: Array.isArray(raw.attachments) ? raw.attachments : undefined,
-            imageSrc: typeof raw.imageSrc === 'string' ? raw.imageSrc : undefined,
-            imageLabel: typeof raw.imageLabel === 'string' ? raw.imageLabel : undefined,
-            audio: typeof raw.audio === 'string' ? raw.audio : undefined,
-            abcNotation: typeof raw.abcNotation === 'string' ? raw.abcNotation : undefined,
-            actionType: typeof raw.actionType === 'string' ? raw.actionType : undefined,
-            fileRef: typeof raw.fileRef === 'string' ? raw.fileRef : undefined,
-            fileLabel: typeof raw.fileLabel === 'string' ? raw.fileLabel : undefined,
-            timestamp: Number(raw.timestamp) || Date.now(),
-        };
-    }
-    function animatedSummaryKeys(source) {
-        const raw = String(source || '');
-        if (!raw)
-            return [];
-        const normalize = (value) => String(value || '').split('?')[0].split('#')[0];
-        const vision = toVisionSource(raw);
-        const keys = new Set();
-        for (const value of [raw, vision, normalize(raw), normalize(vision)]) {
-            if (value)
-                keys.add(value);
-        }
-        const path = normalize(raw);
-        const marker = path.indexOf('/multimedia/');
-        if (marker >= 0) {
-            const rel = path.slice(marker + 1);
-            keys.add(rel);
-            keys.add('/file/read/' + rel);
-            keys.add('/file/miniature/' + rel);
-            keys.add('file://' + rel);
-            try {
-                const base = url()[0];
-                if (base) {
-                    keys.add(base + '/file/read/' + rel);
-                    keys.add(base + '/file/miniature/' + rel);
-                }
-            }
-            catch { }
-        }
-        return [...keys];
-    }
-    function cachedToContext(record) {
-        if (record.role === 'user') {
-            const parsed = splitUserPrefix(record.content);
-            const sender = (record.sender || parsed.sender).trim();
-            const text = record.content;
-            const prefix = sender && !parsed.sender ? `[用户: ${sender}]: ` : '';
-            const blocks = [];
-            if (text)
-                blocks.push({ type: 'text', text: prefix + text });
-            else if (sender)
-                blocks.push({ type: 'text', text: `[用户: ${sender}]:` });
-            for (const attachment of record.attachments || []) {
-                if (attachment.type === 'image') {
-                    const vision = toVisionSource(attachment.src);
-                    if (!vision)
-                        continue;
-                    const [animated, animatedError] = animatedHistoryCache.has(attachment.src)
-                        ? [animatedHistoryCache.get(attachment.src) === true, null]
-                        : isAnimatedImage(attachment.src);
-                    if (!animatedError && !animatedHistoryCache.has(attachment.src)) {
-                        animatedHistoryCache.set(attachment.src, animated);
-                    }
-                    if (animatedError) {
-                        blocks.push({ type: 'text', text: `[历史图片不可用：${attachment.label || fileNameOf(attachment.src)}]` });
-                        continue;
-                    }
-                    if (animated) {
-                        const summary = (getPromptFromKnowledgeAny(animatedSummaryKeys(attachment.src)) || '').trim();
-                        const text = summary
-                            ? `[动态图: ${summary.length > 1200 ? summary.slice(0, 1200) + '…' : summary}]`
-                            : '[动态图]';
-                        blocks.push({ type: 'text', text });
-                        continue;
-                    }
-                    blocks.push({ type: 'image_url', image_url: { url: vision } });
-                }
-                else if (attachment.type === 'video') {
-                    const display = toDisplaySource(attachment.src);
-                    if (display.startsWith('/file/read/'))
-                        blocks.push({ type: 'video_url', video_url: { url: url()[0] + display } });
-                }
-            }
-            if (!blocks.length)
-                return text ? { role: 'user', content: text } : null;
-            if (blocks.length === 1 && blocks[0].type === 'text')
-                return { role: 'user', content: blocks[0].text };
-            return { role: 'user', content: blocks };
-        }
-        if (record.categories.includes('image') || record.categories.includes('action') || record.abcNotation)
-            return null;
-        const text = String(record.content || '').trim();
-        if (!text)
-            return null;
-        return { role: 'assistant', content: text };
-    }
-    function initConversationCache(loadContext) {
-        try {
-            const [content, error] = readTextFile(CACHE_FILE);
-            if (error || !content)
-                return;
-            const parsed = JSON.parse(content);
-            if (!Array.isArray(parsed))
-                return;
-            cachedMessages = parsed
-                .map(normalizeRecord)
-                .filter((item) => !!item)
-                .slice(-MAX_CACHE_MESSAGES);
-            let migrated = false;
-            for (const record of cachedMessages) {
-                if (record.imageSrc) {
-                    const fixed = repairHandleImageURL(record.imageSrc);
-                    if (fixed !== record.imageSrc) {
-                        record.imageSrc = fixed;
-                        migrated = true;
-                    }
-                }
-                for (const attachment of record.attachments || []) {
-                    if (attachment.type !== 'image' || !attachment.src)
-                        continue;
-                    const fixed = repairHandleImageURL(attachment.src);
-                    if (fixed !== attachment.src) {
-                        attachment.src = fixed;
-                        migrated = true;
-                    }
-                }
-                if (record.role === 'assistant' && record.imageSrc && record.imageSrc.startsWith('data:image/')) {
-                    const saved = saveBase64Media(record.imageSrc, 'image/jpeg', 'image');
-                    if (saved) {
-                        record.imageSrc = saved;
-                        migrated = true;
-                    }
-                }
-            }
-            lastSnapshot = migrated ? '' : JSON.stringify(cachedMessages);
-            if (migrated)
-                persistConversation();
-            const context = cachedMessages
-                .map(cachedToContext)
-                .filter((item) => !!item);
-            if (context.length)
-                loadContext(context);
-            console.log(`[对话缓存] 已载入 ${context.length} 条近期记忆`);
-        }
-        catch (error) {
-            console.warn('[对话缓存] 载入失败:', error);
-        }
-    }
-
-    function newId() {
-        return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    }
-    function buildUserRecord(content) {
-        const attachments = [];
-        const texts = [];
-        let sender = '';
-        let hasImage = false;
-        let hasVoice = false;
-        const pushAttachment = (type, source, label) => {
-            const src = toDisplaySource(source);
-            if (!src)
-                return;
-            attachments.push({ type, src, label: label || fileNameOf(src) });
-        };
-        const pushText = (raw) => {
-            const parsed = splitUserPrefix(raw);
-            if (!sender && parsed.sender)
-                sender = parsed.sender;
-            if (!parsed.text || parsed.text === '[视频]' || parsed.text === '[语音]')
-                return;
-            texts.push(raw);
-        };
-        if (typeof content === 'string')
-            pushText(content);
-        else if (Array.isArray(content)) {
-            for (const item of content) {
-                if (!item)
-                    continue;
-                if (item.type === 'text') {
-                    pushText(String(item.text || ''));
-                }
-                else if (item.type === 'image_url') {
-                    pushAttachment('image', item.image_url?.url || '');
-                    hasImage = true;
-                }
-                else if (item.type === 'video_url') {
-                    pushAttachment('video', item.video_url?.url || '');
-                    hasImage = true;
-                }
-                else if (item.type === 'input_audio') {
-                    const src = saveBase64Media(item.input_audio?.data || '', `audio/${item.input_audio?.format || 'wav'}`, 'voice');
-                    if (src) {
-                        attachments.push({ type: 'audio', src, label: '语音' });
-                        hasVoice = true;
-                    }
-                }
-                else if (item.type === 'audio_url') {
-                    pushAttachment('audio', item.audio_url?.url || '', '语音');
-                    hasVoice = true;
-                }
-            }
-        }
-        const text = texts.join('\n').trim();
-        if (!text && !attachments.length)
-            return null;
-        const categories = [];
-        if (text)
-            categories.push('text');
-        if (hasImage)
-            categories.push('image');
-        if (hasVoice)
-            categories.push('voice');
-        if (/@[DIVAT]\.\d{3,}/.test(text))
-            categories.push('file');
-        return {
-            id: newId(),
-            role: 'user',
-            categories: categories.length ? categories : ['text'],
-            content: text,
-            sender: sender || undefined,
-            attachments: attachments.length ? attachments : undefined,
-            timestamp: Date.now(),
-        };
-    }
-    function appendUserMessage(content) {
-        const record = buildUserRecord(content);
-        if (!record)
-            return;
-        appendCachedMessage(record);
-        persistConversation();
-    }
-    function recordAssistantContext(type, content, audio) {
-        if (type === 'music_audio')
-            return;
-        const base = {
-            id: newId(),
-            role: 'assistant',
-            categories: ['text'],
-            content: String(content || ''),
-            timestamp: Date.now(),
-        };
-        if (type === 'music') {
-            base.categories = ['music'];
-            base.content = '';
-            base.abcNotation = String(content || '');
-        }
-        else if (type === 'action') {
-            base.categories = ['action'];
-            base.actionType = type;
-        }
-        else if (type === 'text') {
-            if (audio) {
-                base.categories = ['text', 'voice'];
-                base.audio = audio;
-            }
-            const notice = /^\[已收录\]\s*(@[DIVAT]\.\d{3,})\s*(.*)$/.exec(base.content.trim());
-            if (notice) {
-                base.categories = ['text', 'file'];
-                base.fileRef = notice[1];
-                base.fileLabel = notice[2] || notice[1];
-            }
-        }
-        else {
-            base.categories = [type];
-        }
-        appendCachedMessage(base);
-    }
-    function pushAssistantContext(type, content, audio, auto) {
-        const ok = pushContext(type, content, audio, auto);
-        recordAssistantContext(type, content, audio);
-        persistConversation();
-        return ok;
-    }
-    function pushAssistantImage(images, isSticker, sourcePaths) {
-        const canonical = pushImage(images, isSticker);
-        const list = Array.isArray(canonical) && canonical.length > 0 ? canonical : images;
-        (list || []).forEach((image, index) => {
-            if (!image)
-                return;
-            const src = toDisplaySource(image);
-            if (!src || src.startsWith('data:') || src.startsWith('blob:')) {
-                console.warn('[对话缓存] 图片不是 URL，已跳过近期记忆写入');
-                return;
-            }
-            appendCachedMessage({
-                id: newId(),
-                role: 'assistant',
-                categories: ['image'],
-                content: '',
-                imageSrc: src,
-                imageLabel: isSticker ? '表情包' : '图片',
-                timestamp: Date.now(),
-            });
-        });
-        persistConversation();
-        return list;
-    }
-
-    const screenshotTools = [
-        {
-            type: "function",
-            function: {
-                name: "screenshot",
-                description: "截取当前屏幕画面。默认优先截取当前焦点应用窗口，无法识别焦点窗口时自动降级为全屏截图。支持指定显示器、全屏、绝对坐标区域，以及窗口内精准子区域（偏移量+区域大小）。截取的图片会自动缩放处理并展示给用户。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        mode: {
-                            type: "string",
-                            enum: ["auto", "window", "fullscreen", "display", "region"],
-                            description: "截图模式：auto=焦点窗口优先（默认，失败降级全屏）；window=强制焦点窗口；fullscreen=全屏；display=指定显示器；region=绝对坐标区域"
-                        },
-                        display_index: {
-                            type: "number",
-                            description: "显示器索引（mode=display 时生效，-1 表示全部）"
-                        },
-                        offset_x: {
-                            type: "number",
-                            description: "窗口相对 X 偏移（mode=auto/window，配合 width/height 使用，缺省为 0）"
-                        },
-                        offset_y: {
-                            type: "number",
-                            description: "窗口相对 Y 偏移（mode=auto/window，配合 width/height 使用，缺省为 0）"
-                        },
-                        width: {
-                            type: "number",
-                            description: "窗口相对区域宽度（>0 且 height>0 时启用精准区域覆盖）"
-                        },
-                        height: {
-                            type: "number",
-                            description: "窗口相对区域高度"
-                        },
-                        region_x: {
-                            type: "number",
-                            description: "绝对屏幕区域 X 坐标（mode=region）"
-                        },
-                        region_y: {
-                            type: "number",
-                            description: "绝对屏幕区域 Y 坐标（mode=region）"
-                        },
-                        region_w: {
-                            type: "number",
-                            description: "绝对屏幕区域宽度（mode=region）"
-                        },
-                        region_h: {
-                            type: "number",
-                            description: "绝对屏幕区域高度（mode=region）"
-                        },
-                        format: {
-                            type: "string",
-                            description: "输出图片格式：'png' 或 'jpg'，默认为 'png'",
-                            enum: ["png", "jpg"]
-                        }
-                    },
-                    required: []
-                }
-            }
-        }
-    ];
-    async function handleScreenshot(args) {
-        console.log(`========== 开始处理截图工具调用 ==========`);
-        console.log(`原始参数: ${JSON.stringify(args)}`);
-        const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
-        console.log(`参数解析完成: ${JSON.stringify(parsed)}`);
-        console.log(`准备执行截图操作...`);
-        const [results, captureErr] = screenshotCapture(parsed);
-        if (captureErr) {
-            console.error(`截图失败: ${captureErr.message || String(captureErr)}`);
-            console.log(`========== 截图工具调用结束(失败) ==========`);
-            return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
-        }
-        if (!results || results.length === 0) {
-            console.error(`截图失败: 未获取到截图数据`);
-            console.log(`========== 截图工具调用结束(失败) ==========`);
-            return ['截图失败：未获取到截图数据', ''];
-        }
-        const firstFrame = results[0];
-        console.log(`截图处理成功: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
-        const urls = results.map((r, index) => persistScreenshot(r, index)).filter(Boolean);
-        if (urls.length > 0)
-            pushAssistantImage(urls);
-        console.log(`图片已推送: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
-        const sizeInfo = `${firstFrame.width}x${firstFrame.height}`;
-        const frameInfo = results.length > 1 ? `（共${results.length}帧）` : '';
-        const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}）${frameInfo}，图片已展示给用户。`;
-        console.log(`返回响应: ${sizeInfo}`);
-        console.log(`========== 截图工具调用结束(成功) ==========`);
-        return [textResponse, firstFrame.base64];
-    }
-    function persistScreenshot(frame, index) {
-        try {
-            const base64 = String(frame.base64 || '');
-            const payload = base64.includes('base64,') ? base64.split('base64,')[1] : base64;
-            if (!payload)
-                return '';
-            const [decoded, decodeErr] = base64Decode(payload);
-            if (decodeErr || !decoded) {
-                console.warn('[截图] base64 解码失败:', decodeErr);
-                return '';
-            }
-            const bytes = new Uint8Array(decoded);
-            const ext = frame.format === 'jpg' || frame.format === 'jpeg' ? 'jpg' : 'png';
-            const name = `multimedia/screenshot_${Date.now()}_${index}.${ext}`;
-            const [, path, error] = saveFile(name, true, bytes);
-            if (error) {
-                console.warn('[截图] 落盘失败:', error);
-                return '';
-            }
-            return localPathToReadURL(path);
-        }
-        catch (error) {
-            console.warn('[截图] 落盘异常:', error);
-            return '';
-        }
-    }
-    GlobalConfig.LTPfunction.set('screenshot', handleScreenshot);
 
     const IMAGE_KEEP_CHARS = 0;
     const DUMP_MAX_CHARS = 32 * 1024 * 1024;
@@ -3015,6 +2401,533 @@ var lunarBundle = (function (exports) {
         }
     }
 
+    const VISION_READ_PATH = '/file/miniature/';
+    const FILE_READ_PATH = '/file/read/';
+    function pathPartOf(source) {
+        return String(source || '').split('?')[0].split('#')[0];
+    }
+    function toDisplaySource(source) {
+        const raw = String(source || '');
+        if (!raw)
+            return '';
+        if (raw.startsWith('data:') || raw.startsWith('blob:'))
+            return raw;
+        const path = pathPartOf(raw);
+        const localIndex = path.indexOf(FILE_READ_PATH);
+        if (localIndex >= 0)
+            return path.slice(localIndex);
+        const visionIndex = path.indexOf(VISION_READ_PATH);
+        if (visionIndex >= 0) {
+            return FILE_READ_PATH + path.slice(visionIndex + VISION_READ_PATH.length);
+        }
+        if (path.startsWith('multimedia/'))
+            return FILE_READ_PATH + path;
+        return raw;
+    }
+    function toVisionSource(source) {
+        const raw = String(source || '');
+        if (!raw || raw.startsWith('data:') || raw.startsWith('blob:'))
+            return '';
+        const path = pathPartOf(raw);
+        const visionIndex = path.indexOf(VISION_READ_PATH);
+        if (visionIndex >= 0)
+            return url()[0] + path.slice(visionIndex);
+        const readIndex = path.indexOf(FILE_READ_PATH);
+        if (readIndex >= 0) {
+            const rel = path.slice(readIndex + FILE_READ_PATH.length);
+            if (!rel.startsWith('multimedia/'))
+                return '';
+            return `${url()[0]}${VISION_READ_PATH}${rel}`;
+        }
+        if (path.startsWith('multimedia/'))
+            return `${url()[0]}${VISION_READ_PATH}${path}`;
+        return '';
+    }
+    function localPathToReadURL(source) {
+        if (!source)
+            return '';
+        const normalized = String(source).replace(/\\/g, '/').split('?')[0];
+        const marker = normalized.toLowerCase().lastIndexOf('/multimedia/');
+        const rel = marker >= 0
+            ? normalized.slice(marker + 1)
+            : (normalized.toLowerCase().startsWith('multimedia/') ? normalized : '');
+        return rel ? FILE_READ_PATH + rel : '';
+    }
+    function fileNameOf(source) {
+        const path = pathPartOf(String(source || ''));
+        const name = path.slice(path.lastIndexOf('/') + 1);
+        return name || '文件';
+    }
+    function splitUserPrefix(text) {
+        const raw = String(text || '');
+        const match = /^\[用户:\s*([^\]]*)\]\s*[:：]\s*/u.exec(raw);
+        if (!match)
+            return { sender: '', text: raw };
+        return { sender: match[1].trim(), text: raw.slice(match[0].length) };
+    }
+    function guessImageMime(base64) {
+        const head = String(base64 || '').slice(0, 16);
+        if (head.startsWith('/9j/'))
+            return 'image/jpeg';
+        if (head.startsWith('iVBOR'))
+            return 'image/png';
+        if (head.startsWith('R0lG'))
+            return 'image/gif';
+        if (head.startsWith('UklGR'))
+            return 'image/webp';
+        if (head.startsWith('Qk'))
+            return 'image/bmp';
+        return 'image/png';
+    }
+    function saveBase64Media(base64, mime, kind) {
+        const raw = String(base64 || '');
+        if (!raw)
+            return '';
+        const match = /^data:([^;,]+);base64,(.*)$/s.exec(raw);
+        const data = match ? match[2] : raw;
+        const contentType = match ? match[1] : (kind === 'voice' ? mime : guessImageMime(data));
+        try {
+            const [decoded, decodeErr] = base64Decode(data);
+            if (decodeErr || !decoded) {
+                console.warn('[对话缓存] base64 解码失败:', decodeErr);
+                return '';
+            }
+            const bytes = new Uint8Array(decoded);
+            const extMap = {
+                'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/bmp': 'bmp',
+                'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/flac': 'flac', 'audio/ogg': 'ogg',
+            };
+            const ext = extMap[contentType] || 'bin';
+            const name = `multimedia/${kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+            const [, , error] = saveFile(name, true, bytes);
+            if (error) {
+                console.warn('[对话缓存] 媒体落盘失败:', error);
+                return raw.startsWith('data:') ? raw : '';
+            }
+            return FILE_READ_PATH + name;
+        }
+        catch (error) {
+            console.warn('[对话缓存] 媒体解码失败:', error);
+            return '';
+        }
+    }
+
+    function loadKnowledge(table) {
+        const [entries, error] = knowledgeLoad(table);
+        const map = new Map();
+        if (error || !Array.isArray(entries)) {
+            if (error)
+                console.error(`[知识库] 读取表 ${table} 失败:`, error);
+            return map;
+        }
+        for (const pair of entries) {
+            if (Array.isArray(pair) && pair.length >= 1 && typeof pair[0] === 'string') {
+                map.set(pair[0], typeof pair[1] === 'string' ? pair[1] : String(pair[1] ?? ''));
+            }
+        }
+        return map;
+    }
+    function saveKnowledge(table, map) {
+        const [ok, error] = knowledgeSave(table, [...map.entries()]);
+        if (error)
+            console.error(`[知识库] 写入表 ${table} 失败:`, error);
+        return !error && !!ok;
+    }
+    function getPromptFromKnowledge(key) {
+        try {
+            return loadKnowledge('video_summary').get(key) ?? null;
+        }
+        catch (error) {
+            console.error('[知识库] 读取视频摘要失败:', error);
+            return null;
+        }
+    }
+    function getPromptFromKnowledgeAny(keys) {
+        if (!keys.length)
+            return null;
+        try {
+            const map = loadKnowledge('video_summary');
+            for (const key of keys) {
+                const value = map.get(key);
+                if (typeof value === 'string' && value.trim())
+                    return value;
+            }
+            return null;
+        }
+        catch (error) {
+            console.error('[知识库] 读取媒体理解缓存失败:', error);
+            return null;
+        }
+    }
+    function savePromptToKnowledge(key, prompt) {
+        try {
+            return saveKnowledge('video_summary', loadKnowledge('video_summary').set(key, prompt));
+        }
+        catch (error) {
+            console.error('[知识库] 存储视频摘要失败:', error);
+            return false;
+        }
+    }
+
+    const CACHE_FILE = 'database/messages.json';
+    const MAX_CACHE_MESSAGES = 48;
+    let cachedMessages = [];
+    let lastSnapshot = '';
+    const animatedHistoryCache = new Map();
+    function newId$1() {
+        return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+    function trimCache() {
+        if (cachedMessages.length > MAX_CACHE_MESSAGES)
+            cachedMessages = cachedMessages.slice(-MAX_CACHE_MESSAGES);
+    }
+    function repairHandleImageURL(source) {
+        const match = /^\/file\/read\/(@[DIVAT]\.\d{3,})\/?$/.exec(String(source || ''));
+        if (!match)
+            return source;
+        try {
+            const [resource, error] = resourceRead(match[1], 1);
+            if (!error && resource && !resource.lost && resource.blob_path)
+                return '/file/read/' + resource.blob_path;
+        }
+        catch (error) {
+            console.warn('[对话缓存] 句柄图片地址修复失败:', error);
+        }
+        return source;
+    }
+    function appendCachedMessage(record) {
+        cachedMessages.push(record);
+        trimCache();
+    }
+    function persistConversation() {
+        trimCache();
+        const text = JSON.stringify(cachedMessages);
+        if (text === lastSnapshot)
+            return;
+        try {
+            const [, , error] = saveFile(CACHE_FILE, true, text);
+            if (error) {
+                console.warn('[对话缓存] 写入失败:', error);
+                return;
+            }
+            lastSnapshot = text;
+        }
+        catch (error) {
+            console.warn('[对话缓存] 写入异常:', error);
+        }
+    }
+    function normalizeRecord(raw) {
+        if (!raw || (raw.role !== 'user' && raw.role !== 'assistant'))
+            return null;
+        let content = typeof raw.content === 'string' ? raw.content : '';
+        let sender = typeof raw.sender === 'string' ? raw.sender.trim() : '';
+        const parsed = splitUserPrefix(content);
+        if (!sender && parsed.sender)
+            sender = parsed.sender;
+        return {
+            id: typeof raw.id === 'string' && raw.id ? raw.id : newId$1(),
+            role: raw.role,
+            categories: Array.isArray(raw.categories) ? raw.categories.map(String) : ['text'],
+            content: content,
+            sender: sender || undefined,
+            attachments: Array.isArray(raw.attachments) ? raw.attachments : undefined,
+            imageSrc: typeof raw.imageSrc === 'string' ? raw.imageSrc : undefined,
+            imageLabel: typeof raw.imageLabel === 'string' ? raw.imageLabel : undefined,
+            audio: typeof raw.audio === 'string' ? raw.audio : undefined,
+            abcNotation: typeof raw.abcNotation === 'string' ? raw.abcNotation : undefined,
+            actionType: typeof raw.actionType === 'string' ? raw.actionType : undefined,
+            fileRef: typeof raw.fileRef === 'string' ? raw.fileRef : undefined,
+            fileLabel: typeof raw.fileLabel === 'string' ? raw.fileLabel : undefined,
+            timestamp: Number(raw.timestamp) || Date.now(),
+        };
+    }
+    function animatedSummaryKeys(source) {
+        const raw = String(source || '');
+        if (!raw)
+            return [];
+        const normalize = (value) => String(value || '').split('?')[0].split('#')[0];
+        const vision = toVisionSource(raw);
+        const keys = new Set();
+        for (const value of [raw, vision, normalize(raw), normalize(vision)]) {
+            if (value)
+                keys.add(value);
+        }
+        const path = normalize(raw);
+        const marker = path.indexOf('/multimedia/');
+        if (marker >= 0) {
+            const rel = path.slice(marker + 1);
+            keys.add(rel);
+            keys.add('/file/read/' + rel);
+            keys.add('/file/miniature/' + rel);
+            keys.add('file://' + rel);
+            try {
+                const base = url()[0];
+                if (base) {
+                    keys.add(base + '/file/read/' + rel);
+                    keys.add(base + '/file/miniature/' + rel);
+                }
+            }
+            catch { }
+        }
+        return [...keys];
+    }
+    function cachedToContext(record) {
+        if (record.role === 'user') {
+            const parsed = splitUserPrefix(record.content);
+            const sender = (record.sender || parsed.sender).trim();
+            const text = record.content;
+            const prefix = sender && !parsed.sender ? `[用户: ${sender}]: ` : '';
+            const blocks = [];
+            if (text)
+                blocks.push({ type: 'text', text: prefix + text });
+            else if (sender)
+                blocks.push({ type: 'text', text: `[用户: ${sender}]:` });
+            for (const attachment of record.attachments || []) {
+                if (attachment.type === 'image') {
+                    const vision = toVisionSource(attachment.src);
+                    if (!vision)
+                        continue;
+                    const [animated, animatedError] = animatedHistoryCache.has(attachment.src)
+                        ? [animatedHistoryCache.get(attachment.src) === true, null]
+                        : isAnimatedImage(attachment.src);
+                    if (!animatedError && !animatedHistoryCache.has(attachment.src)) {
+                        animatedHistoryCache.set(attachment.src, animated);
+                    }
+                    if (animatedError) {
+                        blocks.push({ type: 'text', text: `[历史图片不可用：${attachment.label || fileNameOf(attachment.src)}]` });
+                        continue;
+                    }
+                    if (animated) {
+                        const summary = (getPromptFromKnowledgeAny(animatedSummaryKeys(attachment.src)) || '').trim();
+                        const text = summary
+                            ? `[动态图: ${summary.length > 1200 ? summary.slice(0, 1200) + '…' : summary}]`
+                            : '[动态图]';
+                        blocks.push({ type: 'text', text });
+                        continue;
+                    }
+                    blocks.push({ type: 'image_url', image_url: { url: vision } });
+                }
+                else if (attachment.type === 'video') {
+                    const display = toDisplaySource(attachment.src);
+                    if (display.startsWith('/file/read/'))
+                        blocks.push({ type: 'video_url', video_url: { url: url()[0] + display } });
+                }
+            }
+            if (!blocks.length)
+                return text ? { role: 'user', content: text } : null;
+            if (blocks.length === 1 && blocks[0].type === 'text')
+                return { role: 'user', content: blocks[0].text };
+            return { role: 'user', content: blocks };
+        }
+        if (record.categories.includes('image') || record.categories.includes('action') || record.abcNotation)
+            return null;
+        const text = String(record.content || '').trim();
+        if (!text)
+            return null;
+        return { role: 'assistant', content: text };
+    }
+    function initConversationCache(loadContext) {
+        try {
+            const [content, error] = readTextFile(CACHE_FILE);
+            if (error || !content)
+                return;
+            const parsed = JSON.parse(content);
+            if (!Array.isArray(parsed))
+                return;
+            cachedMessages = parsed
+                .map(normalizeRecord)
+                .filter((item) => !!item)
+                .slice(-MAX_CACHE_MESSAGES);
+            let migrated = false;
+            for (const record of cachedMessages) {
+                if (record.imageSrc) {
+                    const fixed = repairHandleImageURL(record.imageSrc);
+                    if (fixed !== record.imageSrc) {
+                        record.imageSrc = fixed;
+                        migrated = true;
+                    }
+                }
+                for (const attachment of record.attachments || []) {
+                    if (attachment.type !== 'image' || !attachment.src)
+                        continue;
+                    const fixed = repairHandleImageURL(attachment.src);
+                    if (fixed !== attachment.src) {
+                        attachment.src = fixed;
+                        migrated = true;
+                    }
+                }
+                if (record.role === 'assistant' && record.imageSrc && record.imageSrc.startsWith('data:image/')) {
+                    const saved = saveBase64Media(record.imageSrc, 'image/jpeg', 'image');
+                    if (saved) {
+                        record.imageSrc = saved;
+                        migrated = true;
+                    }
+                }
+            }
+            lastSnapshot = migrated ? '' : JSON.stringify(cachedMessages);
+            if (migrated)
+                persistConversation();
+            const context = cachedMessages
+                .map(cachedToContext)
+                .filter((item) => !!item);
+            if (context.length)
+                loadContext(context);
+            console.log(`[对话缓存] 已载入 ${context.length} 条近期记忆`);
+        }
+        catch (error) {
+            console.warn('[对话缓存] 载入失败:', error);
+        }
+    }
+
+    function newId() {
+        return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+    function buildUserRecord(content) {
+        const attachments = [];
+        const texts = [];
+        let sender = '';
+        let hasImage = false;
+        let hasVoice = false;
+        const pushAttachment = (type, source, label) => {
+            const src = toDisplaySource(source);
+            if (!src)
+                return;
+            attachments.push({ type, src, label: label || fileNameOf(src) });
+        };
+        const pushText = (raw) => {
+            const parsed = splitUserPrefix(raw);
+            if (!sender && parsed.sender)
+                sender = parsed.sender;
+            if (!parsed.text || parsed.text === '[视频]' || parsed.text === '[语音]')
+                return;
+            texts.push(raw);
+        };
+        if (typeof content === 'string')
+            pushText(content);
+        else if (Array.isArray(content)) {
+            for (const item of content) {
+                if (!item)
+                    continue;
+                if (item.type === 'text') {
+                    pushText(String(item.text || ''));
+                }
+                else if (item.type === 'image_url') {
+                    pushAttachment('image', item.image_url?.url || '');
+                    hasImage = true;
+                }
+                else if (item.type === 'video_url') {
+                    pushAttachment('video', item.video_url?.url || '');
+                    hasImage = true;
+                }
+                else if (item.type === 'input_audio') {
+                    const src = saveBase64Media(item.input_audio?.data || '', `audio/${item.input_audio?.format || 'wav'}`, 'voice');
+                    if (src) {
+                        attachments.push({ type: 'audio', src, label: '语音' });
+                        hasVoice = true;
+                    }
+                }
+                else if (item.type === 'audio_url') {
+                    pushAttachment('audio', item.audio_url?.url || '', '语音');
+                    hasVoice = true;
+                }
+            }
+        }
+        const text = texts.join('\n').trim();
+        if (!text && !attachments.length)
+            return null;
+        const categories = [];
+        if (text)
+            categories.push('text');
+        if (hasImage)
+            categories.push('image');
+        if (hasVoice)
+            categories.push('voice');
+        if (/@[DIVAT]\.\d{3,}/.test(text))
+            categories.push('file');
+        return {
+            id: newId(),
+            role: 'user',
+            categories: categories.length ? categories : ['text'],
+            content: text,
+            sender: sender || undefined,
+            attachments: attachments.length ? attachments : undefined,
+            timestamp: Date.now(),
+        };
+    }
+    function appendUserMessage(content) {
+        const record = buildUserRecord(content);
+        if (!record)
+            return;
+        appendCachedMessage(record);
+        persistConversation();
+    }
+    function recordAssistantContext(type, content, audio) {
+        if (type === 'music_audio')
+            return;
+        const base = {
+            id: newId(),
+            role: 'assistant',
+            categories: ['text'],
+            content: String(content || ''),
+            timestamp: Date.now(),
+        };
+        if (type === 'music') {
+            base.categories = ['music'];
+            base.content = '';
+            base.abcNotation = String(content || '');
+        }
+        else if (type === 'action') {
+            base.categories = ['action'];
+            base.actionType = type;
+        }
+        else if (type === 'text') {
+            if (audio) {
+                base.categories = ['text', 'voice'];
+                base.audio = audio;
+            }
+            const notice = /^\[已收录\]\s*(@[DIVAT]\.\d{3,})\s*(.*)$/.exec(base.content.trim());
+            if (notice) {
+                base.categories = ['text', 'file'];
+                base.fileRef = notice[1];
+                base.fileLabel = notice[2] || notice[1];
+            }
+        }
+        else {
+            base.categories = [type];
+        }
+        appendCachedMessage(base);
+    }
+    function pushAssistantContext(type, content, audio, auto) {
+        const ok = pushContext(type, content, audio, auto);
+        recordAssistantContext(type, content, audio);
+        persistConversation();
+        return ok;
+    }
+    function pushAssistantImage(images, isSticker, sourcePaths) {
+        const canonical = pushImage(images, isSticker);
+        const list = Array.isArray(canonical) && canonical.length > 0 ? canonical : images;
+        (list || []).forEach((image, index) => {
+            if (!image)
+                return;
+            const src = toDisplaySource(image);
+            if (!src || src.startsWith('data:') || src.startsWith('blob:')) {
+                console.warn('[对话缓存] 图片不是 URL，已跳过近期记忆写入');
+                return;
+            }
+            appendCachedMessage({
+                id: newId(),
+                role: 'assistant',
+                categories: ['image'],
+                content: '',
+                imageSrc: src,
+                imageLabel: isSticker ? '表情包' : '图片',
+                timestamp: Date.now(),
+            });
+        });
+        persistConversation();
+        return list;
+    }
+
     function handleCreateCharacter(host, args) {
         const name = String(args.name || '').trim();
         const appearance = String(args.appearance || '').trim();
@@ -3531,6 +3444,321 @@ var lunarBundle = (function (exports) {
                 meter: draft.meter,
                 abcLength: draft.melodyBars,
             };
+        }
+    }
+
+    const screenshoterTools = [
+        {
+            type: 'function',
+            function: {
+                name: 'list_capture_targets',
+                description: '列出当前所有显示器与可见窗口（标题、进程、窗口矩形、客户区尺寸、是否最小化、是否焦点）。当用户说的「那个窗口」不明确、或按标题截图前需要确认目标时先调用它。',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        include_minimized: {
+                            type: 'boolean',
+                            description: '是否也列出已最小化的窗口（最小化窗口无法截图，仅用于告知用户需要先恢复），默认 false'
+                        }
+                    },
+                    required: []
+                }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'capture_screen',
+                description: [
+                    '执行一次截图并立即展示给用户。按用户要求选择模式：',
+                    'mode=fullscreen 截全部屏幕（多显示器会拼成一张）；',
+                    'mode=display 截单个显示器（display_index）；',
+                    'mode=window 截指定窗口：window_title 按标题包含匹配，window_handle 按句柄精确匹配，两者都不填则截当前焦点窗口；被其他窗口遮挡但不处于最小化的窗口同样能截到；',
+                    'mode=region 截绝对屏幕坐标区域（region_x/region_y/region_w/region_h）；',
+                    '在 mode=window 下再给 width/height 可只截窗口内相对区域（offset_x/offset_y 为窗口左上角偏移，client_area=true 时以客户区左上角为原点）。',
+                    'mode=auto 为默认：截焦点窗口，失败时自动降级为全屏。'
+                ].join('\n'),
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        mode: {
+                            type: 'string',
+                            enum: ['auto', 'window', 'fullscreen', 'display', 'region'],
+                            description: '截图模式，默认 auto'
+                        },
+                        window_title: {
+                            type: 'string',
+                            description: '目标窗口标题关键字（包含匹配，忽略大小写）。用于截不在前台的指定窗口'
+                        },
+                        window_handle: {
+                            type: 'number',
+                            description: '目标窗口句柄（优先于 window_title）。来自 list_capture_targets 的 handle'
+                        },
+                        client_area: {
+                            type: 'boolean',
+                            description: '是否只截客户区（去掉标题栏与边框），默认 false；截网页/应用内容时通常设为 true'
+                        },
+                        display_index: {
+                            type: 'number',
+                            description: '显示器索引（mode=display 时生效）；-1 表示全部显示器拼接'
+                        },
+                        offset_x: {
+                            type: 'number',
+                            description: '窗口内相对 X 偏移（配合 width/height）'
+                        },
+                        offset_y: {
+                            type: 'number',
+                            description: '窗口内相对 Y 偏移（配合 width/height）'
+                        },
+                        width: {
+                            type: 'number',
+                            description: '窗口内区域宽度（>0 且 height>0 时只截该子区域）'
+                        },
+                        height: {
+                            type: 'number',
+                            description: '窗口内区域高度'
+                        },
+                        region_x: {
+                            type: 'number',
+                            description: '绝对屏幕区域 X（mode=region）'
+                        },
+                        region_y: {
+                            type: 'number',
+                            description: '绝对屏幕区域 Y（mode=region）'
+                        },
+                        region_w: {
+                            type: 'number',
+                            description: '绝对屏幕区域宽度（mode=region）'
+                        },
+                        region_h: {
+                            type: 'number',
+                            description: '绝对屏幕区域高度（mode=region）'
+                        },
+                        format: {
+                            type: 'string',
+                            enum: ['png', 'jpg'],
+                            description: '输出格式，默认 png。内容型截图（文字/界面）建议 png'
+                        },
+                        note: {
+                            type: 'string',
+                            description: '本次截图的一句话说明（如「Chrome 主窗口」「任务栏右下角」），会写进给用户的汇报'
+                        }
+                    },
+                    required: []
+                }
+            }
+        }
+    ];
+
+    const MAX_WINDOW_LINES = 40;
+    function parseArgs(args) {
+        if (!args)
+            return {};
+        if (typeof args === 'string') {
+            try {
+                const parsed = JSON.parse(args);
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            }
+            catch {
+                return {};
+            }
+        }
+        return args;
+    }
+    function formatWindowLine(item) {
+        const flags = [item.minimized ? '最小化' : '', item.foreground ? '焦点' : ''].filter(Boolean).join('｜');
+        const process = item.process ? `（${item.process}）` : '';
+        return `- handle=${item.handle}｜${item.title}${process}｜窗口 ${item.width}x${item.height}｜客户区 ${item.client_w}x${item.client_h}`
+            + (flags ? `｜${flags}` : '');
+    }
+    function describeCaptureTargets(args) {
+        const parsed = parseArgs(args);
+        const includeMinimized = parsed.include_minimized === true;
+        const [displays, displayErr] = screenshotGetDisplays();
+        const [windows, windowErr] = screenshotListWindows();
+        const sections = [];
+        if (displayErr)
+            sections.push(`显示器枚举失败：${displayErr.message || String(displayErr)}`);
+        else if (displays && displays.length > 0) {
+            sections.push(`显示器 ${displays.length} 个：`);
+            displays.forEach(d => {
+                sections.push(`- index=${d.index}｜${d.width}x${d.height}｜屏幕原点 (${d.x}, ${d.y})`);
+            });
+        }
+        if (windowErr)
+            sections.push(`窗口枚举失败：${windowErr.message || String(windowErr)}`);
+        else {
+            const list = (windows || []).filter(item => includeMinimized || !item.minimized);
+            if (list.length === 0)
+                sections.push('没有可截图的可见窗口（可用 mode=fullscreen 截整屏）。');
+            else {
+                const shown = list.slice(0, MAX_WINDOW_LINES);
+                sections.push(`可见窗口 ${list.length} 个：`);
+                shown.forEach(item => sections.push(formatWindowLine(item)));
+                if (list.length > shown.length)
+                    sections.push(`……其余 ${list.length - shown.length} 个窗口未列出。`);
+            }
+        }
+        sections.push('提示：按标题截图用 window_title（包含匹配），需要精确锁定用 window_handle；最小化窗口需先恢复才能截取。');
+        return sections.join('\n');
+    }
+    function buildCaptureParams(parsed) {
+        const params = {};
+        const numberKeys = [
+            'display_index', 'window_handle', 'offset_x', 'offset_y', 'width', 'height',
+            'region_x', 'region_y', 'region_w', 'region_h'
+        ];
+        numberKeys.forEach(key => {
+            const value = Number(parsed[key]);
+            if (Number.isFinite(value))
+                params[key] = value;
+        });
+        if (typeof parsed.mode === 'string' && parsed.mode)
+            params.mode = parsed.mode;
+        if (typeof parsed.window_title === 'string' && parsed.window_title.trim())
+            params.window_title = parsed.window_title.trim();
+        if (typeof parsed.format === 'string' && parsed.format)
+            params.format = parsed.format;
+        if (parsed.client_area === true)
+            params.client_area = true;
+        return params;
+    }
+    function persistShot(frame, index) {
+        try {
+            const base64 = String(frame.base64 || '');
+            const payload = base64.includes('base64,') ? base64.split('base64,')[1] : base64;
+            if (!payload)
+                return '';
+            const [decoded, decodeErr] = base64Decode(payload);
+            if (decodeErr || !decoded) {
+                console.warn('[截图者] base64 解码失败:', decodeErr);
+                return '';
+            }
+            const bytes = new Uint8Array(decoded);
+            const ext = frame.format === 'jpg' || frame.format === 'jpeg' ? 'jpg' : 'png';
+            const name = `multimedia/screenshot_${Date.now()}_${index}.${ext}`;
+            const [, path, error] = saveFile(name, true, bytes);
+            if (error) {
+                console.warn('[截图者] 落盘失败:', error);
+                return '';
+            }
+            return localPathToReadURL(path);
+        }
+        catch (error) {
+            console.warn('[截图者] 落盘异常:', error);
+            return '';
+        }
+    }
+    function captureScreen(args) {
+        const parsed = parseArgs(args);
+        const params = buildCaptureParams(parsed);
+        const note = typeof parsed.note === 'string' ? parsed.note.trim() : '';
+        const [results, captureErr] = screenshotCapture(params);
+        if (captureErr) {
+            return { text: `截图失败：${captureErr.message || String(captureErr)}`, shot: null };
+        }
+        if (!results || results.length === 0) {
+            return { text: '截图失败：未获取到图像数据', shot: null };
+        }
+        const first = results[0];
+        const urls = results.map((frame, index) => persistShot(frame, index)).filter(Boolean);
+        if (urls.length > 0)
+            pushAssistantImage(urls);
+        const modeText = String(first.mode || params.mode || 'auto');
+        const windowText = first.window_title ? `窗口「${first.window_title}」` : '';
+        const sourceSize = first.source_width && first.source_height
+            ? `，原图 ${first.source_width}x${first.source_height}`
+            : '';
+        const frameText = results.length > 1 ? `，共 ${results.length} 帧` : '';
+        const label = note ? `${note}：` : '';
+        const text = `截图完成。${label}模式=${modeText}${windowText ? '，' + windowText : ''}，`
+            + `输出 ${first.width}x${first.height}${sourceSize}${frameText}，图片已展示给用户。`;
+        return {
+            text,
+            shot: {
+                note: note || `${modeText} 截图`,
+                mode: modeText,
+                windowTitle: first.window_title || '',
+                width: first.width,
+                height: first.height,
+                base64: first.base64,
+                url: urls[0] || '',
+            }
+        };
+    }
+
+    function collectScreenshotShot(toolCall, shots, pending) {
+        if (!pending)
+            return;
+        shots.push(pending);
+    }
+    function pickPrimaryShot(shots) {
+        return shots.length > 0 ? shots[shots.length - 1] : null;
+    }
+    function buildScreenshotSummary(shots) {
+        if (shots.length === 0)
+            return '月华没有截到画面';
+        const primary = shots[shots.length - 1];
+        const target = primary.windowTitle ? `「${primary.windowTitle}」` : '屏幕';
+        const size = `${primary.width}x${primary.height}`;
+        if (shots.length === 1) {
+            return `截好了，${primary.note}（${target}，${size}），已经给你看到了。`;
+        }
+        return `截好了，一共 ${shots.length} 张，最后一张是${primary.note}（${target}，${size}），都已经给你看到了。`;
+    }
+
+    function composeScreenshoterPrompt() {
+        return fileView('prompts/screenshoterRole.md')[0].trim();
+    }
+    class ScreenshoterRole extends CreativeRoleBase {
+        roleTag = '截图者';
+        MAX_ITERATIONS = 4;
+        pendingShot = null;
+        primaryImage = '';
+        constructor() {
+            super(composeScreenshoterPrompt());
+        }
+        get roleName() { return '截图者'; }
+        getToolDefinitions() {
+            return screenshoterTools;
+        }
+        executeTool(toolCall) {
+            const funcName = toolCall.function.name;
+            let args = {};
+            try {
+                args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : (toolCall.function.arguments || {});
+            }
+            catch (parseError) {
+                console.error(`[截图者] 工具调用参数解析失败:`, toolCall.function.arguments);
+                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
+            }
+            switch (funcName) {
+                case 'list_capture_targets':
+                    return describeCaptureTargets(args);
+                case 'capture_screen': {
+                    const result = captureScreen(args);
+                    this.pendingShot = result.shot;
+                    return result.text;
+                }
+                default:
+                    return `未知工具: ${funcName}，可用工具为 list_capture_targets、capture_screen`;
+            }
+        }
+        collectDetail(toolCall, shots) {
+            collectScreenshotShot(toolCall, shots, this.pendingShot);
+            this.pendingShot = null;
+        }
+        buildSummary(shots) {
+            const primary = pickPrimaryShot(shots);
+            this.primaryImage = primary?.base64 || '';
+            return buildScreenshotSummary(shots);
+        }
+        takePrimaryImage() {
+            const image = this.primaryImage;
+            this.primaryImage = '';
+            return image;
         }
     }
 
@@ -4175,7 +4403,6 @@ var lunarBundle = (function (exports) {
     GlobalConfig.LTPfunction.set('search_memory', handleSearchMemory);
 
     const READ_CHAR_BUDGET = 12000;
-    const OUTLINE_PREVIEW_LIMIT = 60;
     function kindLabel(kind) {
         return KIND_LABELS[kind] ?? kind;
     }
@@ -4357,74 +4584,6 @@ var lunarBundle = (function (exports) {
         }
         return finishBlocks(blocks, missing);
     }
-    async function handleInspectResource(args) {
-        const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
-        const handle = String(parsed.handle || '').trim();
-        const request = String(parsed.request || '').trim();
-        const parsedHandle = parseHandle(handle);
-        if (!parsedHandle)
-            return ['请提供文本资源句柄，例如 "@D.003"', ''];
-        const normalized = formatHandle(parsedHandle);
-        if (parsedHandle.kind !== 'D' && parsedHandle.kind !== 'T') {
-            return [`${normalized} 是${kindLabel(parsedHandle.kind)}，不是文本资源；图片/视频/动图请用 use_resource 取描述`, ''];
-        }
-        const entry = getResourceEntry(normalized);
-        if (!entry)
-            return [`【${normalized}】\n${HANDLE_INVALID_NOTICE}。请用 browse_resources 确认可用句柄`, ''];
-        if (entry.state === 'lost') {
-            deleteResource(normalized);
-            return [`【${normalized}｜${entry.title || entry.name}】\n${LOST_FILE_NOTICE}`, ''];
-        }
-        const answer = inspectTextResource(normalized, request);
-        if (!answer) {
-            return [`【${normalized}｜${entry.title || entry.name}】\n探查失败：描述者没有给出答复，可以直接用 use_resource 取正文`, ''];
-        }
-        return [`【${normalized}｜${entry.title || entry.name}】\n${answer}`, ''];
-    }
-    async function handleOutlineResource(args) {
-        const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
-        const handle = String(parsed.handle || '').trim();
-        const parsedHandle = parseHandle(handle);
-        if (!parsedHandle)
-            return ['请提供文档句柄，例如 "@D.003"', ''];
-        const normalized = formatHandle(parsedHandle);
-        const entry = getResourceEntry(normalized);
-        if (!entry)
-            return [`【${normalized}】\n${HANDLE_INVALID_NOTICE}。请用 browse_resources 确认可用句柄`, ''];
-        if (entry.state === 'lost') {
-            deleteResource(normalized);
-            return [`【${normalized}｜${entry.title || entry.name}】\n${LOST_FILE_NOTICE}`, ''];
-        }
-        if (entry.kind !== 'D' && entry.kind !== 'T') {
-            return [`${normalized} 是${kindLabel(entry.kind)}，没有段落大纲；图片/视频/音频请用 use_resource 取描述`, ''];
-        }
-        const before = listResources(entry.kind, 1000).find(item => item.seq === entry.seq);
-        const sections = outlineFor(normalized);
-        if (sections.length === 0) {
-            return [`${normalized}（${entry.title || entry.name}）没有可用的段落结构，可用 use_resource 直接读取全文`, ''];
-        }
-        const lines = sections.slice(0, OUTLINE_PREVIEW_LIMIT).map(section => {
-            const anchor = sectionHandle('D', entry.seq, section.ordinal);
-            const label = section.path || section.title || `第 ${section.ordinal} 段`;
-            const level = section.level > 0 ? `${'#'.repeat(section.level)} ` : '';
-            return `${anchor} ${level}${label}（第 ${section.line_start}-${section.line_end} 行，${section.chars} 字）`;
-        });
-        const head = `【${normalized}｜${entry.title || entry.name}｜共 ${before?.section_count ?? sections.length} 节${before?.state === 'active' ? '' : '，正文已回收'}】`;
-        const tail = sections.length > OUTLINE_PREVIEW_LIMIT ? `\n（仅显示前 ${OUTLINE_PREVIEW_LIMIT} 节，共 ${sections.length} 节）` : '';
-        return [`${head}\n${lines.join('\n')}${tail}\n\n读取某一节：use_resource({"handles":["${sectionHandle('D', entry.seq, sections[0].ordinal)}"]})`, ''];
-    }
-    function outlineFor(handle) {
-        try {
-            const [sections, , error] = resourceOutline(handle);
-            if (error || !sections)
-                return [];
-            return sections;
-        }
-        catch (error) {
-            console.error('[资源工具] 读大纲失败:', error);
-            return [];
-        }
-    }
     function safeParse(text) {
         try {
             const parsed = JSON.parse(text);
@@ -4499,8 +4658,6 @@ var lunarBundle = (function (exports) {
     GlobalConfig.LTPfunction.set('browse_resources', handleBrowseResources);
     GlobalConfig.LTPfunction.set('list_resources', handleListResources);
     GlobalConfig.LTPfunction.set('read_resource', handleReadResource);
-    GlobalConfig.LTPfunction.set('inspect_resource', handleInspectResource);
-    GlobalConfig.LTPfunction.set('outline_resource', handleOutlineResource);
     GlobalConfig.LTPfunction.set('search_resources', handleSearchResources);
 
     function parseToolArgs(raw) {
@@ -4694,14 +4851,36 @@ var lunarBundle = (function (exports) {
         return hasToolCalls;
     }
 
-    const dialogueBaseTools = [...agentControlTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
+    const dialogueBaseTools = [...agentControlTools, ...memoryTools, ...resourceTools, ...scheduleTools];
     const MAX_TOOL_ROUNDS = 5;
     const ACTION_CLAIM_PATTERN = /(已经|已|这就|马上|现在)[^，。！？\n]{0,12}(打开|启动|运行|调出|叫出|切换|准备好|准备完毕)/;
     const ACTION_CLAIM_GUARD = '【系统校验】你刚才声称已经完成了打开/启动类操作，但本轮没有调用任何工具，用户看不到任何变化。请直接调用 use_the_program 执行（只打开应用只填 tool），或如实说明没有完成，不要只口头宣称。';
+    const BUILTIN_CHARACTER_NAMES = new Set(['月华', '琉璃']);
+    function buildFriendsAppearanceSection() {
+        const lines = [];
+        const characters = [...loadCustomCharacters().entries()]
+            .sort((a, b) => a[0].localeCompare(b[0], 'zh-CN'));
+        for (const [name, profile] of characters) {
+            if (BUILTIN_CHARACTER_NAMES.has(name))
+                continue;
+            const appearance = String(profile.appearance || '').trim();
+            if (!appearance)
+                continue;
+            lines.push(`- ${name}：${appearance}`);
+        }
+        return lines.length > 0 ? `## 朋友样貌\n\n${lines.join('\n')}\n` : '';
+    }
+    function applyFriendsAppearance(prompt) {
+        const section = buildFriendsAppearanceSection();
+        if (!section)
+            return prompt.replace(/\n?\{friends-appearance\}\n?/, '\n');
+        return prompt.replace('{friends-appearance}', section);
+    }
     function composeDialoguePrompt(appearances) {
-        return fileView('prompts/dialogueRole.md')[0]
+        const prompt = fileView('prompts/dialogueRole.md')[0]
             .split('{lunar-appearance}').join(appearances.lunar)
             .split('{crystal-appearance}').join(appearances.crystal);
+        return applyFriendsAppearance(prompt);
     }
     function readAppendSettings() {
         const settings = GlobalConfig.customConfig?.agent?.append_settings;
@@ -4713,7 +4892,7 @@ var lunarBundle = (function (exports) {
     }
     class DialogueRole extends ModelBuilder {
         roleTag = "对话者";
-        basePrompt;
+        appearances;
         async generateDialogue(cache) {
             this.applyAppendSettings();
             this.toolRounds = 0;
@@ -4821,13 +5000,14 @@ var lunarBundle = (function (exports) {
         }
         applyAppendSettings() {
             const lines = readAppendSettings();
+            const base = composeDialoguePrompt(this.appearances);
             this.systemPrompt = lines.length > 0
-                ? this.basePrompt.replace(/\s*$/, '') + '\n' + lines.join('\n')
-                : this.basePrompt;
+                ? base.replace(/\s*$/, '') + '\n' + lines.join('\n')
+                : base;
         }
         constructor(appearances) {
             super(composeDialoguePrompt(appearances));
-            this.basePrompt = this.systemPrompt;
+            this.appearances = appearances;
         }
     }
 
@@ -4924,22 +5104,25 @@ var lunarBundle = (function (exports) {
     const memorizerRole = new MemorizerRole();
     const painterRole = new PainterRole();
     const musicianRole = new MusicianRole();
+    const screenshoterRole = new ScreenshoterRole();
     const builtinAppearances = {
         lunar: painterRole.prompts.builtinCharacters.get('月华')?.appearance || '',
         crystal: painterRole.prompts.builtinCharacters.get('琉璃')?.appearance || '',
     };
     const dialogueRole = new DialogueRole(builtinAppearances);
-    registerAgentTargets({ painterRole, musicianRole });
+    registerAgentTargets({ painterRole, musicianRole, screenshoterRole });
     registerDumpRoles({
         dialogue: { role: dialogueRole, label: '对话者' },
         painter: { role: painterRole, label: '绘制者' },
         musician: { role: musicianRole, label: '演奏者' },
+        screenshoter: { role: screenshoterRole, label: '截图者' },
     });
     registerRecoveryRoles({ dialogue: dialogueRole });
     const roleInstances = {
         dialogue: dialogueRole,
         painter: painterRole,
         musician: musicianRole,
+        screenshoter: screenshoterRole,
     };
     try {
         const host = globalThis;

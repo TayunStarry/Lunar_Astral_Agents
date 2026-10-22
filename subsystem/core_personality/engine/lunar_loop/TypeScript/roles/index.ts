@@ -3,6 +3,7 @@ import { registerDumpRoles } from '../agent/data-dump';
 import { registerRecoveryRoles, snapshotAgentContext, restoreAgentContext } from '../agent/recovery';
 import { PainterRole } from './painter';
 import { MusicianRole } from './musician';
+import { ScreenshoterRole } from './screenshoter';
 import { DialogueRole } from './dialogue';
 import { MemorizerRole } from './memorizer';
 import { RandomFloor } from '../tools/math';
@@ -13,6 +14,8 @@ export const memorizerRole: MemorizerRole = new MemorizerRole();
 export const painterRole: PainterRole = new PainterRole();
 /** 演奏者角色(演奏音乐) */
 export const musicianRole: MusicianRole = new MusicianRole();
+/** 截图者角色(自然语言驱动精确截图；承接对话者原有截图工具) */
+export const screenshoterRole: ScreenshoterRole = new ScreenshoterRole();
 /**
  * 姐妹基础外观：直接复用绘制者已解析的角色提示词
  *
@@ -26,12 +29,13 @@ const builtinAppearances = {
 /** 对话者角色(与用户交互) */
 export const dialogueRole: DialogueRole = new DialogueRole(builtinAppearances);
 /** 注入子智能体实例（tool 模块处理函数所需，避免 tool → roles 静态循环引用） */
-registerAgentTargets({ painterRole, musicianRole });
+registerAgentTargets({ painterRole, musicianRole, screenshoterRole });
 /** 注入可导出角色注册表（TUI 数据导出按名单导出单个子智能体上下文） */
 registerDumpRoles({
     dialogue: { role: dialogueRole, label: '对话者' },
     painter: { role: painterRole, label: '绘制者' },
     musician: { role: musicianRole, label: '演奏者' },
+    screenshoter: { role: screenshoterRole, label: '截图者' },
 });
 /** 向引擎重载的上下文抢救模块登记"月华主上下文"归属（重载后据此恢复对话历史） */
 registerRecoveryRoles({ dialogue: dialogueRole });
@@ -50,6 +54,7 @@ export const roleInstances = {
     dialogue: dialogueRole,
     painter: painterRole,
     musician: musicianRole,
+    screenshoter: screenshoterRole,
 };
 try {
     const host = (globalThis as unknown as { agentSystem?: Record<string, unknown> });

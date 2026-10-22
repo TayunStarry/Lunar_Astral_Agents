@@ -58,6 +58,13 @@ const confirmOkBtn = document.getElementById('confirmOkBtn');
 const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 const imageFileInput = document.getElementById('imageFileInput');
 const imageFilesInput = document.getElementById('imageFilesInput');
+const fuseSelectedBtn = document.getElementById('fuseSelectedBtn');
+const fuseModal = document.getElementById('fuseModal');
+const fuseMeta = document.getElementById('fuseMeta');
+const fuseThresholdInput = document.getElementById('fuseThresholdInput');
+const fuseStrategySelect = document.getElementById('fuseStrategySelect');
+const fuseCancelBtn = document.getElementById('fuseCancelBtn');
+const fuseStartBtn = document.getElementById('fuseStartBtn');
 
 // ===== 常量 =====
 
@@ -240,6 +247,20 @@ async function apiQueryMessages(type, query, topK) {
         + '&query=' + encodeURIComponent(query) + '&top_k=' + topK);
 }
 
+/** 权重融合：把集合内高相似文本记忆合并为一条（ids 为空=扫描整个集合） */
+async function apiFuseCollection(collection, ids, threshold, strategy) {
+    return await memoryAPI('fuse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            collection: collection,
+            ids: ids && ids.length ? ids : undefined,
+            threshold: threshold,
+            strategy: strategy
+        })
+    });
+}
+
 // ===== 文件接口封装（直改分片文件，用于条目内容改写） =====
 
 /** 文件名编码（与琉璃文件接口约定一致：encodeURIComponent 后按字节 base64） */
@@ -359,6 +380,7 @@ async function renderCollections() {
                 + '<span class="collection-name"></span>'
                 + '<span class="collection-count"></span>'
                 + '<span class="collection-actions">'
+                + '<button class="icon-btn merge" data-act="fuse" title="权重融合该分组的高相似文本记忆"><i class="fas fa-code-merge"></i></button>'
                 + '<button class="icon-btn warn" data-act="clear" title="清空分组"><i class="fas fa-eraser"></i></button>'
                 + '<button class="icon-btn" data-act="delete" title="删除分组"><i class="fas fa-trash"></i></button>'
                 + '</span>';
@@ -371,6 +393,11 @@ async function renderCollections() {
             el.addEventListener('click', (ev) => {
                 if (ev.target.closest('.icon-btn')) return;
                 selectCollection(c.name);
+            });
+            // 权重融合该分组
+            el.querySelector('[data-act="fuse"]').addEventListener('click', () => {
+                clearSelection();
+                openFuseModal(c.name, []);
             });
             // 清空分组
             el.querySelector('[data-act="clear"]').addEventListener('click', async () => {
@@ -439,6 +466,94 @@ newCollectionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') h
 refreshCollectionsBtn.addEventListener('click', async () => {
     await renderCollections();
     showToast('分组列表已刷新', 'success');
+});
+
+// ===== 权重融合 =====
+// 由前端选中「分组」或「分组内的若干条文本记忆」触发：把达到相似度阈值的条目
+// 合并为一条整合记忆，后端会基于合并后的正文重新生成嵌入向量。
+
+/** 已勾选的条目：Map<条目ID, 所属分组名> */
+const selectedEntries = new Map();
+/** 当前融合作用域：{ collection, ids }（ids 为空表示整个分组） */
+let fuseScope = null;
+
+/** 刷新「融合选中」按钮的可见性与计数 */
+function updateFuseSelectionUI() {
+    const count = selectedEntries.size;
+    fuseSelectedBtn.classList.toggle('hidden', count === 0);
+    fuseSelectedBtn.disabled = count < 2;
+    fuseSelectedBtn.title = count < 2 ? '至少勾选两条文本记忆' : '把选中的 ' + count + ' 条高相似记忆合并为一条';
+    fuseSelectedBtn.innerHTML = '<i class="fas fa-code-merge"></i> 融合选中' + (count ? '（' + count + '）' : '');
+}
+
+/** 清空勾选（换页/刷新列表时调用） */
+function clearSelection() {
+    selectedEntries.clear();
+    document.querySelectorAll('.card-select').forEach(cb => { cb.checked = false; });
+    updateFuseSelectionUI();
+}
+
+/** 打开融合弹窗 */
+function openFuseModal(collection, ids) {
+    if (!collection) {
+        showToast('请先在左侧选择一个分组，再执行融合', 'error');
+        return;
+    }
+    fuseScope = { collection: collection, ids: ids || [] };
+    fuseMeta.textContent = '分组「' + collection + '」 · '
+        + (ids && ids.length ? '仅融合勾选的 ' + ids.length + ' 条' : '扫描整个分组内的文本记忆');
+    fuseModal.classList.remove('hidden');
+}
+
+/** 关闭融合弹窗 */
+function closeFuseModal() {
+    fuseModal.classList.add('hidden');
+    fuseScope = null;
+}
+
+/** 执行融合并把结果反馈给用户 */
+async function runFuse() {
+    if (!fuseScope) return;
+    const threshold = Number(fuseThresholdInput.value);
+    if (!Number.isFinite(threshold) || threshold < 0.5 || threshold > 1) {
+        showToast('相似度阈值需在 0.5 ~ 1 之间', 'error');
+        return;
+    }
+    const originalHtml = fuseStartBtn.innerHTML;
+    fuseStartBtn.disabled = true;
+    fuseStartBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 融合中…';
+    try {
+        const result = await apiFuseCollection(fuseScope.collection, fuseScope.ids, threshold, fuseStrategySelect.value);
+        if (!result || !result.group_count) {
+            showToast('没有达到 ' + (threshold * 100).toFixed(0) + '% 相似度的文本条目，未做改动', 'info');
+        }
+        else {
+            showToast('融合完成：合并 ' + result.group_count + ' 组，删除 ' + result.removed_count
+                + ' 条，新增 ' + result.created_count + ' 条', 'success');
+        }
+        closeFuseModal();
+        clearSelection();
+        await renderCollections();
+        await loadEntries(true);
+    }
+    catch (e) {
+        showToast(e.message, 'error');
+    }
+    finally {
+        fuseStartBtn.disabled = false;
+        fuseStartBtn.innerHTML = originalHtml;
+    }
+}
+
+fuseCancelBtn.addEventListener('click', closeFuseModal);
+fuseStartBtn.addEventListener('click', runFuse);
+fuseSelectedBtn.addEventListener('click', () => {
+    const collections = new Set(selectedEntries.values());
+    if (collections.size !== 1) {
+        showToast('勾选的条目来自不同分组，请只选同一分组内的条目', 'error');
+        return;
+    }
+    openFuseModal([...collections][0], [...selectedEntries.keys()]);
 });
 
 // ===== 记忆导入 =====
@@ -603,12 +718,18 @@ function createCard(entry) {
         : '早前记录';
     const typeIcon = isImage ? 'fa-image' : (isAudio ? 'fa-volume-high' : 'fa-font');
     const canEdit = entryType === 'text';
+    // 权重融合只适用于有正文的文本记忆：媒体记忆不参与勾选
+    const canFuse = canEdit && !!String(entry.content || '').trim();
+    const selectBox = canFuse
+        ? '<input type="checkbox" class="card-select" title="勾选后可把多条高相似记忆融合为一条">'
+        : '';
     const editBtn = canEdit
         ? '<button class="icon-btn warn" data-act="edit" title="改写文本内容（不重算向量）"><i class="fas fa-pen"></i></button>'
         : '';
     const head = document.createElement('div');
     head.className = 'card-head';
-    head.innerHTML = '<i class="fas ' + typeIcon + ' card-type-icon"></i>'
+    head.innerHTML = selectBox
+        + '<i class="fas ' + typeIcon + ' card-type-icon"></i>'
         + '<span class="card-role"><span class="role-badge"></span></span>'
         + '<span class="card-actions">'
         + editBtn
@@ -616,6 +737,17 @@ function createCard(entry) {
         + '</span>';
     head.querySelector('.role-badge').textContent = role;
     card.appendChild(head);
+
+    // 勾选状态：融合选中依赖它（跨页不保留，换页时统一清空）
+    const selectInput = head.querySelector('.card-select');
+    if (selectInput) {
+        selectInput.checked = selectedEntries.has(entry.id);
+        selectInput.addEventListener('change', () => {
+            if (selectInput.checked) selectedEntries.set(entry.id, entry.collection || currentCollection);
+            else selectedEntries.delete(entry.id);
+            updateFuseSelectionUI();
+        });
+    }
 
     // 主体：图片显示区 / 音频播放区 / 文本显示区（固定高度，超长滚动，保留换行）
     const body = document.createElement('div');
@@ -695,6 +827,8 @@ function createCard(entry) {
         try {
             await apiDeleteMessage(entry.id);
             card.remove();
+            selectedEntries.delete(entry.id);
+            updateFuseSelectionUI();
             loadedCount = Math.max(0, loadedCount - 1);
             totalCount = Math.max(0, totalCount - 1);
             listStats.textContent = '已加载 ' + loadedCount + ' / 共 ' + totalCount + ' 条';
@@ -728,6 +862,8 @@ async function loadEntries(reset) {
             // 保留空态提示直到首批渲染
             cardGrid.innerHTML = '<div class="list-empty" id="cardEmpty">正在加载…</div>';
             loadedCount = 0;
+            // 换页后旧条目已不在视图中，勾选一并清空，避免误融合
+            clearSelection();
         }
         const empty = cardGrid.querySelector('.list-empty');
         const offset = loadedCount;

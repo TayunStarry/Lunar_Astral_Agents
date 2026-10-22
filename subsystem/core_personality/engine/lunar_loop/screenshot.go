@@ -10,11 +10,13 @@ import (
 // screenshotCapture 执行屏幕截图、压缩缩放并返回处理后的图片数据数组
 // 参数: params 对象，字段对齐 module.CaptureRequest
 //
-//	mode, display_index, offset_x, offset_y, width, height,
+//	mode, display_index, window_handle, window_title, client_area,
+//	offset_x, offset_y, width, height,
 //	region_x, region_y, region_w, region_h, format, quality, scale
 //
 // 返回值: [Array<Object>, error] 包含 base64/format/width/height 的结果对象数组和错误信息
 // 注意：此函数内部已集成 ResizeImage 处理，返回的 base64 字段格式为 "data:image/[format];base64,[data]"
+// 结果对象额外携带本次截图的实际元信息：mode / window_title / window_handle / source_width / source_height
 func (class *Runtime) screenshotCapture(call goja.FunctionCall) goja.Value {
 	req := module.CaptureRequest{Mode: module.ModeAuto, Format: "png"}
 
@@ -35,6 +37,14 @@ func (class *Runtime) screenshotCapture(call goja.FunctionCall) goja.Value {
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("截图后处理失败: %v", err)})
 	}
+	// 回填截图元信息：智能体据此确认实际截到的窗口/模式，而不是只看图片猜
+	for _, frame := range resized {
+		frame["mode"] = string(result.Mode)
+		frame["window_title"] = result.WindowTitle
+		frame["window_handle"] = result.WindowHandle
+		frame["source_width"] = result.Width
+		frame["source_height"] = result.Height
+	}
 
 	return class.runtime.ToValue([]any{resized, nil})
 }
@@ -47,6 +57,11 @@ func parseCaptureRequest(params map[string]any) module.CaptureRequest {
 		req.Mode = module.CaptureMode(v)
 	}
 	req.DisplayIndex = toInt(params["display_index"])
+	req.WindowHandle = toUint64(params["window_handle"])
+	if v, ok := params["window_title"].(string); ok {
+		req.WindowTitle = v
+	}
+	req.ClientArea = toBool(params["client_area"])
 	req.OffsetX = toInt(params["offset_x"])
 	req.OffsetY = toInt(params["offset_y"])
 	req.Width = toInt(params["width"])
@@ -81,6 +96,37 @@ func toInt(v any) int {
 	}
 }
 
+// toUint64 将 goja 导出的数值转换为 uint64（窗口句柄在 JS 侧以 number 传递）
+func toUint64(v any) uint64 {
+	switch n := v.(type) {
+	case float64:
+		if n <= 0 {
+			return 0
+		}
+		return uint64(n)
+	case int64:
+		if n <= 0 {
+			return 0
+		}
+		return uint64(n)
+	case int:
+		if n <= 0 {
+			return 0
+		}
+		return uint64(n)
+	case uint64:
+		return n
+	default:
+		return 0
+	}
+}
+
+// toBool 将 goja 导出的值转换为 bool
+func toBool(v any) bool {
+	b, ok := v.(bool)
+	return ok && b
+}
+
 // screenshotGetDisplays 获取所有显示器信息
 // 返回值: [Array<{index, x, y, width, height}>, error]
 func (class *Runtime) screenshotGetDisplays(call goja.FunctionCall) goja.Value {
@@ -95,6 +141,36 @@ func (class *Runtime) screenshotGetDisplays(call goja.FunctionCall) goja.Value {
 			"y":      d["y"],
 			"width":  d["width"],
 			"height": d["height"],
+		}
+	}
+
+	return class.runtime.ToValue([]any{result, nil})
+}
+
+// screenshotListWindows 枚举可作为截图目标的可见顶层窗口
+// 返回值: [Array<{handle, title, class, pid, process, x, y, width, height, client_w, client_h, minimized, foreground}>, error]
+func (class *Runtime) screenshotListWindows(call goja.FunctionCall) goja.Value {
+	windows, err := module.ListWindows()
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+
+	result := make([]map[string]any, len(windows))
+	for i, item := range windows {
+		result[i] = map[string]any{
+			"handle":     item.Handle,
+			"title":      item.Title,
+			"class":      item.Class,
+			"pid":        item.ProcessID,
+			"process":    item.Process,
+			"x":          item.X,
+			"y":          item.Y,
+			"width":      item.Width,
+			"height":     item.Height,
+			"client_w":   item.ClientW,
+			"client_h":   item.ClientH,
+			"minimized":  item.Minimized,
+			"foreground": item.Foreground,
 		}
 	}
 
