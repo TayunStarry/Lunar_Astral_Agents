@@ -77,7 +77,7 @@ export function attachImageTags(message: PostMessage): void {
         const source = item.image_url?.url || '';
         if (!source) continue;
         // 视频块（伪装成 image_url 的 data:video URI 或视频扩展名）不走图片标签：
-        // 它们由 LiteImageFile 以「句柄 + 理解文本」原位置换，不进入多模态窗口
+        // 它们由 LiteImageFile 原位置换为句柄，不进入多模态窗口
         const lower = source.toLowerCase();
         if (lower.startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(ext => lower.endsWith(ext))) continue;
         // 已经是视觉读取端点形态：不要再入库一次（避免把副本当原图重复登记）

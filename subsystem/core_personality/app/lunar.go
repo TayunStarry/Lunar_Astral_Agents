@@ -83,7 +83,12 @@ func initNapcatBridge() {
 		return
 	}
 	exeDir := filepath.Dir(exePath)
-	configPath := filepath.Join(exeDir, *GeneralConfig.LocalDir, "lunar_config.json")
+	// QQ 桥接配置已迁到专用 napcat_config.json（新默认）；专用文件不存在时
+	// 回退旧版 lunar_config.json 的 bridging 组，保证升级用户的桥接不失效
+	configPath := filepath.Join(exeDir, *GeneralConfig.LocalDir, "napcat_config.json")
+	if _, err := os.Stat(configPath); err != nil {
+		configPath = filepath.Join(exeDir, *GeneralConfig.LocalDir, "lunar_config.json")
+	}
 
 	if err := napcat.LoadBridgingConfig(configPath); err != nil {
 		LoggerGeneral.Error("CorePersonality", "加载桥接配置失败: %v", err)

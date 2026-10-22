@@ -5,6 +5,7 @@ package WebLTP
 import (
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -26,7 +27,57 @@ var (
 	modelURL   string
 	modelKey   string
 	httpClient = &http.Client{Timeout: 120 * time.Second}
+
+	// 模型实况观察者：由 app 注入控制台的 StreamBegin/Delta/End，
+	// 让 TUI「核心智能 实况」能看到网络搜索的模型思考与输出。
+	observerMu    sync.Mutex
+	observerBegin func(role string)
+	observerDelta func(role, kind, text string)
+	observerEnd   func(role string)
 )
+
+// webSearchModelRole 网络搜索的实况角色标签（TUI 显示）
+const webSearchModelRole = "网络搜索"
+
+// SetModelObserver 注入实况观察者（app 层启动时调用）
+func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string)) {
+	observerMu.Lock()
+	defer observerMu.Unlock()
+	observerBegin, observerDelta, observerEnd = begin, delta, end
+}
+
+// observeBegin 通知实况开始
+func observeBegin() {
+	observerMu.Lock()
+	fn := observerBegin
+	observerMu.Unlock()
+	if fn != nil {
+		fn(webSearchModelRole)
+	}
+}
+
+// observeDelta 通知实况增量（kind: think/content）
+func observeDelta(kind, text string) {
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	observerMu.Lock()
+	fn := observerDelta
+	observerMu.Unlock()
+	if fn != nil {
+		fn(webSearchModelRole, kind, text)
+	}
+}
+
+// observeEnd 通知实况结束
+func observeEnd() {
+	observerMu.Lock()
+	fn := observerEnd
+	observerMu.Unlock()
+	if fn != nil {
+		fn(webSearchModelRole)
+	}
+}
 
 func resolveModel() {
 	modelOnce.Do(func() {
@@ -57,13 +108,15 @@ func textWithImages(text string, dataURLs []string) []contentPart {
 	return parts
 }
 
-// chatText 发起一次纯文本对话并返回助手文本
+// chatText 发起一次对话并返回助手文本（流式，思考与输出同步进实况屏）
 func chatText(messages []chatMessage) (string, error) {
+	observeBegin()
+	defer observeEnd()
 	resolveModel()
 	body, err := json.Marshal(map[string]any{
 		"model":    modelName,
 		"messages": messages,
-		"stream":   false,
+		"stream":   true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("序列化请求失败: %w", err)
@@ -81,12 +134,17 @@ func chatText(messages []chatMessage) (string, error) {
 		return "", fmt.Errorf("请求失败: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("模型 API 返回状态 %d: %s", resp.StatusCode, truncateRunes(string(respBody), 200))
+	}
+	// 服务端可能忽略 stream 参数直接返回 JSON：两种形态都要兼容
+	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		return readModelStream(resp.Body)
+	}
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("读取响应失败: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("模型 API 返回状态 %d: %s", resp.StatusCode, truncateRunes(string(respBody), 200))
 	}
 	var chatResp struct {
 		Choices []struct {
@@ -107,13 +165,66 @@ func chatText(messages []chatMessage) (string, error) {
 	if len(chatResp.Choices) == 0 || strings.TrimSpace(chatResp.Choices[0].Message.Content) == "" {
 		return "", fmt.Errorf("模型 API 返回空响应")
 	}
-	return strings.TrimSpace(chatResp.Choices[0].Message.Content), nil
+	text := strings.TrimSpace(chatResp.Choices[0].Message.Content)
+	observeDelta("content", text)
+	return text, nil
+}
+
+// readModelStream 解析 OpenAI 兼容 SSE，边收边送实况
+func readModelStream(body io.Reader) (string, error) {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	var content strings.Builder
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content          string `json:"content"`
+					ReasoningContent string `json:"reasoning_content"`
+				} `json:"delta"`
+			} `json:"choices"`
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		if chunk.Error != nil && chunk.Error.Message != "" {
+			return "", fmt.Errorf("模型 API 错误: %s", chunk.Error.Message)
+		}
+		for _, choice := range chunk.Choices {
+			if choice.Delta.ReasoningContent != "" {
+				observeDelta("think", choice.Delta.ReasoningContent)
+			}
+			if choice.Delta.Content != "" {
+				content.WriteString(choice.Delta.Content)
+				observeDelta("content", choice.Delta.Content)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("读取模型流失败: %w", err)
+	}
+	text := strings.TrimSpace(content.String())
+	if text == "" {
+		return "", fmt.Errorf("模型 API 返回空响应")
+	}
+	return text, nil
 }
 
 // ExtractQuery 把月华的自然语言指令提炼为必应检索词；失败时返回原指令。
 func ExtractQuery(instruction string) string {
 	q, err := chatText([]chatMessage{
-		{Role: "system", Content: "把用户的自然语言指令提炼为一条简洁的必应检索词：保留关键实体与意图，中文优先，去掉客套与动词指令。只输出检索词本身，不要输出任何其他内容。"},
+		{Role: "system", Content: loadPrompt("webSearchExtractQuery.md")},
 		{Role: "user", Content: instruction},
 	})
 	if err != nil {

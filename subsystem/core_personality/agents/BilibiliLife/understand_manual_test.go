@@ -1,6 +1,6 @@
 package BilibiliLife
 
-// 手动冒烟：真实下载 60 秒并调用一次感知者理解（会产生一次模型调用）。
+// 手动冒烟：真实下载 60 秒并调用一次描述者（影像）理解（会产生一次模型调用）。
 //   $env:BILI_LIFE_UNDERSTAND_PROBE="1"; go test -run TestManualUnderstandProbe -v ./agents/BilibiliLife
 
 import (

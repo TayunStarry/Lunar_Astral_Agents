@@ -9,6 +9,8 @@ import (
 	"strconv"
 
 	"CorePersonality/agents/BilibiliLife"
+	"CorePersonality/agents/Descriptor"
+	"CorePersonality/agents/WebLTP"
 	"CorePersonality/engine/console"
 	"CorePersonality/engine/lunar_loop"
 	module "CorePersonality/engine/multimodal"
@@ -76,6 +78,31 @@ func WireTUIDataDumpHooks() {
 // 除了重启整个程序没有别的办法；而重启会连带重启前端窗口与全部子系统。
 // 控制台的重载按钮是"最小代价的恢复手段"，自动重载则是它的兜底自动化。
 func WireTUIEngineHooks() {
+	// 生活链模型调用也进「核心智能 实况」，用户不用只盯着日志干等。
+	BilibiliLife.SetModelObserver(
+		func(role string) { console.StreamBegin(role) },
+		func(role, kind, text string) {
+			streamKind := console.KindContent
+			if kind == "think" {
+				streamKind = console.KindThink
+			}
+			console.StreamDelta(role, streamKind, text)
+		},
+		func(role string) { console.StreamEnd(role) },
+	)
+	// 网络搜索与描述者（Go 侧智能体）的模型调用同样进实况：
+	// 前者让用户看到检索过程的思考与输出，后者让用户看到影像/文件探查的现场推理。
+	streamObserver := func(role string) { console.StreamBegin(role) }
+	streamDelta := func(role, kind, text string) {
+		streamKind := console.KindContent
+		if kind == "think" {
+			streamKind = console.KindThink
+		}
+		console.StreamDelta(role, streamKind, text)
+	}
+	streamEnd := func(role string) { console.StreamEnd(role) }
+	WebLTP.SetModelObserver(streamObserver, streamDelta, streamEnd)
+	Descriptor.SetModelObserver(streamObserver, streamDelta, streamEnd)
 	console.SetEngineHooks(
 		func() console.EngineStatus {
 			state := lunarloop.EngineState()

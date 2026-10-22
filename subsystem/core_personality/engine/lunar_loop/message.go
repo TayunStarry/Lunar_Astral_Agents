@@ -1,6 +1,7 @@
 package lunarloop
 
 import (
+	"CorePersonality/agents/BilibiliLife"
 	persistence "CorePersonality/engine/persistence"
 	"CorePersonality/transport/napcat"
 	"encoding/json"
@@ -112,9 +113,12 @@ func NewAudioUrlContent(url string) MediaUrlContent {
 // EnqueueMessage 将消息按到达顺序追加到统一未读队列
 // napcat 回调与 HTTP handler 跨 goroutine 入队，互斥保护
 func EnqueueMessage(messages ...PostMessage) {
+	// 先请求中断，再把消息放进队列：避免“已入队但还没标记中断”的窗口里
+	// dialogueTick 把消息拉走，导致生活与对话短暂并发。
+	BilibiliLife.NotifyUnread()
 	unreadMutex.Lock()
-	defer unreadMutex.Unlock()
 	UnreadContext = append(UnreadContext, messages...)
+	unreadMutex.Unlock()
 }
 
 // EnqueueMediaURL 将视频/音频URL包装为媒体内容项，按到达顺序追加到统一未读队列
@@ -156,6 +160,10 @@ func (class *Runtime) unreadCount(goja.FunctionCall) goja.Value {
 
 // pullContext 拉取上下文消息（统一时序队列：文本与视频/音频URL混排，拉取即清空）
 func (class *Runtime) pullContext() goja.Value {
+	// 生活还没停在断点：先不交付消息，等当前模型/步骤结束、生活暂停后再拉。
+	if BilibiliLife.HoldMessages() {
+		return class.runtime.ToValue([]PostMessage{})
+	}
 	// 拉取全部未读消息
 	messages := TakeUnreadContext()
 	// 如果未处理的上下文消息为空，返回空数组

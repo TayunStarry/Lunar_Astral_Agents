@@ -2,13 +2,6 @@ import { GlobalConfig } from '../../config/global';
 import { MessageContent, PostMessageRole } from '../../config/model';
 import { attachImageTags } from '../../capabilities/image-tag';
 import { appendUserMessage } from '../../io/conversation';
-import {
-	descriptionRole,
-	dialogueRole,
-	musicianRole,
-	painterRole,
-	perceiverRole
-} from '../../roles/index';
 
 /** 写入消息（content 为文本、多模态内容数组或宿主下发的媒体URL内容项） */
 export function writeMessage(role: PostMessageRole, content: any) {

@@ -69,7 +69,6 @@ globalThis.callLTPXRemoteTool = async () => '桩调用结果';
 globalThis.saveFile = (name) => [name, name, null];
 
 const { GlobalConfig } = require(path.join(OUT, 'config', 'global.js'));
-const { ModelBuilder } = require(path.join(OUT, 'agent', 'builder.js'));
 const { DialogueRole } = require(path.join(OUT, 'roles', 'dialogue.js'));
 
 GlobalConfig.currentAddress = ['http://127.0.0.1:0/v1/chat/completions'];
@@ -112,7 +111,7 @@ GlobalConfig.LTPfunction.set('fake_tool', async () => {
 	return [`工具执行结果 ${executed}`, ''];
 });
 
-const dialogue = new DialogueRole(new ModelBuilder('描述者系统提示'), { lunar: '黑发红瞳', crystal: '银发蓝瞳' });
+const dialogue = new DialogueRole({ lunar: '黑发红瞳', crystal: '银发蓝瞳' });
 function newCache() {
 	return { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [] };
 }
@@ -244,7 +243,7 @@ check('系统提示已注入姐妹外观',
 
 	// ==== 10. 追加设定：逐行拼在提示词末尾；空配置不残留 ====
 	GlobalConfig.customConfig = { agent: { append_settings: ['喜欢猫', '讨厌被叫 AI'] } };
-	const appendRole = new DialogueRole(new ModelBuilder('描述者桩'), { lunar: '月华外观', crystal: '琉璃外观' });
+	const appendRole = new DialogueRole({ lunar: '月华外观', crystal: '琉璃外观' });
 	appendRole.applyAppendSettings();
 	check('追加设定逐行附加到提示词末尾',
 		appendRole.systemPrompt.endsWith('喜欢猫\n讨厌被叫 AI'), JSON.stringify(appendRole.systemPrompt.slice(-40)));

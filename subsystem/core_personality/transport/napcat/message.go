@@ -124,10 +124,20 @@ func handleGroupMessage(msg NapcatMessage) {
 	if selfID == 0 {
 		selfID, _ = resolveBotInfo()
 	}
-	atSelf := containsAtSelf(msg.Message, selfID)
+	selfStr := strconv.FormatInt(selfID, 10)
+	// 引用月华的发言再说话，语意上仍是对月华讲话，与被直接 @ 等同
+	atSelf := containsAtSelf(msg.Message, selfID) || replyQuotesSelf(msg.Message, selfID)
 	mentioned := containsAnyKeyword(contentToText(content), bridgeConfig.BridgingGroupKeywords)
 	triggerProbability := groupTriggerProbability()
 	randomTrigger := triggerProbability > 0 && rand.Float64() < triggerProbability
+
+	// 明确的 A@B：直接 @ 了群里其他具体成员而月华不在被 @ 之列，
+	// 是成员两人之间的私聊，与月华无关——不入池也不触发，
+	// 关键词与随机概率都不应把月华拉进一场与它无关的对话。
+	// 合并转发与回复引用内部呈现的 @ 月华不受此判定影响：那是「转给月华看」的语义。
+	if !atSelf && redPacket == nil && directAtOther(msg.Message, selfStr) {
+		return
+	}
 
 	if atSelf || mentioned || redPacket != nil || randomTrigger {
 		// 触发：将缓存池连同当前消息一并发送给月华（至多20条）
@@ -274,6 +284,52 @@ func containsAtSelf(segments []MessageSegment, selfID int64) bool {
 		}
 		var atData AtData
 		if json.Unmarshal(segment.Data, &atData) == nil && atData.QQ == selfStr {
+			return true
+		}
+	}
+	return false
+}
+
+// directAtOther 判断消息是否直接 @ 了群里除月华之外的其他具体成员（A@B 私聊语义）。
+// @全体成员（qq=all / 0）面向全群广播，不算两人私聊；仅检查顶层消息段，
+// 合并转发与回复引用内部的 @ 由渲染层呈现，不参与该判定。
+func directAtOther(segments []MessageSegment, selfStr string) bool {
+	for _, segment := range segments {
+		if segment.Type != "at" {
+			continue
+		}
+		var atData AtData
+		if json.Unmarshal(segment.Data, &atData) != nil {
+			continue
+		}
+		if atData.QQ == selfStr || atData.QQ == "" || atData.QQ == "all" || atData.QQ == "0" {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// replyQuotesSelf 判断回复引用的原始消息是否为月华自己所发：
+// 「引用月华的话再发言」在语意上仍是对月华说话，应当转给月华。
+func replyQuotesSelf(segments []MessageSegment, selfID int64) bool {
+	for _, segment := range segments {
+		if segment.Type != "reply" {
+			continue
+		}
+		var replyData ReplyData
+		if json.Unmarshal(segment.Data, &replyData) != nil {
+			continue
+		}
+		id := rawIDString(replyData.ID)
+		if id == "" {
+			continue
+		}
+		detail, err := getMessageDetail(id)
+		if err != nil || detail == nil {
+			continue
+		}
+		if detail.Sender.UserID == selfID {
 			return true
 		}
 	}

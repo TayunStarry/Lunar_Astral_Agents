@@ -138,9 +138,14 @@ func splitTextChunks(text string, chunkChars, maxChunks int) []string {
 
 // summarizeChunk 单段文本摘要
 func summarizeChunk(query string, hit SearchHit, chunk string, index, total int) (string, error) {
-	system := "你是网页情报整理助手，只依据给定正文提取与检索意图相关的事实、数字、结论与要点，不得编造。"
-	user := fmt.Sprintf("检索意图：%s\n页面标题：%s\n页面地址：%s\n\n以下是网页正文的第 %d/%d 段：\n%s\n\n请输出 150-300 字中文要点，只输出要点正文，不要代码块。",
-		query, firstNonEmpty(hit.Title, "（无标题）"), hit.URL, index, total, chunk)
+	system, userTemplate := loadPromptPair("webSearchChunkSummary.md")
+	user := renderPrompt(userTemplate,
+		"{query}", query,
+		"{title}", firstNonEmpty(hit.Title, "（无标题）"),
+		"{url}", hit.URL,
+		"{index}", fmt.Sprintf("%d", index),
+		"{total}", fmt.Sprintf("%d", total),
+		"{chunk}", chunk)
 	return chatText([]chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: user},
@@ -153,9 +158,12 @@ func mergeChunkSummaries(query string, hit SearchHit, parts []string) (string, e
 	for i, part := range parts {
 		fmt.Fprintf(&b, "【第%d段要点】\n%s\n\n", i+1, part)
 	}
-	system := "你是网页情报整理助手，负责把同一网页的多段要点合并成一份连贯摘要。"
-	user := fmt.Sprintf("检索意图：%s\n页面标题：%s\n页面地址：%s\n\n%s请合并为 300-900 字中文摘要：去重、保留关键数字与结论，不要编造，不要代码块。",
-		query, firstNonEmpty(hit.Title, "（无标题）"), hit.URL, b.String())
+	system, userTemplate := loadPromptPair("webSearchMergeSummary.md")
+	user := renderPrompt(userTemplate,
+		"{query}", query,
+		"{title}", firstNonEmpty(hit.Title, "（无标题）"),
+		"{url}", hit.URL,
+		"{parts}", b.String())
 	return chatText([]chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: user},
@@ -180,12 +188,10 @@ func summarizeByVision(query string, hit SearchHit, page PageExtract, frames []s
 	if err != nil {
 		return "", err
 	}
-	user := "以下是页面元数据与正文（正文极少，已从上到下截取整个页面）：\n" + string(payload) + "\n\n" +
-		"请以附带的页面截图为主要情报来源，识别页面主题、关键信息卡片、图表、表格与视觉元素，" +
-		"并结合少量正文互相印证；若截图显示验证码、错误页或付费墙，请如实说明。" +
-		"围绕 query_hint 输出 200-600 字中文要点，只输出摘要正文，不要代码块。"
+	system, userTemplate := loadPromptPair("webSearchVisionSummary.md")
+	user := renderPrompt(userTemplate, "{payload}", string(payload))
 	return chatText([]chatMessage{
-		{Role: "system", Content: "你是网页情报整理助手，擅长从页面截图中提取视觉信息。"},
+		{Role: "system", Content: system},
 		{Role: "user", Content: textWithImages(user, dataURLs)},
 	})
 }
@@ -241,10 +247,10 @@ func summarizeSearchPage(query string, page PageExtract, results []SearchHit) (s
 	if err != nil {
 		return "", err
 	}
-	user := "以下是搜索结果页的文本与结果列表（已从上到下完整浏览，本次回访只做纯文本总结）：\n" + string(payload) + "\n\n" +
-		"请用 200-500 字总结：结果页整体情报分布、主要站点与信息类型、与检索意图最相关的方向，并给出检索建议。只输出正文，不要代码块。"
+	system, userTemplate := loadPromptPair("webSearchSearchPageSummary.md")
+	user := renderPrompt(userTemplate, "{payload}", string(payload))
 	return chatText([]chatMessage{
-		{Role: "system", Content: "你是搜索情报整理助手，负责总结搜索结果页的整体情况。"},
+		{Role: "system", Content: system},
 		{Role: "user", Content: user},
 	})
 }

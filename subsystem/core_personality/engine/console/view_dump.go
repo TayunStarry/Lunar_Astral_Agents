@@ -55,7 +55,7 @@ type dumpOption struct {
 
 // dumpOptionList 可导出的数据清单：顺序即显示顺序，按「日志 / 实况 / 上下文」分组。
 //
-// 热键分配刻意让上下文那组继续占用 1-7（与既有习惯一致），
+// 热键分配刻意让上下文那组继续占用 1-5（与既有习惯一致），
 // 两个新的运行数据用 l / t——它们是「日志」与「实况」的助记。
 var dumpOptionList = []dumpOption{
 	{kind: dumpKindLogs, hotkey: "l", group: "运行数据", title: "原始日志",
@@ -73,12 +73,8 @@ var dumpOptionList = []dumpOption{
 		desc: "绘图子智能体：任务描述与绘画工具返回"},
 	{kind: dumpKindContext, key: "musician", hotkey: "4", title: "演奏者",
 		desc: "音乐子智能体：任务描述与乐理工具返回"},
-	{kind: dumpKindContext, key: "perceiver", hotkey: "5", title: "感知者",
-		desc: "视频 / 动态图理解子智能体"},
-	{kind: dumpKindContext, key: "memorizer", hotkey: "6", title: "记忆者",
+	{kind: dumpKindContext, key: "memorizer", hotkey: "5", title: "记忆者",
 		desc: "长期记忆写入与检索摘要子智能体"},
-	{kind: dumpKindContext, key: "description", hotkey: "7", title: "描述者",
-		desc: "图片内容描述子智能体（降级占位与 describe_images 共用）"},
 }
 
 // dumpState 数据导出屏状态

@@ -86,7 +86,7 @@ async function handleDispatchPainter(args?: Record<string, any> | string): Promi
     if (reference_tag) {
         const resolved = resolveImageRef(String(reference_tag));
         if (!resolved) {
-            return [`绘画任务调度失败：图片句柄 ${reference_tag} 不存在，请用 list_images 查看可引用的图片句柄后重试`, ''];
+            return [`绘画任务调度失败：图片句柄 ${reference_tag} 不存在，请用 browse_resources（kind="I"）查看可引用的图片句柄后重试`, ''];
         }
         if (!resolved.source) {
             return [`绘画任务调度失败：${resolved.handle} 的图片本体已从内容仓库回收（仅存描述${resolved.desc ? `：${resolved.desc}` : ''}），请让用户重新发送该图片，或换一张图片的句柄`, ''];

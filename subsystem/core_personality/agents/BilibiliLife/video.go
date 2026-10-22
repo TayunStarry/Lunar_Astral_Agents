@@ -16,6 +16,7 @@ import (
 	"time"
 
 	module "CorePersonality/engine/multimodal"
+	"CorePersonality/engine/persistence"
 	"CorePersonality/prompts"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
@@ -176,9 +177,9 @@ func understandVideo(localPath string, info videoInfo, maxSlices int) (string, [
 	if len(segments) > maxSlices {
 		segments = segments[:maxSlices]
 	}
-	system, err := prompts.Read("perceiverRole.md")
+	system, err := prompts.Read("descriptorMediaRole.md")
 	if err != nil {
-		return "", nil, fmt.Errorf("读取感知者提示词失败: %w", err)
+		return "", nil, fmt.Errorf("读取描述者提示词失败: %w", err)
 	}
 	var parts []string
 	var results []sliceUnderstanding
@@ -204,7 +205,7 @@ func understandVideo(localPath string, info videoInfo, maxSlices int) (string, [
 				break
 			}
 		}
-		prompt := fmt.Sprintf("这是同一个视频《%s》的第 %d/%d 个 60 秒切片（UP主：%s）。请按感知者格式客观描述这一段画面内容，不要当成另一个视频。",
+		prompt := fmt.Sprintf("这是同一个视频《%s》的第 %d/%d 个 60 秒切片（UP主：%s）。请按描述者格式客观描述这一段画面内容，不要当成另一个视频。",
 			info.Title, i+1, len(segments), info.Owner)
 		text, chatErr := chatWithImages(string(system), prompt, images)
 		if chatErr != nil {
@@ -227,4 +228,111 @@ func understandVideo(localPath string, info videoInfo, maxSlices int) (string, [
 	summary := fmt.Sprintf("《%s》是同一个视频，下面按时间顺序给出 %d 个 60 秒切片的理解，请合成为对这一个视频的整体观看感受：\n\n%s",
 		info.Title, len(parts), strings.Join(parts, "\n\n"))
 	return summary, results, nil
+}
+
+// prepareVideoSegments 把下载好的视频切成 60 秒片段，过滤 1 秒以下的尾巴。
+func prepareVideoSegments(localPath string, maxSlices int) ([]module.MediaSegment, error) {
+	rawSegments, err := module.VideoToMedia(localPath)
+	if err != nil {
+		return nil, fmt.Errorf("视频切片失败: %w", err)
+	}
+	segments := make([]module.MediaSegment, 0, len(rawSegments))
+	for _, seg := range rawSegments {
+		if seg.End-seg.Start < 1.0 {
+			_ = os.Remove(filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
+			continue
+		}
+		segments = append(segments, seg)
+	}
+	if len(segments) == 0 && len(rawSegments) > 0 {
+		segments = rawSegments[:1]
+	}
+	if maxSlices <= 0 {
+		maxSlices = 3
+	}
+	if len(segments) > maxSlices {
+		for _, extra := range segments[maxSlices:] {
+			_ = os.Remove(filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(extra.File)))
+		}
+		segments = segments[:maxSlices]
+	}
+	return segments, nil
+}
+
+// understandOneSlice 只理解一个 60 秒切片；供可中断的状态机逐片调用。
+func understandOneSlice(info videoInfo, seg module.MediaSegment, index, total int) (string, error) {
+	abs := filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(seg.File))
+	groups, err := module.VideoToFrames(abs)
+	if err != nil {
+		return "", fmt.Errorf("抽帧失败: %w", err)
+	}
+	var images []string
+	for _, group := range groups {
+		for _, frame := range group.Frames {
+			if strings.TrimSpace(frame.Image) != "" {
+				images = append(images, frame.Image)
+			}
+			if len(images) >= 60 {
+				break
+			}
+		}
+		if len(images) >= 60 {
+			break
+		}
+	}
+	system, err := prompts.Read("descriptorMediaRole.md")
+	if err != nil {
+		return "", fmt.Errorf("读取描述者提示词失败: %w", err)
+	}
+	prompt := fmt.Sprintf("这是同一个视频《%s》的第 %d/%d 个 60 秒切片（UP主：%s）。请按描述者格式客观描述这一段画面内容，不要当成另一个视频。",
+		info.Title, index, total, info.Owner)
+	text, err := chatWithImages(string(system), prompt, images)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(text), nil
+}
+
+func combineSliceSummaries(info videoInfo, summaries []string) string {
+	parts := make([]string, 0, len(summaries))
+	for i, text := range summaries {
+		parts = append(parts, fmt.Sprintf("【第 %d/%d 个 60 秒切片】%s", i+1, len(summaries), text))
+	}
+	return fmt.Sprintf("《%s》是同一个视频，下面按时间顺序给出 %d 个 60 秒切片的理解，请合成为对这一个视频的整体观看感受：\n\n%s",
+		info.Title, len(parts), strings.Join(parts, "\n\n"))
+}
+
+// storeVideoSummary 把一条视频的整体理解写入视频摘要库（media.db 的 video_summary 表，
+// 键 = 视频主页 URL）。月华之后用该 URL 查记忆时可直接召回这段理解文本，
+// 不需要重新看一遍视频；重复刷到同一视频时按键覆盖更新。
+// 写入失败仅告警，不阻断生活链。
+func storeVideoSummary(info videoInfo, summaries []string) {
+	if strings.TrimSpace(info.URL) == "" {
+		return
+	}
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "《%s》｜UP主：%s\n", info.Title, info.Owner)
+	for i, text := range summaries {
+		if strings.TrimSpace(text) == "" {
+			continue
+		}
+		fmt.Fprintf(&builder, "【第 %d/%d 个 60 秒切片】%s\n", i+1, len(summaries), text)
+	}
+	summary := strings.TrimSpace(builder.String())
+	if summary == "" {
+		return
+	}
+	result := persistence.ExecuteSQLOn("media",
+		"INSERT OR REPLACE INTO video_summary (key, value) VALUES (?, ?)", []any{info.URL, summary})
+	if !result.Success || len(result.Results) == 0 || !result.Results[0].Success {
+		LoggerGeneral.Warn("BilibiliLife", "视频理解写入摘要库失败(%s): %s", info.URL, result.Error)
+		return
+	}
+	LoggerGeneral.Info("BilibiliLife", "视频理解已写入摘要库: %s", info.URL)
+}
+
+func removeSegments(segments []module.MediaSegment) {
+	for _, seg := range segments {
+		_ = os.Remove(filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
+	}
 }

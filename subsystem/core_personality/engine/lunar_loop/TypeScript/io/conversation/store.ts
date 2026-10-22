@@ -149,7 +149,7 @@ function cachedToContext(record: CachedMessage): PostMessage | null {
 				// 历史动图不能直接回读：/file/miniature 对动图原样直通，会把几十 MB 的 GIF
 				// 交给多模态服务，llama-server 拉取/解码失败时整轮模型请求 500
 				// （error: cannot make GET request）。历史动图只保留文本占位；
-				// 当前新消息仍由 LiteImageFile 走感知者理解后置换成文本。
+				// 当前新消息由 LiteImageFile 原位置换为句柄，内容描述按需由句柄系统生成。
 				const [animated, animatedError] = animatedHistoryCache.has(attachment.src)
 					? [animatedHistoryCache.get(attachment.src) === true, null] as [boolean, Error | null]
 					: isAnimatedImage(attachment.src);
@@ -161,8 +161,8 @@ function cachedToContext(record: CachedMessage): PostMessage | null {
 					continue;
 				}
 				if (animated) {
-					// 历史动图不回传原图（GIF 太大且会让多模态服务 500），但感知者可能已经
-					// 理解过它。命中 video_summary 缓存时把理解文本带回上下文，没命中则只留标记。
+					// 历史动图不回传原图（GIF 太大且会让多模态服务 500），
+					// 旧版理解缓存命中时把文本带回上下文，没命中则只留标记。
 					const summary = (getPromptFromKnowledgeAny(animatedSummaryKeys(attachment.src)) || '').trim();
 					const text = summary
 						? `[动态图: ${summary.length > 1200 ? summary.slice(0, 1200) + '…' : summary}]`

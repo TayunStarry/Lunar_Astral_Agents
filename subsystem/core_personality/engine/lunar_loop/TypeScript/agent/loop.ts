@@ -33,12 +33,19 @@ const FAILURE_REPLY = '刚才有点走神，你再说一遍好吗？';
 export async function dialogueTick(): Promise<void> {
     if (GlobalConfig.reasoningInProgress) return;
     let incoming: MultimodalMessage[] = [];
+    let ranDialogue = false;
     try {
         // 计划表到期项先转成对话输入；它不属于生活链
         flushDueScheduleItems();
         incoming = pullContext();
-        if (incoming.length === 0 && GlobalConfig.unreadContext.length === 0) return;
+        if (incoming.length === 0 && GlobalConfig.unreadContext.length === 0) {
+            // 对话空闲：给自动生活一次判定机会（Go 侧检查间隔/每日上限/是否在跑）
+            if (typeof bilibiliLifeAutoTick === 'function') bilibiliLifeAutoTick();
+            return;
+        }
         GlobalConfig.reasoningInProgress = true;
+        if (typeof bilibiliLifeSetDialogueBusy === 'function') bilibiliLifeSetDialogueBusy(true);
+        ranDialogue = true;
         await runDialogueTurn(incoming);
     }
     catch (e) {
@@ -46,6 +53,9 @@ export async function dialogueTick(): Promise<void> {
     }
     finally {
         GlobalConfig.reasoningInProgress = false;
+        if (typeof bilibiliLifeSetDialogueBusy === 'function') bilibiliLifeSetDialogueBusy(false);
+        // 只有真的跑过对话才重置“10 秒后续跑”的计时；空 tick 不能每秒重置它
+        if (ranDialogue && typeof bilibiliLifeDialogueIdle === 'function') bilibiliLifeDialogueIdle();
     }
 }
 

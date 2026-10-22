@@ -148,6 +148,11 @@ func (w *webSession) clickLogin() error {
 
 // ensureLogin：未登录时进入登录页，10 秒一次检测，60 秒未登录则放弃。
 func (w *webSession) ensureLogin() error {
+	return w.ensureLoginInterruptible(nil)
+}
+
+// ensureLoginInterruptible 可在登录等待期间被对话请求打断（每 10 秒检查一次）。
+func (w *webSession) ensureLoginInterruptible(stop func() bool) error {
 	state, err := w.loginState()
 	if err == nil && state.LoggedIn {
 		LoggerGeneral.Info("BilibiliLife", "B站已登录，跳过扫码")
@@ -168,6 +173,9 @@ func (w *webSession) ensureLogin() error {
 	deadline := time.Now().Add(testLoginWait)
 	for time.Now().Before(deadline) {
 		w.wait(loginPollInterval)
+		if stop != nil && stop() {
+			return errPaused
+		}
 		if !w.alive() {
 			return fmt.Errorf("登录等待期间浏览器被关闭")
 		}

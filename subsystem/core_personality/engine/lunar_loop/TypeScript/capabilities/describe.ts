@@ -1,44 +1,22 @@
-import { ModelBuilder } from '../agent/builder';
-import { sanitizeImageDesc, visionReference } from './image-tag';
 import { formatHandle, parseHandle } from './handle';
-import { deleteResource, getResourceEntry, setResourceSummary } from './resource';
+import { getResourceEntry } from './resource';
 
-// ===== 资源描述能力（图片视觉描述 + 视频/音频理解结论） =====
+// ===== 句柄描述能力 =====
 //
-// 句柄取用链路的降级层：当资源本体不可直读（图片出窗、blob 被回收）时，
-// 由视觉模型现场生成或从资源目录摘要字段取回描述。
+// 图片 / 动图 / 视频统一交给 Go 侧描述者（agents/Descriptor）：
+//   有描述 → 直接返回；
+//   没有描述 → 现场生成并写回资源目录；
+//   定向问题 → 只回本次调用，不覆盖共用描述。
 //
-// 角色注入方式与 image-recall 的 registerImageDescribeRole 一致：
-// 由 roles/index.ts 在模块初始化时注入描述角色单例，避免 capabilities → roles 静态循环引用。
-
-/** 描述角色（视觉模型） */
-let describeRole: ModelBuilder | null = null;
-/** 理解角色（视频/音频感知者） */
-let perceiveRole: ModelBuilder | null = null;
-
-/** 注入描述角色（roles/index.ts 调用） */
-export function registerDescribeRole(role: ModelBuilder): void {
-	describeRole = role;
-}
-
-/** 注入理解角色（roles/index.ts 调用；缺省时视频/音频仅返回目录摘要） */
-export function registerPerceiveRole(role: ModelBuilder): void {
-	perceiveRole = role;
-}
-
-/** 资源目录条目的摘要（无条目返回空串） */
-function storedSummary(handle: string): string {
-	const entry = getResourceEntry(handle);
-	return entry?.summary || '';
-}
+// 感知者（PerceiverRole）与 JS 视觉描述角色均已移除；
+// 文本 / 表格由 inspectTextResource 交给描述者的文件探查链路。
 
 /**
- * 生成或取回资源的描述文本
+ * 取回资源的描述文本
  *
- * 顺序：目录摘要命中 → 视觉/理解模型现场生成并回写 → 空串（调用方自行降级）。
- * 定向问题只回本次调用，不写共用摘要，避免窄问题覆盖通用描述。
+ * 顺序：目录摘要命中 → 图片/动图/视频交给描述者 → 音频返回已有转写。
  *
- * @param handle 资源句柄（形如 @I.007 / @V.001）
+ * @param handle 资源句柄（@I.007 / @V.001）
  * @param question 可选定向问题
  * @returns 描述文本（失败返回空串）
  */
@@ -46,69 +24,57 @@ export function describeResource(handle: string, question = ''): string {
 	const parsed = parseHandle(handle);
 	if (!parsed) return '';
 	const normalized = formatHandle(parsed);
-	const cached = storedSummary(normalized);
-	// 无定向问题且已有摘要：直接命中，零模型调用
-	if (cached && !question) return sanitizeImageDesc(cached, 200);
+	const cached = getResourceEntry(normalized)?.summary || '';
 
-	// 图片走视觉描述角色
-	if (parsed.kind === 'I') {
-		const source = resourceSource(normalized);
-		if (!describeRole || !source) return sanitizeImageDesc(cached, 200);
-		try {
-			const instruction = question
-				? `用户想知道：${question}。请观察这张图片，用不超过100字的中文描述其中与该问题相关的关键信息，直接输出描述本身。`
-				: '用一句不超过20字的中文描述这张图片的主体与场景，只输出描述本身。';
-			describeRole.coverContext({
-				role: 'user',
-				content: [
-					{ type: 'text', text: instruction },
-					{ type: 'image_url', image_url: { url: source } }
-				]
-			});
-			const response = describeRole.run([], []);
-			const desc = sanitizeImageDesc(response.body?.choices?.[0]?.message?.content || '', 200);
-			if (desc && !question) {
-				const entry = getResourceEntry(normalized);
-				if (entry) setResourceSummary(entry.id, desc);
-			}
-			return desc || sanitizeImageDesc(cached, 200);
-		}
-		catch (error) {
-			console.error(`[资源描述] ${normalized} 生成失败:`, error);
-			return sanitizeImageDesc(cached, 200);
-		}
+	// 无定向问题且已有描述：直接命中，零模型调用
+	if (cached && !question) return cached;
+
+	// 图片 / 动图 / 视频：有描述由 Go 侧直接返回，没有则现场观看并入库
+	if (parsed.kind === 'I' || parsed.kind === 'V') {
+		return describeMedia(normalized, question, cached);
 	}
 
-	// 视频 / 音频：目录摘要优先（由感知者写入），无摘要时返回空串由调用方兜底
-	return sanitizeImageDesc(cached, 200);
+	// 音频：只有转写摘要，没有可现场观看的本体
+	if (parsed.kind === 'A') return cached;
+
+	return cached;
 }
 
 /**
- * 取资源本体的**给模型看的**来源：图片一律取视觉读取副本（≤ vision_max_side）
+ * 文本句柄探查：把自然语言需求交给 Go 侧描述者
  *
- * 为什么不能直接给相对路径：这个来源是要塞进 `image_url.url` 交给推理服务的，
- * 而本系统的思维链只允许本机视觉读取端点 URL；裸路径与 data URI 都不再作为图片入口。
- *
- * 为什么不能读原图：图片进入思维链的唯一合法形态是视觉读取管线产物。原图（这里那张
- * 3072×4096 的参考图就是典型）会撑爆 llama-server 的非因果注意力批，直接让多模态实例
- * 断言退出；同时也违反「模型永远拿不到原图数据」（docs/adr/0008）。
- * 因此这里只返回视觉读取管线产物（url 形态为端点 URL，base64 形态为同一管线的 data URI）；
- * 先用 visionRead 探测副本可生成，取不到就返回空串让调用方降级为目录摘要，绝不回退原图。
- *
- * @param handle 资源句柄
- * @returns 视觉读取管线产物；取不到返回空串
+ * @param handle 文本资源句柄（@D.xxx / @T.xxx）
+ * @param request 自然语言需求
+ * @returns 描述者答复；失败返回空串（调用方给出统一失败提示）
  */
-function resourceSource(handle: string): string {
-	const entry = getResourceEntry(handle);
-	if (!entry || entry.state !== 'active' || !entry.blob_path) {
-		// 本体已丢失/损坏：顺带移除失效句柄，不在目录中滞留
-		if (entry?.state === 'lost') deleteResource(handle);
+export function inspectTextResource(handle: string, request: string): string {
+	try {
+		const [text, error] = descriptorInspect(handle, request);
+		if (error) {
+			console.error('[描述者] 文件探查失败:', error?.message ?? String(error));
+			return '';
+		}
+		return String(text || '').trim();
+	}
+	catch (error) {
+		console.error('[描述者] 文件探查抛异常:', error);
 		return '';
 	}
-	const [, error] = visionRead(entry.blob_path, handle);
-	if (error) {
-		console.error('[资源描述] 视觉副本生成失败，降级为目录摘要:', error?.message ?? String(error));
-		return '';
+}
+
+/** 影像描述：Go 侧描述者已有描述直接返回，否则现场观看并写回 */
+function describeMedia(handle: string, question: string, cached: string): string {
+	try {
+		const [text, error] = descriptorDescribeMedia(handle, question);
+		if (error) {
+			console.error('[描述者] 影像描述失败:', error?.message ?? String(error));
+			return cached;
+		}
+		const desc = String(text || '').trim();
+		return desc || cached;
 	}
-	return visionReference(handle, entry.blob_path);
+	catch (error) {
+		console.error('[描述者] 影像描述抛异常:', error);
+		return cached;
+	}
 }

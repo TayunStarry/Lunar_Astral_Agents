@@ -8,6 +8,7 @@ package BilibiliLife
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,15 +17,60 @@ import (
 	"LunarSubsystem/LoggerGeneral"
 )
 
+type MentionTarget struct {
+	Name string `json:"name"`
+	UID  int64  `json:"uid,omitempty"`
+}
+
+// ==== 一轮生活的固定机制参数 ====
+//
+// 以下取值是「机制」而非「偏好」，因此不做成配置项：
+// 每个视频读固定条数的热门评论、固定只写 1 条评论、全轮只允许 1 条 @分享评论、
+// 动态正文最多 10 行简述。数量类（刷几个视频、几个切片、回复几条）才开放配置。
+const (
+	// videoMinCount / videoMaxCount 一轮刷视频数量的硬边界，配置越界时夹紧
+	videoMinCount = 1
+	videoMaxCount = 5
+	// defaultVideosPerRound 默认一轮刷 3 个视频（中途可由月华决定就此停下）
+	defaultVideosPerRound = 3
+	// defaultSlicesPerVideo 每个视频默认 10 个 60 秒切片
+	defaultSlicesPerVideo = 10
+	// commentsReadLimit 每个视频固定读 15 条热门评论，用于写评论时参考
+	commentsReadLimit = 15
+	// commentsPerVideo 每个视频固定配 1 条评论
+	commentsPerVideo = 1
+	// defaultRepliesPerRound 默认一轮回应 5 次消息（评论/动态/私信共用这一份额度）
+	defaultRepliesPerRound = 5
+	// dynamicSummaryMaxLines 动态正文里的简述最多 10 行
+	dynamicSummaryMaxLines = 10
+)
+
 type Config struct {
 	// 更倾向看的主题词（标题/卡片文本命中即加分）
 	PreferenceKeywords []string `json:"preference_keywords"`
+	// @分享评论可以 @ 的用户列表；不再硬编码为某一个人
+	MentionTargets []MentionTarget `json:"mention_targets"`
 	// 直接过滤：涉政、对立、录播/付费等
 	BlockedKeywords []string `json:"blocked_keywords"`
+
+	// 自动生活（TUI 强制触发不占每日次数）
+	AutoEnabled    *bool   `json:"auto_enabled"`
+	IntervalHours  float64 `json:"interval_hours"`
+	DailyLimit     int     `json:"daily_limit"`
+	VideosPerRound int     `json:"videos_per_round"` // 一轮最多刷几个视频（1-5）
+	SlicesPerVideo int     `json:"slices_per_video"` // 每个视频理解几个 60 秒切片
+	RepliesPerRound int    `json:"replies_per_round"` // 一轮可回应几次消息（评论/动态/私信共享）
 }
 
 func defaultConfig() Config {
 	return Config{
+		AutoEnabled:        boolPtr(true),
+		IntervalHours:      6,
+		DailyLimit:         2,
+		VideosPerRound:     defaultVideosPerRound,
+		RepliesPerRound:    defaultRepliesPerRound,
+		SlicesPerVideo:     defaultSlicesPerVideo,
+		MentionTargets:     []MentionTarget{{Name: "钛宇-星光阁", UID: 356123824}},
 		PreferenceKeywords: []string{"AI", "人工智能", "Qwen", "DeepSeek", "小肥鱼", "大肥鱼", "AI娘"},
 		BlockedKeywords: []string{
 			// 旧版基础过滤
@@ -44,6 +90,36 @@ func defaultConfig() Config {
 			"地域黑", "地图炮", "种族", "民族",
 		},
 	}
+}
+
+// clampInt 把取值夹紧到 [lo, hi]
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func boolPtr(v bool) *bool { return &v }
+
+func (c Config) pickMention() MentionTarget {
+	valid := make([]MentionTarget, 0, len(c.MentionTargets))
+	for _, target := range c.MentionTargets {
+		if strings.TrimSpace(target.Name) != "" {
+			valid = append(valid, target)
+		}
+	}
+	if len(valid) == 0 {
+		return MentionTarget{Name: targetName}
+	}
+	return valid[rand.Intn(len(valid))]
+}
+
+func (c Config) autoEnabled() bool {
+	return c.AutoEnabled == nil || *c.AutoEnabled
 }
 
 func configPath() string {
@@ -71,6 +147,35 @@ func LoadConfig() Config {
 	if len(saved.PreferenceKeywords) > 0 {
 		cfg.PreferenceKeywords = saved.PreferenceKeywords
 	}
+	if len(saved.MentionTargets) > 0 {
+		valid := make([]MentionTarget, 0, len(saved.MentionTargets))
+		for _, target := range saved.MentionTargets {
+			if strings.TrimSpace(target.Name) != "" {
+				valid = append(valid, MentionTarget{Name: strings.TrimSpace(target.Name), UID: target.UID})
+			}
+		}
+		if len(valid) > 0 {
+			cfg.MentionTargets = valid
+		}
+	}
+	if saved.AutoEnabled != nil {
+		cfg.AutoEnabled = saved.AutoEnabled
+	}
+	if saved.IntervalHours > 0 {
+		cfg.IntervalHours = saved.IntervalHours
+	}
+	if saved.DailyLimit > 0 {
+		cfg.DailyLimit = saved.DailyLimit
+	}
+	if saved.VideosPerRound > 0 {
+		cfg.VideosPerRound = clampInt(saved.VideosPerRound, videoMinCount, videoMaxCount)
+	}
+	if saved.RepliesPerRound > 0 {
+		cfg.RepliesPerRound = saved.RepliesPerRound
+	}
+	if saved.SlicesPerVideo > 0 {
+		cfg.SlicesPerVideo = saved.SlicesPerVideo
+	}
 	if len(saved.BlockedKeywords) > 0 {
 		// 用户过滤词与内置安全词合并；内置涉政/对立词不能因为文件漏写而消失
 		seen := map[string]bool{}
@@ -85,8 +190,6 @@ func LoadConfig() Config {
 		}
 		cfg.BlockedKeywords = merged
 	}
-	LoggerGeneral.Info("BilibiliLife", "选片偏好：参考词 %d 个；过滤词 %d 个（%s）",
-		len(cfg.PreferenceKeywords), len(cfg.BlockedKeywords), path)
 	return cfg
 }
 

@@ -167,6 +167,38 @@ export function isHandleText(text: string): boolean {
 	return parseHandle(text) !== null;
 }
 
+/** 句柄调用查询：句柄 + 可选自然语言需求 */
+export type ResourceQuery = {
+	/** 规范句柄部分（含锚点） */
+	handle: string;
+	/** `&` 之后的自然语言需求（无则为空串） */
+	ask: string;
+};
+
+/**
+ * 解析句柄调用语法 `handle [ "&" ask ]`
+ *
+ * 句柄本身仍由 handle.ts 的唯一文法解析；`&` 只是调用层分隔符，
+ * 不进入资源目录、不参与持久化。约束：
+ *   - 只按**第一个** `&` 切分，ask 内可以继续出现 `&`、换行与中文标点；
+ *   - 容忍 `[@D.003&说明]` / `【@D.003&说明】` 这类展示包裹；
+ *   - 未带 `&` 时 ask 为空串。
+ *
+ * @param raw 原始句柄或句柄+需求文本
+ * @returns { handle, ask }
+ */
+export function parseResourceQuery(raw: string): ResourceQuery {
+	let text = String(raw || '').trim();
+	// 先剥展示包裹，再切 &，避免 ask 末尾的 ] 被误当成句柄的一部分
+	text = text.replace(/^[[【]/, '').replace(/[\]】]$/, '');
+	const index = text.indexOf('&');
+	if (index < 0) return { handle: text.trim(), ask: '' };
+	return {
+		handle: text.slice(0, index).trim(),
+		ask: text.slice(index + 1).trim()
+	};
+}
+
 /** 面向用户的句柄说明（提示文案与占位文本使用） */
 export function describeHandle(raw: string): string {
 	const parsed = parseHandle(raw);
@@ -181,5 +213,6 @@ export function describeHandle(raw: string): string {
 /** 供工具描述拼接的文法速查（避免各处硬编码示例） */
 export function grammarCheatsheet(): string {
 	return '句柄形如 @D.003（文档）、@I.007（图片）、@V.001（视频）、@A.002（音频）；'
-		+ '段落锚点可写 @D.003|§4（第 4 节）或 @D.003|L120-168（第 120-168 行）';
+		+ '段落锚点可写 @D.003|§4（第 4 节）或 @D.003|L120-168（第 120-168 行）；'
+		+ '需要描述者探查时可写成 @D.003&自然语言需求';
 }

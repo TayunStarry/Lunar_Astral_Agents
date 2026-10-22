@@ -16,29 +16,29 @@ export async function understandAudio(audioSource: string): Promise<string> {
 	const cacheable = !audioSource.startsWith('data:');
 	const cachedPrompt = cacheable ? getPromptFromKnowledge(audioSource) : '';
 	if (cachedPrompt) {
-		console.log('[感知者] 命中音频缓存，直接返回');
+		console.log('[语音] 命中音频缓存，直接返回');
 		return cachedPrompt;
 	}
 	// 第一步：将音频本地化并转换为 16kHz 单声道 WAV
-	console.log('[感知者] 开始转换音频...');
+	console.log('[语音] 开始转换音频...');
 	const [wavBase64, audioError] = audioWav(audioSource);
 	if (!wavBase64 || audioError) {
-		console.error('[感知者] 音频转换失败:', audioError);
+		console.error('[语音] 音频转换失败:', audioError);
 		throw new Error('音频转换失败');
 	}
 	// 第二步：调用语音识别模型转写
-	console.log('[感知者] 开始语音转写...');
+	console.log('[语音] 开始语音转写...');
 	const transcript = await transcribeAudio(wavBase64);
 	if (!transcript.trim()) {
-		console.error('[感知者] 语音转写为空');
+		console.error('[语音] 语音转写为空');
 		throw new Error('语音转写为空');
 	}
-	console.log(`[感知者] 语音转写完成: ${transcript.substring(0, 50)}`);
+	console.log(`[语音] 语音转写完成: ${transcript.substring(0, 50)}`);
 	// 第三步：转写文本直接作为音频内容的完整表达，并写入缓存
 	const text = `【语音转写】${transcript}`;
 	if (cacheable) {
 		savePromptToKnowledge(audioSource, text);
-		console.log('[感知者] 语音转写文本已缓存');
+		console.log('[语音] 语音转写文本已缓存');
 	}
 	return text;
 }
@@ -70,7 +70,7 @@ async function transcribeAudio(wavBase64: string): Promise<string> {
 		},
 	});
 	if (error) {
-		console.error('[感知者] 语音转写请求失败:', error.message);
+		console.error('[语音] 语音转写请求失败:', error.message);
 		return '';
 	}
 	/** ASR 原始输出（形如 "language Chinese<asr_text>转写内容"） */
@@ -103,7 +103,7 @@ export async function resourceAudio(
 		return `${media.handle}${transcript}`;
 	}
 	catch (error) {
-		console.error('[感知者] 音频理解失败（句柄已保留）:', error);
+		console.error('[语音] 音频理解失败（句柄已保留）:', error);
 		return `${media.handle}${AUDIO_FALLBACK_TEXT}`;
 	}
 }
@@ -114,7 +114,7 @@ export async function understandAudioOrFallback(audioSource: string): Promise<st
 		return await understandAudio(audioSource);
 	}
 	catch (error) {
-		console.error('[感知者] 音频理解失败，以兜底文本置换:', error);
+		console.error('[语音] 音频理解失败，以兜底文本置换:', error);
 		return AUDIO_FALLBACK_TEXT;
 	}
 }
@@ -131,7 +131,7 @@ export async function resourceAudioOrFallback(audioSource: string): Promise<stri
 		if (text) return text;
 	}
 	catch (error) {
-		console.error('[感知者] 音频资源化失败，退化为纯转写文本:', error);
+		console.error('[语音] 音频资源化失败，退化为纯转写文本:', error);
 	}
 	return understandAudioOrFallback(audioSource);
 }

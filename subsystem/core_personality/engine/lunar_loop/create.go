@@ -1,6 +1,7 @@
 package lunarloop
 
 import (
+	"CorePersonality/agents/BilibiliLife"
 	"CorePersonality/engine/lunar_loop/container"
 	"LunarSubsystem/LoggerGeneral"
 	"fmt"
@@ -63,6 +64,10 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("resourceDelete", adapters.resourceDelete)
 	vm.Set("resourceGrammar", adapters.resourceGrammar)
 
+	// 注册描述者适配器（句柄系统的图片/动图/视频描述与文件内容探查，见 agents/Descriptor）
+	vm.Set("descriptorDescribeMedia", adapters.descriptorDescribeMedia)
+	vm.Set("descriptorInspect", adapters.descriptorInspect)
+
 	// 注册base64编码解码适配器
 	vm.Set("atob", adapters.atob)
 	// 二进制 base64 解码：返回字节数组（atob 返回字符串，不能用于图片/音频）
@@ -115,6 +120,28 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("notifyAgentIdle", adapters.notifyAgentIdle)
 	vm.Set("notifyAgentFailure", adapters.notifyAgentFailure)
 	vm.Set("takeEngineSnapshot", adapters.takeEngineSnapshot)
+
+	// 生活链桥：进度标题 / 空闲自动判定 / 对话完成通知
+	vm.Set("bilibiliLifeProgress", func(goja.FunctionCall) goja.Value {
+		return vm.ToValue(BilibiliLife.Progress())
+	})
+	vm.Set("bilibiliLifeAutoTick", func(goja.FunctionCall) goja.Value {
+		return vm.ToValue(BilibiliLife.AutoTick())
+	})
+	vm.Set("bilibiliLifeDialogueIdle", func(goja.FunctionCall) goja.Value {
+		BilibiliLife.NotifyDialogueIdle()
+		return goja.Undefined()
+	})
+	vm.Set("bilibiliLifeSetDialogueBusy", func(call goja.FunctionCall) goja.Value {
+		BilibiliLife.SetDialogueBusy(call.Argument(0).ToBoolean())
+		return goja.Undefined()
+	})
+	BilibiliLife.SetUnreadCounter(UnreadCount)
+	// 生活日记回执：每轮生活结束把「日记写在了哪个句柄」送进未读队列，
+	// 月华由此知道可用 read_resource 按行回看自己刷了什么
+	BilibiliLife.SetDiaryNotifier(func(message string) {
+		EnqueueMessage(PostMessage{Role: string(RoleUser), Content: "[月华的生活] " + message, Source: "bilibili_life"})
+	})
 
 	// 注册引擎桥接适配器
 	vm.Set("sendToEngine", adapters.sendToEngine)

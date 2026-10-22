@@ -164,9 +164,21 @@ var lunarBundle = (function (exports) {
     function sectionHandle(kind, seq, ordinal) {
         return `${handleOf(kind, seq)}|§${ordinal}`;
     }
+    function parseResourceQuery(raw) {
+        let text = String(raw || '').trim();
+        text = text.replace(/^[[【]/, '').replace(/[\]】]$/, '');
+        const index = text.indexOf('&');
+        if (index < 0)
+            return { handle: text.trim(), ask: '' };
+        return {
+            handle: text.slice(0, index).trim(),
+            ask: text.slice(index + 1).trim()
+        };
+    }
     function grammarCheatsheet() {
         return '句柄形如 @D.003（文档）、@I.007（图片）、@V.001（视频）、@A.002（音频）；'
-            + '段落锚点可写 @D.003|§4（第 4 节）或 @D.003|L120-168（第 120-168 行）';
+            + '段落锚点可写 @D.003|§4（第 4 节）或 @D.003|L120-168（第 120-168 行）；'
+            + '需要描述者探查时可写成 @D.003&自然语言需求';
     }
 
     function setResourceSummary(id, summary, tags) {
@@ -442,7 +454,7 @@ var lunarBundle = (function (exports) {
         if (reference_tag) {
             const resolved = resolveImageRef(String(reference_tag));
             if (!resolved) {
-                return [`绘画任务调度失败：图片句柄 ${reference_tag} 不存在，请用 list_images 查看可引用的图片句柄后重试`, ''];
+                return [`绘画任务调度失败：图片句柄 ${reference_tag} 不存在，请用 browse_resources（kind="I"）查看可引用的图片句柄后重试`, ''];
             }
             if (!resolved.source) {
                 return [`绘画任务调度失败：${resolved.handle} 的图片本体已从内容仓库回收（仅存描述${resolved.desc ? `：${resolved.desc}` : ''}），请让用户重新发送该图片，或换一张图片的句柄`, ''];
@@ -469,167 +481,6 @@ var lunarBundle = (function (exports) {
     }
     GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
     GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
-
-    let describeRole = null;
-    function registerDescribeRole(role) {
-        describeRole = role;
-    }
-    function storedSummary(handle) {
-        const entry = getResourceEntry(handle);
-        return entry?.summary || '';
-    }
-    function describeResource(handle, question = '') {
-        const parsed = parseHandle(handle);
-        if (!parsed)
-            return '';
-        const normalized = formatHandle(parsed);
-        const cached = storedSummary(normalized);
-        if (cached && !question)
-            return sanitizeImageDesc(cached, 200);
-        if (parsed.kind === 'I') {
-            const source = resourceSource(normalized);
-            if (!describeRole || !source)
-                return sanitizeImageDesc(cached, 200);
-            try {
-                const instruction = question
-                    ? `用户想知道：${question}。请观察这张图片，用不超过100字的中文描述其中与该问题相关的关键信息，直接输出描述本身。`
-                    : '用一句不超过20字的中文描述这张图片的主体与场景，只输出描述本身。';
-                describeRole.coverContext({
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: instruction },
-                        { type: 'image_url', image_url: { url: source } }
-                    ]
-                });
-                const response = describeRole.run([], []);
-                const desc = sanitizeImageDesc(response.body?.choices?.[0]?.message?.content || '', 200);
-                if (desc && !question) {
-                    const entry = getResourceEntry(normalized);
-                    if (entry)
-                        setResourceSummary(entry.id, desc);
-                }
-                return desc || sanitizeImageDesc(cached, 200);
-            }
-            catch (error) {
-                console.error(`[资源描述] ${normalized} 生成失败:`, error);
-                return sanitizeImageDesc(cached, 200);
-            }
-        }
-        return sanitizeImageDesc(cached, 200);
-    }
-    function resourceSource(handle) {
-        const entry = getResourceEntry(handle);
-        if (!entry || entry.state !== 'active' || !entry.blob_path) {
-            if (entry?.state === 'lost')
-                deleteResource(handle);
-            return '';
-        }
-        const [, error] = visionRead(entry.blob_path, handle);
-        if (error) {
-            console.error('[资源描述] 视觉副本生成失败，降级为目录摘要:', error?.message ?? String(error));
-            return '';
-        }
-        return visionReference(handle, entry.blob_path);
-    }
-
-    const LIST_LIMIT_MAX$1 = 100;
-    const imageRecallTools = [
-        {
-            type: "function",
-            function: {
-                name: "list_images",
-                description: "列出当前可引用的图片句柄清单（句柄 + 内容描述），按登记时间倒序，只返回文字不含图片。当你不确定某张图片的句柄、或用户提到一张你已看不到的图片时，先用本工具查看清单，再用 describe_images 按句柄取内容描述；需要正文式的统一清单（含文档/视频/音频）请用 list_resources。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        limit: {
-                            type: "number",
-                            description: "返回条目数量上限，默认 30"
-                        }
-                    },
-                    required: []
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "describe_images",
-                description: "按图片句柄获取图片的内容描述（视觉模型解读，不注入图片本体，上下文成本极低）。占位文本 [@I.00x]（…）括号内已是内容描述，无需再调用；需要了解描述之外的细节（如「图上写了什么字」、画面里第二个人的穿着）时可带 question 定向提问。句柄可从消息中的旁注占位、list_images 清单或合并转发文本中获得；交给绘图者参照创作时无需调用，直接在 dispatch_painter 的 reference_tag 里写句柄。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        tags: {
-                            type: "array",
-                            items: { type: "string" },
-                            description: "图片句柄数组，如 [\"@I.003\", \"@I.007\"]（写作 [@I.003] 也可以）"
-                        },
-                        question: {
-                            type: "string",
-                            description: "可选：用户当前关心的具体问题（如'图上写了什么字'、'第二个人穿什么'），描述将围绕该问题定向生成"
-                        }
-                    },
-                    required: ["tags"]
-                }
-            }
-        }
-    ];
-    function describeEntry(tag, question) {
-        const entry = getResourceEntry(tag);
-        if (entry?.summary && !question)
-            return sanitizeImageDesc(entry.summary, 200);
-        const described = describeResource(tag, question);
-        return described || sanitizeImageDesc(entry?.summary || '', 200);
-    }
-    async function handleListImages$1(args) {
-        const parsed = typeof args === 'string' ? safeParse$2(args) : (args || {});
-        const limit = Math.min(Math.max(Number(parsed.limit) || 30, 1), LIST_LIMIT_MAX$1);
-        const lines = [];
-        for (const entry of listResources('I', limit)) {
-            const desc = entry.summary ? sanitizeImageDesc(entry.summary, 40) : '（暂无描述，可用 describe_images 获取）';
-            const lost = entry.state === 'active' ? '' : ' [本体已回收]';
-            lines.push(`[${entry.handle}] ${desc}${lost}`);
-        }
-        if (lines.length === 0)
-            return ['当前没有可引用的图片：资源目录中还没有任何图片入库', ''];
-        const text = `当前可引用的图片句柄（共 ${lines.length} 条，越靠前越新）：`
-            + `\n${lines.join('\n')}`
-            + '\n句柄形如 @I.003，来自统一资源目录：重启后依然有效，本体被回收时会降级为描述。';
-        return [text, ''];
-    }
-    async function handleDescribeImages(args) {
-        const parsed = typeof args === 'string' ? safeParse$2(args) : (args || {});
-        const rawTags = Array.isArray(parsed.tags) ? parsed.tags : (parsed.tag ? [parsed.tag] : []);
-        const resolved = rawTags
-            .map(item => resolveImageRef(String(item || '')))
-            .filter((item) => item !== null);
-        if (resolved.length === 0) {
-            return ['取图失败：请提供图片句柄数组，如 ["@I.003"]；句柄可用 list_images 或 list_resources 查看', ''];
-        }
-        const question = String(parsed.question || '').trim().slice(0, 100);
-        const lines = [];
-        for (const ref of resolved) {
-            const desc = describeEntry(ref.handle, question);
-            lines.push(`[${ref.handle}] ${desc || '（描述生成失败，源图可能已失效）'}`);
-        }
-        let text = `共取回 ${lines.length} 张图片的内容描述：\n${lines.join('\n')}`;
-        if (resolved.length !== rawTags.length) {
-            text += `\n（有 ${rawTags.length - resolved.length} 个句柄无法解析，已跳过；可用 list_images 查看当前可引用句柄）`;
-        }
-        console.log(`[图片描述] 已取回 ${lines.length} 张图片描述`);
-        return [text, ''];
-    }
-    function safeParse$2(text) {
-        try {
-            const parsed = JSON.parse(text);
-            return parsed && typeof parsed === 'object' ? parsed : {};
-        }
-        catch {
-            return {};
-        }
-    }
-    GlobalConfig.LTPfunction.set('list_images', handleListImages$1);
-    GlobalConfig.LTPfunction.set('describe_images', handleDescribeImages);
 
     function interactEvent(topic, payload) {
         try {
@@ -1771,415 +1622,6 @@ var lunarBundle = (function (exports) {
     }
     GlobalConfig.LTPfunction.set('screenshot', handleScreenshot);
 
-    class ModelBuilder {
-        roleTag = "月华";
-        enableTools = true;
-        reasoningStrength = "low";
-        disableThinking = false;
-        messages = [];
-        ragMessages = [];
-        runtimeMessages = [];
-        systemPrompt = "你的名字叫做月华, 是一个女孩子";
-        promptCompletion(prompt) {
-            let addressText = "";
-            if (GlobalConfig.currentAddress.length === 0) {
-                const addressResult = address();
-                GlobalConfig.currentAddress = addressResult[0];
-                addressText = GlobalConfig.currentAddress.join(' ');
-            }
-            else
-                addressText = GlobalConfig.currentAddress.join(' ');
-            return prompt
-                .replace(/{current-address}/g, addressText);
-        }
-        writeContext(context) {
-            const cleaned = this.stripReasoningContent(context);
-            if (this.messages.length >= 48) {
-                const discarded = this.messages.slice(0, this.messages.length - 47);
-                this.messages = this.messages.slice(-47).concat(cleaned);
-                GlobalConfig.unreadRecords.push(...discarded);
-            }
-            else
-                this.messages.push(cleaned);
-            return this;
-        }
-        stripReasoningContent(message) {
-            if ('reasoning_content' in message || 'source' in message) {
-                const { reasoning_content, source, ...rest } = message;
-                return rest;
-            }
-            return message;
-        }
-        coverContext(context) {
-            this.messages = Array.isArray(context) ? context : [context];
-            return this;
-        }
-        appendPrompt(content) {
-            const block = '\n' + content.replace(/^\n+|\n+$/g, '');
-            if (this.systemPrompt.includes(block))
-                return this;
-            this.systemPrompt = this.systemPrompt.replace(/\s*$/, '') + block;
-            return this;
-        }
-        removePrompt(content) {
-            const block = '\n' + content.replace(/^\n+|\n+$/g, '');
-            this.systemPrompt = this.systemPrompt.replace(block, '');
-            return this;
-        }
-        run(appendContext, toolCall) {
-            const rawMessages = [
-                { role: 'system', content: this.systemPrompt },
-                ...this.runtimeMessages,
-                ...appendContext,
-                ...this.messages
-            ];
-            const requestBody = {
-                model: GlobalConfig.MultimodalName,
-                messages: rawMessages,
-                stream: true,
-                tools: toolCall,
-                tool_choice: 'auto',
-                chat_template_kwargs: {
-                    reasoning_strength: this.reasoningStrength,
-                    ...(this.disableThinking ? { enable_thinking: false } : {})
-                }
-            };
-            if (!this.enableTools || toolCall.length === 0) {
-                delete requestBody.tool_choice;
-                delete requestBody.tools;
-            }
-            const headers = {
-                Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
-                "Content-Type": "application/json",
-                "X-Lunar-Role": this.roleTag,
-            };
-            const modelRequest = {
-                method: "POST",
-                crossDomain: true,
-                headers,
-                body: JSON.stringify(requestBody)
-            };
-            const endpoint = "/chat/completions";
-            const [result, error] = syncFetch({ url: GlobalConfig.MultimodalUrl + endpoint, execute: modelRequest });
-            if (error)
-                throw error;
-            if (result?.body?.error) {
-                const errMsg = typeof result.body.error === 'string'
-                    ? result.body.error
-                    : result.body.error.message || JSON.stringify(result.body.error);
-                throw new Error(`模型服务错误 [${result.status}]: ${errMsg}`);
-            }
-            if (!result?.body?.choices) {
-                throw new Error(`模型响应异常: status=${result?.status}, body=${JSON.stringify(result?.body)?.substring(0, 200)}`);
-            }
-            return result;
-        }
-        constructor(prompt) {
-            this.systemPrompt = this.promptCompletion(prompt);
-        }
-    }
-
-    function admitMedia(source, name, origin, kindHint) {
-        if (!source)
-            return null;
-        const lower = source.toLowerCase();
-        const sourceKind = lower.startsWith('data:') ? 'data' : (/^https?:\/\//i.test(source) ? 'url' : 'path');
-        const result = admitResource({ sourceKind, source, name, origin, kindHint });
-        return result ? { handle: result.handle, id: result.id } : null;
-    }
-    function storeMediaSummary(media, summary) {
-        if (!media || !summary || !summary.trim())
-            return;
-        setResourceSummary(media.id, summary.trim().slice(0, 1000));
-    }
-    function existingSummary(media) {
-        const entry = getResourceEntry(media.handle);
-        return entry?.summary || '';
-    }
-    function mediaName(source, fallbackExt) {
-        const lower = (source || '').toLowerCase();
-        const dataMatch = /^data:(image|video|audio)\/(\w+)[;,]/.exec(lower);
-        if (dataMatch)
-            return `media.${dataMatch[2] === 'jpeg' ? 'jpg' : dataMatch[2]}`;
-        const path = lower.split('?')[0].split('#')[0];
-        const base = path.slice(path.lastIndexOf('/') + 1);
-        if (base && /\.[a-z0-9]{2,5}$/.test(base))
-            return base;
-        return `media${fallbackExt}`;
-    }
-    function resolveAdmittedMedia(handle) {
-        const entry = getResourceEntry(handle);
-        return entry ? { handle: entry.handle, id: entry.id } : null;
-    }
-
-    let mediaRoles = null;
-    function registerMediaRoles(roles) {
-        mediaRoles = roles;
-    }
-    function mediaRoleContext() {
-        if (!mediaRoles)
-            throw new Error('媒体角色尚未注入（roles/index.ts 未初始化）');
-        return mediaRoles;
-    }
-
-    function useFrameSequence() {
-        return GlobalConfig.VideoInputMode === 'frames';
-    }
-    async function understandMediaSegments(watch, cacheKey) {
-        console.log('[感知者] 开始观看...');
-        const summary = await watch();
-        console.log('[感知者] 观看完成');
-        if (summary && summary.trim().length > 0 && cacheKey) {
-            savePromptToKnowledge(cacheKey, summary);
-            console.log('[感知者] 理解文本已缓存');
-        }
-        return summary;
-    }
-
-    async function understandAnimatedImage(imageSource, cacheKey) {
-        const cachedPrompt = cacheKey ? getPromptFromKnowledge(cacheKey) : '';
-        if (cachedPrompt) {
-            console.log('[感知者] 命中动态图缓存，直接返回');
-            return cachedPrompt;
-        }
-        console.log('[感知者] 检测到动态图，开始解码帧序列...');
-        const [groups, framesError] = animatedImageToFrames(imageSource);
-        if (!groups || groups.length === 0 || framesError) {
-            console.error('[感知者] 动态图抽帧失败:', framesError);
-            throw new Error('动态图抽帧失败');
-        }
-        const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
-        console.log(`[感知者] 动态图抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
-        return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchAnimation(groups), cacheKey);
-    }
-    async function replaceAnimatedImage(imageSource, handle) {
-        const media = resolveAdmittedMedia(handle);
-        let summary = '';
-        try {
-            summary = await understandAnimatedImage(imageSource, imageSource.startsWith('data:') ? '' : imageSource);
-        }
-        catch (error) {
-            console.error('[感知者] 动态图理解失败，以兜底文本置换:', error);
-        }
-        if (media && summary.trim().length > 0)
-            storeMediaSummary(media, summary);
-        const body = summary.trim().length > 0 ? `【动态图理解】${summary}` : mediaRoleContext().randomDefaultMessage();
-        return media ? `${media.handle}${body}` : body;
-    }
-
-    const AUDIO_FALLBACK_TEXT = '月华听不懂这段语音呢';
-    async function understandAudio(audioSource) {
-        const cacheable = !audioSource.startsWith('data:');
-        const cachedPrompt = cacheable ? getPromptFromKnowledge(audioSource) : '';
-        if (cachedPrompt) {
-            console.log('[感知者] 命中音频缓存，直接返回');
-            return cachedPrompt;
-        }
-        console.log('[感知者] 开始转换音频...');
-        const [wavBase64, audioError] = audioWav(audioSource);
-        if (!wavBase64 || audioError) {
-            console.error('[感知者] 音频转换失败:', audioError);
-            throw new Error('音频转换失败');
-        }
-        console.log('[感知者] 开始语音转写...');
-        const transcript = await transcribeAudio(wavBase64);
-        if (!transcript.trim()) {
-            console.error('[感知者] 语音转写为空');
-            throw new Error('语音转写为空');
-        }
-        console.log(`[感知者] 语音转写完成: ${transcript.substring(0, 50)}`);
-        const text = `【语音转写】${transcript}`;
-        if (cacheable) {
-            savePromptToKnowledge(audioSource, text);
-            console.log('[感知者] 语音转写文本已缓存');
-        }
-        return text;
-    }
-    async function transcribeAudio(wavBase64) {
-        const [result, error] = syncFetch({
-            url: GlobalConfig.MultimodalUrl + '/chat/completions',
-            execute: {
-                method: 'POST',
-                crossDomain: true,
-                headers: {
-                    Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: GlobalConfig.AsrName,
-                    messages: [{
-                            role: 'user',
-                            content: [{ type: 'input_audio', input_audio: { data: wavBase64, format: 'wav' } }]
-                        }],
-                    temperature: 0,
-                }),
-            },
-        });
-        if (error) {
-            console.error('[感知者] 语音转写请求失败:', error.message);
-            return '';
-        }
-        const raw = result?.body?.choices?.[0]?.message?.content || '';
-        const marker = '<asr_text>';
-        return raw.includes(marker) ? raw.substring(raw.indexOf(marker) + marker.length).trim() : raw.trim();
-    }
-    async function resourceAudio(originalSource, name, origin) {
-        const media = admitMedia(originalSource, name, origin, 'A');
-        if (!media)
-            return '';
-        const cached = existingSummary(media);
-        if (cached)
-            return `${media.handle}${cached}`;
-        try {
-            const transcript = await understandAudio(originalSource);
-            storeMediaSummary(media, transcript);
-            return `${media.handle}${transcript}`;
-        }
-        catch (error) {
-            console.error('[感知者] 音频理解失败（句柄已保留）:', error);
-            return `${media.handle}${AUDIO_FALLBACK_TEXT}`;
-        }
-    }
-    async function understandAudioOrFallback(audioSource) {
-        try {
-            return await understandAudio(audioSource);
-        }
-        catch (error) {
-            console.error('[感知者] 音频理解失败，以兜底文本置换:', error);
-            return AUDIO_FALLBACK_TEXT;
-        }
-    }
-    async function resourceAudioOrFallback(audioSource) {
-        try {
-            const text = await resourceAudio(audioSource, mediaName(audioSource, '.wav'), audioSource.startsWith('data:') ? 'client-upload' : 'channel');
-            if (text)
-                return text;
-        }
-        catch (error) {
-            console.error('[感知者] 音频资源化失败，退化为纯转写文本:', error);
-        }
-        return understandAudioOrFallback(audioSource);
-    }
-
-    const VIDEO_FALLBACK_TEXT = '月华看不了这个视频呢';
-    async function understandVideo(videoUrl) {
-        const cachedPrompt = getPromptFromKnowledge(videoUrl);
-        if (cachedPrompt) {
-            console.log('[感知者] 命中视频缓存，直接返回');
-            return cachedPrompt;
-        }
-        if (useFrameSequence()) {
-            console.log('[感知者] 开始将视频抽取为图片序列帧...');
-            const [groups, framesError] = videoFrames(videoUrl);
-            if (!groups || groups.length === 0 || framesError) {
-                console.error('[感知者] 视频抽帧失败:', framesError);
-                throw new Error('视频抽帧失败');
-            }
-            const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
-            console.log(`[感知者] 视频抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
-            return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchFrames(groups), videoUrl);
-        }
-        console.log('[感知者] 开始将视频写入媒体目录...');
-        const [segments, mediaError] = videoMedia(videoUrl);
-        if (!segments || segments.length === 0 || mediaError) {
-            console.error('[感知者] 视频媒体化失败:', mediaError);
-            throw new Error('视频媒体化失败');
-        }
-        const mediaUrls = segments.map(segment => `file://${segment.file}`);
-        console.log(`[感知者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
-        return understandMediaSegments(() => mediaRoleContext().perceiverRole.watchVideo(mediaUrls), videoUrl);
-    }
-    async function resourceVideo(originalSource, name, origin, admitSource) {
-        const media = admitMedia(originalSource, name, origin, 'V');
-        if (!media)
-            return '';
-        const cached = existingSummary(media);
-        if (cached)
-            return `${media.handle}【视频理解】${cached}`;
-        try {
-            const summary = await understandVideo(originalSource);
-            if (!summary || !summary.trim())
-                return `${media.handle}`;
-            storeMediaSummary(media, summary);
-            return `${media.handle}【视频理解】${summary}`;
-        }
-        catch (error) {
-            console.error('[感知者] 视频理解失败（句柄已保留）:', error);
-            return `${media.handle}${VIDEO_FALLBACK_TEXT}`;
-        }
-    }
-    async function understandVideoOrFallback(videoUrl) {
-        try {
-            const summary = await understandVideo(videoUrl);
-            if (summary.trim().length > 0)
-                return summary;
-            return mediaRoleContext().randomDefaultMessage();
-        }
-        catch (error) {
-            console.error('[感知者] 视频理解失败，以兜底文本置换:', error);
-            return VIDEO_FALLBACK_TEXT;
-        }
-    }
-    async function resourceVideoOrFallback(videoSource) {
-        try {
-            const text = await resourceVideo(videoSource, mediaName(videoSource, '.mp4'), videoSource.startsWith('data:') ? 'client-upload' : 'channel');
-            if (text)
-                return text;
-        }
-        catch (error) {
-            console.error('[感知者] 视频资源化失败，退化为纯理解文本:', error);
-        }
-        return understandVideoOrFallback(videoSource);
-    }
-
-    async function LiteImageFile() {
-        for (let message of GlobalConfig.unreadContext) {
-            if (typeof message.content === 'string')
-                continue;
-            const newContent = [];
-            for (let item of message.content) {
-                if (item.type == 'text') {
-                    newContent.push(item);
-                    continue;
-                }
-                if (item.type === 'video_url') {
-                    newContent.push({ type: 'text', text: await resourceVideoOrFallback(item.video_url.url) });
-                    continue;
-                }
-                if (item.type === 'audio_url') {
-                    newContent.push({ type: 'text', text: await resourceAudioOrFallback(item.audio_url.url) });
-                    continue;
-                }
-                if ('input_audio' in item) {
-                    const format = item.input_audio.format || 'wav';
-                    newContent.push({ type: 'text', text: await resourceAudioOrFallback(`data:audio/${format};base64,${item.input_audio.data}`) });
-                    continue;
-                }
-                if (!item.image_url)
-                    continue;
-                const imageSource = item.image_url.url;
-                if (imageSource.toLowerCase().startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(format => imageSource.toLowerCase().endsWith(format))) {
-                    newContent.push({ type: 'text', text: await resourceVideoOrFallback(imageSource) });
-                    continue;
-                }
-                const [isAnimated, animatedError] = isAnimatedImage(imageSource);
-                if (animatedError)
-                    console.error('[动态图判定失败]:', animatedError.message);
-                if (!animatedError && isAnimated) {
-                    let handle = handleFromVisionURL(imageSource);
-                    if (!handle) {
-                        const admitted = admitImageDataURI(imageSource, `image${guessImageExt(imageSource)}`);
-                        handle = admitted?.handle || '';
-                    }
-                    newContent.push({ type: 'text', text: await replaceAnimatedImage(imageSource, handle) });
-                    continue;
-                }
-                newContent.push(item);
-            }
-            message.content = newContent;
-        }
-    }
-
     const IMAGE_KEEP_CHARS = 0;
     const DUMP_MAX_CHARS = 32 * 1024 * 1024;
     let roleRegistry = {};
@@ -2438,6 +1880,114 @@ var lunarBundle = (function (exports) {
             outfitFull: String(raw.outfitFull || '').trim() || undefined,
             outfitChibi: String(raw.outfitChibi || '').trim() || undefined,
         };
+    }
+
+    class ModelBuilder {
+        roleTag = "月华";
+        enableTools = true;
+        reasoningStrength = "low";
+        disableThinking = false;
+        messages = [];
+        ragMessages = [];
+        runtimeMessages = [];
+        systemPrompt = "你的名字叫做月华, 是一个女孩子";
+        promptCompletion(prompt) {
+            let addressText = "";
+            if (GlobalConfig.currentAddress.length === 0) {
+                const addressResult = address();
+                GlobalConfig.currentAddress = addressResult[0];
+                addressText = GlobalConfig.currentAddress.join(' ');
+            }
+            else
+                addressText = GlobalConfig.currentAddress.join(' ');
+            return prompt
+                .replace(/{current-address}/g, addressText);
+        }
+        writeContext(context) {
+            const cleaned = this.stripReasoningContent(context);
+            if (this.messages.length >= 48) {
+                const discarded = this.messages.slice(0, this.messages.length - 47);
+                this.messages = this.messages.slice(-47).concat(cleaned);
+                GlobalConfig.unreadRecords.push(...discarded);
+            }
+            else
+                this.messages.push(cleaned);
+            return this;
+        }
+        stripReasoningContent(message) {
+            if ('reasoning_content' in message || 'source' in message) {
+                const { reasoning_content, source, ...rest } = message;
+                return rest;
+            }
+            return message;
+        }
+        coverContext(context) {
+            this.messages = Array.isArray(context) ? context : [context];
+            return this;
+        }
+        appendPrompt(content) {
+            const block = '\n' + content.replace(/^\n+|\n+$/g, '');
+            if (this.systemPrompt.includes(block))
+                return this;
+            this.systemPrompt = this.systemPrompt.replace(/\s*$/, '') + block;
+            return this;
+        }
+        removePrompt(content) {
+            const block = '\n' + content.replace(/^\n+|\n+$/g, '');
+            this.systemPrompt = this.systemPrompt.replace(block, '');
+            return this;
+        }
+        run(appendContext, toolCall) {
+            const rawMessages = [
+                { role: 'system', content: this.systemPrompt },
+                ...this.runtimeMessages,
+                ...appendContext,
+                ...this.messages
+            ];
+            const requestBody = {
+                model: GlobalConfig.MultimodalName,
+                messages: rawMessages,
+                stream: true,
+                tools: toolCall,
+                tool_choice: 'auto',
+                chat_template_kwargs: {
+                    reasoning_strength: this.reasoningStrength,
+                    ...(this.disableThinking ? { enable_thinking: false } : {})
+                }
+            };
+            if (!this.enableTools || toolCall.length === 0) {
+                delete requestBody.tool_choice;
+                delete requestBody.tools;
+            }
+            const headers = {
+                Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
+                "Content-Type": "application/json",
+                "X-Lunar-Role": this.roleTag,
+            };
+            const modelRequest = {
+                method: "POST",
+                crossDomain: true,
+                headers,
+                body: JSON.stringify(requestBody)
+            };
+            const endpoint = "/chat/completions";
+            const [result, error] = syncFetch({ url: GlobalConfig.MultimodalUrl + endpoint, execute: modelRequest });
+            if (error)
+                throw error;
+            if (result?.body?.error) {
+                const errMsg = typeof result.body.error === 'string'
+                    ? result.body.error
+                    : result.body.error.message || JSON.stringify(result.body.error);
+                throw new Error(`模型服务错误 [${result.status}]: ${errMsg}`);
+            }
+            if (!result?.body?.choices) {
+                throw new Error(`模型响应异常: status=${result?.status}, body=${JSON.stringify(result?.body)?.substring(0, 200)}`);
+            }
+            return result;
+        }
+        constructor(prompt) {
+            this.systemPrompt = this.promptCompletion(prompt);
+        }
     }
 
     class CreativeRoleBase extends ModelBuilder {
@@ -3523,7 +3073,7 @@ var lunarBundle = (function (exports) {
             let handleLabel = '';
             if (args.image_tag) {
                 if (!resolved)
-                    return '超分失败：句柄不存在或已失效，请先调用 list_images 或 list_resources 查看可用图片';
+                    return '超分失败：句柄不存在或已失效，请先调用 list_images 查看可用图片';
                 if (!resolved.source)
                     return `超分失败：${resolved.handle} 的本体已从内容仓库回收，无法超分`;
                 source = resolved.source;
@@ -3984,6 +3534,240 @@ var lunarBundle = (function (exports) {
         }
     }
 
+    function admitMedia(source, name, origin, kindHint) {
+        if (!source)
+            return null;
+        const lower = source.toLowerCase();
+        const sourceKind = lower.startsWith('data:') ? 'data' : (/^https?:\/\//i.test(source) ? 'url' : 'path');
+        const result = admitResource({ sourceKind, source, name, origin, kindHint });
+        return result ? { handle: result.handle, id: result.id } : null;
+    }
+    function storeMediaSummary(media, summary) {
+        if (!media || !summary || !summary.trim())
+            return;
+        setResourceSummary(media.id, summary.trim().slice(0, 1000));
+    }
+    function existingSummary(media) {
+        const entry = getResourceEntry(media.handle);
+        return entry?.summary || '';
+    }
+    function mediaName(source, fallbackExt) {
+        const lower = (source || '').toLowerCase();
+        const dataMatch = /^data:(image|video|audio)\/(\w+)[;,]/.exec(lower);
+        if (dataMatch)
+            return `media.${dataMatch[2] === 'jpeg' ? 'jpg' : dataMatch[2]}`;
+        const path = lower.split('?')[0].split('#')[0];
+        const base = path.slice(path.lastIndexOf('/') + 1);
+        if (base && /\.[a-z0-9]{2,5}$/.test(base))
+            return base;
+        return `media${fallbackExt}`;
+    }
+
+    const AUDIO_FALLBACK_TEXT = '月华听不懂这段语音呢';
+    async function understandAudio(audioSource) {
+        const cacheable = !audioSource.startsWith('data:');
+        const cachedPrompt = cacheable ? getPromptFromKnowledge(audioSource) : '';
+        if (cachedPrompt) {
+            console.log('[语音] 命中音频缓存，直接返回');
+            return cachedPrompt;
+        }
+        console.log('[语音] 开始转换音频...');
+        const [wavBase64, audioError] = audioWav(audioSource);
+        if (!wavBase64 || audioError) {
+            console.error('[语音] 音频转换失败:', audioError);
+            throw new Error('音频转换失败');
+        }
+        console.log('[语音] 开始语音转写...');
+        const transcript = await transcribeAudio(wavBase64);
+        if (!transcript.trim()) {
+            console.error('[语音] 语音转写为空');
+            throw new Error('语音转写为空');
+        }
+        console.log(`[语音] 语音转写完成: ${transcript.substring(0, 50)}`);
+        const text = `【语音转写】${transcript}`;
+        if (cacheable) {
+            savePromptToKnowledge(audioSource, text);
+            console.log('[语音] 语音转写文本已缓存');
+        }
+        return text;
+    }
+    async function transcribeAudio(wavBase64) {
+        const [result, error] = syncFetch({
+            url: GlobalConfig.MultimodalUrl + '/chat/completions',
+            execute: {
+                method: 'POST',
+                crossDomain: true,
+                headers: {
+                    Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: GlobalConfig.AsrName,
+                    messages: [{
+                            role: 'user',
+                            content: [{ type: 'input_audio', input_audio: { data: wavBase64, format: 'wav' } }]
+                        }],
+                    temperature: 0,
+                }),
+            },
+        });
+        if (error) {
+            console.error('[语音] 语音转写请求失败:', error.message);
+            return '';
+        }
+        const raw = result?.body?.choices?.[0]?.message?.content || '';
+        const marker = '<asr_text>';
+        return raw.includes(marker) ? raw.substring(raw.indexOf(marker) + marker.length).trim() : raw.trim();
+    }
+    async function resourceAudio(originalSource, name, origin) {
+        const media = admitMedia(originalSource, name, origin, 'A');
+        if (!media)
+            return '';
+        const cached = existingSummary(media);
+        if (cached)
+            return `${media.handle}${cached}`;
+        try {
+            const transcript = await understandAudio(originalSource);
+            storeMediaSummary(media, transcript);
+            return `${media.handle}${transcript}`;
+        }
+        catch (error) {
+            console.error('[语音] 音频理解失败（句柄已保留）:', error);
+            return `${media.handle}${AUDIO_FALLBACK_TEXT}`;
+        }
+    }
+    async function understandAudioOrFallback(audioSource) {
+        try {
+            return await understandAudio(audioSource);
+        }
+        catch (error) {
+            console.error('[语音] 音频理解失败，以兜底文本置换:', error);
+            return AUDIO_FALLBACK_TEXT;
+        }
+    }
+    async function resourceAudioOrFallback(audioSource) {
+        try {
+            const text = await resourceAudio(audioSource, mediaName(audioSource, '.wav'), audioSource.startsWith('data:') ? 'client-upload' : 'channel');
+            if (text)
+                return text;
+        }
+        catch (error) {
+            console.error('[语音] 音频资源化失败，退化为纯转写文本:', error);
+        }
+        return understandAudioOrFallback(audioSource);
+    }
+
+    const VIDEO_FALLBACK_TEXT = '月华看不了这个视频呢';
+    function resourceVideo(originalSource, name, origin) {
+        const media = admitMedia(originalSource, name, origin, 'V');
+        return media ? media.handle : '';
+    }
+    function resourceVideoOrFallback(videoSource) {
+        try {
+            const handle = resourceVideo(videoSource, mediaName(videoSource, '.mp4'), videoSource.startsWith('data:') ? 'client-upload' : 'channel');
+            if (handle)
+                return handle;
+        }
+        catch (error) {
+            console.error('[视频] 资源化失败:', error);
+        }
+        return VIDEO_FALLBACK_TEXT;
+    }
+
+    const ANIMATED_FALLBACK_TEXT = '月华看不了这个动图呢';
+    async function LiteImageFile() {
+        for (let message of GlobalConfig.unreadContext) {
+            if (typeof message.content === 'string')
+                continue;
+            const newContent = [];
+            for (let item of message.content) {
+                if (item.type == 'text') {
+                    newContent.push(item);
+                    continue;
+                }
+                if (item.type === 'video_url') {
+                    newContent.push({ type: 'text', text: resourceVideoOrFallback(item.video_url.url) });
+                    continue;
+                }
+                if (item.type === 'audio_url') {
+                    newContent.push({ type: 'text', text: await resourceAudioOrFallback(item.audio_url.url) });
+                    continue;
+                }
+                if ('input_audio' in item) {
+                    const format = item.input_audio.format || 'wav';
+                    newContent.push({ type: 'text', text: await resourceAudioOrFallback(`data:audio/${format};base64,${item.input_audio.data}`) });
+                    continue;
+                }
+                if (!item.image_url)
+                    continue;
+                const imageSource = item.image_url.url;
+                if (imageSource.toLowerCase().startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(format => imageSource.toLowerCase().endsWith(format))) {
+                    newContent.push({ type: 'text', text: resourceVideoOrFallback(imageSource) });
+                    continue;
+                }
+                const [isAnimated, animatedError] = isAnimatedImage(imageSource);
+                if (animatedError)
+                    console.error('[动态图判定失败]:', animatedError.message);
+                if (!animatedError && isAnimated) {
+                    let handle = handleFromVisionURL(imageSource);
+                    if (!handle) {
+                        const admitted = admitImageDataURI(imageSource, `image${guessImageExt(imageSource)}`);
+                        handle = admitted?.handle || '';
+                    }
+                    newContent.push({ type: 'text', text: handle || ANIMATED_FALLBACK_TEXT });
+                    continue;
+                }
+                newContent.push(item);
+            }
+            message.content = newContent;
+        }
+    }
+
+    function describeResource(handle, question = '') {
+        const parsed = parseHandle(handle);
+        if (!parsed)
+            return '';
+        const normalized = formatHandle(parsed);
+        const cached = getResourceEntry(normalized)?.summary || '';
+        if (cached && !question)
+            return cached;
+        if (parsed.kind === 'I' || parsed.kind === 'V') {
+            return describeMedia(normalized, question, cached);
+        }
+        if (parsed.kind === 'A')
+            return cached;
+        return cached;
+    }
+    function inspectTextResource(handle, request) {
+        try {
+            const [text, error] = descriptorInspect(handle, request);
+            if (error) {
+                console.error('[描述者] 文件探查失败:', error?.message ?? String(error));
+                return '';
+            }
+            return String(text || '').trim();
+        }
+        catch (error) {
+            console.error('[描述者] 文件探查抛异常:', error);
+            return '';
+        }
+    }
+    function describeMedia(handle, question, cached) {
+        try {
+            const [text, error] = descriptorDescribeMedia(handle, question);
+            if (error) {
+                console.error('[描述者] 影像描述失败:', error?.message ?? String(error));
+                return cached;
+            }
+            const desc = String(text || '').trim();
+            return desc || cached;
+        }
+        catch (error) {
+            console.error('[描述者] 影像描述抛异常:', error);
+            return cached;
+        }
+    }
+
     const CRYSTAL_TOOL_NAME = 'use_the_program';
     let programs = [];
     let crystalTool = buildCrystalTool(programs);
@@ -4237,7 +4021,7 @@ var lunarBundle = (function (exports) {
             type: 'function',
             function: {
                 name: 'search_memory',
-                description: '从长期记忆库检索历史对话与知识片段。用于回答「某用户之前说过什么」「以前聊过什么」「你还记不记得」这类问题。三种方式：vector（默认，语义检索，适合模糊描述）、keyword（关键词精确匹配，空格分词且全部命中，适合人名/原话/专有名词）、regex（正则匹配，RE2 语法）。filter 为必须包含的词（如说话人昵称），exclude 为必须排除的词。注意：这是聊天记忆检索，不是文档资源检索——查文件/资料请用 search_resources。',
+                description: '从长期记忆库检索历史对话与知识片段。用于回答「某用户之前说过什么」「以前聊过什么」「你还记不记得」这类问题。三种方式：vector（默认，语义检索，适合模糊描述）、keyword（关键词精确匹配，空格分词且全部命中，适合人名/原话/专有名词）、regex（正则匹配，RE2 语法）。filter 为必须包含的词（如说话人昵称），exclude 为必须排除的词。查询里带B站视频链接或 BV 号时，会一并返回月华自己刷到该视频时的观看理解摘要。注意：这是聊天记忆检索，不是文档资源检索——查文件/资料请用 browse_resources。',
                 parameters: {
                     type: 'object',
                     properties: {
@@ -4312,6 +4096,35 @@ var lunarBundle = (function (exports) {
         const mode = String(value || '').trim().toLowerCase();
         return mode === 'keyword' || mode === 'regex' ? mode : 'vector';
     }
+    function extractVideoKeys(query) {
+        return [...new Set([...String(query || '').matchAll(/BV[0-9A-Za-z]{10}/g)].map(match => match[0]))];
+    }
+    function findVideoSummaries(keys) {
+        if (!keys.length)
+            return [];
+        try {
+            const [entries, error] = knowledgeLoad('video_summary');
+            if (error || !Array.isArray(entries))
+                return [];
+            const found = [];
+            for (const pair of entries) {
+                if (!Array.isArray(pair) || typeof pair[0] !== 'string')
+                    continue;
+                const key = pair[0];
+                const upperKey = key.toUpperCase();
+                if (!keys.some(id => upperKey.includes(id.toUpperCase())))
+                    continue;
+                const text = typeof pair[1] === 'string' ? pair[1] : String(pair[1] ?? '');
+                if (text.trim())
+                    found.push(`[已看视频摘要] ${key}\n${preview(text)}`);
+            }
+            return found;
+        }
+        catch (error) {
+            console.error('[记忆检索] 视频摘要召回失败:', error);
+            return [];
+        }
+    }
     async function handleSearchMemory(args) {
         const parsed = typeof args === 'string' ? safeParse$1(args) : (args || {});
         const query = String(parsed.query || '').trim();
@@ -4333,22 +4146,29 @@ var lunarBundle = (function (exports) {
         const filters = parseTerms(parsed.filter);
         const exclude = parseTerms(parsed.exclude);
         const hits = searchMemoryGlobal(query, limit, { mode, filters, exclude });
-        if (hits.length === 0) {
+        const videoSummaries = findVideoSummaries(extractVideoKeys(query));
+        if (hits.length === 0 && videoSummaries.length === 0) {
             const hint = mode === 'vector'
                 ? '可以改用 mode=keyword 并只保留人名/主题词再试一次'
                 : '可以放宽 filter/exclude，或改用默认的 vector 模式再试一次';
             return [`记忆库中没有检索到相关记录。${hint}；不要编造记忆内容。`, ''];
         }
-        const lines = hits.map((hit, index) => {
-            const meta = [
-                `角色=${roleLabel(hit.role)}`,
-                `时间=${formatTime(hit.timestamp)}`,
-                mode === 'vector' ? `相关度=${hit.similarity.toFixed(3)}` : `方式=${MODE_LABELS[mode]}`
-            ].join('｜');
-            return `[${index + 1}] ${meta}\n${preview(hit.content)}`;
-        });
-        const text = `以${MODE_LABELS[mode]}检索到 ${hits.length} 条相关记忆：`
-            + `\n${lines.join('\n\n')}`
+        const sections = [];
+        if (hits.length > 0) {
+            const lines = hits.map((hit, index) => {
+                const meta = [
+                    `角色=${roleLabel(hit.role)}`,
+                    `时间=${formatTime(hit.timestamp)}`,
+                    mode === 'vector' ? `相关度=${hit.similarity.toFixed(3)}` : `方式=${MODE_LABELS[mode]}`
+                ].join('｜');
+                return `[${index + 1}] ${meta}\n${preview(hit.content)}`;
+            });
+            sections.push(`以${MODE_LABELS[mode]}检索到 ${hits.length} 条相关记忆：\n${lines.join('\n\n')}`);
+        }
+        if (videoSummaries.length > 0) {
+            sections.push(`已看视频摘要 ${videoSummaries.length} 条（月华自己刷B站时留下的观看理解）：\n${videoSummaries.join('\n\n')}`);
+        }
+        const text = sections.join('\n\n')
             + '\n\n只依据以上原文回答；原文不足以回答用户问题时，直接说明没有找到相关信息，不要编造或把无关内容当答案。';
         return [text, ''];
     }
@@ -4362,18 +4182,25 @@ var lunarBundle = (function (exports) {
     function stateNote(entry) {
         return entry.state === 'active' ? '' : ` [${LOST_FILE_NOTICE}]`;
     }
+    function previewSummary(text, maxChars) {
+        const clean = String(text || '').replace(/\s+/g, ' ').trim();
+        return clean.length > maxChars ? `${clean.slice(0, maxChars).trim()}…` : clean;
+    }
     function entryLine(entry) {
-        const desc = entry.summary ? `：${entry.summary}` : '';
+        const desc = entry.summary ? `：${previewSummary(entry.summary, 80)}` : '';
         const sectionNote = entry.section_count > 0 ? ` ${entry.section_count}节` : '';
         return `${entry.handle} [${kindLabel(entry.kind)}] ${entry.title || entry.name}${sectionNote}${stateNote(entry)}${desc}`;
     }
-    async function handleListResources(args) {
-        const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
-        const kind = String(parsed.kind || '').trim().toUpperCase();
-        const limit = Math.min(Math.max(Number(parsed.limit) || 30, 1), 200);
-        if (kind && !KIND_LABELS[kind]) {
-            return [`类型码无效：${kind}。可用类型码：D 文档 / I 图片 / V 视频 / A 音频 / T 表格`, ''];
+    function finishBlocks(blocks, missing) {
+        if (blocks.length === 0) {
+            return [`取回失败：${missing.join('、')} —— ${HANDLE_INVALID_NOTICE}。请先用 browse_resources 确认可用句柄`, ''];
         }
+        let text = blocks.join('\n\n---\n\n');
+        if (missing.length > 0)
+            text += `\n\n以下句柄无法取回：${missing.join('、')}（${HANDLE_INVALID_NOTICE}）`;
+        return [text, ''];
+    }
+    function listResourcesText(kind, limit) {
         const entries = listResources(kind, limit);
         const valid = [];
         let purged = 0;
@@ -4387,14 +4214,129 @@ var lunarBundle = (function (exports) {
         }
         if (valid.length === 0) {
             const purgedNote = purged > 0 ? `（已自动清理 ${purged} 条源文件丢失的失效句柄）` : '';
-            return [`资源目录为空：当前没有已收录的资源${purgedNote}。用户可以上传图片、发送文本文件，或让我生成图片后再引用`, ''];
+            return `资源目录为空：当前没有已收录的资源${purgedNote}。用户可以上传图片、发送文本文件，或让我生成图片后再引用`;
         }
         const stats = resourceStatistics();
         const lines = valid.map(entryLine);
         const purgeNote = purged > 0 ? `；已自动清理 ${purged} 条源文件丢失的失效句柄` : '';
         const head = `当前可用资源（共 ${valid.length} 条，按收录时间倒序，越靠前越新${purgeNote}${stats ? `；目录总计 ${stats.total} 条 / ${formatBytes(stats.bytes)}` : ''}）：`;
-        const tail = `\n${grammarCheatsheet()}。需要正文时用 read_resource 按句柄取回；文档可先用 outline_resource 看结构再定向读取。`;
-        return [`${head}\n${lines.join('\n')}${tail}`, ''];
+        const tail = `\n${grammarCheatsheet()}。需要内容时用 use_resource 按句柄取回；文本可写成 @D.003&需求，让描述者探查摘要、结构或引用关系。`;
+        return `${head}\n${lines.join('\n')}${tail}`;
+    }
+    function searchResourcesText(query, kind, limit) {
+        const hits = searchResources(query, kind, limit);
+        if (hits.length === 0) {
+            return `未找到与「${query}」相关的资源。可用 browse_resources 查看全部资源，或让用户重新提供资料`;
+        }
+        const lines = [];
+        for (const hit of hits) {
+            if (hit.sections && hit.sections.length > 0) {
+                const sectionLines = hit.sections.slice(0, 5).map(section => {
+                    const parsed = parseHandle(hit.handle);
+                    const anchor = parsed ? sectionHandle(parsed.kind, parsed.seq, section.ordinal) : hit.handle;
+                    return `    ${anchor} ${section.path || section.title || `第 ${section.ordinal} 段`}（第 ${section.line_start}-${section.line_end} 行）`;
+                });
+                lines.push(`${hit.handle} [${kindLabel(hit.kind)}] ${hit.title}${hit.summary ? `：${previewSummary(hit.summary, 120)}` : ''}\n  命中章节：\n${sectionLines.join('\n')}`);
+            }
+            else {
+                lines.push(`${hit.handle} [${kindLabel(hit.kind)}] ${hit.title}${hit.summary ? `：${previewSummary(hit.summary, 120)}` : ''}`);
+            }
+        }
+        return `与「${query}」相关的资源（共 ${hits.length} 条）：\n${lines.join('\n')}\n\n下一步：用 use_resource 按上述句柄取回正文`;
+    }
+    function readHandleBlock(rawHandle, ask, missing) {
+        const parsedHandle = parseHandle(rawHandle);
+        if (!parsedHandle) {
+            missing.push(rawHandle || '(空)');
+            return '';
+        }
+        const normalized = formatHandle(parsedHandle);
+        const entry = getResourceEntry(normalized);
+        if (!entry) {
+            missing.push(normalized);
+            return '';
+        }
+        if (entry.state === 'lost') {
+            deleteResource(normalized);
+            return `【${normalized}】\n${LOST_FILE_NOTICE}`;
+        }
+        if (parsedHandle.kind === 'I' || parsedHandle.kind === 'V' || parsedHandle.kind === 'A') {
+            const desc = describeResource(normalized, ask);
+            if (!desc && !getResourceEntry(normalized)) {
+                return `【${normalized}】\n${LOST_FILE_NOTICE}`;
+            }
+            return `【${normalized}｜${kindLabel(parsedHandle.kind)}｜${entry.title || entry.name}】\n${desc || '（暂无描述，且本体不可直接解读）'}`;
+        }
+        if (ask && !parsedHandle.anchor) {
+            const answer = inspectTextResource(normalized, ask);
+            if (!answer) {
+                return `【${normalized}｜${entry.title || entry.name}】\n探查失败：描述者没有给出答复，可改用 "${normalized}|L起始-结束" 直接取原文`;
+            }
+            return `【${normalized}｜${entry.title || entry.name}】\n${answer}`;
+        }
+        const result = readResource(normalized, READ_CHAR_BUDGET);
+        if (!result) {
+            missing.push(normalized);
+            return '';
+        }
+        if (result.lost) {
+            deleteResource(normalized);
+            return `【${normalized}｜${result.title}】\n${LOST_FILE_NOTICE}`;
+        }
+        const rangeNote = result.line_start && result.line_end ? `｜第 ${result.line_start}-${result.line_end} 行` : '';
+        const sectionNote = result.section_title ? `｜${result.section_title}` : '';
+        const truncated = result.truncated ? '\n（内容较长已截断；可带 |L起-止 或 |§n 定向读取）' : '';
+        return `【${normalized}${sectionNote}${rangeNote}｜共 ${result.total_lines || 0} 行】\n${result.content || ''}${truncated}`;
+    }
+    async function handleUseResource(args) {
+        const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
+        const rawHandles = Array.isArray(parsed.handles)
+            ? parsed.handles
+            : (parsed.handle ? [parsed.handle] : []);
+        if (rawHandles.length === 0) {
+            return ['请提供资源句柄，例如 "@D.003" 或 "@D.003|L11-99&这段讲了什么"', ''];
+        }
+        const globalAsk = String(parsed.ask || '').trim();
+        const blocks = [];
+        const missing = [];
+        for (const raw of rawHandles) {
+            const query = parseResourceQuery(String(raw || ''));
+            const block = readHandleBlock(query.handle, globalAsk || query.ask, missing);
+            if (block)
+                blocks.push(block);
+        }
+        return finishBlocks(blocks, missing);
+    }
+    async function handleBrowseResources(args) {
+        const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
+        const kind = String(parsed.kind || '').trim().toUpperCase();
+        if (kind && !KIND_LABELS[kind]) {
+            return [`类型码无效：${kind}。可用类型码：D 文档 / I 图片 / V 视频 / A 音频 / T 表格`, ''];
+        }
+        const query = String(parsed.query || '').trim();
+        const fallback = query ? 10 : 30;
+        const limit = Math.min(Math.max(Number(parsed.limit) || fallback, 1), query ? 50 : 200);
+        if (query)
+            return [searchResourcesText(query, kind, limit), ''];
+        return [listResourcesText(kind, limit), ''];
+    }
+    async function handleListResources(args) {
+        const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
+        const kind = String(parsed.kind || '').trim().toUpperCase();
+        if (kind && !KIND_LABELS[kind]) {
+            return [`类型码无效：${kind}。可用类型码：D 文档 / I 图片 / V 视频 / A 音频 / T 表格`, ''];
+        }
+        const limit = Math.min(Math.max(Number(parsed.limit) || 30, 1), 200);
+        return [listResourcesText(kind, limit), ''];
+    }
+    async function handleSearchResources(args) {
+        const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
+        const query = String(parsed.query || '').trim();
+        if (!query)
+            return ['请提供搜索关键词', ''];
+        const kind = String(parsed.kind || '').trim().toUpperCase();
+        const limit = Math.min(Math.max(Number(parsed.limit) || 10, 1), 50);
+        return [searchResourcesText(query, kind, limit), ''];
     }
     async function handleReadResource(args) {
         const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
@@ -4402,56 +4344,42 @@ var lunarBundle = (function (exports) {
             ? parsed.handles
             : (parsed.handle ? [parsed.handle] : []);
         if (rawHandles.length === 0) {
-            return ['请提供资源句柄，例如 ["@D.003"]。可用清单见 list_resources', ''];
+            return ['请提供资源句柄，例如 ["@D.003"]。可用清单见 browse_resources', ''];
         }
         const question = String(parsed.question || '').trim().slice(0, 200);
         const blocks = [];
         const missing = [];
         for (const raw of rawHandles) {
-            const handle = String(raw || '').trim();
-            const parsedHandle = parseHandle(handle);
-            if (!parsedHandle) {
-                missing.push(handle || '(空)');
-                continue;
-            }
-            const normalized = formatHandle(parsedHandle);
-            const entry = getResourceEntry(normalized);
-            if (parsedHandle.kind === 'I' || parsedHandle.kind === 'V' || parsedHandle.kind === 'A') {
-                if (!entry) {
-                    missing.push(normalized);
-                    continue;
-                }
-                if (entry.state === 'lost') {
-                    deleteResource(normalized);
-                    blocks.push(`【${normalized}】\n${LOST_FILE_NOTICE}`);
-                    continue;
-                }
-                const desc = describeResource(normalized, question);
-                blocks.push(`【${normalized}｜${kindLabel(parsedHandle.kind)}｜${entry.title || entry.name}】\n${desc || '（暂无描述，且本体不可直接解读）'}`);
-                continue;
-            }
-            const result = readResource(normalized, READ_CHAR_BUDGET);
-            if (!result) {
-                missing.push(normalized);
-                continue;
-            }
-            if (result.lost) {
-                deleteResource(normalized);
-                blocks.push(`【${normalized}｜${result.title}】\n${LOST_FILE_NOTICE}`);
-                continue;
-            }
-            const rangeNote = result.line_start && result.line_end ? `｜第 ${result.line_start}-${result.line_end} 行` : '';
-            const sectionNote = result.section_title ? `｜${result.section_title}` : '';
-            const truncated = result.truncated ? '\n（内容较长已截断，可用 outline_resource 查看结构后按节定向读取）' : '';
-            blocks.push(`【${normalized}${sectionNote}${rangeNote}｜共 ${result.total_lines || 0} 行】\n${result.content || ''}${truncated}`);
+            const query = parseResourceQuery(String(raw || ''));
+            const block = readHandleBlock(query.handle, question || query.ask, missing);
+            if (block)
+                blocks.push(block);
         }
-        if (blocks.length === 0) {
-            return [`取回失败：${missing.join('、')} —— ${HANDLE_INVALID_NOTICE}。请先用 list_resources 确认可用句柄`, ''];
+        return finishBlocks(blocks, missing);
+    }
+    async function handleInspectResource(args) {
+        const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
+        const handle = String(parsed.handle || '').trim();
+        const request = String(parsed.request || '').trim();
+        const parsedHandle = parseHandle(handle);
+        if (!parsedHandle)
+            return ['请提供文本资源句柄，例如 "@D.003"', ''];
+        const normalized = formatHandle(parsedHandle);
+        if (parsedHandle.kind !== 'D' && parsedHandle.kind !== 'T') {
+            return [`${normalized} 是${kindLabel(parsedHandle.kind)}，不是文本资源；图片/视频/动图请用 use_resource 取描述`, ''];
         }
-        let text = blocks.join('\n\n---\n\n');
-        if (missing.length > 0)
-            text += `\n\n以下句柄无法取回：${missing.join('、')}（${HANDLE_INVALID_NOTICE}）`;
-        return [text, ''];
+        const entry = getResourceEntry(normalized);
+        if (!entry)
+            return [`【${normalized}】\n${HANDLE_INVALID_NOTICE}。请用 browse_resources 确认可用句柄`, ''];
+        if (entry.state === 'lost') {
+            deleteResource(normalized);
+            return [`【${normalized}｜${entry.title || entry.name}】\n${LOST_FILE_NOTICE}`, ''];
+        }
+        const answer = inspectTextResource(normalized, request);
+        if (!answer) {
+            return [`【${normalized}｜${entry.title || entry.name}】\n探查失败：描述者没有给出答复，可以直接用 use_resource 取正文`, ''];
+        }
+        return [`【${normalized}｜${entry.title || entry.name}】\n${answer}`, ''];
     }
     async function handleOutlineResource(args) {
         const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
@@ -4462,18 +4390,18 @@ var lunarBundle = (function (exports) {
         const normalized = formatHandle(parsedHandle);
         const entry = getResourceEntry(normalized);
         if (!entry)
-            return [`【${normalized}】\n${HANDLE_INVALID_NOTICE}。请用 list_resources 确认可用句柄`, ''];
+            return [`【${normalized}】\n${HANDLE_INVALID_NOTICE}。请用 browse_resources 确认可用句柄`, ''];
         if (entry.state === 'lost') {
             deleteResource(normalized);
             return [`【${normalized}｜${entry.title || entry.name}】\n${LOST_FILE_NOTICE}`, ''];
         }
         if (entry.kind !== 'D' && entry.kind !== 'T') {
-            return [`${normalized} 是${kindLabel(entry.kind)}，没有段落大纲；图片/视频/音频请用 read_resource 取描述`, ''];
+            return [`${normalized} 是${kindLabel(entry.kind)}，没有段落大纲；图片/视频/音频请用 use_resource 取描述`, ''];
         }
         const before = listResources(entry.kind, 1000).find(item => item.seq === entry.seq);
         const sections = outlineFor(normalized);
         if (sections.length === 0) {
-            return [`${normalized}（${entry.title || entry.name}）没有可用的段落结构，可用 read_resource 直接读取全文`, ''];
+            return [`${normalized}（${entry.title || entry.name}）没有可用的段落结构，可用 use_resource 直接读取全文`, ''];
         }
         const lines = sections.slice(0, OUTLINE_PREVIEW_LIMIT).map(section => {
             const anchor = sectionHandle('D', entry.seq, section.ordinal);
@@ -4483,34 +4411,7 @@ var lunarBundle = (function (exports) {
         });
         const head = `【${normalized}｜${entry.title || entry.name}｜共 ${before?.section_count ?? sections.length} 节${before?.state === 'active' ? '' : '，正文已回收'}】`;
         const tail = sections.length > OUTLINE_PREVIEW_LIMIT ? `\n（仅显示前 ${OUTLINE_PREVIEW_LIMIT} 节，共 ${sections.length} 节）` : '';
-        return [`${head}\n${lines.join('\n')}${tail}\n\n读取某一节：read_resource({"handles":["${sectionHandle('D', entry.seq, sections[0].ordinal)}"]})`, ''];
-    }
-    async function handleSearchResources(args) {
-        const parsed = typeof args === 'string' ? safeParse(args) : (args || {});
-        const query = String(parsed.query || '').trim();
-        if (!query)
-            return ['请提供搜索关键词', ''];
-        const kind = String(parsed.kind || '').trim().toUpperCase();
-        const limit = Math.min(Math.max(Number(parsed.limit) || 10, 1), 50);
-        const hits = searchResources(query, kind, limit);
-        if (hits.length === 0) {
-            return [`未找到与「${query}」相关的资源。可用 list_resources 查看全部资源，或让用户重新提供资料`, ''];
-        }
-        const lines = [];
-        for (const hit of hits) {
-            if (hit.sections && hit.sections.length > 0) {
-                const sectionLines = hit.sections.slice(0, 5).map(section => {
-                    const parsed = parseHandle(hit.handle);
-                    const anchor = parsed ? sectionHandle(parsed.kind, parsed.seq, section.ordinal) : hit.handle;
-                    return `    ${anchor} ${section.path || section.title || `第 ${section.ordinal} 段`}（第 ${section.line_start}-${section.line_end} 行）`;
-                });
-                lines.push(`${hit.handle} [${kindLabel(hit.kind)}] ${hit.title}${hit.summary ? `：${hit.summary}` : ''}\n  命中章节：\n${sectionLines.join('\n')}`);
-            }
-            else {
-                lines.push(`${hit.handle} [${kindLabel(hit.kind)}] ${hit.title}${hit.summary ? `：${hit.summary}` : ''}`);
-            }
-        }
-        return [`与「${query}」相关的资源（共 ${hits.length} 条）：\n${lines.join('\n')}\n\n下一步：用 read_resource 按上述句柄取回正文`, ''];
+        return [`${head}\n${lines.join('\n')}${tail}\n\n读取某一节：use_resource({"handles":["${sectionHandle('D', entry.seq, sections[0].ordinal)}"]})`, ''];
     }
     function outlineFor(handle) {
         try {
@@ -4549,40 +4450,19 @@ var lunarBundle = (function (exports) {
         {
             type: 'function',
             function: {
-                name: 'list_resources',
-                description: `列出当前可用的全部资源（文本文件、图片、视频、音频共用一份目录），返回句柄 + 类型 + 标题/描述 + 内容状态。当你需要确认某个句柄是否还有效、或想知道现在手上有哪些资料时调用。${grammarCheatsheet()}。`,
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        kind: {
-                            type: 'string',
-                            description: '可选：只列出某一类资源，取 D 文档 / I 图片 / V 视频 / A 音频 / T 表格'
-                        },
-                        limit: {
-                            type: 'number',
-                            description: '返回条目数量上限，默认 30'
-                        }
-                    },
-                    required: []
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'read_resource',
-                description: '按句柄取回资源内容：文档返回完整段落正文（绝不半句截断），图片/视频/音频返回内容描述（不注入本体，上下文成本极低）。句柄可带锚点定向读取某一节或某几行，例如 @D.003|§4 或 @D.003|L120-168。正文已从内容仓库回收时返回目录摘要与结构提示，句柄依然有效。',
+                name: 'use_resource',
+                description: `按句柄读取或探查资源。每个句柄可写成 @D.003、@D.003|§4、@D.003|L120-168，也可以写成 @D.003&自然语言需求（或把需求放在 ask 字段）。规则：文档/表格带锚点或没有 ask 时返回原文（带锚点即该段原文）；文档/表格不带锚点且带 ask 时交给描述者探查摘要、结构大纲、引用关系；图片/动图/视频返回描述——已有描述直接返回，没有则由描述者现场生成并入库；音频返回已有转写。${grammarCheatsheet()}。`,
                 parameters: {
                     type: 'object',
                     properties: {
                         handles: {
                             type: 'array',
                             items: { type: 'string' },
-                            description: '资源句柄数组，如 ["@D.003", "@D.003|§4", "@I.007"]'
+                            description: '资源句柄数组，如 ["@D.003", "@D.003|§4", "@D.003|L120-168&这段讲了什么", "@I.007", "@V.001"]'
                         },
-                        question: {
+                        ask: {
                             type: 'string',
-                            description: '可选：用户当前关心的具体问题（图片/视频/音频按此定向生成描述）'
+                            description: '可选：对所有句柄生效的自然语言需求；单个句柄也可用 handle&需求 的内联写法'
                         }
                     },
                     required: ['handles']
@@ -4592,48 +4472,34 @@ var lunarBundle = (function (exports) {
         {
             type: 'function',
             function: {
-                name: 'outline_resource',
-                description: '取文档的段落结构（目录树），每节返回规范锚点句柄 @D.003|§n 与行区间、字数。不知道文档里有什么、或需要定位到具体章节时先调用本工具，再用 read_resource 按锚点整段读取 —— 这比一次性读全文更省上下文。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        handle: {
-                            type: 'string',
-                            description: '文档句柄，如 "@D.003"'
-                        }
-                    },
-                    required: ['handle']
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'search_resources',
-                description: '跨资源搜索：在全部资源的标题、摘要、标签与段落标题中匹配关键词，返回「哪份资源的哪一节」命中了。本工具只做文档资源定位，**不检索聊天记忆**——问「谁之前说过什么 / 以前聊过什么」请用 search_memory。取正文请随后调用 read_resource。适合用户问「我之前给过你的那份配置里…」这类跨资料检索。',
+                name: 'browse_resources',
+                description: '浏览资源目录或跨资源检索。不传 query 时按 kind 列出句柄 + 类型 + 标题/描述 + 内容状态；传 query 时在标题、摘要、标签与段落标题中匹配，返回「哪份资源的哪一节」命中了。本工具只做资源目录，不检索聊天记忆——问「谁之前说过什么 / 以前聊过什么」请用 search_memory。拿到句柄后用 use_resource 读取。',
                 parameters: {
                     type: 'object',
                     properties: {
                         query: {
                             type: 'string',
-                            description: '搜索关键词'
+                            description: '可选：搜索关键词；省略时按目录列出'
                         },
                         kind: {
                             type: 'string',
-                            description: '可选：限定资源类型，取 D / I / V / A / T'
+                            description: '可选：只处理某一类资源，取 D 文档 / I 图片 / V 视频 / A 音频 / T 表格'
                         },
                         limit: {
                             type: 'number',
-                            description: '返回条数上限，默认 10'
+                            description: '返回条目数量上限；列目录默认 30，检索默认 10'
                         }
                     },
-                    required: ['query']
+                    required: []
                 }
             }
         }
     ];
+    GlobalConfig.LTPfunction.set('use_resource', handleUseResource);
+    GlobalConfig.LTPfunction.set('browse_resources', handleBrowseResources);
     GlobalConfig.LTPfunction.set('list_resources', handleListResources);
     GlobalConfig.LTPfunction.set('read_resource', handleReadResource);
+    GlobalConfig.LTPfunction.set('inspect_resource', handleInspectResource);
     GlobalConfig.LTPfunction.set('outline_resource', handleOutlineResource);
     GlobalConfig.LTPfunction.set('search_resources', handleSearchResources);
 
@@ -4828,7 +4694,7 @@ var lunarBundle = (function (exports) {
         return hasToolCalls;
     }
 
-    const dialogueBaseTools = [...agentControlTools, ...imageRecallTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
+    const dialogueBaseTools = [...agentControlTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
     const MAX_TOOL_ROUNDS = 5;
     const ACTION_CLAIM_PATTERN = /(已经|已|这就|马上|现在)[^，。！？\n]{0,12}(打开|启动|运行|调出|叫出|切换|准备好|准备完毕)/;
     const ACTION_CLAIM_GUARD = '【系统校验】你刚才声称已经完成了打开/启动类操作，但本轮没有调用任何工具，用户看不到任何变化。请直接调用 use_the_program 执行（只打开应用只填 tool），或如实说明没有完成，不要只口头宣称。';
@@ -4846,7 +4712,6 @@ var lunarBundle = (function (exports) {
             .filter(line => line.length > 0);
     }
     class DialogueRole extends ModelBuilder {
-        descriptionRole;
         roleTag = "对话者";
         basePrompt;
         async generateDialogue(cache) {
@@ -4863,6 +4728,9 @@ var lunarBundle = (function (exports) {
                 GlobalConfig.unreadContext = [];
                 this.formatHistoricalMessages();
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
+                const lifeProgress = typeof bilibiliLifeProgress === 'function' ? bilibiliLifeProgress() : '';
+                if (lifeProgress)
+                    this.runtimeMessages.push({ role: 'user', content: `[月华的生活] ${lifeProgress}` });
                 const response = this.run(guardNote ? [...this.ragMessages, guardNote] : this.ragMessages, [...dialogueBaseTools, ...getCrystalRemoteTools()]);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
@@ -4943,29 +4811,7 @@ var lunarBundle = (function (exports) {
             const entry = getResourceEntry(tag);
             if (entry?.summary)
                 return sanitizeImageDesc(entry.summary, 20);
-            const generated = this.generateImageDesc(source, tag);
-            if (generated && entry)
-                setResourceSummary(entry.id, generated);
-            return generated;
-        }
-        generateImageDesc(source, tag) {
-            if (!source)
-                return '';
-            try {
-                this.descriptionRole.coverContext({
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: '用一句不超过20字的中文描述这张图片的主体与场景，只输出描述本身。' },
-                        { type: 'image_url', image_url: { url: source } }
-                    ]
-                });
-                const response = this.descriptionRole.run([], []);
-                return sanitizeImageDesc(response.body?.choices?.[0]?.message?.content || '', 20);
-            }
-            catch (error) {
-                console.error('[对话者] 图片描述生成失败:', error);
-                return '';
-            }
+            return sanitizeImageDesc(describeResource(tag), 20);
         }
         analyzeMessageResponse(message, cache) {
             applyModelResponse(message, cache);
@@ -4979,187 +4825,9 @@ var lunarBundle = (function (exports) {
                 ? this.basePrompt.replace(/\s*$/, '') + '\n' + lines.join('\n')
                 : this.basePrompt;
         }
-        constructor(descriptionRole, appearances) {
+        constructor(appearances) {
             super(composeDialoguePrompt(appearances));
-            this.descriptionRole = descriptionRole;
             this.basePrompt = this.systemPrompt;
-        }
-    }
-
-    class PerceiverRole extends ModelBuilder {
-        roleTag = "感知者";
-        SUMMARY_THRESHOLD = 4096;
-        summaryTaskTemplate = fileView('prompts/perceiverSummaryTask.md')[0];
-        MAX_SEGMENTS = 8;
-        RETRY_WAIT_MS = 25000;
-        MAX_ATTEMPTS = 2;
-        constructor() {
-            super(fileView('prompts/perceiverRole.md')[0]);
-            this.disableThinking = true;
-        }
-        async watchVideo(mediaUrls) {
-            if (mediaUrls.length === 0) {
-                console.warn('[感知者] 未收到任何视频片段');
-                return '';
-            }
-            const watched = this.sampleSegments(mediaUrls);
-            if (watched.length < mediaUrls.length) {
-                console.log(`[感知者] 片段数 ${mediaUrls.length} 超过单次上限 ${this.MAX_SEGMENTS}，等距抽样观看 ${watched.length} 段`);
-            }
-            console.log(`[感知者] 开始观看视频，共 ${watched.length} 个片段`);
-            const understandings = [];
-            for (let index = 0; index < watched.length; index++) {
-                console.log(`[感知者] 观看第 ${index + 1}/${watched.length} 段`);
-                const understanding = await this.evaluateSegment(watched[index], index + 1, watched.length);
-                if (understanding.trim().length > 0) {
-                    understandings.push(understanding);
-                    console.log(`[感知者] 第 ${index + 1} 段理解完成`);
-                }
-            }
-            return this.finalizeUnderstandings(understandings);
-        }
-        async watchOneClip(mediaUrl) {
-            if (!mediaUrl) {
-                console.warn('[感知者] 未收到视频切片');
-                return '';
-            }
-            console.log('[感知者] 开始观看 1 个切片（生活链 · 单次调用）');
-            const understanding = (await this.evaluateSegment(mediaUrl, 1, 1)).trim();
-            return understanding;
-        }
-        async watchFrames(groups) {
-            return this.watchGroupSequence(groups, 'video');
-        }
-        async watchAnimation(groups) {
-            return this.watchGroupSequence(groups, 'animation');
-        }
-        async watchGroupSequence(groups, mode) {
-            if (groups.length === 0) {
-                console.warn('[感知者] 未收到任何采样帧分组');
-                return '';
-            }
-            const watched = this.sampleSegments(groups);
-            if (watched.length < groups.length) {
-                console.log(`[感知者] 分组数 ${groups.length} 超过单次上限 ${this.MAX_SEGMENTS}，等距抽样观看 ${watched.length} 组`);
-            }
-            console.log(`[感知者] 开始观看${mode === 'animation' ? '动画' : '视频'}采样帧，共 ${watched.length} 个分组`);
-            const understandings = [];
-            for (let index = 0; index < watched.length; index++) {
-                console.log(`[感知者] 观看第 ${index + 1}/${watched.length} 组（${watched[index].frames.length} 帧）`);
-                const understanding = await this.evaluateFrameGroup(watched[index], index + 1, watched.length, mode);
-                if (understanding.trim().length > 0) {
-                    understandings.push(understanding);
-                    console.log(`[感知者] 第 ${index + 1} 组理解完成`);
-                }
-            }
-            return this.finalizeUnderstandings(understandings);
-        }
-        sampleSegments(items) {
-            if (items.length <= this.MAX_SEGMENTS)
-                return items;
-            const picked = [];
-            for (let i = 0; i < this.MAX_SEGMENTS; i++) {
-                picked.push(items[Math.round(i * (items.length - 1) / (this.MAX_SEGMENTS - 1))]);
-            }
-            return [...new Set(picked)];
-        }
-        async finalizeUnderstandings(understandings) {
-            if (understandings.length === 0) {
-                console.warn('[感知者] 未产生任何片段理解');
-                return '';
-            }
-            const concatenated = understandings.join('\n\n');
-            if (concatenated.length <= this.SUMMARY_THRESHOLD) {
-                console.log(`[感知者] 拼接理解文本 ${concatenated.length} 字符，未超 ${this.SUMMARY_THRESHOLD}，直接返回`);
-                return concatenated;
-            }
-            console.log(`[感知者] 拼接理解文本 ${concatenated.length} 字符，超过 ${this.SUMMARY_THRESHOLD}，触发客观摘要`);
-            const summary = await this.generateObjectiveSummary(concatenated);
-            if (summary.trim().length > 0) {
-                console.log(`[感知者] 客观摘要完成（${summary.length} 字符）`);
-                return summary;
-            }
-            console.warn(`[感知者] 客观摘要失败，退回拼接理解文本（硬切断至 ${this.SUMMARY_THRESHOLD} 字符）`);
-            return concatenated.slice(0, this.SUMMARY_THRESHOLD);
-        }
-        async evaluateSegment(mediaUrl, index, total) {
-            const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
-            const prompt = `请观看这段视频${position}，按「片段理解任务」的格式输出该片段的客观内容理解。`;
-            this.coverContext({
-                role: 'user',
-                content: [
-                    { type: 'text', text: prompt },
-                    { type: 'image_url', image_url: { url: mediaUrl } }
-                ]
-            });
-            this.runtimeMessages = [];
-            for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
-                try {
-                    const response = this.run([], []);
-                    const content = response.body?.choices?.[0]?.message?.content || '';
-                    if (!content.trim()) {
-                        console.warn(`[感知者] 第 ${index} 段返回空内容`);
-                    }
-                    return content;
-                }
-                catch (error) {
-                    console.error(`[感知者] 第 ${index} 段第 ${attempt} 次推理失败:`, error);
-                    if (attempt < this.MAX_ATTEMPTS) {
-                        console.warn(`[感知者] 等待 ${this.RETRY_WAIT_MS / 1000} 秒后重试第 ${index} 段`);
-                        await new Promise(resolve => setTimeout(resolve, this.RETRY_WAIT_MS));
-                    }
-                }
-            }
-            return '';
-        }
-        frameGroupPrompt(mode, index, total) {
-            const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
-            if (mode === 'animation') {
-                return `以下是一个短循环动画（GIF/动图）的采样帧${position}，按时间顺序抽取，整体时长通常只有几秒且首尾可能循环衔接。请重点还原：动画主体是谁；完整动作从什么状态开始、到什么状态结束；动作的幅度与节奏；以及表情、眼神、小物件位移等容易被忽略的细微变化。若多数画面几乎相同，请直接说明动画大部分时间处于静止，并指出真正发生变化的画面。请按「片段理解任务」的格式输出客观内容理解，不要逐帧罗列，画面之外的内容不要编造。`;
-            }
-            return `以下是一段较长视频${position}按时间顺序等距抽取的采样帧，帧间隔约 2 秒，是连续画面的关键切片而非全部画面。请基于这组切片还原该段时间线：场景与出场主体；动作与事件的先后顺序及因果（谁、在哪里、做了什么、引起什么变化）；镜头或视角是否发生切换。请按「片段理解任务」的格式输出客观内容理解，不要逐帧罗列，画面之外的内容不要编造。`;
-        }
-        async evaluateFrameGroup(group, index, total, mode) {
-            const prompt = this.frameGroupPrompt(mode, index, total);
-            this.coverContext({
-                role: 'user',
-                content: [
-                    { type: 'text', text: prompt },
-                    ...group.frames.map((frame) => ({ type: 'image_url', image_url: { url: frame.image } }))
-                ]
-            });
-            this.runtimeMessages = [];
-            for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
-                try {
-                    const response = this.run([], []);
-                    const content = response.body?.choices?.[0]?.message?.content || '';
-                    if (!content.trim()) {
-                        console.warn(`[感知者] 第 ${index} 组返回空内容`);
-                    }
-                    return content;
-                }
-                catch (error) {
-                    console.error(`[感知者] 第 ${index} 组第 ${attempt} 次推理失败:`, error);
-                    if (attempt < this.MAX_ATTEMPTS) {
-                        console.warn(`[感知者] 等待 ${this.RETRY_WAIT_MS / 1000} 秒后重试第 ${index} 组`);
-                        await new Promise(resolve => setTimeout(resolve, this.RETRY_WAIT_MS));
-                    }
-                }
-            }
-            return '';
-        }
-        async generateObjectiveSummary(concatenated) {
-            const prompt = this.summaryTaskTemplate.replace('{content}', concatenated);
-            this.coverContext({ role: 'user', content: prompt });
-            this.runtimeMessages = [];
-            try {
-                const response = this.run([], []);
-                return response.body?.choices?.[0]?.message?.content || '';
-            }
-            catch (error) {
-                console.error('[感知者] 客观摘要推理失败:', error);
-                return '';
-            }
         }
     }
 
@@ -5253,7 +4921,6 @@ var lunarBundle = (function (exports) {
         }
     }
 
-    const descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
     const memorizerRole = new MemorizerRole();
     const painterRole = new PainterRole();
     const musicianRole = new MusicianRole();
@@ -5261,25 +4928,18 @@ var lunarBundle = (function (exports) {
         lunar: painterRole.prompts.builtinCharacters.get('月华')?.appearance || '',
         crystal: painterRole.prompts.builtinCharacters.get('琉璃')?.appearance || '',
     };
-    const dialogueRole = new DialogueRole(descriptionRole, builtinAppearances);
-    const perceiverRole = new PerceiverRole();
-    registerMediaRoles({ perceiverRole, randomDefaultMessage });
+    const dialogueRole = new DialogueRole(builtinAppearances);
     registerAgentTargets({ painterRole, musicianRole });
-    registerDescribeRole(descriptionRole);
     registerDumpRoles({
         dialogue: { role: dialogueRole, label: '对话者' },
         painter: { role: painterRole, label: '绘制者' },
         musician: { role: musicianRole, label: '演奏者' },
-        perceiver: { role: perceiverRole, label: '感知者' },
-        description: { role: descriptionRole, label: '描述者' },
     });
     registerRecoveryRoles({ dialogue: dialogueRole });
     const roleInstances = {
         dialogue: dialogueRole,
         painter: painterRole,
         musician: musicianRole,
-        perceiver: perceiverRole,
-        description: descriptionRole,
     };
     try {
         const host = globalThis;
@@ -5596,12 +5256,19 @@ var lunarBundle = (function (exports) {
         if (GlobalConfig.reasoningInProgress)
             return;
         let incoming = [];
+        let ranDialogue = false;
         try {
             flushDueScheduleItems();
             incoming = pullContext();
-            if (incoming.length === 0 && GlobalConfig.unreadContext.length === 0)
+            if (incoming.length === 0 && GlobalConfig.unreadContext.length === 0) {
+                if (typeof bilibiliLifeAutoTick === 'function')
+                    bilibiliLifeAutoTick();
                 return;
+            }
             GlobalConfig.reasoningInProgress = true;
+            if (typeof bilibiliLifeSetDialogueBusy === 'function')
+                bilibiliLifeSetDialogueBusy(true);
+            ranDialogue = true;
             await runDialogueTurn(incoming);
         }
         catch (e) {
@@ -5609,6 +5276,10 @@ var lunarBundle = (function (exports) {
         }
         finally {
             GlobalConfig.reasoningInProgress = false;
+            if (typeof bilibiliLifeSetDialogueBusy === 'function')
+                bilibiliLifeSetDialogueBusy(false);
+            if (ranDialogue && typeof bilibiliLifeDialogueIdle === 'function')
+                bilibiliLifeDialogueIdle();
         }
     }
     async function runDialogueTurn(incoming) {
@@ -5685,13 +5356,11 @@ var lunarBundle = (function (exports) {
     setInterval(() => { void dialogueTick(); }, 1000);
 
     exports.LiteImageFile = LiteImageFile;
-    exports.descriptionRole = descriptionRole;
     exports.ensureMemoryReady = ensureMemoryReady;
     exports.extractTextFromMessage = extractTextFromMessage;
     exports.memorizerRole = memorizerRole;
     exports.musicianRole = musicianRole;
     exports.painterRole = painterRole;
-    exports.perceiverRole = perceiverRole;
     exports.randomDefaultMessage = randomDefaultMessage;
 
     return exports;

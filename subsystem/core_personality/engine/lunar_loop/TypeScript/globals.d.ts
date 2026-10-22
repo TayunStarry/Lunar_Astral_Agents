@@ -112,10 +112,13 @@ declare global {
      */
     function syncFetch(config: ProxyFetchConfig): [any, Error | null];
     /**
-     * 将视频本地化并写入 llama-server 媒体目录，供感知者以 file:// 引用观看
+     * 将视频本地化并写入 llama-server 媒体目录
      *
      * 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径。
      * 超过 80 秒的视频自动按 80 秒分段（长边超限时重编码归一化，否则流复制切分），切片一律不含音轨。
+     *
+     * 注意：月华的消息入口不再自动理解视频（只给句柄）；
+     * 该适配器仍保留给需要 file:// 媒体引用的宿主内调用方。
      *
      * @param {string} inputFile 视频地址（URL / data URI / 本地路径）
      *
@@ -238,6 +241,14 @@ declare global {
      * @returns 宿主统一未读队列当前长度
      */
     function unreadCount(): number;
+    /** 当前生活进度标题（如「月华正在看《…》，看到了 2/3」）；整轮结束返回空串 */
+    function bilibiliLifeProgress(): string;
+    /** 对话空闲时判定自动生活（Go 侧检查间隔/每日上限/是否在跑） */
+    function bilibiliLifeAutoTick(): boolean;
+    /** 对话完成通知：Go 侧等 10 秒静默后续跑暂停中的生活 */
+    function bilibiliLifeDialogueIdle(): void;
+    /** 同步对话链是否正在推理，TUI 强制生活/自动判定据此延迟 */
+    function bilibiliLifeSetDialogueBusy(busy: boolean): void;
     /**
      * 推送上下文
      * 
@@ -503,7 +514,7 @@ declare global {
      *
      * @param {string} argsJSON 请求参数 JSON，形如 {"agent":"painter","includeImages":false}；
      *                          agent 取 'lunar'（月华主上下文/未读队列）或子智能体名
-     *                          （dialogue/painter/musician/perceiver/description）
+     *                          （dialogue/painter/musician/memorizer）
      *
      * @returns {[string, Error | null]} 包含导出结果的元组，[上下文 JSON 文本, 错误信息]
      */
@@ -829,4 +840,35 @@ declare global {
         seqWidth: number;
         typeCodes: Record<string, string>;
     };
+
+    // =========================================================================
+    // 描述者（句柄系统 · Go 侧 agents/Descriptor）
+    // =========================================================================
+
+    /**
+     * 取回图片 / 动图 / 视频的内容描述
+     *
+     * 已有描述时直接返回；没有描述时由 Go 侧描述者现场观看（静态图走视觉副本，
+     * 动图/视频走序列帧），把描述写回资源目录后返回。定向问题不覆盖共用描述。
+     *
+     * @param {string} handle 资源句柄（@I.007 / @V.001）
+     *
+     * @param {string} [question] 可选定向问题
+     *
+     * @returns {[string, Error | null]} [描述文本, 错误信息]
+     */
+    function descriptorDescribeMedia(handle: string, question?: string): [string, Error | null];
+
+    /**
+     * 按文本句柄执行一次自然语言探查
+     *
+     * 描述者持有摘要 / 结构大纲 / 引用关系 / 分片读取工具，按需取段后答复。
+     *
+     * @param {string} handle 文本资源句柄（@D.xxx / @T.xxx）
+     *
+     * @param {string} request 自然语言需求
+     *
+     * @returns {[string, Error | null]} [答复文本, 错误信息]
+     */
+    function descriptorInspect(handle: string, request: string): [string, Error | null];
 }

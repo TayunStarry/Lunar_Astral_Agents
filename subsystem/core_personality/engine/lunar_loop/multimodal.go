@@ -15,7 +15,7 @@ import (
 	"github.com/dop251/goja"
 )
 
-// videoMedia 将视频本地化并写入 llama-server 媒体目录，供感知者以 file:// 引用观看
+// videoMedia 将视频本地化并写入 llama-server 媒体目录，供需要 file:// 引用的调用方使用
 // 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径
 // 超过 60 秒的视频自动按 60 秒分段（FFmpeg 流复制切分）
 // 返回值: [Array<{file: string, start: number, end: number}>, error] 媒体片段列表和错误信息

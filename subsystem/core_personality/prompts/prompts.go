@@ -1,4 +1,8 @@
-// Package prompts 收纳月华（Lunar）智能体的全部提示词，统一在此维护。
+// Package prompts 收纳月华（Lunar）与内部智能体的全部提示词，统一在此维护。
+//
+// 使用方包括：
+//   - TypeScript 侧角色（经 lunar_loop 的 fileView 以 "prompts/xxx.md" 读取）；
+//   - Go 侧内置智能体（agents/Descriptor 描述者、agents/WebLTP 网络搜索、agents/BilibiliLife 生活链）。
 //
 // 提示词是数据而不是代码，此前散落在 hierarchy/assets/prompts/ 这类"前端资源"
 // 目录下，与 CSS/JS 混在一起。现在集中到独立的 prompts/，运行期由

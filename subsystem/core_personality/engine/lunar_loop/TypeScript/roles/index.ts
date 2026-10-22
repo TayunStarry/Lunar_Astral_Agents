@@ -1,18 +1,12 @@
-import { ModelBuilder } from '../agent/builder';
-import { registerMediaRoles } from '../capabilities/media';
-import { registerDescribeRole, registerPerceiveRole } from '../capabilities/describe';
 import { registerAgentTargets } from '../tools/agent-control';
 import { registerDumpRoles } from '../agent/data-dump';
 import { registerRecoveryRoles, snapshotAgentContext, restoreAgentContext } from '../agent/recovery';
 import { PainterRole } from './painter';
 import { MusicianRole } from './musician';
 import { DialogueRole } from './dialogue';
-import { PerceiverRole } from './perceiver';
 import { MemorizerRole } from './memorizer';
 import { RandomFloor } from '../tools/math';
 
-/** 描述者角色(视觉内容描述) */
-export const descriptionRole: ModelBuilder = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
 /** 记忆者角色(长期记忆写入与检索摘要)；声明先于对话者（构造注入依赖） */
 export const memorizerRole: MemorizerRole = new MemorizerRole();
 /** 绘制者角色(图片生成) */
@@ -30,23 +24,14 @@ const builtinAppearances = {
     crystal: painterRole.prompts.builtinCharacters.get('琉璃')?.appearance || '',
 };
 /** 对话者角色(与用户交互) */
-export const dialogueRole: DialogueRole = new DialogueRole(descriptionRole, builtinAppearances);
-/** 感知者角色(视频/动态图理解) */
-export const perceiverRole: PerceiverRole = new PerceiverRole();
-/** 注入媒体模块所需的角色单例（media → roles 静态边解除） */
-registerMediaRoles({ perceiverRole, randomDefaultMessage });
+export const dialogueRole: DialogueRole = new DialogueRole(builtinAppearances);
 /** 注入子智能体实例（tool 模块处理函数所需，避免 tool → roles 静态循环引用） */
 registerAgentTargets({ painterRole, musicianRole });
-/** 注入统一资源描述能力所需的角色（图片视觉描述 → 描述者；视频/音频理解 → 感知者） */
-registerDescribeRole(descriptionRole);
-registerPerceiveRole(perceiverRole);
 /** 注入可导出角色注册表（TUI 数据导出按名单导出单个子智能体上下文） */
 registerDumpRoles({
     dialogue: { role: dialogueRole, label: '对话者' },
     painter: { role: painterRole, label: '绘制者' },
     musician: { role: musicianRole, label: '演奏者' },
-    perceiver: { role: perceiverRole, label: '感知者' },
-    description: { role: descriptionRole, label: '描述者' },
 });
 /** 向引擎重载的上下文抢救模块登记"月华主上下文"归属（重载后据此恢复对话历史） */
 registerRecoveryRoles({ dialogue: dialogueRole });
@@ -65,8 +50,6 @@ export const roleInstances = {
     dialogue: dialogueRole,
     painter: painterRole,
     musician: musicianRole,
-    perceiver: perceiverRole,
-    description: descriptionRole,
 };
 try {
     const host = (globalThis as unknown as { agentSystem?: Record<string, unknown> });

@@ -165,7 +165,7 @@ func DataDumpTranscriptHandler(w http.ResponseWriter, r *http.Request) {
 // DataDumpContextHandler 导出智能体上下文为 JSON（POST /debug/dump/context?agent=xxx）。
 //
 // agent 取值：lunar（月华主上下文/未读队列）或子智能体名
-// （dialogue / painter / musician / perceiver / description）。
+// （dialogue / painter / musician / memorizer）。
 // include_images=1 时保留图片原始 base64（体积很大，仅深度排查用）。
 func DataDumpContextHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

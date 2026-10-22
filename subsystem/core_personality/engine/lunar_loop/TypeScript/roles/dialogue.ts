@@ -5,10 +5,10 @@ import { ModelResponseBody, PostMessage } from '../config/model';
 import { ModelBuilder } from '../agent/builder';
 import { LiteImageFile } from '../capabilities/media';
 import { IMAGE_WINDOW_SIZE, sanitizeImageDesc } from '../capabilities/image-tag';
-import { getResourceEntry, setResourceSummary } from '../capabilities/resource';
+import { getResourceEntry } from '../capabilities/resource';
+import { describeResource } from '../capabilities/describe';
 import { getCrystalRemoteTools } from '../capabilities/ltpx';
 import { agentControlTools } from '../tools/agent-control';
-import { imageRecallTools } from '../tools/image-recall';
 import { memoryTools } from '../tools/memory';
 import { resourceTools } from '../tools/resource';
 import { scheduleTools } from '../tools/schedule/defs';
@@ -19,7 +19,7 @@ import { demoteOverflowImagesIn } from './dialogue/history';
 import { executeToolCalls } from './dialogue/tool-calls';
 
 /** 对话者固有工具（除琉璃聚合工具外全部固定不变，定义随本模块静态聚合） */
-const dialogueBaseTools: ToolCall[] = [...agentControlTools, ...imageRecallTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
+const dialogueBaseTools: ToolCall[] = [...agentControlTools, ...memoryTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
 
 /** 单次应答允许的工具调用轮次上限（防御模型在工具调用间自循环） */
 const MAX_TOOL_ROUNDS = 5;
@@ -112,6 +112,9 @@ export class DialogueRole extends ModelBuilder {
             this.formatHistoricalMessages();
             // 添加当前时间到运行时消息列表
             this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
+            // 生活链当前进度：只进运行时消息，不进历史；整轮结束后为空
+            const lifeProgress = typeof bilibiliLifeProgress === 'function' ? bilibiliLifeProgress() : '';
+            if (lifeProgress) this.runtimeMessages.push({ role: 'user', content: `[月华的生活] ${lifeProgress}` });
             /** 向处理器模型发送请求并等待响应（固有工具 + 琉璃聚合工具常驻槽位，工具链变化时刷新定义） */
             const response = this.run(guardNote ? [...this.ragMessages, guardNote] : this.ragMessages, [...dialogueBaseTools, ...getCrystalRemoteTools()]);
             // 处理响应文本内容
@@ -246,43 +249,15 @@ export class DialogueRole extends ModelBuilder {
 
     /**
      * 获取图片条目描述（占位文本 [@I.00x]（描述）中括号内的内容来源）：
-     * 资源目录摘要命中直接返回；未命中时用视觉模型对源图生成一次并回写摘要。
+     * 资源目录摘要命中直接返回；未命中时交给 Go 侧描述者现场生成并回写摘要。
      * 返回值为已规整文本（折叠空白、剔除括号类结构字符、20 字上限），
      * 保证拼接进占位后不破坏句柄形态、不残留多余文本。
      */
     private describeImage(tag: string, source: string): string {
         const entry = getResourceEntry(tag);
         if (entry?.summary) return sanitizeImageDesc(entry.summary, 20);
-        const generated = this.generateImageDesc(source, tag);
-        if (generated && entry) setResourceSummary(entry.id, generated);
-        return generated;
-    }
-
-    /**
-     * 用视觉模型为图片生成一次性描述并回写资源目录
-     *
-     * @param source 图片来源（消息内现存的压缩图片数据）
-     * @param tag 规范句柄（@I.00x）
-     * @returns 规整后的描述（失败返回空串）
-     */
-    private generateImageDesc(source: string, tag: string): string {
-        if (!source) return '';
-        try {
-            // 图片包装为独立消息，喂给描述角色生成一次性摘要（单图单次调用）
-            this.descriptionRole.coverContext({
-                role: 'user',
-                content: [
-                    { type: 'text', text: '用一句不超过20字的中文描述这张图片的主体与场景，只输出描述本身。' },
-                    { type: 'image_url', image_url: { url: source } }
-                ]
-            });
-            const response = this.descriptionRole.run([], []);
-            return sanitizeImageDesc(response.body?.choices?.[0]?.message?.content || '', 20);
-        }
-        catch (error) {
-            console.error('[对话者] 图片描述生成失败:', error);
-            return '';
-        }
+        // source 只是旧链路的视觉来源；描述者按句柄自行读取资源目录，无需再传图
+        return sanitizeImageDesc(describeResource(tag), 20);
     }
 
     /** 处理聊天消息响应 */
@@ -309,7 +284,7 @@ export class DialogueRole extends ModelBuilder {
     }
 
     /** 构造函数 */
-    public constructor(private descriptionRole: ModelBuilder, appearances: SisterAppearances) {
+    public constructor(appearances: SisterAppearances) {
         super(composeDialoguePrompt(appearances));
         this.basePrompt = this.systemPrompt;
     }

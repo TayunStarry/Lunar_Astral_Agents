@@ -73,7 +73,7 @@ export function handleUpscaleImage(host: PainterHost, args: ImageTagParams): str
 		let source = '';
 		let handleLabel = '';
 		if (args.image_tag) {
-			if (!resolved) return '超分失败：句柄不存在或已失效，请先调用 list_images 或 list_resources 查看可用图片';
+			if (!resolved) return '超分失败：句柄不存在或已失效，请先调用 list_images 查看可用图片';
 			if (!resolved.source) return `超分失败：${resolved.handle} 的本体已从内容仓库回收，无法超分`;
 			source = resolved.source;
 			handleLabel = resolved.handle;
