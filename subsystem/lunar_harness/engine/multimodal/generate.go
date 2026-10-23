@@ -1,7 +1,7 @@
 package multimodal
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"bytes"
 	"encoding/base64"
@@ -30,9 +30,9 @@ func StartTaskProcessor() {
 // 方案在入队时固化为任务字段，避免排队期间切换方案导致同一任务前后不一致。
 func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool, scheme string) (*GenerateTask, int) {
 	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
-	schemeName := GeneralConfig.NormalizeDiffusionSchemeName(scheme)
+	schemeName := config.NormalizeDiffusionSchemeName(scheme)
 	if schemeName == "" {
-		schemeName = GeneralConfig.CurrentDiffusionSchemeName()
+		schemeName = config.CurrentDiffusionSchemeName()
 	}
 	task := &GenerateTask{
 		ID:                   taskID,
@@ -77,7 +77,7 @@ func ProcessTask(task GenerateTask) {
 	TaskStatusMu.Unlock()
 	// 模型方案快照：任务创建时已固化方案名，这里按任务取成套模型路径，
 	// 排队期间前端/智能体切换方案不会改变本任务实际使用的模型。
-	scheme := GeneralConfig.ResolveDiffusionScheme(task.Scheme)
+	scheme := config.ResolveDiffusionScheme(task.Scheme)
 	schemeLabel := scheme.Name
 	if schemeLabel == "" {
 		schemeLabel = "默认（扁平配置）"
@@ -87,10 +87,10 @@ func ProcessTask(task GenerateTask) {
 	// 构建输出文件名
 	timestamp := time.Now().Format("20060102_150405")
 	outputFilename := fmt.Sprintf("%s.png", timestamp)
-	outputPath := filepath.Join(*GeneralConfig.LocalDir, "multimedia/generated", outputFilename)
+	outputPath := filepath.Join(*config.LocalDir, "multimedia/generated", outputFilename)
 
 	// 确保输出目录存在
-	os.MkdirAll(filepath.Join(*GeneralConfig.LocalDir, "multimedia/generated"), 0755)
+	os.MkdirAll(filepath.Join(*config.LocalDir, "multimedia/generated"), 0755)
 
 	// 归一化请求参数：尺寸对齐到 32 的倍数（Qwen-Image 系列为 16× VAE 压缩 + 2×2 patch，官方要求
 	// 宽高可被 32 整除；官方 2K 比例如 2528×1696 也是 32 的倍数而非 64），步数收进合理区间；
@@ -102,7 +102,7 @@ func ProcessTask(task GenerateTask) {
 		steps = scheme.Steps
 	}
 	if steps <= 0 {
-		steps = *GeneralConfig.SDSteps
+		steps = *config.SDSteps
 	}
 	if steps < 1 {
 		steps = 1
@@ -139,17 +139,17 @@ func ProcessTask(task GenerateTask) {
 	}
 
 	// 采样策略：auto 表示不传参，由 sd.cpp 按模型自动选择（本模型为 euler + flux 调度）
-	if v := strings.TrimSpace(*GeneralConfig.SDSampler); v != "" && !strings.EqualFold(v, "auto") {
+	if v := strings.TrimSpace(*config.SDSampler); v != "" && !strings.EqualFold(v, "auto") {
 		args = append(args, "--sampling-method", v)
 	}
-	if v := strings.TrimSpace(*GeneralConfig.SDScheduler); v != "" && !strings.EqualFold(v, "auto") {
+	if v := strings.TrimSpace(*config.SDScheduler); v != "" && !strings.EqualFold(v, "auto") {
 		args = append(args, "--scheduler", v)
 	}
-	if *GeneralConfig.SDFlowShift > 0 {
-		args = append(args, "--flow-shift", fmt.Sprintf("%.3f", *GeneralConfig.SDFlowShift))
+	if *config.SDFlowShift > 0 {
+		args = append(args, "--flow-shift", fmt.Sprintf("%.3f", *config.SDFlowShift))
 	}
 	// 扩散模型 flash attention：速度换数值精度，排查方块伪影时可关闭后对比
-	if *GeneralConfig.SDFlashAttention {
+	if *config.SDFlashAttention {
 		args = append(args, "--diffusion-fa")
 	}
 
@@ -160,7 +160,7 @@ func ProcessTask(task GenerateTask) {
 
 	// 图生图参数
 	if task.InitImg != "" && task.InitImg != "null" {
-		initImgPath := filepath.Join(*GeneralConfig.LocalDir, task.InitImg)
+		initImgPath := filepath.Join(*config.LocalDir, task.InitImg)
 		if _, err := os.Stat(initImgPath); err == nil {
 			args = append(args, "--init-img", initImgPath)
 			args = append(args, "--strength", fmt.Sprintf("%.2f", task.Strength))
@@ -187,8 +187,8 @@ func ProcessTask(task GenerateTask) {
 
 	// 执行显存守卫：可用显存不足时先卸载月华模型, 并记录守卫后的可用显存
 	freeMiB := 0
-	if GeneralConfig.ImageVRAMGuardHook != nil {
-		free, err := GeneralConfig.ImageVRAMGuardHook()
+	if config.ImageVRAMGuardHook != nil {
+		free, err := config.ImageVRAMGuardHook()
 		freeMiB = free
 		if err != nil {
 			logger.Warn("MultimodalAnalysis", "显存守卫执行失败: %v", err)
@@ -196,21 +196,21 @@ func ProcessTask(task GenerateTask) {
 	}
 
 	// 守卫后显存仍吃紧时, 让 sd.cpp 把权重驻留内存、按需载入显存（计算仍在 GPU）, 避免爆显存
-	switch strings.ToLower(strings.TrimSpace(*GeneralConfig.SDOffloadToCPU)) {
+	switch strings.ToLower(strings.TrimSpace(*config.SDOffloadToCPU)) {
 	case "always", "true":
 		args = append(args, "--offload-to-cpu")
 		logger.Info("MultimodalAnalysis", "sd.cpp 权重内存卸载: always")
 	case "off", "false", "no":
 		// 显式禁用
 	default: // auto
-		if freeMiB > 0 && freeMiB < *GeneralConfig.ImageVRAMGuardMiB {
+		if freeMiB > 0 && freeMiB < *config.ImageVRAMGuardMiB {
 			args = append(args, "--offload-to-cpu")
 			logger.Info("MultimodalAnalysis", "可用显存 %d MiB 不足, sd.cpp 启用权重内存卸载", freeMiB)
 		}
 	}
 
 	// 显存预算：交给 sd.cpp 做图切割执行（GiB，支持 cuda0=9 形式）；未配置时由 --auto-fit 自动管理
-	if v := strings.TrimSpace(*GeneralConfig.SDMaxVRAM); v != "" {
+	if v := strings.TrimSpace(*config.SDMaxVRAM); v != "" {
 		args = append(args, "--max-vram", v)
 		logger.Info("MultimodalAnalysis", "sd.cpp 显存预算: %s GiB", v)
 	}
@@ -226,7 +226,7 @@ func ProcessTask(task GenerateTask) {
 	//     解码 3.81s；与 CPU 全帧解码像素比对：最大差 1/255、98.9% 像素完全相同；
 	//   - 整段 CPU 解码同样无接缝，但 1024×1536 实测要 197.93s。
 	// 因此按「整帧 GPU → GPU + direct conv → CPU」三档退让，绝不落到空间分片。
-	plan := resolveVAEDecode(width, height, freeMiB, vaeBackendMode(), *GeneralConfig.SDVaeConvDirect)
+	plan := resolveVAEDecode(width, height, freeMiB, vaeBackendMode(), *config.SDVaeConvDirect)
 	switch {
 	case plan.onCPU:
 		logger.Info("MultimodalAnalysis", "VAE 解码在 CPU 上进行: %s", plan.why)
@@ -242,7 +242,7 @@ func ProcessTask(task GenerateTask) {
 	// VAE 分片解码：默认 off。只有显式要求（always）或「显式要求 GPU 且显存放不下」时
 	// 才传入分片几何——分片一定会在接缝处留白块，能不用就不用。
 	needVAETiling := false
-	switch strings.ToLower(strings.TrimSpace(*GeneralConfig.SDVaeTiling)) {
+	switch strings.ToLower(strings.TrimSpace(*config.SDVaeTiling)) {
 	case "always", "true", "on":
 		needVAETiling = true
 	case "off", "false", "no":
@@ -252,11 +252,11 @@ func ProcessTask(task GenerateTask) {
 	}
 	if needVAETiling {
 		args = append(args, "--vae-tiling")
-		if v := strings.TrimSpace(*GeneralConfig.SDVaeTileSize); v != "" {
+		if v := strings.TrimSpace(*config.SDVaeTileSize); v != "" {
 			args = append(args, "--vae-tile-size", v)
 		}
-		if *GeneralConfig.SDVaeTileOverlap > 0 {
-			args = append(args, "--vae-tile-overlap", fmt.Sprintf("%.2f", *GeneralConfig.SDVaeTileOverlap))
+		if *config.SDVaeTileOverlap > 0 {
+			args = append(args, "--vae-tile-overlap", fmt.Sprintf("%.2f", *config.SDVaeTileOverlap))
 		}
 		logger.Warn("MultimodalAnalysis",
 			"sd.cpp 启用 VAE 分片解码 (%dx%d)：分片接缝可能出现硬边纯色方块，仅建议在无法整段解码时使用", width, height)
@@ -265,7 +265,7 @@ func ProcessTask(task GenerateTask) {
 	// 运行时后端分配：sd.cpp 的 --backend 接受**逗号列表**（如 clip=cpu,vae=cuda0）。
 	// 必须合并成一条：分多次传 --backend 由解析器互相覆盖，依赖它等于赌实现细节。
 	backendSpecs := make([]string, 0, 2)
-	if *GeneralConfig.SDTextEncoderOnCPU {
+	if *config.SDTextEncoderOnCPU {
 		backendSpecs = append(backendSpecs, "te=cpu") // 提示词编码器（--llm）不占显存
 	}
 	if plan.onCPU {
@@ -277,7 +277,7 @@ func ProcessTask(task GenerateTask) {
 
 	// 显示命令参数，正确分组
 	logger.Info("MultimodalAnalysis", "执行命令参数:")
-	logger.Info("MultimodalAnalysis", "  程序: %s", *GeneralConfig.VisualEngine)
+	logger.Info("MultimodalAnalysis", "  程序: %s", *config.VisualEngine)
 
 	// 正确分组显示参数
 	for i := 0; i < len(args); i++ {
@@ -305,7 +305,7 @@ func ProcessTask(task GenerateTask) {
 	}
 
 	// 执行命令
-	cmd := exec.Command(*GeneralConfig.VisualEngine, args...)
+	cmd := exec.Command(*config.VisualEngine, args...)
 
 	// 捕获标准输出和错误输出
 	stdout, _ := cmd.StdoutPipe()
@@ -401,7 +401,7 @@ func RemoveWaitClient(taskID string) {
 // GenerateImage 生成图片并等待完成，返回图片路径和base64编码
 func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool) (map[string]any, error) {
 	// 检查是否允许使用扩散生成
-	if !*GeneralConfig.AllowDiffusion {
+	if !*config.AllowDiffusion {
 		return nil, fmt.Errorf("未启用[扩散生成]功能")
 	}
 
@@ -454,14 +454,14 @@ func GenerateImage(prompt, negativePrompt string, batchSize, width, height, step
 // 输入图片字节写入临时文件供引擎读取，放大结果写入多媒体生成目录并返回 base64 与尺寸
 func UpscaleImage(imageData []byte) (map[string]any, error) {
 	// 与扩散生成共用功能开关
-	if !*GeneralConfig.AllowDiffusion {
+	if !*config.AllowDiffusion {
 		return nil, fmt.Errorf("未启用[扩散生成]功能")
 	}
 	if len(imageData) == 0 {
 		return nil, fmt.Errorf("图片数据为空")
 	}
 	// 超分模型跟随当前绘图方案（未配置方案时回退扁平配置）
-	upscaleModel := GeneralConfig.ResolveDiffusionScheme("").RealESRGANModel
+	upscaleModel := config.ResolveDiffusionScheme("").RealESRGANModel
 	if strings.TrimSpace(upscaleModel) == "" {
 		return nil, fmt.Errorf("未配置超分模型（real_esrgan_model）")
 	}
@@ -480,8 +480,8 @@ func UpscaleImage(imageData []byte) (map[string]any, error) {
 	inputFile.Close()
 
 	// 输出写入多媒体生成目录
-	os.MkdirAll(filepath.Join(*GeneralConfig.LocalDir, "multimedia/generated"), 0755)
-	outputPath := filepath.Join(*GeneralConfig.LocalDir, "multimedia/generated", fmt.Sprintf("upscale_%s.png", time.Now().Format("20060102_150405")))
+	os.MkdirAll(filepath.Join(*config.LocalDir, "multimedia/generated"), 0755)
+	outputPath := filepath.Join(*config.LocalDir, "multimedia/generated", fmt.Sprintf("upscale_%s.png", time.Now().Format("20060102_150405")))
 
 	// 纯超分管线：不加载扩散模型，仅 RealESRGAN 放大
 	args := []string{
@@ -490,9 +490,9 @@ func UpscaleImage(imageData []byte) (map[string]any, error) {
 		"-i", inputPath,
 		"-o", outputPath,
 	}
-	logger.Info("MultimodalAnalysis", "图像超分: %s %s", *GeneralConfig.VisualEngine, strings.Join(args, " "))
+	logger.Info("MultimodalAnalysis", "图像超分: %s %s", *config.VisualEngine, strings.Join(args, " "))
 
-	cmd := exec.Command(*GeneralConfig.VisualEngine, args...)
+	cmd := exec.Command(*config.VisualEngine, args...)
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 
@@ -537,7 +537,7 @@ func UpscaleImage(imageData []byte) (map[string]any, error) {
 func normalizeImageSide(side int) int {
 	const minSide, maxSide, align = 256, 2816, 32
 	if side <= 0 {
-		side = *GeneralConfig.SDImageSize
+		side = *config.SDImageSize
 	}
 	if side <= 0 {
 		side = 1024
@@ -596,7 +596,7 @@ func scaleByMegapixel(width, height, perMP int) int {
 
 // vaeBackendMode 归一化 sd-vae-backend 配置（未知取值按 auto 处理）
 func vaeBackendMode() string {
-	switch strings.ToLower(strings.TrimSpace(*GeneralConfig.SDVaeBackend)) {
+	switch strings.ToLower(strings.TrimSpace(*config.SDVaeBackend)) {
 	case "cpu":
 		return "cpu"
 	case "gpu":

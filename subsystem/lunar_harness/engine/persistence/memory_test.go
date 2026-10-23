@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 func testMemoryDB(t *testing.T) *MemoryDB {
@@ -171,7 +171,7 @@ func TestDefaultCollectionsCoverage(t *testing.T) {
 // multimedia/memory/<分组>/，同时改写文档 URL。
 func TestMigrateLegacyMemoryImages(t *testing.T) {
 	isolateStorage(t)
-	base := filepath.Clean(*GeneralConfig.LocalDir)
+	base := filepath.Clean(*config.LocalDir)
 	const collection = "测试分组"
 	legacyRel := path.Join(StorageRootMultimedia, collection, "legacy.png")
 	legacyAbs := filepath.Join(base, filepath.FromSlash(legacyRel))
@@ -220,13 +220,13 @@ func TestTagRequestDisablesThinking(t *testing.T) {
 	}))
 	defer server.Close()
 
-	origURL := *GeneralConfig.AgentMultimodalURL
-	origModel := *GeneralConfig.AgentMultimodalModel
-	*GeneralConfig.AgentMultimodalURL = server.URL
-	*GeneralConfig.AgentMultimodalModel = "test-multimodal"
+	origURL := *config.AgentMultimodalURL
+	origModel := *config.AgentMultimodalModel
+	*config.AgentMultimodalURL = server.URL
+	*config.AgentMultimodalModel = "test-multimodal"
 	t.Cleanup(func() {
-		*GeneralConfig.AgentMultimodalURL = origURL
-		*GeneralConfig.AgentMultimodalModel = origModel
+		*config.AgentMultimodalURL = origURL
+		*config.AgentMultimodalModel = origModel
 	})
 
 	d := &MemoryDB{httpClient: server.Client()}

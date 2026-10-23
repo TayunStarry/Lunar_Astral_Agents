@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // ServiceName 模块标识。
@@ -115,5 +115,5 @@ func packageRoot() string {
 		return filepath.Join("local_data", "package")
 	}
 	execDir := filepath.Dir(execPath)
-	return filepath.Join(execDir, *GeneralConfig.LocalDir, "package")
+	return filepath.Join(execDir, *config.LocalDir, "package")
 }

@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 
 	"github.com/dop251/goja"
 )
@@ -48,7 +48,7 @@ func databaseDir() string {
 	if err != nil {
 		return filepath.Join("local_data", "database")
 	}
-	return filepath.Join(filepath.Dir(execPath), *GeneralConfig.LocalDir, "database")
+	return filepath.Join(filepath.Dir(execPath), *config.LocalDir, "database")
 }
 
 // ensureDB 打开默认共享库 knowledge.db。

@@ -1,7 +1,7 @@
 package lunarloop
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/persistence"
 	"context"
@@ -26,7 +26,7 @@ import (
 // 模型配置与月华共用 agent.embedding_* / agent.multimodal_*
 func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
 	// 确保全局 MemoryDB 实例已初始化（幂等，若宿主已初始化则复用）
-	module.InitMemoryDB(*GeneralConfig.MemoryDBDir)
+	module.InitMemoryDB(*config.MemoryDBDir)
 
 	if err := module.MemoryInitInstance(); err != nil {
 		logger.Error("LunarCore", "记忆库实例初始化失败: %v", err)
@@ -38,7 +38,7 @@ func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
 
 // memoryListCollections 列出记忆库全部分组集合名（管理/调试用途，不参与检索参数）
 func (class *Runtime) memoryListCollections(call goja.FunctionCall) goja.Value {
-	module.InitMemoryDB(*GeneralConfig.MemoryDBDir)
+	module.InitMemoryDB(*config.MemoryDBDir)
 	if err := module.MemoryInitInstance(); err != nil {
 		logger.Error("LunarCore", "记忆库实例初始化失败: %v", err)
 		return class.runtime.ToValue([]any{nil, err})

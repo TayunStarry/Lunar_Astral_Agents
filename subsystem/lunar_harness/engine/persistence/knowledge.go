@@ -1,7 +1,7 @@
 package persistence
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"database/sql"
 	"fmt"
@@ -16,7 +16,7 @@ import (
 )
 
 func init() {
-	logger.SetDevMode(*GeneralConfig.Developer)
+	logger.SetDevMode(*config.Developer)
 }
 
 // InitKnowledgeDB 初始化知识库（SQLite）
@@ -241,7 +241,7 @@ func executeRawSQLOn(dbHandle *sql.DB, op map[string]interface{}, tx *sql.Tx) Op
 // EnsureKnowledgeInitialized 确保知识库已初始化并连接可用
 func EnsureKnowledgeInitialized() error {
 	if KnowledgeDatabase == nil || !KnowledgeDatabase.IsKnowledgeInitialized() {
-		if err := InitKnowledgeDB(*GeneralConfig.KnowledgeDBPath); err != nil {
+		if err := InitKnowledgeDB(*config.KnowledgeDBPath); err != nil {
 			return err
 		}
 	}
@@ -497,7 +497,7 @@ func (d *KnowledgeDB) ensureFileDB(name string) (*sql.DB, error) {
 	if db, ok := d.fileDBs[name]; ok {
 		return db, nil
 	}
-	dbDir := filepath.Clean(filepath.Dir(*GeneralConfig.KnowledgeDBPath))
+	dbDir := filepath.Clean(filepath.Dir(*config.KnowledgeDBPath))
 	dbPath := filepath.Clean(filepath.Join(dbDir, rel+".db"))
 	// 防穿越复核：最终路径必须仍位于 database 目录内
 	if !strings.HasPrefix(dbPath, dbDir+string(os.PathSeparator)) {

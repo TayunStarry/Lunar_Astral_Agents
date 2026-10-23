@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 )
 
 // 清掉本次用例写入的导出文件（避免污染工作目录）
 func cleanupDumps(t *testing.T, pattern string) {
 	t.Helper()
-	glob := filepath.Join(*GeneralConfig.LocalDir, "logs", "dump", pattern)
+	glob := filepath.Join(*config.LocalDir, "logs", "dump", pattern)
 	t.Cleanup(func() {
 		if entries, err := filepath.Glob(glob); err == nil {
 			for _, e := range entries {

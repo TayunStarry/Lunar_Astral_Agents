@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	file "LunarSubsystem/LunarHarness/engine/persistence"
 )
 
@@ -49,15 +49,15 @@ func TestForwardImageName(t *testing.T) {
 // TestAdmitForwardImageDataURI 只有 file 引用、下载后为 data URI 的转发图片
 // 必须能收进资源归档并返回句柄，而不是退化成 [图片]。
 func TestAdmitForwardImageDataURI(t *testing.T) {
-	origLocal := *GeneralConfig.LocalDir
-	origArchive := *GeneralConfig.ArchiveDBPath
+	origLocal := *config.LocalDir
+	origArchive := *config.ArchiveDBPath
 	tmp := t.TempDir()
-	*GeneralConfig.LocalDir = tmp
-	*GeneralConfig.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	*config.LocalDir = tmp
+	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
 	t.Cleanup(func() {
 		_ = file.CloseArchiveDB()
-		*GeneralConfig.LocalDir = origLocal
-		*GeneralConfig.ArchiveDBPath = origArchive
+		*config.LocalDir = origLocal
+		*config.ArchiveDBPath = origArchive
 	})
 
 	const onePixelPNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="

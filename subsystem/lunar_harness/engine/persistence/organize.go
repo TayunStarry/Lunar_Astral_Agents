@@ -1,7 +1,7 @@
 package persistence
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"fmt"
 	"io"
@@ -17,8 +17,8 @@ func ExecuteOrganize(req OrganizeRequest) OrganizeResponse {
 	}
 
 	// 解析基础路径
-	basePath := filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, req.BasePath))
-	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	basePath := filepath.Clean(filepath.Join(*config.LocalDir, req.BasePath))
+	localDir := filepath.Clean(*config.LocalDir)
 
 	// 验证基础路径在 LocalDir 内
 	if !strings.HasPrefix(basePath, localDir) {

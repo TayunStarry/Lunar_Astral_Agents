@@ -22,7 +22,7 @@ import (
 	"runtime"
 	"sync"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 
 	webview "github.com/webview/webview_go"
@@ -104,7 +104,7 @@ func OpenDesktopWindow(spec DesktopWindowSpec) error {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 
-		w := webview.New(*GeneralConfig.Developer)
+		w := webview.New(*config.Developer)
 		if w == nil {
 			desktopMu.Lock()
 			delete(desktopWindows, spec.ID)
@@ -119,8 +119,8 @@ func OpenDesktopWindow(spec DesktopWindowSpec) error {
 
 		w.SetTitle(spec.Title)
 		w.SetSize(spec.Width, spec.Height, webview.HintNone)
-		if *GeneralConfig.WebViewMinWidth > 0 && *GeneralConfig.WebViewMinHeight > 0 {
-			w.SetSize(*GeneralConfig.WebViewMinWidth, *GeneralConfig.WebViewMinHeight, webview.HintMin)
+		if *config.WebViewMinWidth > 0 && *config.WebViewMinHeight > 0 {
+			w.SetSize(*config.WebViewMinWidth, *config.WebViewMinHeight, webview.HintMin)
 		}
 		applyDesktopWindowStyle(w, spec.IconPath)
 		if spec.InitJS != "" {

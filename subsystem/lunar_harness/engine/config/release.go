@@ -1,4 +1,4 @@
-package GeneralConfig
+package config
 
 // ==== Gitee Release 发布通道（lunar_config.json 的 release 节） ====
 //

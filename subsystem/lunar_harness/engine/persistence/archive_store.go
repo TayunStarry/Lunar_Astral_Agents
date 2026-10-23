@@ -10,7 +10,7 @@ package persistence
 // 因此 @I.007 在重启后仍指向同一资源。
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"database/sql"
 	"encoding/json"
@@ -133,7 +133,7 @@ func EnsureArchiveInitialized() error {
 	if ArchiveDatabase != nil && ArchiveDatabase.initialized && ArchiveDatabase.db != nil {
 		return nil
 	}
-	return InitArchiveDB(*GeneralConfig.ArchiveDBPath)
+	return InitArchiveDB(*config.ArchiveDBPath)
 }
 
 func (d *ArchiveDB) init(dbPath string) error {

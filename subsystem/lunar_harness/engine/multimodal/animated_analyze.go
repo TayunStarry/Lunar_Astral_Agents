@@ -17,7 +17,7 @@ import (
 	"os"
 	"strconv"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 )
@@ -55,8 +55,8 @@ func analyzeAnimatedFrames(inputFile string, maxFrames int) (*animatedAnalysis, 
 		"frames:v": strconv.Itoa(maxFrames),
 		"loglevel": "error",
 	})
-	if *GeneralConfig.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
+	if *config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*config.FfmpegPath)
 	}
 	if err := stream.WithOutput(buf, os.Stderr).Run(); err != nil {
 		return nil, fmt.Errorf("缩略解码失败: %w", err)

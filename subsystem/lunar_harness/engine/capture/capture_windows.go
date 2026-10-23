@@ -1,6 +1,6 @@
 //go:build windows
 
-package windowcapture
+package capture
 
 import (
 	"fmt"

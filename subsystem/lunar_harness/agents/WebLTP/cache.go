@@ -7,7 +7,7 @@ package WebLTP
 //   - 命中但超过 TTL → 视为未命中，照常访问网页并用新摘要覆写旧行；
 //   - 未命中 → 访问并写入。
 // 打开失败或摘要为空/过短的页面不写缓存。数据库落在网络检索领域库
-// GeneralConfig.WebDBPath（默认 LocalDir/database/web.db，表 web_ltp_page_cache），
+// config.WebDBPath（默认 LocalDir/database/web.db，表 web_ltp_page_cache），
 // 与知识库 knowledge.db 分离；表结构由 persistence 领域库统一建好，本包不重复建表。
 
 import (

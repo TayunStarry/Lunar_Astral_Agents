@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -131,7 +131,7 @@ func (c Config) autoEnabled() bool {
 }
 
 func configPath() string {
-	dir := strings.TrimSpace(*GeneralConfig.LocalDir)
+	dir := strings.TrimSpace(*config.LocalDir)
 	if dir == "" {
 		dir = "local_data"
 	}

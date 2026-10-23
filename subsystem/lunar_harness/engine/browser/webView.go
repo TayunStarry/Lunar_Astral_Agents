@@ -1,7 +1,7 @@
 package browser
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"net"
 	"net/url"
@@ -144,22 +144,22 @@ func createWebView() webview.WebView {
 	}
 
 	logger.SubInfo("browser", "createWebView", "调用 webview.New")
-	w := webview.New(*GeneralConfig.Developer)
+	w := webview.New(*config.Developer)
 	if w == nil {
 		logger.SubError("browser", "createWebView", "webview.New 返回 nil")
 		return nil
 	}
 
 	logger.SubInfo("browser", "createWebView", "设置窗口标题和尺寸")
-	w.SetTitle(*GeneralConfig.WebViewTitle)
-	w.SetSize(*GeneralConfig.WebViewWidth, *GeneralConfig.WebViewHeight, webview.HintNone)
+	w.SetTitle(*config.WebViewTitle)
+	w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintNone)
 
-	if *GeneralConfig.WebViewMinWidth > 0 && *GeneralConfig.WebViewMinHeight > 0 {
-		w.SetSize(*GeneralConfig.WebViewMinWidth, *GeneralConfig.WebViewMinHeight, webview.HintMin)
+	if *config.WebViewMinWidth > 0 && *config.WebViewMinHeight > 0 {
+		w.SetSize(*config.WebViewMinWidth, *config.WebViewMinHeight, webview.HintMin)
 	}
 
-	if !*GeneralConfig.WebViewResizable {
-		w.SetSize(*GeneralConfig.WebViewWidth, *GeneralConfig.WebViewHeight, webview.HintFixed)
+	if !*config.WebViewResizable {
+		w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintFixed)
 	}
 
 	webviewInstance = w

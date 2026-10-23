@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -21,21 +21,21 @@ import (
 func setupDomainTest(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
-	origLocal := *GeneralConfig.LocalDir
-	origArchive := *GeneralConfig.ArchiveDBPath
-	origKnowledge := *GeneralConfig.KnowledgeDBPath
-	origMedia := *GeneralConfig.MediaDBPath
-	origWeb := *GeneralConfig.WebDBPath
-	origText := *GeneralConfig.TextDBPath
-	origCharacter := *GeneralConfig.CharacterDBPath
+	origLocal := *config.LocalDir
+	origArchive := *config.ArchiveDBPath
+	origKnowledge := *config.KnowledgeDBPath
+	origMedia := *config.MediaDBPath
+	origWeb := *config.WebDBPath
+	origText := *config.TextDBPath
+	origCharacter := *config.CharacterDBPath
 
-	*GeneralConfig.LocalDir = tmp
-	*GeneralConfig.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
-	*GeneralConfig.KnowledgeDBPath = filepath.Join(tmp, "database", "knowledge.db")
-	*GeneralConfig.MediaDBPath = filepath.Join(tmp, "database", "media.db")
-	*GeneralConfig.WebDBPath = filepath.Join(tmp, "database", "web.db")
-	*GeneralConfig.TextDBPath = filepath.Join(tmp, "database", "text.db")
-	*GeneralConfig.CharacterDBPath = filepath.Join(tmp, "database", "character.db")
+	*config.LocalDir = tmp
+	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	*config.KnowledgeDBPath = filepath.Join(tmp, "database", "knowledge.db")
+	*config.MediaDBPath = filepath.Join(tmp, "database", "media.db")
+	*config.WebDBPath = filepath.Join(tmp, "database", "web.db")
+	*config.TextDBPath = filepath.Join(tmp, "database", "text.db")
+	*config.CharacterDBPath = filepath.Join(tmp, "database", "character.db")
 
 	if KnowledgeDatabase != nil {
 		_ = KnowledgeDatabase.Close()
@@ -51,13 +51,13 @@ func setupDomainTest(t *testing.T) string {
 		KnowledgeDatabase = nil
 		_ = CloseArchiveDB()
 		_ = CloseDomainDBs()
-		*GeneralConfig.LocalDir = origLocal
-		*GeneralConfig.ArchiveDBPath = origArchive
-		*GeneralConfig.KnowledgeDBPath = origKnowledge
-		*GeneralConfig.MediaDBPath = origMedia
-		*GeneralConfig.WebDBPath = origWeb
-		*GeneralConfig.TextDBPath = origText
-		*GeneralConfig.CharacterDBPath = origCharacter
+		*config.LocalDir = origLocal
+		*config.ArchiveDBPath = origArchive
+		*config.KnowledgeDBPath = origKnowledge
+		*config.MediaDBPath = origMedia
+		*config.WebDBPath = origWeb
+		*config.TextDBPath = origText
+		*config.CharacterDBPath = origCharacter
 	})
 	return tmp
 }
@@ -65,7 +65,7 @@ func setupDomainTest(t *testing.T) string {
 // TestKnowledgeBuiltinTableRouting 内建表落各自领域库，用户表仍落 knowledge.db
 func TestKnowledgeBuiltinTableRouting(t *testing.T) {
 	setupDomainTest(t)
-	if err := InitKnowledgeDB(*GeneralConfig.KnowledgeDBPath); err != nil {
+	if err := InitKnowledgeDB(*config.KnowledgeDBPath); err != nil {
 		t.Fatalf("初始化知识库失败: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestExecuteSQLOnDomainDB(t *testing.T) {
 // TestLegacyKnowledgeTablesMigrate 历史 knowledge.db 内建表迁移到领域库并删除旧表
 func TestLegacyKnowledgeTablesMigrate(t *testing.T) {
 	tmp := setupDomainTest(t)
-	dbPath := *GeneralConfig.KnowledgeDBPath
+	dbPath := *config.KnowledgeDBPath
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		t.Fatalf("创建目录失败: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestLegacyKnowledgeTablesMigrate(t *testing.T) {
 // TestLegacyVisionCacheMigrate 历史 archive.db 视觉缓存迁入 media.db
 func TestLegacyVisionCacheMigrate(t *testing.T) {
 	tmp := setupDomainTest(t)
-	archivePath := *GeneralConfig.ArchiveDBPath
+	archivePath := *config.ArchiveDBPath
 	if err := os.MkdirAll(filepath.Dir(archivePath), 0o755); err != nil {
 		t.Fatalf("创建目录失败: %v", err)
 	}

@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -124,7 +124,7 @@ func VisionCacheEvict(maxBytes int64) (int, int64) {
 		}
 		// 删除磁盘副本（失败不阻断：Windows 句柄占用等场景保留行，下次再试）
 		if cachePath != "" {
-			abs := filepath.Join(*GeneralConfig.LocalDir, filepath.FromSlash(cachePath))
+			abs := filepath.Join(*config.LocalDir, filepath.FromSlash(cachePath))
 			_ = os.Remove(abs)
 		}
 		if _, err := db.Exec(`DELETE FROM vision_cache WHERE content_hash = ? AND side = ?`, contentHash, side); err != nil {

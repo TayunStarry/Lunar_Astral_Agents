@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -31,7 +31,7 @@ func PlayStartupFailSound() {
 		return
 	}
 	execDir := filepath.Dir(execPath)
-	audioPath := filepath.Join(execDir, *GeneralConfig.LocalDir, "audios", "cartoon-fail.mp3")
+	audioPath := filepath.Join(execDir, *config.LocalDir, "audios", "cartoon-fail.mp3")
 	if _, err := os.Stat(audioPath); err != nil {
 		logger.Error("LunarHarness", "失败音效文件不存在: %s", audioPath)
 		return

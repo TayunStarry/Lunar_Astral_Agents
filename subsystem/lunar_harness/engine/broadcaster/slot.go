@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	KokoroTTS "LunarSubsystem/LunarHarness/engine/kokoro_tts"
 	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/omnivoice_tts"
@@ -29,7 +29,7 @@ func resolveEngine(override string) string {
 	case EngineQwen, EngineKokoro, EngineOmniVoice:
 		return override
 	}
-	return *GeneralConfig.TTSEngine
+	return *config.TTSEngine
 }
 
 // currentEngine 读取在位引擎名（"" = 空槽）
@@ -110,7 +110,7 @@ func Snapshot() SlotSnapshot {
 	snap := SlotSnapshot{
 		Engine:        currentEngine(),
 		State:         SlotState(stateNames[slotStateVal.Load()]),
-		DefaultEngine: *GeneralConfig.TTSEngine,
+		DefaultEngine: *config.TTSEngine,
 		LastUsedUnix:  slotLastUseUnix.Load(),
 		SwitchCount:   switchCount.Load(),
 	}

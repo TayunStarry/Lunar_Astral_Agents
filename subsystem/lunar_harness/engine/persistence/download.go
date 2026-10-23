@@ -1,7 +1,7 @@
 package persistence
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"fmt"
 	"os"
@@ -17,10 +17,10 @@ func GetFileInfo(filePath string) (string, int64, error) {
 	}
 
 	// 拼接配置中的本地目录和请求的文件路径，并清理路径格式
-	fullPath := filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, filePath))
+	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, filePath))
 
 	// 检查拼接后的完整路径是否在配置的本地目录下，防止路径遍历攻击
-	if !strings.HasPrefix(fullPath, filepath.Clean(*GeneralConfig.LocalDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(*config.LocalDir)) {
 		return "", 0, fmt.Errorf("访问被拒绝")
 	}
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
 
@@ -51,21 +51,21 @@ func TestMemoryHandlerGlobalTypeAPI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	origLocal := *GeneralConfig.LocalDir
-	origArchive := *GeneralConfig.ArchiveDBPath
-	origURL := *GeneralConfig.AgentEmbeddingURL
-	origModel := *GeneralConfig.AgentEmbeddingModel
+	origLocal := *config.LocalDir
+	origArchive := *config.ArchiveDBPath
+	origURL := *config.AgentEmbeddingURL
+	origModel := *config.AgentEmbeddingModel
 	tmp := t.TempDir()
-	*GeneralConfig.LocalDir = tmp
-	*GeneralConfig.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
-	*GeneralConfig.AgentEmbeddingURL = server.URL + "/v1"
-	*GeneralConfig.AgentEmbeddingModel = "test-embedding"
+	*config.LocalDir = tmp
+	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	*config.AgentEmbeddingURL = server.URL + "/v1"
+	*config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
 		_ = persistence.CloseArchiveDB()
-		*GeneralConfig.LocalDir = origLocal
-		*GeneralConfig.ArchiveDBPath = origArchive
-		*GeneralConfig.AgentEmbeddingURL = origURL
-		*GeneralConfig.AgentEmbeddingModel = origModel
+		*config.LocalDir = origLocal
+		*config.ArchiveDBPath = origArchive
+		*config.AgentEmbeddingURL = origURL
+		*config.AgentEmbeddingModel = origModel
 	})
 
 	persistence.InitMemoryDB(filepath.Join(tmp, "memory"))

@@ -3,7 +3,7 @@
 package AutoLTP
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -15,9 +15,9 @@ import (
 // autoConfig 惰性加载模型配置（模型名/URL/Key），仅首次调用时解析一次。
 func autoConfig() {
 	autoConfigOnce.Do(func() {
-		autoModel = stringOr(*GeneralConfig.AgentMultimodalModel, "system-multimodal")
-		autoURL = normV1(stringOr(*GeneralConfig.AgentMultimodalURL, GeneralConfig.LocalV1URL()))
-		autoKey = stringOr(*GeneralConfig.AgentMultimodalKey, "")
+		autoModel = stringOr(*config.AgentMultimodalModel, "system-multimodal")
+		autoURL = normV1(stringOr(*config.AgentMultimodalURL, config.LocalV1URL()))
+		autoKey = stringOr(*config.AgentMultimodalKey, "")
 	})
 }
 

@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/engine/persistence"
@@ -23,7 +23,7 @@ import (
 
 // resourceVisionURI 生成静态图片的视觉副本并返回 data URI
 func resourceVisionURI(res persistence.ArchiveResource, abs string) (string, error) {
-	side := *GeneralConfig.VisionMaxSide
+	side := *config.VisionMaxSide
 	if side <= 0 {
 		side = 1080
 	}
@@ -33,7 +33,7 @@ func resourceVisionURI(res persistence.ArchiveResource, abs string) (string, err
 		hash = hex.EncodeToString(sum[:8])
 	}
 	cacheRel := filepath.ToSlash(filepath.Join("multimedia", "vision", hash+"_s"+strconv.Itoa(side)+".jpg"))
-	cacheAbs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(cacheRel))
+	cacheAbs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(cacheRel))
 
 	data, mime, cached, err := multimodal.VisionTransform(abs, cacheAbs, side, res.Handle)
 	if err != nil {
@@ -49,7 +49,7 @@ func resourceVisionURI(res persistence.ArchiveResource, abs string) (string, err
 			CachePath:   cacheRel,
 			Bytes:       int64(len(data)),
 		})
-		if removed, freed := persistence.VisionCacheEvict(int64(*GeneralConfig.VisionCacheCapMB) << 20); removed > 0 {
+		if removed, freed := persistence.VisionCacheEvict(int64(*config.VisionCacheCapMB) << 20); removed > 0 {
 			logger.Info("CrystalAstral", "描述者：视觉副本缓存淘汰 %d 个（释放 %d 字节）", removed, freed)
 		}
 	}

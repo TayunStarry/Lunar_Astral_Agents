@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	StarLTP "LunarSubsystem/LunarHarness/engine/ltp9"
 	Multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
@@ -291,9 +291,9 @@ func sniffAudioFormat(b64 string) string {
 // audioB64 为 llama-server 音频解码器原生支持格式（wav/mp3/flac/ogg）的 base64 编码
 // 返回剥离 "language xxx<asr_text>" 前缀后的转写正文
 func transcribeViaYuehua(audioB64 string, format string) (string, error) {
-	target := strings.TrimSuffix(*GeneralConfig.AgentMultimodalURL, "/") + "/chat/completions"
+	target := strings.TrimSuffix(*config.AgentMultimodalURL, "/") + "/chat/completions"
 	reqBody, _ := json.Marshal(map[string]any{
-		"model": *GeneralConfig.AgentASRModel,
+		"model": *config.AgentASRModel,
 		"messages": []map[string]any{{
 			"role": "user",
 			"content": []map[string]any{{
@@ -308,7 +308,7 @@ func transcribeViaYuehua(audioB64 string, format string) (string, error) {
 		return "", fmt.Errorf("构造语音识别请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if key := *GeneralConfig.AgentMultimodalKey; key != "" {
+	if key := *config.AgentMultimodalKey; key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
 	// 首次请求会触发月华侧 ASR 模型按需加载，放宽超时

@@ -7,7 +7,7 @@ package lunarloop
 // 从 JS 侧按 TypeScript 的真实调用形态传参，断言参数被正确解析。
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	file "LunarSubsystem/LunarHarness/engine/persistence"
 	"bytes"
 	"crypto/sha256"
@@ -28,15 +28,15 @@ import (
 func newBridgeTestRuntime(t *testing.T) *goja.Runtime {
 	t.Helper()
 	tmp := t.TempDir()
-	origLocal := *GeneralConfig.LocalDir
-	origArchive := *GeneralConfig.ArchiveDBPath
-	*GeneralConfig.LocalDir = tmp
-	*GeneralConfig.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	origLocal := *config.LocalDir
+	origArchive := *config.ArchiveDBPath
+	*config.LocalDir = tmp
+	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
 	t.Cleanup(func() {
 		// 先关连接再还原配置，否则 Windows 上临时目录删不掉
 		_ = file.CloseArchiveDB()
-		*GeneralConfig.LocalDir = origLocal
-		*GeneralConfig.ArchiveDBPath = origArchive
+		*config.LocalDir = origLocal
+		*config.ArchiveDBPath = origArchive
 	})
 	if err := os.MkdirAll(tmp, 0755); err != nil {
 		t.Fatalf("准备临时目录失败: %v", err)
@@ -283,7 +283,7 @@ func TestResourceAdmitDataURIRoundTripsBytes(t *testing.T) {
 	if err := json.Unmarshal([]byte(payload), &admitted); err != nil {
 		t.Fatalf("解析入库结果失败: %v（%s）", err, payload)
 	}
-	blobPath := filepath.Join(*GeneralConfig.LocalDir, filepath.FromSlash(admitted.Result.BlobPath))
+	blobPath := filepath.Join(*config.LocalDir, filepath.FromSlash(admitted.Result.BlobPath))
 	onDisk, err := os.ReadFile(blobPath)
 	if err != nil {
 		t.Fatalf("读取入库实体失败: %v（%s）", err, blobPath)

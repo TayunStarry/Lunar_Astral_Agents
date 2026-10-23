@@ -17,7 +17,7 @@ package WebLTP
 // 配置沿用主配置文件 lunar_config.json 的 web_search 字段（缺失字段使用默认值）。
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"encoding/json"
 	"fmt"
@@ -28,7 +28,7 @@ import (
 const webSearchPagesHardCap = 10
 
 // LoadConfig 从 lunar_config.json 的 web_search 字段读取配置（每次运行重读，便于热更新）。
-// 路径解析与 GeneralConfig 对齐：LocalDir 为绝对路径时直接使用；
+// 路径解析与 engine/config 对齐：LocalDir 为绝对路径时直接使用；
 // 相对路径时依次尝试「可执行文件所在目录」「当前工作目录」。文件或字段缺失时用默认值。
 func LoadConfig() Config {
 	cfg := defaultConfig()
@@ -144,11 +144,11 @@ func defaultConfig() Config {
 	}
 }
 
-// resolveLunarConfigPath 定位 lunar_config.json（与 GeneralConfig 的解析语义一致）
+// resolveLunarConfigPath 定位 lunar_config.json（与 engine/config 的解析语义一致）
 func resolveLunarConfigPath() (string, error) {
 	const name = "lunar_config.json"
-	if filepath.IsAbs(*GeneralConfig.LocalDir) {
-		p := filepath.Join(*GeneralConfig.LocalDir, name)
+	if filepath.IsAbs(*config.LocalDir) {
+		p := filepath.Join(*config.LocalDir, name)
 		if _, err := os.Stat(p); err == nil {
 			return p, nil
 		}
@@ -156,10 +156,10 @@ func resolveLunarConfigPath() (string, error) {
 	}
 	var candidates []string
 	if exePath, err := os.Executable(); err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(exePath), *GeneralConfig.LocalDir, name))
+		candidates = append(candidates, filepath.Join(filepath.Dir(exePath), *config.LocalDir, name))
 	}
 	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(cwd, *GeneralConfig.LocalDir, name))
+		candidates = append(candidates, filepath.Join(cwd, *config.LocalDir, name))
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
@@ -174,5 +174,5 @@ func resolveLunarConfigPath() (string, error) {
 
 // localDirFlag 暴露 LocalDir 标志（截图目录基于本地数据根目录）
 func localDirFlag() *string {
-	return GeneralConfig.LocalDir
+	return config.LocalDir
 }

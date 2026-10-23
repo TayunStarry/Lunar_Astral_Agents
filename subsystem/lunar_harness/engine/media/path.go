@@ -2,7 +2,7 @@
 package media
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"path/filepath"
 	"strings"
 )
@@ -18,12 +18,12 @@ func ResolvePath(path string) string {
 	if filepath.IsAbs(normalized) {
 		return filepath.Clean(normalized)
 	}
-	return filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, normalized))
+	return filepath.Clean(filepath.Join(*config.LocalDir, normalized))
 }
 
 // IsWithinLocalDir 校验目标路径是否位于 LocalDir 内，防止目录遍历
 func IsWithinLocalDir(fullPath string) bool {
 	cleaned := filepath.Clean(fullPath)
-	local := filepath.Clean(*GeneralConfig.LocalDir)
+	local := filepath.Clean(*config.LocalDir)
 	return cleaned == local || strings.HasPrefix(cleaned, local+string(filepath.Separator))
 }

@@ -1,4 +1,4 @@
-# Lunar_Astral_Agents - 编译脚本
+﻿# Lunar_Astral_Agents - 编译脚本
 # 统一构建「Lunar Harness」（月华 + 琉璃）：
 #   1. 图标编译（rsrc）
 #   2. 关闭运行中的 Lunar_Astral_Agents.exe

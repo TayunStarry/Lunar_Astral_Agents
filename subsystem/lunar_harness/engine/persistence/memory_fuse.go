@@ -1,7 +1,7 @@
 package persistence
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"bytes"
 	"context"
@@ -323,7 +323,7 @@ func concatMemoryContents(contents []string) string {
 
 // mergeMemoryContentsWithModel 调用多模态/文本模型把多条记忆整合为一条完整记忆
 func (d *MemoryDB) mergeMemoryContentsWithModel(ctx context.Context, contents []string) (string, error) {
-	if strings.TrimSpace(*GeneralConfig.AgentMultimodalURL) == "" {
+	if strings.TrimSpace(*config.AgentMultimodalURL) == "" {
 		return "", fmt.Errorf("LLM 服务地址未配置")
 	}
 	clipped := make([]string, len(contents))
@@ -340,7 +340,7 @@ func (d *MemoryDB) mergeMemoryContentsWithModel(ctx context.Context, contents []
 		"不要分点、不要标题、不要解释，只输出合并后的正文。"
 
 	reqBody := chatRequest{
-		Model: *GeneralConfig.AgentMultimodalModel,
+		Model: *config.AgentMultimodalModel,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: "待合并的记忆：\n" + strings.Join(clipped, "\n\n")},
@@ -355,14 +355,14 @@ func (d *MemoryDB) mergeMemoryContentsWithModel(ctx context.Context, contents []
 		return "", fmt.Errorf("序列化整合请求失败: %w", err)
 	}
 
-	apiURL := strings.TrimRight(*GeneralConfig.AgentMultimodalURL, "/") + "/chat/completions"
+	apiURL := strings.TrimRight(*config.AgentMultimodalURL, "/") + "/chat/completions"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", fmt.Errorf("创建整合请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if *GeneralConfig.AgentMultimodalKey != "" {
-		req.Header.Set("Authorization", "Bearer "+*GeneralConfig.AgentMultimodalKey)
+	if *config.AgentMultimodalKey != "" {
+		req.Header.Set("Authorization", "Bearer "+*config.AgentMultimodalKey)
 	}
 
 	client := d.httpClient

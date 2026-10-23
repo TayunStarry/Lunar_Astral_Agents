@@ -31,6 +31,10 @@ const (
 // 必须在宿主程序启动最早期（任何子系统装配前）调用，确保启动期日志不逃逸到终端。
 func Install() {
 	pipelineOnce.Do(func() {
+		// 控制台日志镜像单例：stdout 管道扫描与 logger 直写共用一份
+		// （console_log 关闭时为 nil，两条路径的写入都静默）
+		sharedConsole := openConsoleLog()
+
 		// ==== stdout/stderr 管道接管 ====
 		stdoutR, stdoutW, err := os.Pipe()
 		if err == nil {
@@ -41,7 +45,9 @@ func Install() {
 			realStderr = os.Stderr
 			os.Stdout = stdoutW
 			os.Stderr = stdoutW
-			logger.SetOutput(stdoutW)
+			// logger 直写日志镜像而非管道：结构化日志由下面的钩子单一供源进入
+			// 「原始日志」视图，经管道再走一遍会重复；镜像落盘仍受 shouldPrint 级别过滤
+			logger.SetOutput(consoleLogWriter{cl: sharedConsole})
 			// 标准库 log 也必须改道：它内部持有的是「init 时的 os.Stderr 文件对象」
 			// （即真实控制台），只替换 os.Stderr 变量对它无效。漏掉这一步时，
 			// httputil / net/http 等库用 log.Printf 打的错误会直接糊在 TUI 界面上
@@ -63,7 +69,7 @@ func Install() {
 				}
 			}
 
-			go scanPipeLines(stdoutR)
+			go scanPipeLines(stdoutR, sharedConsole)
 		}
 
 		// ==== logger 结构化日志钩子 ====
@@ -145,9 +151,9 @@ func scrubSingleLine(raw string) string {
 // scanPipeLines 逐行扫描管道内容并送入原始日志缓冲。
 // 同时把每一行镜像到 {程序根}/local_data/logs/console.log：进程退出后仍有据可查
 // （含 Go 运行时的 panic 栈——它们同样经 stderr 进入本管道）。
-func scanPipeLines(r *os.File) {
+// 镜像写入器由 Install 传入（与 logger 直写共用同一份；可为 nil，WriteLine 自行静默）。
+func scanPipeLines(r *os.File, consoleLog *consoleLog) {
 	defer r.Close()
-	consoleLog := openConsoleLog()
 	defer consoleLog.Close()
 
 	scanner := bufio.NewScanner(r)

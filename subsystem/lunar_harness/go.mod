@@ -4,9 +4,7 @@ go 1.26.0
 
 require (
 	LunarSubsystem/EndpointDocs v0.0.0-00010101000000-000000000000
-	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/LunarDecoder v0.0.0-00010101000000-000000000000
-	LunarSubsystem/WindowCapture v0.0.0
 	github.com/auuunya/go-element v1.0.1
 	github.com/chai2010/webp v1.4.0
 	github.com/charmbracelet/bubbles v1.0.0
@@ -61,10 +59,6 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 )
 
-replace LunarSubsystem/GeneralConfig => ../general_config
-
 replace LunarSubsystem/LunarDecoder => ../lunar_decoder
 
 replace LunarSubsystem/EndpointDocs => ../endpoint_docs
-
-replace LunarSubsystem/WindowCapture => ../window_capture

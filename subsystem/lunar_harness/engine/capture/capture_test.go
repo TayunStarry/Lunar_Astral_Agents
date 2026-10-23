@@ -1,4 +1,4 @@
-package windowcapture
+package capture
 
 import (
 	"image"

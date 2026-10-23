@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
 
@@ -15,19 +15,19 @@ import (
 func setupDiaryTest(t *testing.T) {
 	t.Helper()
 	tmp := t.TempDir()
-	origLocal := *GeneralConfig.LocalDir
-	origArchive := *GeneralConfig.ArchiveDBPath
-	origMedia := *GeneralConfig.MediaDBPath
-	*GeneralConfig.LocalDir = tmp
-	*GeneralConfig.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
-	*GeneralConfig.MediaDBPath = filepath.Join(tmp, "database", "media.db")
+	origLocal := *config.LocalDir
+	origArchive := *config.ArchiveDBPath
+	origMedia := *config.MediaDBPath
+	*config.LocalDir = tmp
+	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	*config.MediaDBPath = filepath.Join(tmp, "database", "media.db")
 	t.Cleanup(func() {
 		// 先关库再还原配置，否则 Windows 上临时目录无法删除
 		_ = persistence.CloseArchiveDB()
 		_ = persistence.CloseDomainDBs()
-		*GeneralConfig.LocalDir = origLocal
-		*GeneralConfig.ArchiveDBPath = origArchive
-		*GeneralConfig.MediaDBPath = origMedia
+		*config.LocalDir = origLocal
+		*config.ArchiveDBPath = origArchive
+		*config.MediaDBPath = origMedia
 	})
 }
 
@@ -72,7 +72,7 @@ func TestDiaryAndDynamicShareSameCopy(t *testing.T) {
 		t.Fatalf("本段应为 1 标题+%d 条链接+2 行简述，实际 %d 行", len(urls), lines)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(*GeneralConfig.LocalDir, filepath.FromSlash(diaryDocRel)))
+	raw, err := os.ReadFile(filepath.Join(*config.LocalDir, filepath.FromSlash(diaryDocRel)))
 	if err != nil {
 		t.Fatalf("读回日记文档失败: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestAppendDiaryDocumentNewestOnTop(t *testing.T) {
 		t.Fatalf("新段应为 3 行，实际 %d 行", newLines)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(*GeneralConfig.LocalDir, filepath.FromSlash(diaryDocRel)))
+	raw, err := os.ReadFile(filepath.Join(*config.LocalDir, filepath.FromSlash(diaryDocRel)))
 	if err != nil {
 		t.Fatalf("读回日记文档失败: %v", err)
 	}

@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"encoding/json"
 	"fmt"
@@ -16,7 +16,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Generate服务 → 不允许的请求方法", http.StatusMethodNotAllowed)
 		return
 	}
-	if !*GeneralConfig.AllowDiffusion {
+	if !*config.AllowDiffusion {
 		http.Error(w, "Generate服务 → 未启用[扩散生成]功能", http.StatusServiceUnavailable)
 		return
 	}
@@ -72,7 +72,7 @@ func StartTaskProcessor() {
 // buildReadPath 构建文件读取路径
 func buildReadPath(resultPath string) string {
 	// 移除本地目录前缀，获取相对路径
-	relativePath := strings.TrimPrefix(resultPath, *GeneralConfig.LocalDir)
+	relativePath := strings.TrimPrefix(resultPath, *config.LocalDir)
 	// 移除Windows路径开头的反斜杠，确保路径格式统一
 	relativePath = strings.TrimPrefix(relativePath, "\\")
 	return "/file/read/" + relativePath
@@ -132,16 +132,16 @@ func DiffusionSchemeHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("Scheme服务 → 解析JSON失败: %v", err), http.StatusBadRequest)
 			return
 		}
-		if err := GeneralConfig.SetActiveDiffusionScheme(req.Scheme); err != nil {
+		if err := config.SetActiveDiffusionScheme(req.Scheme); err != nil {
 			http.Error(w, fmt.Sprintf("Scheme服务 → %v", err), http.StatusBadRequest)
 			return
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"current": GeneralConfig.CurrentDiffusionSchemeName(),
-		"default": GeneralConfig.DefaultDiffusionSchemeName(),
-		"schemes": GeneralConfig.DiffusionSchemeInfos(),
+		"current": config.CurrentDiffusionSchemeName(),
+		"default": config.DefaultDiffusionSchemeName(),
+		"schemes": config.DiffusionSchemeInfos(),
 	})
 }
 
@@ -154,7 +154,7 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 检查是否允许使用扩散生成
-	if !*GeneralConfig.AllowDiffusion {
+	if !*config.AllowDiffusion {
 		http.Error(w, "Generate服务 → 未启用[扩散生成]功能", http.StatusServiceUnavailable)
 		return
 	}

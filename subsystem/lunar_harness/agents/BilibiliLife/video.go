@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/engine/persistence"
@@ -154,7 +154,7 @@ func fetchPlayURL(bvid string, cid int64, qn int) (string, error) {
 }
 
 func downloadClip(playURL, bvid string, seconds int) (string, error) {
-	cacheDir := filepath.Join(*GeneralConfig.LocalDir, "cache")
+	cacheDir := filepath.Join(*config.LocalDir, "cache")
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return "", err
 	}
@@ -197,7 +197,7 @@ func understandVideo(localPath string, info videoInfo, maxSlices int) (string, [
 	segments := make([]module.MediaSegment, 0, len(rawSegments))
 	for _, seg := range rawSegments {
 		if seg.End-seg.Start < 1.0 {
-			_ = os.Remove(filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
+			_ = os.Remove(filepath.Join(*config.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
 			continue
 		}
 		segments = append(segments, seg)
@@ -218,7 +218,7 @@ func understandVideo(localPath string, info videoInfo, maxSlices int) (string, [
 	var parts []string
 	var results []sliceUnderstanding
 	for i, seg := range segments {
-		abs := filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(seg.File))
+		abs := filepath.Join(*config.LocalDir, "multimedia", filepath.FromSlash(seg.File))
 		groups, frameErr := module.VideoToFrames(abs)
 		if frameErr != nil {
 			results = append(results, sliceUnderstanding{Index: i + 1, Error: frameErr.Error()})
@@ -253,7 +253,7 @@ func understandVideo(localPath string, info videoInfo, maxSlices int) (string, [
 	}
 	// 清理切片与临时 mp4：切片已理解完，不留在 footage 里
 	for _, seg := range segments {
-		_ = os.Remove(filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
+		_ = os.Remove(filepath.Join(*config.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
 	}
 	_ = os.Remove(localPath)
 	if len(parts) == 0 {
@@ -273,7 +273,7 @@ func prepareVideoSegments(localPath string, maxSlices int) ([]module.MediaSegmen
 	segments := make([]module.MediaSegment, 0, len(rawSegments))
 	for _, seg := range rawSegments {
 		if seg.End-seg.Start < 1.0 {
-			_ = os.Remove(filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
+			_ = os.Remove(filepath.Join(*config.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
 			continue
 		}
 		segments = append(segments, seg)
@@ -286,7 +286,7 @@ func prepareVideoSegments(localPath string, maxSlices int) ([]module.MediaSegmen
 	}
 	if len(segments) > maxSlices {
 		for _, extra := range segments[maxSlices:] {
-			_ = os.Remove(filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(extra.File)))
+			_ = os.Remove(filepath.Join(*config.LocalDir, "multimedia", filepath.FromSlash(extra.File)))
 		}
 		segments = segments[:maxSlices]
 	}
@@ -295,7 +295,7 @@ func prepareVideoSegments(localPath string, maxSlices int) ([]module.MediaSegmen
 
 // understandOneSlice 只理解一个 60 秒切片；供可中断的状态机逐片调用。
 func understandOneSlice(info videoInfo, seg module.MediaSegment, index, total int) (string, error) {
-	abs := filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(seg.File))
+	abs := filepath.Join(*config.LocalDir, "multimedia", filepath.FromSlash(seg.File))
 	groups, err := module.VideoToFrames(abs)
 	if err != nil {
 		return "", fmt.Errorf("抽帧失败: %w", err)
@@ -367,6 +367,6 @@ func storeVideoSummary(info videoInfo, summaries []string) {
 
 func removeSegments(segments []module.MediaSegment) {
 	for _, seg := range segments {
-		_ = os.Remove(filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
+		_ = os.Remove(filepath.Join(*config.LocalDir, "multimedia", filepath.FromSlash(seg.File)))
 	}
 }

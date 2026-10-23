@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/transport/ws"
 )
@@ -22,10 +22,10 @@ func Start(roots StaticRoots) (*http.Server, error) {
 	// 默认仅绑定 127.0.0.1 回环地址：/ws 无鉴权且承载调试面，对局域网开放等于开放控制面。
 	// 跨机部署时经 lunar_config.json 的 server.allow_lan 显式放开。
 	bindHost := "127.0.0.1"
-	if *GeneralConfig.AllowLAN {
+	if *config.AllowLAN {
 		bindHost = ""
 	}
-	addr := fmt.Sprintf("%s:%d", bindHost, *GeneralConfig.BasicPort)
+	addr := fmt.Sprintf("%s:%d", bindHost, *config.BasicPort)
 	// 对外展示用 URL：绑全部网卡时用 localhost，回环绑定时用 127.0.0.1
 	urlHost := bindHost
 	if urlHost == "" {
@@ -37,7 +37,7 @@ func Start(roots StaticRoots) (*http.Server, error) {
 	ln := takePreboundListener()
 	if ln == nil {
 		var err error
-		ln, err = ListenInstance(*GeneralConfig.BasicPort, *GeneralConfig.AllowLAN)
+		ln, err = ListenInstance(*config.BasicPort, *config.AllowLAN)
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +68,7 @@ func Start(roots StaticRoots) (*http.Server, error) {
 		}
 	}()
 
-	logger.Info("LunarHarness", "核心人格服务正运行在 http://%s:%d", urlHost, *GeneralConfig.BasicPort)
+	logger.Info("LunarHarness", "核心人格服务正运行在 http://%s:%d", urlHost, *config.BasicPort)
 	return srv, nil
 }
 

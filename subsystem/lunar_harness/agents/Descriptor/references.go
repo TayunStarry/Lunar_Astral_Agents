@@ -13,7 +13,7 @@ import (
 	"regexp"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // buildReferences 扫描全文的引用关系
@@ -166,7 +166,7 @@ func resolveReference(doc *docContext, target string) (string, bool) {
 		if rel == "." {
 			continue
 		}
-		local := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(rel))
+		local := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(rel))
 		if fileExists(local) {
 			return rel, true
 		}

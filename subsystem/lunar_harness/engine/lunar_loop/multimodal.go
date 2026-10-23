@@ -1,7 +1,7 @@
 package lunarloop
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"crypto/sha256"
 	"encoding/base64"
@@ -215,7 +215,7 @@ func resolveLocalFilePath(path string) (string, bool) {
 		}
 		return "", false
 	}
-	localRel := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), candidate)
+	localRel := filepath.Join(filepath.Clean(*config.LocalDir), candidate)
 	if fileExists(localRel) {
 		return localRel, true
 	}
@@ -322,16 +322,16 @@ func (class *Runtime) setDiffusionScheme(call goja.FunctionCall) goja.Value {
 	if !ok {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("方案名必须是字符串")})
 	}
-	if err := GeneralConfig.SetActiveDiffusionScheme(name); err != nil {
+	if err := config.SetActiveDiffusionScheme(name); err != nil {
 		return class.runtime.ToValue([]any{"", err})
 	}
-	return class.runtime.ToValue([]any{GeneralConfig.CurrentDiffusionSchemeName(), nil})
+	return class.runtime.ToValue([]any{config.CurrentDiffusionSchemeName(), nil})
 }
 
 // getDiffusionScheme 查询当前绘图模型方案
 // 返回值: [string, error] 当前方案键名和错误信息
 func (class *Runtime) getDiffusionScheme(call goja.FunctionCall) goja.Value {
-	return class.runtime.ToValue([]any{GeneralConfig.CurrentDiffusionSchemeName(), nil})
+	return class.runtime.ToValue([]any{config.CurrentDiffusionSchemeName(), nil})
 }
 
 // asInt 把 goja 导出的数值转换为 int（不支持的形态返回 0）

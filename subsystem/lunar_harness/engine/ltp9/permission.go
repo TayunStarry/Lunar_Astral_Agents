@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
 	lunardecoder "LunarSubsystem/LunarDecoder"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -70,7 +70,7 @@ func permAllowed(name string) bool {
 // verifyPermissions 读取插件 permissions.key，用代码哈希整体解码 → 按分隔符分割 → 去填充得到 allow-* 集合。
 // 解码失败或名称非法 → 视为密钥与代码不对应，拒绝对应权限；开发模式跳过校验并默认授予全部权限。
 func (p *plugin) verifyPermissions() map[string]bool {
-	if *GeneralConfig.Developer {
+	if *config.Developer {
 		logger.Info(ServiceName, "开发模式启用，插件 %s 默认授予全部 allow-* 权限（跳过权限密钥校验）", p.ID)
 		return allGranted()
 	}

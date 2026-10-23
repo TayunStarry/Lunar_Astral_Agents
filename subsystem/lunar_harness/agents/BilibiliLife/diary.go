@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
@@ -77,7 +77,7 @@ func buildDynamicText(title string, videoURLs []string, brief string) string {
 // 新日记写在旧日记前面：最新一段永远从文档第 1 行开始，回执行号因此可直接指向它。
 func appendDiaryDocument(title string, videoURLs []string, brief string) (string, int, error) {
 	rel := filepath.FromSlash(diaryDocRel)
-	abs := filepath.Join(*GeneralConfig.LocalDir, rel)
+	abs := filepath.Join(*config.LocalDir, rel)
 
 	// 读取既有日记（文件不存在视为空文档，从本段起建）
 	var old string

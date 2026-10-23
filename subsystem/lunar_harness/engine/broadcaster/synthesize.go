@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	KokoroTTS "LunarSubsystem/LunarHarness/engine/kokoro_tts"
 	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/omnivoice_tts"
 	qwentts "LunarSubsystem/LunarHarness/engine/qwen_tts"
@@ -107,7 +107,7 @@ func ptrOr[T any](req *T, def T) T {
 func synthQwen(req TTSRequest) (map[string]any, int) {
 	qreq := qwentts.TTSRequest{
 		Text:              req.Text,
-		RefAudio:          resolveAssetPath(firstNonEmpty(req.RefAudio, *GeneralConfig.TTSRefAudio)),
+		RefAudio:          resolveAssetPath(firstNonEmpty(req.RefAudio, *config.TTSRefAudio)),
 		LanguageID:        req.LanguageID,
 		Temperature:       req.Temperature,
 		TopK:              req.TopK,
@@ -127,12 +127,12 @@ func synthQwen(req TTSRequest) (map[string]any, int) {
 // synthKokoro Kokoro 适配：统一参数 → Kokoro 请求。
 // Kokoro 不支持参考音频：RefAudio/RefText 被丢弃；音色由 Voice/Mix 决定。
 func synthKokoro(req TTSRequest) (map[string]any, int) {
-	voice := firstNonEmpty(req.Voice, *GeneralConfig.TTSVoice)
-	speed := ptrOr(req.Speed, float32(*GeneralConfig.TTSSpeed))
-	lang := firstNonEmpty(req.Lang, *GeneralConfig.TTSLang)
+	voice := firstNonEmpty(req.Voice, *config.TTSVoice)
+	speed := ptrOr(req.Speed, float32(*config.TTSSpeed))
+	lang := firstNonEmpty(req.Lang, *config.TTSLang)
 	mix := req.Mix
-	if len(mix) == 0 && len(GeneralConfig.TTSMix) > 0 {
-		for _, m := range GeneralConfig.TTSMix {
+	if len(mix) == 0 && len(config.TTSMix) > 0 {
+		for _, m := range config.TTSMix {
 			mix = append(mix, MixEntry{Voice: m.Voice, Weight: m.Weight})
 		}
 	}
@@ -166,7 +166,7 @@ func synthKokoro(req TTSRequest) (map[string]any, int) {
 // synthOmniVoice OmniVoice 适配：统一参数 → OmniVoice 请求。
 // 支持参考音频+参考文本声音克隆，或 instruct 属性关键词设计音色（二者互斥）。
 func synthOmniVoice(req TTSRequest) (map[string]any, int) {
-	seed := ptrOr(req.Seed, *GeneralConfig.TTSSeed)
+	seed := ptrOr(req.Seed, *config.TTSSeed)
 
 	// WithEngine 读锁钉住引擎：合成期间引擎不会被卸载
 	var samples []float32
@@ -174,12 +174,12 @@ func synthOmniVoice(req TTSRequest) (map[string]any, int) {
 		var serr error
 		samples, serr = engine.Synthesize(OmniVoiceTTS.TTSRequest{
 			Text:            req.Text,
-			Lang:            firstNonEmpty(req.Lang, *GeneralConfig.TTSLang),
-			Instruct:        firstNonEmpty(req.Instruct, *GeneralConfig.TTSInstruct),
-			RefAudio:        resolveAssetPath(firstNonEmpty(req.RefAudio, *GeneralConfig.TTSRefAudio)),
-			RefText:         firstNonEmpty(req.RefText, *GeneralConfig.TTSRefText),
+			Lang:            firstNonEmpty(req.Lang, *config.TTSLang),
+			Instruct:        firstNonEmpty(req.Instruct, *config.TTSInstruct),
+			RefAudio:        resolveAssetPath(firstNonEmpty(req.RefAudio, *config.TTSRefAudio)),
+			RefText:         firstNonEmpty(req.RefText, *config.TTSRefText),
 			Seed:            seed,
-			DisablePostproc: ptrOr(req.DisablePostproc, *GeneralConfig.TTSDisablePostproc),
+			DisablePostproc: ptrOr(req.DisablePostproc, *config.TTSDisablePostproc),
 		})
 		return serr
 	})
@@ -188,9 +188,9 @@ func synthOmniVoice(req TTSRequest) (map[string]any, int) {
 	}
 
 	wav := OmniVoiceTTS.EncodePCMToWAV(samples, OmniVoiceTTS.SampleRate)
-	voice := firstNonEmpty(req.Instruct, *GeneralConfig.TTSInstruct)
+	voice := firstNonEmpty(req.Instruct, *config.TTSInstruct)
 	if voice == "" {
-		voice = firstNonEmpty(req.RefAudio, *GeneralConfig.TTSRefAudio)
+		voice = firstNonEmpty(req.RefAudio, *config.TTSRefAudio)
 		if voice != "" {
 			voice = "clone"
 		}

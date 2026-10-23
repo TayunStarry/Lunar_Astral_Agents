@@ -16,7 +16,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	mmmodule "LunarSubsystem/LunarHarness/engine/multimodal"
 	persist "LunarSubsystem/LunarHarness/engine/persistence"
 
@@ -51,14 +51,14 @@ func TestBase64DecodePreservesBinaryBytes(t *testing.T) {
 // base64Decode → Uint8Array → saveFile，落盘后必须仍是可解码的 PNG。
 func TestSaveFileWithBase64DecodeRoundTrip(t *testing.T) {
 	tmp := t.TempDir()
-	origLocal := *GeneralConfig.LocalDir
-	origArchive := *GeneralConfig.ArchiveDBPath
-	*GeneralConfig.LocalDir = tmp
-	*GeneralConfig.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	origLocal := *config.LocalDir
+	origArchive := *config.ArchiveDBPath
+	*config.LocalDir = tmp
+	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
 	t.Cleanup(func() {
 		_ = persist.CloseArchiveDB()
-		*GeneralConfig.LocalDir = origLocal
-		*GeneralConfig.ArchiveDBPath = origArchive
+		*config.LocalDir = origLocal
+		*config.ArchiveDBPath = origArchive
 	})
 
 	vm := goja.New()
@@ -97,9 +97,9 @@ func TestSaveFileWithBase64DecodeRoundTrip(t *testing.T) {
 // 断言「.png 后缀的 GIF + 带 tag 查询串的视觉 URL」仍能被识别为动态图。
 func TestResolveImageBytesStripsServiceURLQueryAndDetectsAnimated(t *testing.T) {
 	tmp := t.TempDir()
-	origLocal := *GeneralConfig.LocalDir
-	*GeneralConfig.LocalDir = tmp
-	t.Cleanup(func() { *GeneralConfig.LocalDir = origLocal })
+	origLocal := *config.LocalDir
+	*config.LocalDir = tmp
+	t.Cleanup(func() { *config.LocalDir = origLocal })
 
 	frame := image.NewPaletted(image.Rect(0, 0, 8, 8), color.Palette{color.RGBA{R: 255, A: 255}})
 	var buf bytes.Buffer

@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LunarHarness/clients"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/lunar_loop"
 	"LunarSubsystem/LunarHarness/engine/lunar_loop/container"
@@ -22,12 +22,12 @@ import (
 // JavaScript 智能体运行时（思考循环）属消费层，由 startLunarAgent 在装配末段启动。
 func assembleLunar() error {
 	// ==== MIME 类型映射 ====
-	for ext, mimeType := range GeneralConfig.MimeMap {
+	for ext, mimeType := range config.MimeMap {
 		mime.AddExtensionType(ext, mimeType)
 	}
 
 	// ==== 本地数据目录 ====
-	if err := os.MkdirAll(*GeneralConfig.LocalDir, 0755); err != nil {
+	if err := os.MkdirAll(*config.LocalDir, 0755); err != nil {
 		return err
 	}
 
@@ -85,9 +85,9 @@ func initNapcatBridge() {
 	exeDir := filepath.Dir(exePath)
 	// QQ 桥接配置已迁到专用 napcat_config.json（新默认）；专用文件不存在时
 	// 回退旧版 lunar_config.json 的 bridging 组，保证升级用户的桥接不失效
-	configPath := filepath.Join(exeDir, *GeneralConfig.LocalDir, "napcat_config.json")
+	configPath := filepath.Join(exeDir, *config.LocalDir, "napcat_config.json")
 	if _, err := os.Stat(configPath); err != nil {
-		configPath = filepath.Join(exeDir, *GeneralConfig.LocalDir, "lunar_config.json")
+		configPath = filepath.Join(exeDir, *config.LocalDir, "lunar_config.json")
 	}
 
 	if err := napcat.LoadBridgingConfig(configPath); err != nil {

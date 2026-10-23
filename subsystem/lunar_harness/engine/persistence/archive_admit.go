@@ -14,7 +14,7 @@ package persistence
 //   - 文本类：documents/<原文件名>，同名即同一份文档，便于人机两端按名称传递与讨论
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"fmt"
 	"io"
@@ -231,14 +231,14 @@ func ResourceAdmit(in AdmitInput) (AdmitResult, error) {
 	if res.Title == "" {
 		res.Title = res.Name
 	}
-	blobAbs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(blobRel))
+	blobAbs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(blobRel))
 
 	// 5.4 落盘后再做一次哈希冲突裁决：placeBlob 可能把实体放到与 snapshotRel
 	//     不同的位置（源文件已在系统存储内时原地引用）。仍按路径优先级决定保留哪一份。
 	if IsMediaExtension(ext) {
 		if existing, ok := FindActiveResourceByHash(kind, hash); ok && existing.BlobPath != blobRel {
 			if preferNewPath(blobRel, existing.BlobPath) {
-				oldAbs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(existing.BlobPath))
+				oldAbs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(existing.BlobPath))
 				if oldAbs != blobAbs {
 					_ = os.Remove(oldAbs)
 				}
@@ -496,7 +496,7 @@ func localPathFromServiceURL(raw string) (string, bool) {
 func resolveUnderLocalDir(rel string) (string, error) {
 	rel = strings.ReplaceAll(rel, "\\", "/")
 	rel = strings.TrimPrefix(rel, "/")
-	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	localDir := filepath.Clean(*config.LocalDir)
 	if filepath.IsAbs(rel) {
 		abs := filepath.Clean(rel)
 		if !strings.HasPrefix(abs, localDir+string(os.PathSeparator)) && abs != localDir {
@@ -638,7 +638,7 @@ func safeDocumentName(name, hash, ext string) string {
 func placeBlob(localPath, hash, ext, name, sourceKind string) (rel string, moved bool, owned bool, err error) {
 	localAbs := filepath.Clean(localPath)
 	archiveRel := snapshotRel(hash, ext, name)
-	archiveAbs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(archiveRel))
+	archiveAbs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(archiveRel))
 
 	// 分支 1：已在系统自有的存储内 → 原地引用（受保护，不归归档所有）
 	if rel, ok := relativeToLocalDir(localAbs); ok && isSystemOwnedStore(rel) && fileExists(localAbs) {
@@ -721,7 +721,7 @@ func copyIntoPlace(src, dst string) error {
 
 // relativeToLocalDir 求绝对路径相对 LocalDir 的斜杠形式路径（不在其下时返回 false）
 func relativeToLocalDir(abs string) (string, bool) {
-	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	localDir := filepath.Clean(*config.LocalDir)
 	rel, err := filepath.Rel(localDir, abs)
 	if err != nil {
 		return "", false
@@ -852,7 +852,7 @@ func firstNonEmpty(values ...string) string {
 
 // probeResourceMeta 探测并回写资源元数据（失败仅告警，不影响入库）
 func probeResourceMeta(res *ArchiveResource, blobRel string) {
-	abs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(blobRel))
+	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(blobRel))
 	switch res.Kind {
 	case KindImage:
 		width, height, err := imageDimensions(abs)

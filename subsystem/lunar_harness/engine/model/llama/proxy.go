@@ -1,7 +1,7 @@
 package llama
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"bufio"
 	"context"
@@ -50,7 +50,7 @@ func startLocked() {
 		// 重复惩罚系数：1.0表示无惩罚
 		"--repeat_penalty", "1.0",
 		// 服务器监听端口
-		"--port", strconv.Itoa(*GeneralConfig.ModelPort),
+		"--port", strconv.Itoa(*config.ModelPort),
 		// 并行请求处理数
 		"--parallel", "1",
 		// 批处理大小
@@ -66,13 +66,13 @@ func startLocked() {
 	}
 
 	// 若配置了 ffmpeg 路径，同步告知 llama-server 视频解码所需的 ffmpeg/ffprobe 所在目录
-	if *GeneralConfig.FfmpegPath != "" {
-		args = append(args, "--video-ffmpeg-dir", filepath.Dir(*GeneralConfig.FfmpegPath))
+	if *config.FfmpegPath != "" {
+		args = append(args, "--video-ffmpeg-dir", filepath.Dir(*config.FfmpegPath))
 	}
 
-	logger.Info("LlamaProxy", "正在启动 llama-server 端口: %d", *GeneralConfig.ModelPort)
+	logger.Info("LlamaProxy", "正在启动 llama-server 端口: %d", *config.ModelPort)
 
-	cmd := exec.Command(*GeneralConfig.InferEngine, args...)
+	cmd := exec.Command(*config.InferEngine, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -114,7 +114,7 @@ func startLocked() {
 
 // Alive 探测模型服务是否仍在监听（用于"引擎重载"决策：服务崩了，重载 goja 也白搭）
 func Alive() bool {
-	return portOpen(*GeneralConfig.ModelPort)
+	return portOpen(*config.ModelPort)
 }
 
 // portOpen 探测本机端口是否可连接
@@ -145,16 +145,16 @@ func Restart() error {
 		_ = serverProcess.Process.Kill()
 		// 等端口释放（最多 5 秒）：不等待就重启会撞端口，新进程照样起不来
 		deadline := time.Now().Add(5 * time.Second)
-		for time.Now().Before(deadline) && portOpen(*GeneralConfig.ModelPort) {
+		for time.Now().Before(deadline) && portOpen(*config.ModelPort) {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
 	serverProcess = nil
 	startLocked()
-	if serverProcess != nil && portOpen(*GeneralConfig.ModelPort) {
+	if serverProcess != nil && portOpen(*config.ModelPort) {
 		return nil
 	}
-	return fmt.Errorf("llama-server 重启后仍不可用（端口 %d）", *GeneralConfig.ModelPort)
+	return fmt.Errorf("llama-server 重启后仍不可用（端口 %d）", *config.ModelPort)
 }
 
 // Close 优雅关闭 llama.cpp 服务器
@@ -194,7 +194,7 @@ func readOutput(reader io.ReadCloser, prefix string) {
 			return
 		}
 		line = strings.TrimSpace(line)
-		if *GeneralConfig.Developer {
+		if *config.Developer {
 			logger.Info("LlamaProxy", "[%s] %s", prefix, line)
 		}
 		checkReadySignal(line)
@@ -236,7 +236,7 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		proxyToLocal(w, r)
 		return
 	}
-	if *GeneralConfig.AgentMultimodalURL != "" && *GeneralConfig.AgentMultimodalURL != GeneralConfig.LocalV1URL() {
+	if *config.AgentMultimodalURL != "" && *config.AgentMultimodalURL != config.LocalV1URL() {
 		ProxyToCloud(w, r)
 		return
 	}
@@ -251,7 +251,7 @@ func isEmbeddingRequest(r *http.Request) bool {
 
 // proxyToLocal 将请求反向代理到本地 llama.cpp 服务器
 func proxyToLocal(w http.ResponseWriter, r *http.Request) {
-	targetURL := fmt.Sprintf("http://localhost:%d", *GeneralConfig.ModelPort)
+	targetURL := fmt.Sprintf("http://localhost:%d", *config.ModelPort)
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		http.Error(w, "llama[ERROR] -> 解析目标 URL 失败", http.StatusInternalServerError)
@@ -270,7 +270,7 @@ func proxyToLocal(w http.ResponseWriter, r *http.Request) {
 
 // ProxyToCloud 将请求反向代理到云服务器
 func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
-	target, err := url.Parse(*GeneralConfig.AgentMultimodalURL)
+	target, err := url.Parse(*config.AgentMultimodalURL)
 	if err != nil {
 		http.Error(w, "GGUF模块[ERROR] -> 解析云服务器 URL 失败", http.StatusInternalServerError)
 		return
@@ -286,10 +286,10 @@ func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
 		req.URL.Host = target.Host
 		req.Host = target.Host
 		// 注入云模型密钥认证头
-		if *GeneralConfig.AgentMultimodalKey != "" {
-			req.Header.Set("Authorization", "Bearer "+*GeneralConfig.AgentMultimodalKey)
+		if *config.AgentMultimodalKey != "" {
+			req.Header.Set("Authorization", "Bearer "+*config.AgentMultimodalKey)
 		}
 	}
-	logger.Info("LlamaProxy", "云代理: %s %s -> %s%s", r.Method, r.URL.Path, *GeneralConfig.AgentMultimodalURL, r.URL.Path)
+	logger.Info("LlamaProxy", "云代理: %s %s -> %s%s", r.Method, r.URL.Path, *config.AgentMultimodalURL, r.URL.Path)
 	proxy.ServeHTTP(w, r)
 }

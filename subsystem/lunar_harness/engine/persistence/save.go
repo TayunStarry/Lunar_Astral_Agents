@@ -1,7 +1,7 @@
 package persistence
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"crypto/sha256"
 	"encoding/base64"
@@ -28,7 +28,7 @@ func SaveFileEx(fileName string, opts SaveOptions, body io.Reader) (SaveResult, 
 	if rel == "" || rel == ".." || strings.HasPrefix(rel, "../") || filepath.IsAbs(rel) {
 		return SaveResult{}, fmt.Errorf("无效的文件名")
 	}
-	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	localDir := filepath.Clean(*config.LocalDir)
 	fullPath := filepath.Clean(filepath.Join(localDir, filepath.FromSlash(rel)))
 	if fullPath != localDir && !strings.HasPrefix(fullPath, localDir+string(os.PathSeparator)) {
 		return SaveResult{}, fmt.Errorf("访问被拒绝")
@@ -168,7 +168,7 @@ func applyVersion(rel, fullPath string, overwrite bool) (string, string) {
 	ext := filepath.Ext(rel)
 	base := strings.TrimSuffix(rel, ext)
 	rel = base + "_" + timestamp + ext
-	return rel, filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(rel))
+	return rel, filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(rel))
 }
 
 // writeTempStream 把输入流写入目标目录下的临时文件，同时计算 sha16 与字节数

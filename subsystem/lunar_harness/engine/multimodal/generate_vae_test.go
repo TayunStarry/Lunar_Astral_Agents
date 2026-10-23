@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -81,12 +81,12 @@ func TestVAEBackendMode(t *testing.T) {
 		"auto": "auto", "": "auto", "whatever": "auto",
 	}
 	for in, want := range cases {
-		saved := *GeneralConfig.SDVaeBackend
-		*GeneralConfig.SDVaeBackend = in
+		saved := *config.SDVaeBackend
+		*config.SDVaeBackend = in
 		if got := vaeBackendMode(); got != want {
 			t.Fatalf("vaeBackendMode(%q)=%q，期望 %q", in, got, want)
 		}
-		*GeneralConfig.SDVaeBackend = saved
+		*config.SDVaeBackend = saved
 	}
 }
 

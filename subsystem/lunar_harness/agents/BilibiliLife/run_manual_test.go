@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 func TestManualRun(t *testing.T) {
@@ -17,7 +17,7 @@ func TestManualRun(t *testing.T) {
 		t.Skip("设置 BILI_LIFE_RUN=1 才执行真实 B 站生活")
 	}
 	// 测试二进制不在 exe 目录，必须显式指向仓库的 local_data，否则切片/临时文件会落到临时目录。
-	*GeneralConfig.LocalDir = `D:\Lunar_Astral_Agents\local_data`
+	*config.LocalDir = `D:\Lunar_Astral_Agents\local_data`
 	// 手动测试给扫码留 3 分钟；生产仍是 60 秒。
 	testLoginWait = 3 * time.Minute
 	if err := Run(); err != nil {

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 
 	"github.com/chai2010/webp"
@@ -74,7 +74,7 @@ func DeleteLocalFile(abs string) error {
 
 // relativeToLocal 把绝对路径转换为相对 LocalDir 的斜杠路径
 func relativeToLocal(abs string) (string, error) {
-	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	localDir := filepath.Clean(*config.LocalDir)
 	rel, err := filepath.Rel(localDir, filepath.Clean(abs))
 	if err != nil {
 		return "", err

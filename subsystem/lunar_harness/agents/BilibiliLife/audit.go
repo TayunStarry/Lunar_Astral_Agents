@@ -23,7 +23,7 @@ import (
 
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -77,8 +77,8 @@ func sampleGrayGrids(localPath string) ([][]uint8, error) {
 		"loglevel": "error",
 	}
 	stream := ffmpeg.Input(localPath).Output(pattern, args)
-	if *GeneralConfig.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
+	if *config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*config.FfmpegPath)
 	}
 	if err := stream.Run(); err != nil {
 		return nil, fmt.Errorf("ffmpeg 采样帧失败: %w", err)

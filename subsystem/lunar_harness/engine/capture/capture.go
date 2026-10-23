@@ -1,4 +1,4 @@
-// Package windowcapture 提供 Windows 窗口/客户区截图的统一实现。
+// Package capture 提供 Windows 窗口/客户区截图的统一实现。
 //
 // 设计目标：
 //   - 统一 GDI 生命周期：DC、兼容位图、SelectObject/DeleteObject/DeleteDC 成对释放；
@@ -7,7 +7,7 @@
 //   - 统一两种模式：ModeWindow（整个窗口，含标题栏/边框）与 ModeClient（仅客户区）。
 //
 // 调用方只需要提供窗口句柄（uintptr），不需要接触 win32 类型与 GDI 句柄。
-package windowcapture
+package capture
 
 import "image"
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/lunar_loop"
@@ -39,7 +39,7 @@ type DataDumpResponse struct {
 
 // dumpDir 导出目录（相对程序根目录）
 func dumpDir() string {
-	return filepath.Join(*GeneralConfig.LocalDir, "logs", "dump")
+	return filepath.Join(*config.LocalDir, "logs", "dump")
 }
 
 // writeDumpFile 写入导出文件，返回绝对路径与字节数。

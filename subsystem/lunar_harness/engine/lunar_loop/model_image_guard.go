@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // 宿主自产图片（屏幕截图 ≤1024、视频采样帧 ≤640）的硬上限。
@@ -43,7 +43,7 @@ var modelVideoExts = []string{".mp4", ".webm", ".mov", ".avi", ".mkv", ".m4v", "
 
 // modelImageSideCap 当前允许进入模型上下文的内联图长边上限（像素）
 func modelImageSideCap() int {
-	side := *GeneralConfig.VisionMaxSide
+	side := *config.VisionMaxSide
 	if side < hostDerivedImageMaxSide {
 		side = hostDerivedImageMaxSide
 	}
@@ -169,7 +169,7 @@ func isLocalVisionURL(raw string) bool {
 	if !strings.HasPrefix(parsed.Path, "/file/miniature/") {
 		return false
 	}
-	return parsed.Port() != "" && parsed.Port() == strconv.Itoa(*GeneralConfig.BasicPort)
+	return parsed.Port() != "" && parsed.Port() == strconv.Itoa(*config.BasicPort)
 }
 
 // inlineImageSize 从 data:image/*;base64 里读出像素尺寸（只解码文件头）

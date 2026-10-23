@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // TestConfigHotReload 钉住 bilibili_life.json 的改动会被自动调度重新加载：
 // 否则新增的 @ 目标要等重启才生效，表现为「永远只 @ 同一个人」。
 func TestConfigHotReload(t *testing.T) {
 	tmp := t.TempDir()
-	orig := *GeneralConfig.LocalDir
-	*GeneralConfig.LocalDir = tmp
-	t.Cleanup(func() { *GeneralConfig.LocalDir = orig })
+	orig := *config.LocalDir
+	*config.LocalDir = tmp
+	t.Cleanup(func() { *config.LocalDir = orig })
 
 	path := filepath.Join(tmp, "bilibili_life.json")
 	write := func(body string, mod time.Time) {

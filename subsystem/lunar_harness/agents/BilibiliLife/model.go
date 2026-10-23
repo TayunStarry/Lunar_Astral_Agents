@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 type chatMessage struct {
@@ -91,18 +91,18 @@ func observeEnd() {
 
 func resolveModel() {
 	modelOnce.Do(func() {
-		modelName = strings.TrimSpace(*GeneralConfig.AgentMultimodalModel)
+		modelName = strings.TrimSpace(*config.AgentMultimodalModel)
 		if modelName == "" {
 			modelName = "system-multimodal"
 		}
-		modelURL = strings.TrimRight(strings.TrimSpace(*GeneralConfig.AgentMultimodalURL), "/")
+		modelURL = strings.TrimRight(strings.TrimSpace(*config.AgentMultimodalURL), "/")
 		if modelURL == "" {
-			modelURL = GeneralConfig.LocalV1URL()
+			modelURL = config.LocalV1URL()
 		}
 		if !strings.HasSuffix(modelURL, "/v1") {
 			modelURL += "/v1"
 		}
-		modelKey = strings.TrimSpace(*GeneralConfig.AgentMultimodalKey)
+		modelKey = strings.TrimSpace(*config.AgentMultimodalKey)
 	})
 }
 

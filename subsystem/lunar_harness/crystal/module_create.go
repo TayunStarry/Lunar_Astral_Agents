@@ -1,8 +1,8 @@
 package crystal
 
 import (
-	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LunarHarness/agents"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/persistence"
 	"archive/zip"
@@ -55,7 +55,7 @@ func packageBaseDir() string {
 		return filepath.Join("local_data", "package")
 	}
 	execDir := filepath.Dir(execPath)
-	return filepath.Join(execDir, *GeneralConfig.LocalDir, "package")
+	return filepath.Join(execDir, *config.LocalDir, "package")
 }
 
 // parseModuleCreateRequest 解析创建请求：优先 multipart（ZIP 上传），否则 JSON

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // defaultGuardThresholdMiB 显存守卫端点的默认阈值（MiB），请求未指定时生效
@@ -50,7 +50,7 @@ func VRAMGuardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	unloaded, err := unloadLoadedGPUModels(*GeneralConfig.ModelPort)
+	unloaded, err := unloadLoadedGPUModels(*config.ModelPort)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("VRAM守卫 → 卸载模型失败: %v", err), http.StatusServiceUnavailable)
 		return

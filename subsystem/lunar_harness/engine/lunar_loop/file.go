@@ -1,7 +1,7 @@
 package lunarloop
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/prompts"
@@ -209,7 +209,7 @@ func (class *Runtime) saveDebugFile(call goja.FunctionCall) goja.Value {
 	}
 
 	// LocalDir 内的路径统一经 persistence 写入（Lunar Harness 内文件操作的唯一实现）
-	if rel, relErr := filepath.Rel(filepath.Clean(*GeneralConfig.LocalDir), filepath.Clean(filePath)); relErr == nil &&
+	if rel, relErr := filepath.Rel(filepath.Clean(*config.LocalDir), filepath.Clean(filePath)); relErr == nil &&
 		rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		if _, err := module.SaveFileEx(filepath.ToSlash(rel), module.SaveOptions{Overwrite: true}, strings.NewReader(content)); err != nil {
 			return class.runtime.ToValue([]any{"", fmt.Errorf("写入文件失败: %w", err)})

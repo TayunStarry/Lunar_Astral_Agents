@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"github.com/dop251/goja"
 )
@@ -176,7 +176,7 @@ func doLTP9Fetch(urlStr string, opts map[string]any) (int, string, http.Header, 
 		timeout = time.Duration(t * float64(time.Second))
 	}
 	// TLS 默认校验服务端证书（防 MITM 篡改插件消费的数据）；server.insecure_tls 显式置 true 才跳过
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: *GeneralConfig.InsecureTLS}}
+	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: *config.InsecureTLS}}
 	client := &http.Client{Timeout: timeout, Transport: transport}
 	if redirect, ok := opts["redirect"].(string); ok && redirect == "manual" {
 		client.CheckRedirect = func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }

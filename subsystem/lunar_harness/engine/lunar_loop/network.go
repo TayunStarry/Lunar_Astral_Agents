@@ -1,8 +1,8 @@
 package lunarloop
 
 import (
-	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LunarHarness/engine/browser"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"bufio"
@@ -25,8 +25,8 @@ import (
 // 返回值: [Array<string>, error] 地址列表和错误信息
 func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 	// 如果当前地址已缓存，直接返回
-	if len(GeneralConfig.ServerAddress) > 0 {
-		return class.runtime.ToValue([]any{GeneralConfig.ServerAddress, nil})
+	if len(config.ServerAddress) > 0 {
+		return class.runtime.ToValue([]any{config.ServerAddress, nil})
 	}
 
 	// 默认兜底地址
@@ -67,8 +67,8 @@ func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 	}
 
 	// 缓存当前地址
-	GeneralConfig.ServerAddress = []string{data.RegionName, data.City}
-	return class.runtime.ToValue([]any{GeneralConfig.ServerAddress, nil})
+	config.ServerAddress = []string{data.RegionName, data.City}
+	return class.runtime.ToValue([]any{config.ServerAddress, nil})
 }
 
 // getEnvironmentUrl 返回本机服务的可达基地址（供 JS 端自调用本机端点）。
@@ -78,15 +78,15 @@ func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 // 此时返回局域网 IP 会导致智能体自调用（/vram/unload、/vram/guard）连接被拒；
 // 仅在 server.allow_lan 放开、服务监听全部网卡时，才返回局域网 IP。
 func (class *Runtime) getEnvironmentUrl(call goja.FunctionCall) goja.Value {
-	if !*GeneralConfig.AllowLAN {
-		return class.runtime.ToValue([]any{GeneralConfig.LocalBaseURL(), nil})
+	if !*config.AllowLAN {
+		return class.runtime.ToValue([]any{config.LocalBaseURL(), nil})
 	}
 	ip, err := browser.GetLocalIP([]string{})
 	if err != nil {
 		logger.Error("LunarCore", "获取本地IP失败: %v", err)
-		return class.runtime.ToValue([]any{GeneralConfig.LocalBaseURL(), nil})
+		return class.runtime.ToValue([]any{config.LocalBaseURL(), nil})
 	}
-	return class.runtime.ToValue([]any{fmt.Sprintf("http://%s:%d", ip, *GeneralConfig.BasicPort), nil})
+	return class.runtime.ToValue([]any{fmt.Sprintf("http://%s:%d", ip, *config.BasicPort), nil})
 }
 
 // syncFetch 适配TypeScript调用的网络请求代理功能，处理HTTP请求并返回统一格式响应
@@ -96,19 +96,19 @@ func (class *Runtime) syncFetch(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
 
-	config, ok := call.Argument(0).Export().(map[string]any)
+	reqConfig, ok := call.Argument(0).Export().(map[string]any)
 	if !ok {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("config必须是对象")})
 	}
 
 	// 解析URL
-	url, ok := config["url"].(string)
+	url, ok := reqConfig["url"].(string)
 	if !ok {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("无效的URL")})
 	}
 
 	// 解析执行配置
-	execute, ok := config["execute"].(map[string]any)
+	execute, ok := reqConfig["execute"].(map[string]any)
 	if !ok {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("无效的execute")})
 	}
@@ -174,7 +174,7 @@ func (class *Runtime) syncFetch(call goja.FunctionCall) goja.Value {
 	role := "月华"
 	if xr := req.Header.Get("X-Lunar-Role"); xr != "" {
 		role = xr
-	} else if rt, ok := config["roleTag"].(string); ok && rt != "" {
+	} else if rt, ok := reqConfig["roleTag"].(string); ok && rt != "" {
 		role = rt
 	}
 
@@ -189,7 +189,7 @@ func (class *Runtime) syncFetch(call goja.FunctionCall) goja.Value {
 
 	// 发送请求（支持自签名证书，设置超时防止模型重载期间无限挂起）
 	client := &http.Client{
-		Timeout: time.Duration(*GeneralConfig.SyncFetchTimeout) * time.Second,
+		Timeout: time.Duration(*config.SyncFetchTimeout) * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
@@ -271,7 +271,7 @@ func (class *Runtime) doStreamingChat(req *http.Request, role string, promptEsti
 
 	// SSE 不能无限挂着：模型偶发重复生成时，scanner 会一直读下去，
 	// 上层看到的就是“感知者卡死”。用 sync-fetch-timeout（默认 300 秒）做整体截止。
-	deadline := time.Duration(*GeneralConfig.SyncFetchTimeout) * time.Second
+	deadline := time.Duration(*config.SyncFetchTimeout) * time.Second
 	if deadline <= 0 {
 		deadline = 5 * time.Minute
 	}

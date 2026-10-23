@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // Auto-LTP 可观测性：逐角色 trace 日志 + 配图归档。
@@ -29,7 +29,7 @@ func autoTraceInitPath() {
 		autoTraceDir = "."
 		return
 	}
-	autoTraceDir = filepath.Join(filepath.Dir(execPath), *GeneralConfig.LocalDir, "logs")
+	autoTraceDir = filepath.Join(filepath.Dir(execPath), *config.LocalDir, "logs")
 	_ = os.MkdirAll(autoTraceDir, 0755)
 }
 
@@ -39,7 +39,7 @@ func autoShotDirPath() string {
 	if err != nil {
 		return "."
 	}
-	dir := filepath.Join(filepath.Dir(execPath), *GeneralConfig.LocalDir, "multimedia", "moment")
+	dir := filepath.Join(filepath.Dir(execPath), *config.LocalDir, "multimedia", "moment")
 	_ = os.MkdirAll(dir, 0755)
 	return dir
 }

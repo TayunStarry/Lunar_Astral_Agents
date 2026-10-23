@@ -12,7 +12,7 @@ package persistence
 // 保留优先级最高的那一份；同优先级时保留最早分配的句柄（编号稳定）。
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"os"
 	"path/filepath"
@@ -39,7 +39,7 @@ func (d *ArchiveDB) DedupeDuplicateHashes() (int, error) {
 		return 0, err
 	}
 
-	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	localDir := filepath.Clean(*config.LocalDir)
 	removed := 0
 	for _, list := range groups {
 		if len(list) < 2 {
@@ -90,7 +90,7 @@ func dedupePriority(res ArchiveResource) int {
 	if !IsStoragePath(res.BlobPath) {
 		return -1
 	}
-	abs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(res.BlobPath))
+	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath))
 	if res.State != StateActive || !fileExists(abs) {
 		return -1
 	}

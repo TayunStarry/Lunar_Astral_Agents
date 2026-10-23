@@ -7,21 +7,21 @@ import (
 	"testing"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
 
 // TestPageCacheUsesWebDB get/put 往返且数据落在 web 领域库
 func TestPageCacheUsesWebDB(t *testing.T) {
 	tmp := t.TempDir()
-	origLocal := *GeneralConfig.LocalDir
-	origWeb := *GeneralConfig.WebDBPath
-	*GeneralConfig.LocalDir = tmp
-	*GeneralConfig.WebDBPath = filepath.Join(tmp, "database", "web.db")
+	origLocal := *config.LocalDir
+	origWeb := *config.WebDBPath
+	*config.LocalDir = tmp
+	*config.WebDBPath = filepath.Join(tmp, "database", "web.db")
 	t.Cleanup(func() {
 		_ = persistence.CloseDomainDBs()
-		*GeneralConfig.LocalDir = origLocal
-		*GeneralConfig.WebDBPath = origWeb
+		*config.LocalDir = origLocal
+		*config.WebDBPath = origWeb
 	})
 
 	cache, err := openPageCache(time.Hour)

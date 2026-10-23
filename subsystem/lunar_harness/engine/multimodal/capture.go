@@ -1,7 +1,7 @@
 package multimodal
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"bytes"
 	"fmt"
 	"image"
@@ -21,7 +21,7 @@ import (
 //   - region：绝对屏幕坐标区域
 //
 // 目标窗口识别顺序：WindowHandle > WindowTitle（标题包含匹配）> 当前焦点窗口。
-// 目标窗口走 WindowCapture 的 PrintWindow 渲染，因此被遮挡（未最小化）也能拿到画面。
+// 目标窗口走 engine/capture 的 PrintWindow 渲染，因此被遮挡（未最小化）也能拿到画面。
 //
 // 坐标覆盖：目标窗口模式下 Width>0 && Height>0 时，
 // 按窗口相对偏移 (OffsetX, OffsetY) + 区域大小 (Width, Height) 精准截取子区域。
@@ -33,10 +33,10 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 
 	// 默认值
 	if req.Format == "" {
-		req.Format = *GeneralConfig.Format
+		req.Format = *config.Format
 	}
 	if req.Quality == 0 {
-		req.Quality = *GeneralConfig.JPEGQuality
+		req.Quality = *config.JPEGQuality
 	}
 	if req.Mode == "" {
 		req.Mode = ModeAuto

@@ -7,7 +7,7 @@ package persistence
 // 句柄分配仍由 ArchiveDatabase.InsertResource 统一完成。
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +31,7 @@ func RegisterPath(rel string) (canonicalRel string, handle string, err error) {
 	if err := EnsureArchiveInitialized(); err != nil {
 		return rel, "", nil
 	}
-	abs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(rel))
+	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(rel))
 	info, statErr := os.Stat(abs)
 	if statErr != nil || info.IsDir() {
 		return rel, "", statErr
@@ -74,7 +74,7 @@ func FindActiveResourceByHash(kind, hash string) (ArchiveResource, bool) {
 		_ = ArchiveDatabase.DeleteResource(existing.ID)
 		return ArchiveResource{}, false
 	}
-	abs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(existing.BlobPath))
+	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(existing.BlobPath))
 	if existing.State != StateActive || !fileExists(abs) {
 		// 失效句柄不参与去重，同时清掉
 		_ = ArchiveDatabase.DeleteResource(existing.ID)
@@ -115,7 +115,7 @@ func upsertHandleWithKnownHash(rel, abs, hash string) (handle string, canonicalR
 		if existing, ok := FindActiveResourceByHash(kind, hash); ok && existing.BlobPath != rel {
 			if preferNewPath(rel, existing.BlobPath) {
 				// 新路径更优（如从根目录迁到生成目录）：删除旧实体，句柄改指新路径
-				oldAbs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(existing.BlobPath))
+				oldAbs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(existing.BlobPath))
 				if oldAbs != abs {
 					_ = os.Remove(oldAbs)
 				}
@@ -175,7 +175,7 @@ func TouchHandlesForRead(rel string) {
 	if !IsStoragePath(rel) || EnsureArchiveInitialized() != nil {
 		return
 	}
-	abs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(rel))
+	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(rel))
 	if !fileExists(abs) {
 		_ = ArchiveDatabase.DeleteResourcesByBlobPath(rel)
 		return

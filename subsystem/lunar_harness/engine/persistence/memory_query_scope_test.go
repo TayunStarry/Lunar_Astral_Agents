@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // scopeEmbeddingServer 假嵌入服务：查询文本含“目标”时映射为 [1,0]，否则 [0,1]。
@@ -85,11 +85,11 @@ func scopeTestDocs() (map[string][]Document, string, string) {
 func TestMemoryQueryFastScopeSkipsFarCollections(t *testing.T) {
 	server := scopeEmbeddingServer(t)
 	defer server.Close()
-	origURL, origModel := *GeneralConfig.AgentEmbeddingURL, *GeneralConfig.AgentEmbeddingModel
-	*GeneralConfig.AgentEmbeddingURL = server.URL + "/v1"
-	*GeneralConfig.AgentEmbeddingModel = "test-embedding"
+	origURL, origModel := *config.AgentEmbeddingURL, *config.AgentEmbeddingModel
+	*config.AgentEmbeddingURL = server.URL + "/v1"
+	*config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
-		*GeneralConfig.AgentEmbeddingURL, *GeneralConfig.AgentEmbeddingModel = origURL, origModel
+		*config.AgentEmbeddingURL, *config.AgentEmbeddingModel = origURL, origModel
 	})
 
 	docs, idNear, idFar := scopeTestDocs()
@@ -122,11 +122,11 @@ func TestMemoryQueryFastScopeSkipsFarCollections(t *testing.T) {
 func TestMemoryQueryFastScopeFallsBackWhenFirstMisses(t *testing.T) {
 	server := scopeEmbeddingServer(t)
 	defer server.Close()
-	origURL, origModel := *GeneralConfig.AgentEmbeddingURL, *GeneralConfig.AgentEmbeddingModel
-	*GeneralConfig.AgentEmbeddingURL = server.URL + "/v1"
-	*GeneralConfig.AgentEmbeddingModel = "test-embedding"
+	origURL, origModel := *config.AgentEmbeddingURL, *config.AgentEmbeddingModel
+	*config.AgentEmbeddingURL = server.URL + "/v1"
+	*config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
-		*GeneralConfig.AgentEmbeddingURL, *GeneralConfig.AgentEmbeddingModel = origURL, origModel
+		*config.AgentEmbeddingURL, *config.AgentEmbeddingModel = origURL, origModel
 	})
 
 	_, idNear, idFar := scopeTestDocs()

@@ -99,6 +99,25 @@ func AppendConsoleLog(text string) {
 	_, _ = f.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + text + "\n")
 }
 
+// consoleLogWriter 把 logger 的结构化输出直写控制台日志镜像。
+//
+// TUI 模式下 logger 的打印不进入 stdout 管道：那里是原生库输出、标准库 log 与
+// panic 栈的通道，而 logger 自身的日志已经由日志钩子（routeLogRecord）送入
+// 「原始日志」视图——再经管道走一遍会让同一行在原始日志里出现两次。
+// 落盘职责改由本适配器承担，正文经 scrubLogText 清洗（剥 ANSI、按 \r 分行），
+// 级别过滤仍由 logger 的 shouldPrint 把守，console_log 关闭时镜像为 nil、写入静默。
+type consoleLogWriter struct {
+	cl *consoleLog
+}
+
+// Write 实现 io.Writer：log.Logger 每次打印调用一次，正文可能含多行与 \r 进度刷新
+func (w consoleLogWriter) Write(p []byte) (int, error) {
+	for _, line := range scrubLogText(string(p)) {
+		w.cl.WriteLine(line)
+	}
+	return len(p), nil
+}
+
 // WriteLine 追加一行（带时间戳；写失败静默忽略，日志不能影响主流程）
 func (c *consoleLog) WriteLine(line string) {
 	if c == nil {

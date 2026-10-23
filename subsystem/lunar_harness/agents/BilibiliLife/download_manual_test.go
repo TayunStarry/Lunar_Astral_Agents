@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 )
 
@@ -15,7 +15,7 @@ func TestManualDownloadProbe(t *testing.T) {
 	if os.Getenv("BILI_LIFE_DOWNLOAD_PROBE") != "1" {
 		t.Skip("设置 BILI_LIFE_DOWNLOAD_PROBE=1 才真实下载")
 	}
-	*GeneralConfig.LocalDir = `D:\Lunar_Astral_Agents\local_data`
+	*config.LocalDir = `D:\Lunar_Astral_Agents\local_data`
 	info, err := fetchVideoInfo("BV1ponw6vEB9")
 	if err != nil {
 		t.Fatalf("view 失败: %v", err)
@@ -35,7 +35,7 @@ func TestManualDownloadProbe(t *testing.T) {
 	}
 	t.Logf("下载 %s → %d 个切片，首个=%s", local, len(segments), segments[0].File)
 	for _, seg := range segments {
-		_ = os.Remove(*GeneralConfig.LocalDir + "/multimedia/" + seg.File)
+		_ = os.Remove(*config.LocalDir + "/multimedia/" + seg.File)
 	}
 	_ = os.Remove(local)
 }

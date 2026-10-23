@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -64,19 +64,19 @@ func observeEnd() {
 // resolveModel 解析模型配置（仅首次调用）
 func resolveModel() {
 	modelOnce.Do(func() {
-		modelName = strings.TrimSpace(*GeneralConfig.AgentMultimodalModel)
+		modelName = strings.TrimSpace(*config.AgentMultimodalModel)
 		if modelName == "" {
 			modelName = "system-multimodal"
 		}
-		rawURL := strings.TrimRight(strings.TrimSpace(*GeneralConfig.AgentMultimodalURL), "/")
+		rawURL := strings.TrimRight(strings.TrimSpace(*config.AgentMultimodalURL), "/")
 		if rawURL == "" {
-			rawURL = GeneralConfig.LocalV1URL()
+			rawURL = config.LocalV1URL()
 		}
 		if !strings.HasSuffix(rawURL, "/v1") {
 			rawURL += "/v1"
 		}
 		modelURL = rawURL
-		modelKey = strings.TrimSpace(*GeneralConfig.AgentMultimodalKey)
+		modelKey = strings.TrimSpace(*config.AgentMultimodalKey)
 	})
 }
 

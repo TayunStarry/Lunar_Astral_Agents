@@ -17,8 +17,8 @@ package crystal
 //   POST /webview/deepread   高层编排：导航 → 就绪 → 元素提取（可滚动） → 截图 → 模型摘要
 
 import (
-	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LunarHarness/engine/browser"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	imageproc "LunarSubsystem/LunarHarness/engine/multimodal"
 	"bytes"
@@ -480,13 +480,13 @@ type webChatMessage struct {
 
 // webviewSummarize 调用月华多模态模型（/v1 协议）把元素提取结果总结为中文要点
 func webviewSummarize(page webExtract, queryHint string) (string, error) {
-	model := strings.TrimSpace(*GeneralConfig.AgentMultimodalModel)
+	model := strings.TrimSpace(*config.AgentMultimodalModel)
 	if model == "" {
 		model = "system-multimodal"
 	}
-	baseURL := strings.TrimRight(strings.TrimSpace(*GeneralConfig.AgentMultimodalURL), "/")
+	baseURL := strings.TrimRight(strings.TrimSpace(*config.AgentMultimodalURL), "/")
 	if baseURL == "" {
-		baseURL = GeneralConfig.LocalV1URL()
+		baseURL = config.LocalV1URL()
 	}
 	if !strings.HasSuffix(baseURL, "/v1") {
 		baseURL += "/v1"
@@ -522,7 +522,7 @@ func webviewSummarize(page webExtract, queryHint string) (string, error) {
 		return "", fmt.Errorf("创建摘要请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if key := strings.TrimSpace(*GeneralConfig.AgentMultimodalKey); key != "" {
+	if key := strings.TrimSpace(*config.AgentMultimodalKey); key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
 	client := &http.Client{Timeout: 90 * time.Second}

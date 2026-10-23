@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 )
@@ -14,23 +15,29 @@ func SetDevMode(v bool) {
 	devMode = v
 }
 
-func SetOutput(w *os.File) {
+// SetOutput 设置底层输出目标（默认真实 stdout）。
+// TUI 管线接管时传入控制台日志镜像写入器：logger 的打印不再进入 stdout 管道，
+// 「原始日志」视图由日志钩子单一供源，避免同一行经两条路径重复出现。
+func SetOutput(w io.Writer) {
 	mu.Lock()
 	defer mu.Unlock()
 	stdLog = log.New(w, "", 0)
 }
 
 // SetLogHook 注册外部流式日志钩子（TUI 统一日志管线使用）。
-// 钩子在每条日志完成控制台打印与环形缓冲记录后同步回调，参数为纯文本消息
-// （未经 ANSI 色彩与 Markdown 转义）。传 nil 注销钩子。
+// 钩子在级别过滤与底层打印**之前**同步回调，接收全量日志的纯文本消息
+// （未经 ANSI 色彩与 Markdown 转义）；视图缓冲与环形截断由管线侧负责。
+// 传 nil 注销钩子。
 func SetLogHook(hook func(level, module, sub, msg string)) {
 	hookMu.Lock()
 	defer hookMu.Unlock()
 	logHookFunc = hook
 }
 
-// shouldPrint 判断是否允许输出并记录。
-// 开发者模式下打印全部日志；非开发者模式下仅打印（记录）警告、错误、致命级别日志。
+// shouldPrint 判断是否允许输出到底层目标。
+// 底层目标在非 TUI 模式下是真实控制台，TUI 模式下是控制台日志镜像（console.log）。
+// 开发者模式下全部输出；非开发者模式下仅输出警告、错误、致命级别。
+// TUI 各视图缓冲不受此过滤——它们经日志钩子接收全量。
 func shouldPrint(level string) bool {
 	mu.RLock()
 	defer mu.RUnlock()

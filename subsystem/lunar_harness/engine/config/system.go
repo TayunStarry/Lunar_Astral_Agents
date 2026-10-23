@@ -1,4 +1,4 @@
-package GeneralConfig
+package config
 
 import (
 	"flag"

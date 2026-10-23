@@ -1,7 +1,7 @@
 package persistence
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"fmt"
 	"os"
@@ -16,9 +16,9 @@ func GetFileList(path string) ([]FileInfo, error) {
 		path = "."
 	}
 	// 拼接完整路径并清理路径格式
-	fullPath := filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, path))
+	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, path))
 	// 检查请求路径是否在允许的目录范围内，防止路径遍历攻击
-	if !strings.HasPrefix(fullPath, filepath.Clean(*GeneralConfig.LocalDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(*config.LocalDir)) {
 		return nil, fmt.Errorf("访问被拒绝")
 	}
 	// 获取文件或目录的信息
@@ -47,7 +47,7 @@ func GetFileList(path string) ([]FileInfo, error) {
 			continue
 		}
 		// 计算文件或目录相对于配置目录的相对路径
-		relPath, err := filepath.Rel(*GeneralConfig.LocalDir, filepath.Join(fullPath, file.Name()))
+		relPath, err := filepath.Rel(*config.LocalDir, filepath.Join(fullPath, file.Name()))
 		// 若计算失败，使用文件名作为相对路径
 		if err != nil {
 			relPath = file.Name()

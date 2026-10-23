@@ -1,7 +1,7 @@
 package multimodal
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/json"
@@ -106,7 +106,7 @@ func VideoToMedia(inputFile string) ([]MediaSegment, error) {
 
 	// 片段归档至 multimedia/footage 子目录；llama-server 的 media-path 指向 multimedia 根，
 	// 返回的文件名需携带 footage/ 前缀才能被 file:// 引用正确解析
-	mediaDir := *GeneralConfig.LocalDir + "/multimedia/footage"
+	mediaDir := *config.LocalDir + "/multimedia/footage"
 	if err := os.MkdirAll(mediaDir, 0755); err != nil {
 		return nil, fmt.Errorf("创建媒体片段目录失败: %w", err)
 	}
@@ -122,7 +122,7 @@ func VideoToMedia(inputFile string) ([]MediaSegment, error) {
 		if segments > 1 {
 			fileName = fmt.Sprintf("footage/%s_seg%d%s", hash, i, ext)
 		}
-		outPath := filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(fileName))
+		outPath := filepath.Join(*config.LocalDir, "multimedia", filepath.FromSlash(fileName))
 		// 音轨一律不进入切片（声音与音乐对视频理解无效）：
 		// 重编码路径本来就只保留视频流，流复制路径经 map 0:v:0 只映射视频流
 		var err error
@@ -163,8 +163,8 @@ func cutVideoSegment(inputFile string, outFile string, start float64, duration f
 		"movflags":          "+faststart",
 		"loglevel":          "error",
 	})
-	if *GeneralConfig.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
+	if *config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*config.FfmpegPath)
 	}
 	return stream.Run()
 }
@@ -192,8 +192,8 @@ func normalizeVideoSegment(inputFile string, outFile string, start float64, dura
 		"movflags": "+faststart",
 		"loglevel": "error",
 	})
-	if *GeneralConfig.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
+	if *config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*config.FfmpegPath)
 	}
 	if err := stream.Run(); err != nil {
 		return err

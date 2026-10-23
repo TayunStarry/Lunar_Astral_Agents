@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/lunar_loop/container"
 
@@ -95,8 +95,8 @@ func EngineState() EngineStatus {
 	statusMu.RUnlock()
 	out.RuntimeReady = container.IsReady()
 	out.AgentReady = IsAgentReady()
-	out.AutoReload = *GeneralConfig.EngineAutoReload
-	out.AutoReloadThreshold = *GeneralConfig.EngineAutoReloadFailures
+	out.AutoReload = *config.EngineAutoReload
+	out.AutoReloadThreshold = *config.EngineAutoReloadFailures
 	return out
 }
 
@@ -230,10 +230,10 @@ func NotifyAgentFailure(reason string) {
 	logger.SubWarn(lunarCoreModule, lunarJavaScriptSub,
 		"应答失败（连续 %d 次）: %s", failures, reason)
 
-	if !*GeneralConfig.EngineAutoReload || *GeneralConfig.EngineAutoReloadFailures <= 0 {
+	if !*config.EngineAutoReload || *config.EngineAutoReloadFailures <= 0 {
 		return
 	}
-	if failures < *GeneralConfig.EngineAutoReloadFailures {
+	if failures < *config.EngineAutoReloadFailures {
 		return
 	}
 	// 冷却期：重载本身会丢上下文，连续失败的密集区里反复重载只会更糟

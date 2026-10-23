@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	windowcapture "LunarSubsystem/WindowCapture"
+	"LunarSubsystem/LunarHarness/engine/capture"
 	"github.com/lxn/win"
 )
 
@@ -211,14 +211,14 @@ func resolveTargetWindow(title string, handle uint64) (uintptr, string, error) {
 
 // captureTargetWindowArea 捕获目标窗口（整窗或客户区），并支持窗口内相对子区域
 func captureTargetWindowArea(hwnd uintptr, clientArea bool, offsetX, offsetY, width, height int) (*image.RGBA, error) {
-	mode := windowcapture.ModeWindow
+	mode := capture.ModeWindow
 	if clientArea {
-		mode = windowcapture.ModeClient
+		mode = capture.ModeClient
 	}
 	if width > 0 && height > 0 {
-		return windowcapture.CaptureRegion(hwnd, mode, offsetX, offsetY, width, height)
+		return capture.CaptureRegion(hwnd, mode, offsetX, offsetY, width, height)
 	}
-	return windowcapture.Capture(hwnd, mode)
+	return capture.Capture(hwnd, mode)
 }
 
 // CaptureWindowRGBA 按窗口句柄截取原始 RGBA 图像（clientArea=true 时只取客户区）。

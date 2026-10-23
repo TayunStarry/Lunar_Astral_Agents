@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	mmmodule "LunarSubsystem/LunarHarness/engine/multimodal"
 	filemodule "LunarSubsystem/LunarHarness/engine/persistence"
 
@@ -47,7 +47,7 @@ var visionImageExts = map[string]bool{
 // @return 副本字节、contentType
 func VisionReadBlob(relPath, tag string, side int) ([]byte, string, error) {
 	if side <= 0 {
-		side = *GeneralConfig.VisionMaxSide
+		side = *config.VisionMaxSide
 	}
 	// 路径规整与越界防护（与 ReadFile 同一套约定：相对 LocalDir 解析）
 	clean := filepath.ToSlash(filepath.Clean(relPath))
@@ -83,8 +83,8 @@ func VisionReadBlob(relPath, tag string, side int) ([]byte, string, error) {
 	}
 	cacheRel := "multimedia/vision/" + contentHash + "_s" + strconv.Itoa(side) + ".jpg"
 	data, mime, cached, err := mmmodule.VisionTransform(
-		filepath.Join(*GeneralConfig.LocalDir, clean),
-		filepath.Join(*GeneralConfig.LocalDir, cacheRel),
+		filepath.Join(*config.LocalDir, clean),
+		filepath.Join(*config.LocalDir, cacheRel),
 		side, tag,
 	)
 	if err != nil {
@@ -103,7 +103,7 @@ func VisionReadBlob(relPath, tag string, side int) ([]byte, string, error) {
 		CachePath:   cacheRel,
 		Bytes:       int64(len(data)),
 	})
-	if removed, freed := filemodule.VisionCacheEvict(int64(*GeneralConfig.VisionCacheCapMB) << 20); removed > 0 {
+	if removed, freed := filemodule.VisionCacheEvict(int64(*config.VisionCacheCapMB) << 20); removed > 0 {
 		fmt.Printf("[视觉缓存] 容量超限，已淘汰 %d 个副本，释放 %d 字节\n", removed, freed)
 	}
 	return data, mime, nil

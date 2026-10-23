@@ -1,7 +1,7 @@
 package persistence
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"fmt"
 	"os"
@@ -22,7 +22,7 @@ func ExecuteMove(req MoveItemRequest) MoveResponse {
 		return response
 	}
 
-	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	localDir := filepath.Clean(*config.LocalDir)
 
 	// 解析并校验目标目录
 	var targetBase string

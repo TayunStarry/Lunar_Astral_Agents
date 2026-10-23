@@ -1,7 +1,7 @@
 package multimodal
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -49,8 +49,8 @@ func AudioToWavBase64(inputFile string) (string, error) {
 		"ar":       "16000",
 		"loglevel": "error",
 	})
-	if *GeneralConfig.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
+	if *config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*config.FfmpegPath)
 	}
 	if err := stream.Run(); err != nil {
 		return "", fmt.Errorf("音频转码失败: %w", err)

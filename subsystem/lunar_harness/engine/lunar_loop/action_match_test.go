@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // setAnimationActions 替换动画列表缓存（测试结束后由调用方清理）
@@ -69,11 +69,11 @@ func TestMatchActionNameUsesAnimationCache(t *testing.T) {
 	server := startActionEmbeddingServer(t)
 	defer server.Close()
 
-	origURL, origModel := *GeneralConfig.AgentEmbeddingURL, *GeneralConfig.AgentEmbeddingModel
-	*GeneralConfig.AgentEmbeddingURL = server.URL + "/v1"
-	*GeneralConfig.AgentEmbeddingModel = "test-embedding"
+	origURL, origModel := *config.AgentEmbeddingURL, *config.AgentEmbeddingModel
+	*config.AgentEmbeddingURL = server.URL + "/v1"
+	*config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
-		*GeneralConfig.AgentEmbeddingURL, *GeneralConfig.AgentEmbeddingModel = origURL, origModel
+		*config.AgentEmbeddingURL, *config.AgentEmbeddingModel = origURL, origModel
 		resetActionMatchState()
 	})
 
@@ -89,11 +89,11 @@ func TestMatchActionNameUsesAnimationCache(t *testing.T) {
 // TestMatchActionNameFallsBackToLexical 覆盖：嵌入服务不可用时退回字面包含匹配，
 // 仍然不访问记忆库。
 func TestMatchActionNameFallsBackToLexical(t *testing.T) {
-	origURL, origModel := *GeneralConfig.AgentEmbeddingURL, *GeneralConfig.AgentEmbeddingModel
-	*GeneralConfig.AgentEmbeddingURL = "http://127.0.0.1:1/v1"
-	*GeneralConfig.AgentEmbeddingModel = "test-embedding"
+	origURL, origModel := *config.AgentEmbeddingURL, *config.AgentEmbeddingModel
+	*config.AgentEmbeddingURL = "http://127.0.0.1:1/v1"
+	*config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
-		*GeneralConfig.AgentEmbeddingURL, *GeneralConfig.AgentEmbeddingModel = origURL, origModel
+		*config.AgentEmbeddingURL, *config.AgentEmbeddingModel = origURL, origModel
 		resetActionMatchState()
 	})
 

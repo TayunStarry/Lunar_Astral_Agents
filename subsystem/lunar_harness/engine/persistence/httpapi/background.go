@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 	"fmt"
@@ -24,7 +24,7 @@ func RandomBackgroundHandler(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	backgroundDir := filepath.Join(*GeneralConfig.LocalDir, "multimedia/background")
+	backgroundDir := filepath.Join(*config.LocalDir, "multimedia/background")
 	filePath := filepath.Join(backgroundDir, filename)
 	file, err := os.Open(filePath)
 	if err != nil {

@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/engine/persistence"
@@ -45,7 +45,7 @@ func DescribeMedia(handle, question string) (string, error) {
 		return cached, nil
 	}
 
-	abs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(res.BlobPath))
+	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath))
 	if res.Kind == persistence.KindVideo {
 		groups, err := multimodal.VideoToFrames(abs)
 		if err != nil {

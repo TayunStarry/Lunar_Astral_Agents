@@ -3,13 +3,13 @@
 package browser
 
 // 会话窗口内容截图：具体 GDI 生命周期、PrintWindow 空图判定与屏幕回退
-// 统一由 LunarSubsystem/WindowCapture 实现，本文件只负责交出 WebView 句柄。
+// 统一由 LunarHarness 的 engine/capture 实现，本文件只负责交出 WebView 句柄。
 
 import (
 	"fmt"
 	"image"
 
-	windowcapture "LunarSubsystem/WindowCapture"
+	"LunarSubsystem/LunarHarness/engine/capture"
 )
 
 // WindowHandle 返回会话窗口句柄（供持有统一截图机制的调用方按句柄截图）
@@ -30,5 +30,5 @@ func (s *WebViewSession) ClientScreenshot() (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	return windowcapture.Capture(hwnd, windowcapture.ModeClient)
+	return capture.Capture(hwnd, capture.ModeClient)
 }

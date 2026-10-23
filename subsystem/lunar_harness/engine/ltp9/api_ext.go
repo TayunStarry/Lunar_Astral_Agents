@@ -1,7 +1,7 @@
 package StarLTP
 
 // ==== 扩展能力实现：JWT / 摘要 / Ed25519 / 图像 / LLM ====
-// LLM 配置读取 lunar_config.json 的 agent 字段（GeneralConfig 同源），不硬编码。
+// LLM 配置读取 lunar_config.json 的 agent 字段（engine/config 同源），不硬编码。
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // ==== JWT 签名（hash.signJWT，allow-certificate） ====
@@ -240,11 +240,11 @@ func engineImageDownload(p *plugin, url, fileName string) (any, error) {
 // ==== LLM agent.chat/embed（allow-agent，读取 lunar_config.json 的 agent 字段） ====
 
 // engineLLMChat 调用 OpenAI 兼容 v1/chat/completions，返回首个 choice 的文本内容。
-// 配置统一读取 GeneralConfig 的 agent.multimodal_*（来自 lunar_config.json，与 embed/memory 同源）。
+// 配置统一读取 engine/config 的 agent.multimodal_*（来自 lunar_config.json，与 embed/memory 同源）。
 func engineLLMChat(messages []any, opts map[string]any) (any, error) {
-	model := stringOr(*GeneralConfig.AgentMultimodalModel, "system-multimodal")
-	baseURL := strings.TrimSpace(*GeneralConfig.AgentMultimodalURL)
-	apiKey := *GeneralConfig.AgentMultimodalKey
+	model := stringOr(*config.AgentMultimodalModel, "system-multimodal")
+	baseURL := strings.TrimSpace(*config.AgentMultimodalURL)
+	apiKey := *config.AgentMultimodalKey
 	if baseURL == "" {
 		return rwResult{Success: false, Error: "未配置 agent.multimodal_url（lunar_config.json）"}, nil
 	}
@@ -314,9 +314,9 @@ func engineLLMChat(messages []any, opts map[string]any) (any, error) {
 
 // readEmbedConfig 从项目配置读取智能体文本嵌入模型配置（lunar_config.json 的 agent 字段，不硬编码）。
 func readEmbedConfig() (model, baseURL, apiKey string) {
-	return stringOr(*GeneralConfig.AgentEmbeddingModel, "system-embedding"),
-		stringOr(*GeneralConfig.AgentEmbeddingURL, GeneralConfig.LocalV1URL()),
-		stringOr(*GeneralConfig.AgentEmbeddingKey, "")
+	return stringOr(*config.AgentEmbeddingModel, "system-embedding"),
+		stringOr(*config.AgentEmbeddingURL, config.LocalV1URL()),
+		stringOr(*config.AgentEmbeddingKey, "")
 }
 
 // embedComplete 调用 OpenAI 兼容 v1/embeddings 批量嵌入文本，返回与输入等长的向量列表。

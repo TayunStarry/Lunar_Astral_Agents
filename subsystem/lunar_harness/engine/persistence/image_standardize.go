@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
 )
@@ -300,7 +300,7 @@ func (d *MemoryDB) removeMemoryMediaForDoc(collection string, doc Document) {
 	if d.mediaURLReferenced(doc.URL) {
 		return
 	}
-	base := filepath.Clean(*GeneralConfig.LocalDir)
+	base := filepath.Clean(*config.LocalDir)
 	abs := filepath.Join(base, filepath.FromSlash(rel))
 	if abs == base || !strings.HasPrefix(abs, base+string(os.PathSeparator)) {
 		logger.Warn("FileManager", "记忆媒体路径越界，跳过删除: %s", rel)
@@ -354,7 +354,7 @@ func (c *Collection) migrateLegacyMemoryImages() bool {
 
 	oldPrefix := path.Join(StorageRootMultimedia, c.Name) + "/"
 	newPrefix := path.Join(StorageRootMultimedia, MemoryMediaSubdir, c.Name) + "/"
-	base := filepath.Clean(*GeneralConfig.LocalDir)
+	base := filepath.Clean(*config.LocalDir)
 	changed := false
 	for i := range docs {
 		doc := &docs[i]

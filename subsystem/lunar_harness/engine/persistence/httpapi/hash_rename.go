@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 	"encoding/json"
@@ -26,7 +26,7 @@ func HashRenameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := persistence.HashRenameDir(filepath.Clean(*GeneralConfig.LocalDir), req.Path)
+	response, err := persistence.HashRenameDir(filepath.Clean(*config.LocalDir), req.Path)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, response)
 		return

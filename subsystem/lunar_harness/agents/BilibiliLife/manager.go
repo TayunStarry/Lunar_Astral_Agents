@@ -18,7 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 )
@@ -141,7 +141,7 @@ func (m *lifeManager) refreshConfigLocked() {
 }
 
 func localRoot() string {
-	dir := strings.TrimSpace(*GeneralConfig.LocalDir)
+	dir := strings.TrimSpace(*config.LocalDir)
 	if dir == "" {
 		return "local_data"
 	}

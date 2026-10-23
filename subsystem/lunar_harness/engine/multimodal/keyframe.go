@@ -1,7 +1,7 @@
 package multimodal
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"bytes"
 	"encoding/json"
@@ -125,8 +125,8 @@ func extractAllFramesAtFPS(inputFile string, fps float64) ([]image.Image, error)
 	}
 
 	stream := ffmpeg.Input(inputFile).Output("pipe:1", kwargs)
-	if *GeneralConfig.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
+	if *config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*config.FfmpegPath)
 	}
 
 	err := stream.WithOutput(buf, os.Stderr).Run()

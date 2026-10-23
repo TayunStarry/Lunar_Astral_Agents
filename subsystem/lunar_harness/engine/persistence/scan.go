@@ -9,7 +9,7 @@ package persistence
 //   - 不自动删除任何实体文件：句柄清理只删目录行，实体由调用方显式操作。
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"io/fs"
 	"os"
@@ -35,7 +35,7 @@ func SyncStorageHandles() error {
 
 // syncStorageHandles 执行一次完整对齐（调用方须持有 storageScanMu）
 func syncStorageHandles() error {
-	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	localDir := filepath.Clean(*config.LocalDir)
 	present := map[string]bool{}
 	scanned, cleaned, skippedDerived := 0, 0, 0
 
@@ -143,7 +143,7 @@ func syncFileHandle(rel, abs string) error {
 		if existing, ok := FindActiveResourceByHash(kind, hash); ok && existing.BlobPath != rel {
 			if preferNewPath(rel, existing.BlobPath) {
 				// 新实体更优：删除旧实体并把句柄迁移过来
-				oldAbs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(existing.BlobPath))
+				oldAbs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(existing.BlobPath))
 				if oldAbs != abs {
 					_ = os.Remove(oldAbs)
 				}

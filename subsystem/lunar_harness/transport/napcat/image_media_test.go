@@ -7,7 +7,7 @@ package napcat
 // 上传上限，需要在出站前压缩本机大图。
 
 import (
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"image"
 	"image/color"
 	"image/png"
@@ -20,9 +20,9 @@ import (
 func setupQQImageTest(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
-	orig := *GeneralConfig.LocalDir
-	*GeneralConfig.LocalDir = tmp
-	t.Cleanup(func() { *GeneralConfig.LocalDir = orig })
+	orig := *config.LocalDir
+	*config.LocalDir = tmp
+	t.Cleanup(func() { *config.LocalDir = orig })
 	if err := os.MkdirAll(filepath.Join(tmp, "multimedia", "generated"), 0755); err != nil {
 		t.Fatalf("准备图片目录失败: %v", err)
 	}

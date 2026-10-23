@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
@@ -102,7 +102,7 @@ func InspectText(handle, request string) (string, error) {
 
 // loadDoc 载入文件正文并建立结构/引用索引
 func loadDoc(res persistence.ArchiveResource) (*docContext, error) {
-	abs := filepath.Join(filepath.Clean(*GeneralConfig.LocalDir), filepath.FromSlash(res.BlobPath))
+	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath))
 	data, err := os.ReadFile(abs)
 	if err != nil {
 		return nil, fmt.Errorf("读取文件失败: %w", err)

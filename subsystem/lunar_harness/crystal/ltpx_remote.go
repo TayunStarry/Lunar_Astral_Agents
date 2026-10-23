@@ -1,10 +1,10 @@
 package crystal
 
 import (
-	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LunarHarness/agents/AutoLTP"
 	"LunarSubsystem/LunarHarness/agents/WebLTP"
 	"LunarSubsystem/LunarHarness/clients"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/ltp9"
 	"LunarSubsystem/LunarHarness/transport/ws"
@@ -54,7 +54,7 @@ func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 		return defs, pkgMap
 	}
 	execDir := filepath.Dir(execPath)
-	packageDir := filepath.Join(execDir, *GeneralConfig.LocalDir, "package")
+	packageDir := filepath.Join(execDir, *config.LocalDir, "package")
 
 	entries, err := os.ReadDir(packageDir)
 	if err != nil {

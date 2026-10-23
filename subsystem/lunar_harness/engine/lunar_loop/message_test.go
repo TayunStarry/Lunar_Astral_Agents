@@ -12,13 +12,13 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 func TestRegisterPushedImageKeepsReadableReadURL(t *testing.T) {
 	_ = newBridgeTestRuntime(t)
 	rel := "multimedia/generated/qq-send.png"
-	abs := filepath.Join(*GeneralConfig.LocalDir, filepath.FromSlash(rel))
+	abs := filepath.Join(*config.LocalDir, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(abs), 0755); err != nil {
 		t.Fatalf("创建生成目录失败: %v", err)
 	}

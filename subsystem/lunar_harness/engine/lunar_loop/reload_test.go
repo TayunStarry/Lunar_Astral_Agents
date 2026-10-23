@@ -3,7 +3,7 @@ package lunarloop
 import (
 	"testing"
 
-	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // resetEngineStatusForTest 清空自愈状态与暂存快照（各子测试互不干扰；测试间不并发）
@@ -24,11 +24,11 @@ func resetEngineStatusForTest() {
 func TestAgentFailureCounter(t *testing.T) {
 	resetEngineStatusForTest()
 	// 关掉自动重载：本用例只验证计数，不想真的去重建运行时
-	savedAuto, savedThreshold := *GeneralConfig.EngineAutoReload, *GeneralConfig.EngineAutoReloadFailures
-	*GeneralConfig.EngineAutoReload = false
+	savedAuto, savedThreshold := *config.EngineAutoReload, *config.EngineAutoReloadFailures
+	*config.EngineAutoReload = false
 	defer func() {
-		*GeneralConfig.EngineAutoReload = savedAuto
-		*GeneralConfig.EngineAutoReloadFailures = savedThreshold
+		*config.EngineAutoReload = savedAuto
+		*config.EngineAutoReloadFailures = savedThreshold
 	}()
 
 	NotifyAgentFailure("Could not establish connection")

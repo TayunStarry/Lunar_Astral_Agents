@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LunarHarness/crystal"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/browser"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/lunar_loop"
 	file "LunarSubsystem/LunarHarness/engine/persistence"
@@ -108,7 +108,7 @@ func Assemble() {
 
 // lunarWindowSpec 月华消息终端窗口规格
 func lunarWindowSpec() browser.DesktopWindowSpec {
-	base := fmt.Sprintf("http://127.0.0.1:%d", *GeneralConfig.BasicPort)
+	base := fmt.Sprintf("http://127.0.0.1:%d", *config.BasicPort)
 	return browser.DesktopWindowSpec{
 		ID:       WindowLunar,
 		URL:      base + "/",
@@ -121,7 +121,7 @@ func lunarWindowSpec() browser.DesktopWindowSpec {
 
 // crystalWindowSpec 琉璃桌面窗口规格（启动打开与 LTPX 前端守护唤起共用）
 func crystalWindowSpec() browser.DesktopWindowSpec {
-	base := fmt.Sprintf("http://127.0.0.1:%d", *GeneralConfig.BasicPort)
+	base := fmt.Sprintf("http://127.0.0.1:%d", *config.BasicPort)
 	return browser.DesktopWindowSpec{
 		ID:       WindowCrystal,
 		URL:      base + server.DesktopPrefix,
