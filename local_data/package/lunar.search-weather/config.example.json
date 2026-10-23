@@ -1,0 +1,21 @@
+{
+  "_comment": "实时资讯配置示例。复制为 config.json 后填入自己的凭据；config.json 已在 .gitignore 中，不会入库。",
+  "api": {
+    "provider": "auto",
+    "qweather_auth": "api_key",
+    "qweather_host": "",
+    "qweather_key": "",
+    "qweather_project_id": "",
+    "qweather_key_id": ""
+  },
+  "display": {
+    "default_city": "",
+    "show_aqi": true
+  },
+  "news": {
+    "enabled": true
+  },
+  "plugin": {
+    "enabled": true
+  }
+}

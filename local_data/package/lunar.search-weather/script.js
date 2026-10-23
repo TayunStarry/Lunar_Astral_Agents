@@ -163,30 +163,61 @@ function escapeHTML(text) {
 function renderWeather(data) {
     if (!data) return;
     const c = data.current || {};
+    const aqi = data.aqi;
+    const meta = [];
+    meta.push('<div class="weather-meta-item"><i class="fas fa-temperature-half"></i><span>体感 ' + num(c.feels_like) + '°C</span></div>');
+    meta.push('<div class="weather-meta-item"><i class="fas fa-droplet"></i><span>湿度 ' + num(c.humidity) + '%</span></div>');
+    meta.push('<div class="weather-meta-item"><i class="fas fa-wind"></i><span>' + escapeHTML(c.wind || '-') + '</span></div>');
+    if (c.visibility) {
+        meta.push('<div class="weather-meta-item"><i class="fas fa-eye"></i><span>能见度 ' + escapeHTML(String(c.visibility)) + 'km</span></div>');
+    }
+    if (aqi && (aqi.value || aqi.category)) {
+        meta.push('<div class="weather-meta-item ' + aqiClass(aqi) + '"><i class="fas fa-leaf"></i><span>'
+            + escapeHTML(aqi.category || aqi.level || '空气质量') + ' AQI ' + num(aqi.value)
+            + (aqi.primary ? ' · ' + escapeHTML(aqi.primary) : '') + '</span></div>');
+    }
     const html = [
         '<div class="weather-block">',
         '  <div class="weather-city"><i class="fas fa-location-dot"></i> ' + escapeHTML(data.city) + '</div>',
         '  <div class="weather-main">',
-        '    <div class="weather-temp">' + (c.temperature || 0) + '<span class="weather-unit">°C</span></div>',
+        '    <div class="weather-temp">' + num(c.temperature) + '<span class="weather-unit">°C</span></div>',
         '    <div class="weather-cond"><i class="fas fa-cloud-sun"></i> ' + escapeHTML(c.condition || '未知') + '</div>',
         '  </div>',
-        '  <div class="weather-meta">',
-        '    <div class="weather-meta-item"><i class="fas fa-temperature-half"></i><span>体感 ' + (c.feels_like || 0) + '°C</span></div>',
-        '    <div class="weather-meta-item"><i class="fas fa-droplet"></i><span>湿度 ' + (c.humidity || 0) + '%</span></div>',
-        '    <div class="weather-meta-item"><i class="fas fa-wind"></i><span>' + escapeHTML(c.wind || '-') + '</span></div>',
-        '  </div>',
+        '  <div class="weather-meta">' + meta.join('') + '</div>',
         '  <div class="weather-forecast">'
     ].join('');
     const forecastHtml = (data.forecast || []).map(f =>
         '<div class="forecast-card">'
         + '<div class="forecast-date">' + escapeHTML(f.date || '') + '</div>'
         + '<div class="forecast-cond">' + escapeHTML(f.condition || '未知') + '</div>'
-        + '<div class="forecast-temp">' + (f.low || 0) + '° ~ ' + (f.high || 0) + '°</div>'
+        + '<div class="forecast-temp">' + num(f.low) + '° ~ ' + num(f.high) + '°</div>'
+        + (f.precip_prob !== null && f.precip_prob !== undefined
+            ? '<div class="forecast-precip"><i class="fas fa-umbrella"></i> ' + num(f.precip_prob) + '%</div>'
+            : '')
         + '</div>'
     ).join('');
+    const strategy = data.strategy ? ' · 策略：' + escapeHTML(data.strategy) : '';
+    const fallback = data.requested && data.requested !== data.strategy
+        ? '（请求 ' + escapeHTML(data.requested) + '，已回退）'
+        : '';
     const footer = '</div></div>'
-        + '<div class="weather-source">数据来源：' + escapeHTML(data.source || '-') + '</div>';
+        + '<div class="weather-source">数据来源：' + escapeHTML(data.source || '-') + strategy + fallback + '</div>';
     resultBody.innerHTML = html + forecastHtml + footer;
+}
+
+/** 数字兜底（空值显示 0） */
+function num(value) {
+    const n = parseFloat(value);
+    return Number.isFinite(n) ? Math.round(n) : 0;
+}
+
+/** AQI 等级色 */
+function aqiClass(aqi) {
+    const level = parseInt(aqi.level, 10) || 0;
+    if (level <= 2) return 'aqi-good';
+    if (level === 3) return 'aqi-moderate';
+    if (level === 4) return 'aqi-poor';
+    return 'aqi-bad';
 }
 
 /** 渲染新闻列表 */
@@ -195,9 +226,18 @@ function renderNews(data) {
     const items = data.news.map((n, i) =>
         '<div class="news-item"><span class="news-index">' + (i + 1) + '</span><span class="news-text">' + escapeHTML(n) + '</span></div>'
     ).join('');
+    const header = escapeHTML(data.title || '今日要闻')
+        + (data.date ? ' · ' + escapeHTML(data.date) : '');
+    const source = '<div class="news-source">'
+        + (data.url
+            ? '<a href="' + escapeHTML(data.url) + '" target="_blank" rel="noopener">查看原文</a> · '
+            : '')
+        + '来源：' + escapeHTML(data.source || '60s.7se.cn')
+        + '</div>';
     resultBody.innerHTML = '<div class="news-block">'
-        + '<div class="news-header"><i class="fas fa-newspaper"></i> ' + escapeHTML(data.date || '今日') + ' 要闻</div>'
+        + '<div class="news-header"><i class="fas fa-newspaper"></i> ' + header + '</div>'
         + items
+        + source
         + '</div>';
 }
 
@@ -209,9 +249,9 @@ async function handleManualWeather() {
     if (!city) { cityInput.focus(); return; }
     renderResult({ type: 'loading' });
     try {
-        const data = await fetchWeather(city);
+        const data = await fetchWeather(city, 'auto');
         renderResult({ type: 'weather', data: data });
-        addHistory('weather', data.city + ' 天气', { type: 'weather', data: data });
+        addHistory('weather', data.city + ' 天气 · ' + (data.source || ''), { type: 'weather', data: data });
     } catch (e) {
         renderResult({ type: 'error', error: e.message });
         addHistory('error', city + ' 天气查询失败', { type: 'error', error: e.message });
@@ -224,7 +264,7 @@ async function handleManualNews() {
     try {
         const data = await fetchNews();
         renderResult({ type: 'news', data: data });
-        addHistory('news', (data.date || '今日') + ' 要闻', { type: 'news', data: data });
+        addHistory('news', (data.title || '今日') + ' · ' + (data.date || ''), { type: 'news', data: data });
     } catch (e) {
         renderResult({ type: 'error', error: e.message });
         addHistory('error', '新闻获取失败', { type: 'error', error: e.message });
@@ -277,3 +317,8 @@ window.addEventListener('message', async (event) => {
 
 // ===== 初始化 =====
 renderHistory();
+
+// 配置里关闭新闻时隐藏新闻入口（天气能力不受影响）
+loadSWConfig().then((cfg) => {
+    if (!cfg.newsEnabled && newsBtn) newsBtn.style.display = 'none';
+}).catch(() => { });

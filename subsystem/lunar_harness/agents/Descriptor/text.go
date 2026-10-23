@@ -45,7 +45,7 @@ func InspectText(handle, request string) (string, error) {
 	}
 
 	system := promptText("descriptorFileRole.md")
-	briefing := buildBriefing(doc, request)
+	briefing := buildBriefing(doc, handle, request)
 	messages := []chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: briefing},
@@ -127,7 +127,10 @@ func loadDoc(res persistence.ArchiveResource) (*docContext, error) {
 }
 
 // buildBriefing 组装文件探查的初始消息
-func buildBriefing(doc *docContext, request string) string {
+//
+// rawHandle 为用户传入的原始句柄：带锚点（|L.. / |§n）时正文只提供该范围，
+// 并显式告知模型本次阅读范围，避免整份文件稀释重点。
+func buildBriefing(doc *docContext, rawHandle, request string) string {
 	summary := strings.TrimSpace(doc.Resource.Summary)
 	if summary == "" {
 		summary = "（暂无现成摘要）"
@@ -136,9 +139,10 @@ func buildBriefing(doc *docContext, request string) string {
 	if doc.Truncated {
 		truncated = "（超大文件已按上限截断）"
 	}
-	contentBlock := buildContentBlock(doc)
+	scope, contentBlock := scopedContent(doc, rawHandle)
 	return renderPrompt(promptText("descriptorFileBriefing.md"),
 		"{request}", request,
+		"{scope}", scope,
 		"{handle}", doc.Handle,
 		"{name}", doc.Resource.Name,
 		"{kind}", resourceKindLabel(doc.Resource.Kind),
@@ -151,6 +155,34 @@ func buildBriefing(doc *docContext, request string) string {
 		"{references}", formatReferences(doc.References, 15),
 		"{content_block}", contentBlock,
 	)
+}
+
+// scopedContent 生成「阅读范围 + 正文块」。
+//
+// 无锚点：整份文件（小文件内联，大文件只给开头并引导分片读取）。
+// 带锚点：只取该行区间 / 该章节的正文，并让模型知道本次只看这一段；
+// 锚点解析失败或取不到内容时回退整份文件，不阻断探查。
+func scopedContent(doc *docContext, rawHandle string) (scope, block string) {
+	parsed, ok := persistence.ParseHandle(rawHandle)
+	if !ok || (!parsed.HasLine && !parsed.HasSection) {
+		return "整份文件", buildContentBlock(doc)
+	}
+	scoped, err := persistence.ResourceRead(rawHandle, persistence.MaxReadBytes)
+	if err != nil || strings.TrimSpace(scoped.Content) == "" {
+		logger.Warn("CrystalAstral", "描述者：指定范围取回失败，回退整份文件: %v", err)
+		return "整份文件（指定范围未能取回，已回退整份）", buildContentBlock(doc)
+	}
+	if parsed.HasSection {
+		scope = fmt.Sprintf("第 %d 节《%s》（第 %d-%d 行，全文 %d 行）",
+			parsed.SectionOrdinal, scoped.SectionTitle, scoped.LineStart, scoped.LineEnd, len(doc.Lines))
+	} else {
+		scope = fmt.Sprintf("第 %d-%d 行（全文 %d 行）", scoped.LineStart, scoped.LineEnd, len(doc.Lines))
+	}
+	body := scoped.Content
+	if len([]rune(body)) > inlineContentLimit {
+		body = hardCutRunes(body, inlineContentLimit)
+	}
+	return scope, "【正文（仅指定范围）】\n" + body
 }
 
 // buildContentBlock 小文件内联正文，大文件只给开头并引导分片读取

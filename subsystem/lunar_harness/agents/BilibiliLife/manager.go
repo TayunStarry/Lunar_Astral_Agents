@@ -171,6 +171,11 @@ func Run() error {
 		return fmt.Errorf("已有一次生活正在运行")
 	}
 	manager.reloadConfigLocked()
+	// 生活开始前事件：插件可取消本次生活（取消仍消耗一次本日额度并计为完成）
+	if allow, reason := dispatchBeforeLifeStarts(manager.cfg, true); !allow {
+		consumeLifeQuota(reason)
+		return nil
+	}
 	manager.runner = newRunner(manager.cfg, true)
 	manager.running = true
 	manager.paused = false
@@ -199,6 +204,11 @@ func (m *lifeManager) start(forced bool) (string, error) {
 		return "已继续上次没走完的生活", nil
 	}
 	m.reloadConfigLocked()
+	// 生活开始前事件：插件可取消本次生活（取消仍消耗一次本日额度并计为完成）
+	if allow, reason := dispatchBeforeLifeStarts(m.cfg, forced); !allow {
+		consumeLifeQuota(reason)
+		return "生活开始前被 LTP9 插件取消（已计为完成一次生活）", nil
+	}
 	m.runner = newRunner(m.cfg, forced)
 	m.running = true
 	m.paused = false
@@ -297,6 +307,8 @@ func (m *lifeManager) pause(r *runner) {
 
 func (m *lifeManager) fail(r *runner, err error) {
 	logger.Error("BilibiliLife", "本次刷视频失败: %v", err)
+	// 生活结束前事件（纯触发器）：失败也是一种结束，插件可据此做收尾
+	dispatchBeforeLifeEnds(r, "failed", err.Error())
 	m.mu.Lock()
 	m.running = false
 	m.paused = false
@@ -310,6 +322,8 @@ func (m *lifeManager) fail(r *runner, err error) {
 }
 
 func (m *lifeManager) finish(r *runner) {
+	// 生活结束前事件（纯触发器）：正常完成，插件可据此做收尾
+	dispatchBeforeLifeEnds(r, "finished", "")
 	m.mu.Lock()
 	m.running = false
 	m.paused = false
@@ -466,6 +480,11 @@ func AutoTick() bool {
 		}
 	}
 	manager.cfg = cfg
+	// 生活开始前事件：插件可取消本次自动生活（取消仍消耗一次本日额度并计为完成）
+	if allow, reason := dispatchBeforeLifeStarts(cfg, false); !allow {
+		consumeLifeQuota(reason)
+		return false
+	}
 	manager.runner = newRunner(cfg, false)
 	manager.running = true
 	manager.paused = false

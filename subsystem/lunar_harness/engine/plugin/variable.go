@@ -28,6 +28,10 @@ const (
 	EventBeforeQueryStarts = "before_query_starts"
 	// EventBeforeQueryEnds 查询结束前：改写或取消搜索报告
 	EventBeforeQueryEnds = "before_query_ends"
+	// EventBeforeLifeStarts 生活开始前：可取消本次生活（取消仍消耗一次本日额度并计为完成）
+	EventBeforeLifeStarts = "before_life_starts"
+	// EventBeforeLifeEnds 生活结束前：纯触发通知，返回值不被使用
+	EventBeforeLifeEnds = "before_life_ends"
 )
 
 // LTP9Tag metadata.json 标识 LTP9 包的标签。

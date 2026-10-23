@@ -180,21 +180,6 @@ const NODES = {
             { key: 'timeout', label: '超时(秒, 读/DNS/连接)', type: 'number', def: 5 }
         ]
     },
-    async: {
-        label: '异步子任务', icon: 'fa-tasks', color: '#6366f1',
-        desc: 'async：run 以指定包导出的函数为任务体后台执行（不填包/函数则耗时模拟）；reportProgress 上报进度；getStatus/list 查询状态；<任务ID/进度> 可连线',
-        ins: [{ k: 'taskId', label: '任务ID' }, { k: 'progress', label: '进度' }], out: { k: 'result', label: '结果' },
-        fields: [
-            { key: 'op', label: '操作', type: 'select', options: ['run', 'reportProgress', 'getStatus', 'list'], def: 'run' },
-            { key: 'plugin', label: '任务体包ID（run 可选；下拉=引擎真实加载）', type: 'text', ph: '留空=耗时模拟', dynamic: 'plugins' },
-            { key: 'fn', label: '任务体函数名（run 可选；下拉=该包真实导出）', type: 'text', ph: 'queryWeather', dynamic: 'exports' },
-            { key: 'args', label: '任务体参数 (JSON数组，可选)', type: 'json', rows: 1, def: '[]' },
-            { key: 'ms', label: '耗时(毫秒, 无任务体时的模拟)', type: 'number', def: 1500 },
-            { key: 'timeout', label: '超时(毫秒, run 看门狗)', type: 'number', def: 8000 },
-            { key: 'taskId', label: '任务ID (report/getStatus；可连线)', type: 'number', def: 0 },
-            { key: 'progress', label: '进度 (reportProgress)', type: 'json', rows: 1, def: '50' }
-        ]
-    },
     transform: {
         label: '提取合并', icon: 'fa-code-merge', color: '#38bdf8',
         desc: '多路合并：接收多路输入，逐路设置提取字段（留空取全部），按 {{inN.字段}} 占位符模板组合为单路输出；路径支持数组下标（如 result.outcomes[0].result.data.city）；任一上游连线完成即激活（不等其他上游）；模板必填',

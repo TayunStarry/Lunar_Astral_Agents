@@ -34,6 +34,7 @@ local_data/bilibili_config.json
 local_data/bilibili_account.json
 local_data/bilibili_life.json
 local_data/napcat_config.json
+local_data/package/lunar.search-weather/config.json
 docs/plans/cookies*.txt
 local_data/bili_login_qr.png
 bin/

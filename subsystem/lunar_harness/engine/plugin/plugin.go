@@ -14,8 +14,8 @@ import (
 	"github.com/dop251/goja_nodejs/eventloop"
 )
 
-// callAwaitTimeout 等待异步导出函数（Promise）敲定的超时。
-const callAwaitTimeout = 90 * time.Second
+// callFnTimeout 单次同步回调的总等待上限（含 eventloop 调度）。
+const callFnTimeout = 90 * time.Second
 
 // pluginLoadTimeout 等待 execute.js 顶层执行完成的超时：goja 同步执行无法被打断，
 // 死循环脚本不再无限阻塞加载方（循环本身成为僵尸，由 unload 的 StopNoWait 兜底）。
@@ -44,7 +44,6 @@ func newPlugin(dir, root, id, title string) *plugin {
 		events:     map[string][]*eventSub{},
 		exports:    map[string]jsFunc{},
 		commands:   map[string]*commandEntry{},
-		asyncTasks: map[int]*asyncTask{},
 	}
 	_ = os.MkdirAll(p.DataDir, 0755)
 	// 启动插件独立事件循环（goja.New + 自带定时器）
@@ -148,7 +147,6 @@ func (p *plugin) unload() {
 	p.events = map[string][]*eventSub{}
 	p.exports = map[string]jsFunc{}
 	p.commands = map[string]*commandEntry{}
-	p.asyncTasks = map[int]*asyncTask{}
 	p.signalSubs = nil
 	p.granted = nil
 	p.mu.Unlock()
@@ -156,8 +154,10 @@ func (p *plugin) unload() {
 }
 
 // callFn 在插件事件循环内调用一个 JS 函数并同步返回其结果。
-// 若函数返回 Promise（async 函数 / await fetch/WebSocket），由后台 goroutine 通过反复
-// 短回插件 loop 的方式轮询，期间 loop 保持空闲可继续处理网络回调与微任务，直至敲定或超时。
+//
+// LTP9 引擎只提供同步回调：事件订阅器、导出函数、指令处理器都必须直接返回普通值。
+// 若回调返回 Promise（async 函数 / 未 await 的异步调用），引擎不做等待，直接报错——
+// 需要异步的脚本应自行用定时器与回调组织，但「注册给引擎的方法」本身必须同步可得。
 func (p *plugin) callFn(fn jsFunc, args ...any) (any, error) {
 	done := make(chan callResult, 1)
 	loopOK := p.loop.RunOnLoop(func(vm *goja.Runtime) {
@@ -179,20 +179,11 @@ func (p *plugin) callFn(fn jsFunc, args ...any) (any, error) {
 			}
 			return
 		}
-
-		// 非 Promise：直接返回导出结果
-		pm, ok := v.Export().(*goja.Promise)
-		if !ok {
-			done <- callResult{out: v.Export()}
+		if _, isPromise := v.Export().(*goja.Promise); isPromise {
+			done <- callResult{err: fmt.Errorf("回调返回了 Promise：LTP9 引擎只支持同步回调，请自行在脚本内完成异步")}
 			return
 		}
-
-		// Promise：若已同步敲定则直接取结果；pending 则由后台轮询，让出 loop 处理异步回调
-		if pm.State() != goja.PromiseStatePending {
-			done <- settlePromise(pm)
-			return
-		}
-		go p.awaitPromise(pm, done)
+		done <- callResult{out: v.Export()}
 	})
 	if !loopOK {
 		// 循环已终止（插件卸载中）：立即失败，不再等满外层兜底超时
@@ -204,56 +195,8 @@ func (p *plugin) callFn(fn jsFunc, args ...any) (any, error) {
 			return nil, res.err
 		}
 		return res.out, nil
-	case <-time.After(callAwaitTimeout + 10*time.Second): // 外层兜底超时
+	case <-time.After(callFnTimeout):
 		return nil, fmt.Errorf("函数调用总超时（含 eventloop 调度）")
-	}
-}
-
-// settlePromise 从已敲定的 Promise 提取结果（仅在插件 loop 线程内调用）。
-func settlePromise(pm *goja.Promise) callResult {
-	if pm.State() == goja.PromiseStateRejected {
-		return callResult{err: fmt.Errorf("%s", pm.Result().String())}
-	}
-	if pm.State() == goja.PromiseStateFulfilled {
-		rv := pm.Result()
-		if rv != nil && !goja.IsUndefined(rv) && !goja.IsNull(rv) {
-			return callResult{out: rv.Export()}
-		}
-		return callResult{out: nil}
-	}
-	return callResult{}
-}
-
-// awaitPromise 在插件事件循环之外等待 pending Promise 敲定。
-// 反复短回 p.loop（RunOnLoop 会顺带清空微任务队列），让 async 函数内的 await/fetch/WebSocket
-// 回调能在 loop 上真实继续执行并使 Promise 兑现；一旦敲定即把结果投回 done。
-func (p *plugin) awaitPromise(pm *goja.Promise, done chan callResult) {
-	guard := time.After(callAwaitTimeout)
-	for {
-		select {
-		case <-guard:
-			done <- callResult{err: fmt.Errorf("Promise 未在 %s 内敲定", callAwaitTimeout)}
-			return
-		case <-time.After(5 * time.Millisecond):
-		}
-		var r callResult
-		settled := false
-		loopOK := p.loop.RunOnLoop(func(vm *goja.Runtime) {
-			if pm.State() == goja.PromiseStatePending {
-				return
-			}
-			settled = true
-			r = settlePromise(pm)
-		})
-		if !loopOK {
-			// 循环已终止：Promise 永远不会在死循环上兑现，立即失败
-			done <- callResult{err: fmt.Errorf("插件事件循环已终止，Promise 无法敲定")}
-			return
-		}
-		if settled {
-			done <- r
-			return
-		}
 	}
 }
 

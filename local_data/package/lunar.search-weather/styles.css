@@ -418,6 +418,16 @@ body {
 
 .weather-meta-item i { color: var(--accent); }
 
+/* 空气质量等级色 */
+.weather-meta-item.aqi-good { border-color: rgba(32, 201, 151, 0.45); color: var(--success); }
+.weather-meta-item.aqi-good i { color: var(--success); }
+.weather-meta-item.aqi-moderate { border-color: rgba(232, 161, 60, 0.45); color: var(--accent-warm); }
+.weather-meta-item.aqi-moderate i { color: var(--accent-warm); }
+.weather-meta-item.aqi-poor { border-color: rgba(220, 100, 53, 0.45); color: #dc6435; }
+.weather-meta-item.aqi-poor i { color: #dc6435; }
+.weather-meta-item.aqi-bad { border-color: rgba(220, 53, 69, 0.45); color: var(--danger); }
+.weather-meta-item.aqi-bad i { color: var(--danger); }
+
 .weather-forecast {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -435,6 +445,8 @@ body {
 .forecast-date { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; }
 .forecast-cond { font-size: 0.85rem; margin-bottom: 6px; }
 .forecast-temp { font-size: 0.85rem; font-weight: 600; color: var(--accent); }
+.forecast-precip { font-size: 0.72rem; color: var(--text-secondary); margin-top: 4px; }
+.forecast-precip i { color: var(--accent); margin-right: 3px; }
 
 .weather-source {
     margin-top: 12px;
@@ -479,6 +491,20 @@ body {
 }
 
 .news-text { flex: 1; min-width: 0; }
+
+.news-source {
+    margin-top: 10px;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.news-source a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.news-source a:hover { text-decoration: underline; }
 
 /* ===== 月华操作步骤 ===== */
 .step-section {

@@ -44,7 +44,6 @@ var bpNodePorts = map[string]bpPortDef{
 	"llm":              {ins: []string{"content"}, outs: []string{"answer"}},
 	"http":             {ins: []string{"url", "body", "headers"}, outs: []string{"resp"}},
 	"network":          {ins: []string{"handle", "data"}, outs: []string{"result"}},
-	"async":            {ins: []string{"taskId", "progress"}, outs: []string{"result"}},
 	"transform":        {ins: []string{"in1", "in2", "in3", "in4"}, outs: []string{"text"}},
 	"extract":          {ins: []string{"input"}, outs: []string{"out1", "out2", "out3", "out4"}},
 	"display":          {ins: []string{"text"}, outs: []string{"text"}},
@@ -720,17 +719,6 @@ func bpBuildEnvelope(nodeType string, p map[string]any) (map[string]any, string)
 			"handle": handle, "data": data, "timeout": bpNum(p, "timeout", 0),
 		}
 		return map[string]any{"type": "ltp9/test", "action": "network", "op": op, "args": args}, ""
-	case "async":
-		op := s("op")
-		if op == "" {
-			op = "run"
-		}
-		params := map[string]any{
-			"plugin": strings.TrimSpace(s("plugin")), "fn": strings.TrimSpace(s("fn")),
-			"args": parseVal("args", true), "ms": bpNum(p, "ms", 0), "timeout": bpNum(p, "timeout", 0),
-			"task_id": int(bpNum(p, "taskId", 0)), "progress": parseVal("progress", false),
-		}
-		return map[string]any{"type": "ltp9/test", "action": "async", "op": op, "params": params}, ""
 	case "http":
 		method := s("method")
 		if method == "" {

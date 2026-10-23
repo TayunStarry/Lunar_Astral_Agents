@@ -164,21 +164,10 @@ var lunarBundle = (function (exports) {
     function sectionHandle(kind, seq, ordinal) {
         return `${handleOf(kind, seq)}|§${ordinal}`;
     }
-    function parseResourceQuery(raw) {
-        let text = String(raw || '').trim();
-        text = text.replace(/^[[【]/, '').replace(/[\]】]$/, '');
-        const index = text.indexOf('&');
-        if (index < 0)
-            return { handle: text.trim(), ask: '' };
-        return {
-            handle: text.slice(0, index).trim(),
-            ask: text.slice(index + 1).trim()
-        };
-    }
     function grammarCheatsheet() {
         return '句柄形如 @D.003（文档）、@I.007（图片）、@V.001（视频）、@A.002（音频）；'
             + '段落锚点可写 @D.003|§4（第 4 节）或 @D.003|L120-168（第 120-168 行）；'
-            + '需要描述者探查时可写成 @D.003&自然语言需求';
+            + '需要描述者协助时，把需求填进 use_resource 的 ask 字段（不要拼进句柄）';
     }
 
     function setResourceSummary(id, summary, tags) {
@@ -4524,7 +4513,7 @@ var lunarBundle = (function (exports) {
         const lines = valid.map(entryLine);
         const purgeNote = purged > 0 ? `；已自动清理 ${purged} 条源文件丢失的失效句柄` : '';
         const head = `当前可用资源（共 ${valid.length} 条，按收录时间倒序，越靠前越新${purgeNote}${stats ? `；目录总计 ${stats.total} 条 / ${formatBytes(stats.bytes)}` : ''}）：`;
-        const tail = `\n${grammarCheatsheet()}。需要内容时用 use_resource 按句柄取回；文本可写成 @D.003&需求，让描述者探查摘要、结构或引用关系。`;
+        const tail = `\n${grammarCheatsheet()}。需要内容时用 use_resource 按句柄取回；要描述者探查摘要、结构或引用关系时，在 ask 字段写需求。`;
         return `${head}\n${lines.join('\n')}${tail}`;
     }
     function searchResourcesText(query, kind, limit) {
@@ -4571,10 +4560,10 @@ var lunarBundle = (function (exports) {
             }
             return `【${normalized}｜${kindLabel(parsedHandle.kind)}｜${entry.title || entry.name}】\n${desc || '（暂无描述，且本体不可直接解读）'}`;
         }
-        if (ask && !parsedHandle.anchor) {
+        if (ask) {
             const answer = inspectTextResource(normalized, ask);
             if (!answer) {
-                return `【${normalized}｜${entry.title || entry.name}】\n探查失败：描述者没有给出答复，可改用 "${normalized}|L起始-结束" 直接取原文`;
+                return `【${normalized}｜${entry.title || entry.name}】\n探查失败：描述者没有给出答复，可去掉 ask 直接取原文（或用 |L起始-结束 读片段）`;
             }
             return `【${normalized}｜${entry.title || entry.name}】\n${answer}`;
         }
@@ -4598,14 +4587,13 @@ var lunarBundle = (function (exports) {
             ? parsed.handles
             : (parsed.handle ? [parsed.handle] : []);
         if (rawHandles.length === 0) {
-            return ['请提供资源句柄，例如 "@D.003" 或 "@D.003|L11-99&这段讲了什么"', ''];
+            return ['请提供资源句柄，例如 ["@D.003"]；需要描述者协助时把需求写进 ask 字段', ''];
         }
         const globalAsk = String(parsed.ask || '').trim();
         const blocks = [];
         const missing = [];
         for (const raw of rawHandles) {
-            const query = parseResourceQuery(String(raw || ''));
-            const block = readHandleBlock(query.handle, globalAsk || query.ask, missing);
+            const block = readHandleBlock(String(raw || ''), globalAsk, missing);
             if (block)
                 blocks.push(block);
         }
@@ -4654,8 +4642,7 @@ var lunarBundle = (function (exports) {
         const blocks = [];
         const missing = [];
         for (const raw of rawHandles) {
-            const query = parseResourceQuery(String(raw || ''));
-            const block = readHandleBlock(query.handle, question || query.ask, missing);
+            const block = readHandleBlock(String(raw || ''), question, missing);
             if (block)
                 blocks.push(block);
         }
@@ -4687,18 +4674,18 @@ var lunarBundle = (function (exports) {
             type: 'function',
             function: {
                 name: 'use_resource',
-                description: `按句柄读取或探查资源。每个句柄可写成 @D.003、@D.003|§4、@D.003|L120-168，也可以写成 @D.003&自然语言需求（或把需求放在 ask 字段）。规则：文档/表格带锚点或没有 ask 时返回原文（带锚点即该段原文）；文档/表格不带锚点且带 ask 时交给描述者探查摘要、结构大纲、引用关系；图片/动图/视频返回描述——已有描述直接返回，没有则由描述者现场生成并入库；音频返回已有转写。${grammarCheatsheet()}。`,
+                description: `按句柄读取或探查资源。每个句柄可写成 @D.003、@D.003|§4、@D.003|L120-168。规则：不填 ask 时，文档/表格直接返回原文（带锚点即该段原文）；填写 ask 时，文档/表格一律交给描述者按需求探查（带锚点则只关注该段）；图片/动图/视频返回描述——已有描述直接返回，没有则由描述者现场生成并入库；音频返回已有转写。${grammarCheatsheet()}。`,
                 parameters: {
                     type: 'object',
                     properties: {
                         handles: {
                             type: 'array',
                             items: { type: 'string' },
-                            description: '资源句柄数组，如 ["@D.003", "@D.003|§4", "@D.003|L120-168&这段讲了什么", "@I.007", "@V.001"]'
+                            description: '资源句柄数组，如 ["@D.003", "@D.003|§4", "@D.003|L120-168", "@I.007", "@V.001"]；需求请写 ask 字段，不要拼进句柄'
                         },
                         ask: {
                             type: 'string',
-                            description: '可选：对所有句柄生效的自然语言需求；单个句柄也可用 handle&需求 的内联写法'
+                            description: '可选：交给描述者的自然语言需求。文档/表格填了它就一定会调用描述者（带锚点时按该段范围作答）；不填则直接返回原文。'
                         }
                     },
                     required: ['handles']

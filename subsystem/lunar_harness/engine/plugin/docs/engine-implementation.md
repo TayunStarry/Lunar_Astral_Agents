@@ -11,7 +11,7 @@
 | 项 | LTP9-Flash |
 |----|------|
 | 载体 | CodeAgent（进程内 goja 兼容层/事件容器） |
-| 语言规范 | **ES2023+ 语法**（可选链、空值合并、类、BigInt 等）；插件回调统一为**同步函数**，切勿使用异步操作（回调/导出支持 Promise 敲定等待，但 `database.transaction` 回调内禁异步） |
+| 语言规范 | **ES2023+ 语法**（可选链、空值合并、类、BigInt 等）；插件回调统一为**同步函数**并直接返回普通值，引擎不等待 Promise（需要异步请自行用定时器与回调组织；`database.transaction` 回调内同样禁异步） |
 | 沙箱 | **每插件一个独立 goja Runtime**（`goja_nodejs/eventloop` 提供事件循环与定时器） |
 | 组织架构 | 插件层 / 引擎层 / 客户端（三端） |
 | 沙箱 API | **顶层全局**（见 §5），契约见 `docs/LTP 9.1 Flash.d.ts` |
@@ -132,8 +132,8 @@ unload(pluginID): 停止事件循环（带存活探针与宽限）→ 清空订�
 ### 4.3 语言能力（同步回调模型）
 
 - **沙箱全局**：`console`（log/info/warn/error/debug，输出走引擎日志）与定时器（`setTimeout`/`setInterval`/`setImmediate` 及对应 clear，由 eventloop 注入）。
-- **同步为主、异步可用**：事件订阅回调、`exportFunction` 导出的函数优先写成**同步函数**返回普通对象；需要网络时用阻塞式 `http.get/post` 或同步 `fetch`，需要等待时用 `sleep(ms)`。
-- `WebSocket` 全局以事件回调形态存在（`allow-network` 门控）。若回调/导出函数返回 pending Promise（`async` 函数），`callFn` 会让出插件事件循环并轮询直到 Promise 兑现或超时（默认 90s）；`database.transaction` 回调内返回 Promise 会立即回滚并报错。
+- **只提供同步回调**：事件订阅回调、`exportFunction` 导出的函数、指令处理器都必须写成**同步函数**并直接返回普通对象；需要网络时用阻塞式 `http.get/post` 或同步 `fetch`，需要等待时用 `sleep(ms)`。
+- `WebSocket` 全局以事件回调形态存在（`allow-network` 门控）。若注册给引擎的回调返回 Promise（`async` 函数），`callFn` 不等待并发起错误——需要异步的脚本请自行用定时器与回调组织，注册方法本身必须同步可得。
 
 ### 4.4 定时器与时间戳（来自 goja_nodejs/eventloop）
 
@@ -342,24 +342,13 @@ command.register(name, pattern, (match, context) => result, { aliases?: string[]
 
 引擎侧经 Go 接口 `Command(pluginID, text, context)` / `CommandAll(text, context)` 触发。
 
-### 5.15 异步子任务 `async`（常驻）
-
-```js
-async.run(taskFn, { timeout?, data? })  // taskFn 收到 ({ id, data })；→ { success, text: taskId }
-async.reportProgress(taskId, progress)
-async.getStatus(taskId)                 // → { success, taskId, status, progress }
-async.list()                            // → { success, tasks: [{ taskId, status, progress }] }
-```
-
-任务仍在插件事件循环线程内执行（复用 callFn）；超时看门狗仅标记状态。
-
-### 5.16 导出插件能力 `exportFunction`（常驻）
+### 5.15 导出插件能力 `exportFunction`（常驻）
 
 ```js
 exportFunction("myFunction", (a, b) => { return a + b })   // 同步函数，供 callFunction 调用
 ```
 
-### 5.17 Web-LTP 网络搜索 `agent.search`（双权限：allow-agent 绑定 + allow-network 执行）
+### 5.16 Web-LTP 网络搜索 `agent.search`（双权限：allow-agent 绑定 + allow-network 执行）
 
 ```js
 agent.search(instruction)   // 自然语言指令 → 检索 → 多页面摘要 → 报告 → { success, text: 报告, error? }
@@ -367,7 +356,7 @@ agent.search(instruction)   // 自然语言指令 → 检索 → 多页面摘要
 // 无 allow-network 时返回 { success:false, error }
 ```
 
-### 5.18 时间与休眠（常驻）
+### 5.17 时间与休眠（常驻）
 
 ```js
 time.now() / time.nowMs()
@@ -393,7 +382,7 @@ LTP9-Flash 用**权限密钥 + 沙箱注入控制**双层实现。引擎经哈�
 | `allow-send` | （预留） | 保留权限名，Flash 当前未挂载能力 |
 | `allow-socket` | （预留） | 保留权限名，Flash 当前未挂载能力 |
 
-> 常驻注入（不参与 `allow-*` 开关）：`event` / `signal.subscribe 之外的 event 方法` / `config` / `time` / `sleep` / `exportFunction` / `command` / `async` / `console` / 定时器。
+> 常驻注入（不参与 `allow-*` 开关）：`event` / `signal.subscribe 之外的 event 方法` / `config` / `time` / `sleep` / `exportFunction` / `command` / `console` / 定时器。
 > 开发模式（`GeneralConfig.Developer`）跳过密钥校验并默认授予全部 `allow-*`。
 
 ---
@@ -448,6 +437,8 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 | `before_sending_amessage` | `engine/lunar_loop` 的 `pushContext`（推送消息前） | `{ messages }` | `{ messages?, cancel? }` |
 | `before_query_starts` | `crystal` 的 `web_search` 执行前 | `{ instruction }` | `{ instruction?, cancel? }` |
 | `before_query_ends` | `crystal` 的 `web_search` 报告回传前 | `{ instruction, report }` | `{ report?, cancel? }` |
+| `before_life_starts` | `agents/BilibiliLife` 每次生活启动前（自动 / TUI 强制） | `{ forced, videosPerRound, slicesPerVideo, repliesPerRound, dailyCount, dailyLimit }` | `{ cancel?, reason? }`（取消仍消耗一次本日额度并计为完成） |
+| `before_life_ends` | `agents/BilibiliLife` 正常完成 / 中途失败时 | `{ result, forced, videosWatched, repliesUsed, reason? }` | 纯触发器，返回值不被使用 |
 
 `cancel` 语义：查询类取消会让月华的工具调用立即收到「网络搜索请求/报告已被 LTP9 插件取消」。
 
@@ -466,7 +457,7 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 | 能力实现 | `api.go` / `api_ext.go` | 广播、事件发布、跨包调用、文件、记忆库（文本+图片）、图像、LLM chat/embed 的 Go 侧实现 |
 | 数据库 | `api_database.go` | `database` query/exec/transaction/migrate/namespace（共享 knowledge.db + 命名空间独立库，句柄缓存） |
 | 网络 | `api_net.go` / `api_network.go` / `api_ws.go` | `api_net.go`：同步 `http` 与同步 `fetch`（共用 `doLTP9Fetch`）；`api_ws.go`：全局 WebSocket **客户端**（文本帧 string / 二进制帧 ArrayBuffer）；`api_network.go`：`network` 套接字（TCP/UDP/DNS） |
-| 指令/异步/编解码 | `api_command.go` / `api_async.go` / `api_encoding.go` | `command` 指令系统、`async` 后台子任务、`encoding` 编解码与 lunar 加解密桥 |
+| 指令/编解码 | `api_command.go` / `api_encoding.go` | `command` 指令系统、`encoding` 编解码与 lunar 加解密桥 |
 | 探针 | `api_probe.go` | 前端可视化测试探针（ltp9/test 信封，复用各能力同源实现） |
 | 类型/常量 | `type.go` / `variable.go` | 类型定义与常量/变量集中管理 |
 
@@ -518,7 +509,6 @@ subsystem/lunar_harness/engine/plugin/
 ├── api_ws.go          # 全局 WebSocket 客户端
 ├── api_network.go     # network 套接字（TCP/UDP/DNS）
 ├── api_command.go     # command 指令系统
-├── api_async.go       # async 后台子任务
 ├── api_encoding.go    # encoding 编解码 + lunar 加解密桥
 ├── api_probe.go       # 前端可视化测试探针
 ├── type.go            # 类型定义集中

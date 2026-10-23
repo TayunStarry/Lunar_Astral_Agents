@@ -3,17 +3,17 @@
  * 「Agent to Agent」：月华将自然语言指令交给本模块的专用智能体，
  * 由大语言模型（LLM）作为最终执行者完成意图识别与查询调度。
  *
- * 整合能力（来源）：
- * - 天气查询：lunar.skill.weather 的零配置兜底源 wttr.in（浏览器可直接请求，免 Key）
- * - 新闻摘要：lunar.skill.search 的当日要闻源 60s.7se.cn
+ * 依赖：
+ * - weather-providers.js：wttr.in / Open-Meteo / 和风天气 数据源
+ * - weather-service.js：配置读取、auto 回退调度、新闻解析、文本总结
  *
  * 特性：
  * - 独立上下文历史：保留最近 40 轮对话，超出丢弃最早的轮次
- * - 多轮工具调用循环：LLM 通过 OpenAI function calling 逐次调用 get_weather / get_news，
- *   观察工具结果并持续决策，直到给出最终答复
+ * - 多轮工具调用循环：LLM 通过 OpenAI function calling 调用 get_weather / get_news /
+ *   get_weather_sources，观察工具结果并持续决策，直到给出最终答复
+ * - 智能体可通过 get_weather 的 provider 参数选择和风 / Open-Meteo / wttr 策略
  * - 步骤回调：每个关键步骤通过 onStep 通知前端，实现「月华操作步骤与结构」的同步展示
- * - 模型调用走琉璃后端 /v1 代理（OpenAI v1 协议），由后端按 lunar_config.json 解析模型配置，
- *   前端不接触模型配置
+ * - 模型调用走琉璃后端 /v1 代理（OpenAI v1 协议），由后端按 lunar_config.json 解析模型配置
  */
 
 // ===== 智能体常量与状态 =====
@@ -50,61 +50,6 @@ async function loadSWAgentModel() {
     return swModelConfigPromise;
 }
 
-// ===== 数据获取（智能体工具与手动操作共用） =====
-
-/**
- * 查询指定城市天气（wttr.in，零配置免 Key，浏览器可直接请求）
- * @param {string} city - 城市名称（中文或英文）
- * @returns {Promise<Object>} 结构化天气数据（失败时抛出异常）
- */
-async function fetchWeather(city) {
-    const resp = await fetch('https://wttr.in/' + encodeURIComponent(city) + '?format=j1');
-    if (!resp.ok) throw new Error('天气服务返回状态 ' + resp.status);
-    const data = await resp.json();
-    const current = data.current_condition && data.current_condition[0];
-    if (!current) throw new Error('天气数据解析失败');
-
-    const area = data.nearest_area && data.nearest_area[0];
-    const result = {
-        city: (area && area.areaName && area.areaName[0] && area.areaName[0].value) || city,
-        current: {
-            temperature: parseFloat(current.temp_C) || 0,
-            feels_like: parseFloat(current.FeelsLikeC) || parseFloat(current.temp_C) || 0,
-            condition: (current.weatherDesc && current.weatherDesc[0] && current.weatherDesc[0].value) || '未知',
-            humidity: parseInt(current.humidity, 10) || 0,
-            wind: (current.winddir16Point || '') + ' ' + (current.windspeedKmph || '') + 'km/h'
-        },
-        forecast: [],
-        source: 'wttr.in'
-    };
-
-    const weather = data.weather || [];
-    for (let i = 0; i < Math.min(weather.length, 2); i++) {
-        const day = weather[i];
-        const hourly = day.hourly || [];
-        result.forecast.push({
-            date: day.date || '',
-            high: parseFloat(day.maxtempC) || 0,
-            low: parseFloat(day.mintempC) || 0,
-            condition: (hourly[4] && hourly[4].weatherDesc && hourly[4].weatherDesc[0])
-                ? hourly[4].weatherDesc[0].value : '未知'
-        });
-    }
-    return result;
-}
-
-/**
- * 获取当日新闻摘要（60s.7se.cn）
- * @returns {Promise<Object>} { date, news: string[] }（失败时抛出异常）
- */
-async function fetchNews() {
-    const resp = await fetch('https://60s.7se.cn/v2/60s');
-    if (!resp.ok) throw new Error('新闻服务返回状态 ' + resp.status);
-    const data = await resp.json();
-    if (!data || !data.data || !Array.isArray(data.data.news)) throw new Error('新闻数据解析失败');
-    return { date: data.data.date || '', news: data.data.news };
-}
-
 // ===== 工具定义（OpenAI function calling 格式，供智能体 LLM 调用） =====
 
 const swAgentTools = [
@@ -112,11 +57,19 @@ const swAgentTools = [
         type: 'function',
         function: {
             name: 'get_weather',
-            description: '查询指定城市的实时天气与未来2天预报，返回当前气温、体感温度、天气状况、湿度、风力等信息。',
+            description: '查询指定城市的实时天气与未来2-3天预报。provider 为查询策略：auto=自动回退（默认）；qweather=和风天气，中文最准且支持空气质量；openmeteo=Open-Meteo，免费全球覆盖；wttr=wttr.in，免费轻量。用户关心空气质量/AQI 或需要更准确的中文天气时优先 qweather；普通查询用 auto。',
             parameters: {
                 type: 'object',
                 properties: {
-                    city: { type: 'string', description: '城市名称，中文或英文均可，示例：北京、上海、shenzhen、Tokyo' }
+                    city: {
+                        type: 'string',
+                        description: '城市名称，中文或英文均可，示例：北京、上海、shenzhen、Tokyo'
+                    },
+                    provider: {
+                        type: 'string',
+                        enum: ['auto', 'qweather', 'openmeteo', 'wttr'],
+                        description: '天气查询策略，默认 auto'
+                    }
                 },
                 required: ['city']
             }
@@ -126,7 +79,19 @@ const swAgentTools = [
         type: 'function',
         function: {
             name: 'get_news',
-            description: '获取当日新闻图文摘要（由权威信源整理的当日要闻列表），无需参数。',
+            description: '获取当日新闻要闻列表（60s.7se.cn 整理），无需参数。接口不可用时返回错误，不要编造新闻。',
+            parameters: {
+                type: 'object',
+                properties: {},
+                required: []
+            }
+        }
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'get_weather_sources',
+            description: '查看当前可用的天气数据源、默认策略、和风天气是否配置、AQI 是否开启、默认城市与新闻可用性。用于在不确定该选哪个 provider 时先做能力确认。',
             parameters: {
                 type: 'object',
                 properties: {},
@@ -136,21 +101,36 @@ const swAgentTools = [
     }
 ];
 
-// ===== 系统提示词（专用角色） =====
+// ===== 系统提示词（专用角色，动态注入当前能力） =====
 
-function buildSWSystemPrompt() {
+async function buildSWSystemPrompt() {
+    const cfg = await loadSWConfig();
+    const qweatherState = qweatherAvailable(cfg)
+        ? '可用（' + cfg.qweatherHost + '）'
+        : '不可用（' + qweatherUnavailableReason(cfg) + '）';
     return [
         '你是星月智能「实时天气与新闻」的专用智能体（AtoA 执行者），负责解析月华发来的自然语言指令，',
-        '并作为实时天气与新闻模块的最终执行者，通过工具完成新闻与天气查询。',
+        '并通过工具完成天气与新闻查询。',
         '',
         '【能力范围】',
-        '天气查询（指定城市当前天气与未来2天预报）、当日新闻摘要获取。',
+        '天气查询（当前天气、未来2-3天预报、空气质量）与当日新闻摘要。',
+        '',
+        '【天气查询策略】',
+        '- auto：默认；和风（若可用）→ Open-Meteo → wttr.in 自动回退。',
+        '- qweather：和风天气，中文城市/天气最准确，支持 AQI；当前：' + qweatherState + '。',
+        '- openmeteo：Open-Meteo，免费、全球覆盖、3 天预报。',
+        '- wttr：wttr.in，免费、轻量、2 天预报。',
+        '默认策略：' + cfg.provider + '。',
+        '选择规则：用户关心空气质量/AQI、或需要更准确的中文天气时优先 qweather；普通查询用 auto；',
+        '用户明确指定数据源时按用户要求；某个源查不到城市时换另一个源或 auto 重试。',
         '',
         '【执行规则】',
-        '1. 用户需要查询某地天气时，调用 get_weather 并传入城市名（中文或英文）。',
-        '2. 用户需要了解今日新闻/要闻/资讯时，调用 get_news。',
-        '3. 指令意图不明确时，用一句简洁中文向月华确认，不要臆测执行。',
-        '4. 查询完成后，用一两句简洁中文总结结果（天气含城市与气温状况，新闻含条数与主题），不要输出额外内容或代码块。'
+        '1. 查天气时调用 get_weather，city 传城市名，provider 传你选择的策略。',
+        '2. 不确定数据源是否可用时，可先调用 get_weather_sources。',
+        '3. 用户问今日新闻/要闻/资讯时调用 get_news。',
+        '4. 指令意图不明确时，用一句简洁中文向月华确认，不要臆测执行。',
+        '5. 查询完成后用一两句简洁中文总结：天气含城市、气温、天气状况与数据源；新闻含条数与主题。',
+        '6. 工具返回错误时如实说明，不要编造数据，也不要输出代码块。'
     ].join('\n');
 }
 
@@ -202,36 +182,48 @@ function safeParseSWArgs(jsonStr) {
 
 // ===== 工具执行器 =====
 
-/** 天气查询 */
+/** 天气查询（智能体可指定 provider） */
 async function execSWWeather(args) {
     const city = String(args.city || '').trim();
     if (!city) return { success: false, error: '请提供城市名称' };
-    const data = await fetchWeather(city);
-    const lines = [`【${data.city}】当前天气（${data.source}）：`];
-    lines.push(`- 气温：${data.current.temperature}°C（体感 ${data.current.feels_like}°C）`);
-    lines.push(`- 天气状况：${data.current.condition}`);
-    lines.push(`- 湿度：${data.current.humidity}%`);
-    lines.push(`- 风力：${data.current.wind}`);
-    data.forecast.forEach(f => {
-        lines.push(`- 预报 ${f.date}：${f.condition}，${f.low}°C ~ ${f.high}°C`);
-    });
+    const provider = String(args.provider || '').trim().toLowerCase();
+    const result = await queryWeather(city, provider || null);
+    if (!result.ok) return { success: false, error: result.error };
+    const data = result.data;
     if (typeof renderResult === 'function') renderResult({ type: 'weather', data: data });
-    return { success: true, text: lines.join('\n'), data: data };
+    return { success: true, text: generateWeatherText(data), data: data };
 }
 
 /** 新闻摘要 */
-async function execSWNews(args) {
+async function execSWNews() {
     const data = await fetchNews();
-    const lines = [`【${data.date || '今日'}】当日要闻（共 ${data.news.length} 条）：`];
-    data.news.forEach((n, i) => lines.push(`${i + 1}. ${n}`));
     if (typeof renderResult === 'function') renderResult({ type: 'news', data: data });
-    return { success: true, text: lines.join('\n'), data: data };
+    return { success: true, text: generateNewsText(data), data: data };
+}
+
+/** 数据源能力确认 */
+async function execSWWeatherSources() {
+    const cfg = await loadSWConfig();
+    const lines = [
+        '天气查询能力：',
+        '- 默认策略：' + cfg.provider,
+        '- 和风天气：' + (qweatherAvailable(cfg)
+            ? '可用（' + cfg.qweatherHost + '）'
+            : '不可用（' + qweatherUnavailableReason(cfg) + '）'),
+        '- Open-Meteo：可用',
+        '- wttr.in：可用',
+        '- AQI：' + (cfg.showAQI ? '开启（仅和风天气）' : '关闭'),
+        '- 默认城市：' + (cfg.defaultCity || '未设置'),
+        '- 新闻查询：' + (cfg.newsEnabled ? '可用' : '关闭')
+    ];
+    return { success: true, text: lines.join('\n') };
 }
 
 /** 工具名 → 执行器映射 */
 const swToolExecutors = {
     get_weather: execSWWeather,
-    get_news: execSWNews
+    get_news: execSWNews,
+    get_weather_sources: execSWWeatherSources
 };
 
 /**
@@ -265,7 +257,7 @@ async function runSWAgent(instruction, onStep) {
     if (onStep) onStep({ kind: 'info', text: '收到月华指令：' + text });
 
     // 消息骨架：系统提示 + 独立上下文历史（最近 40 轮）+ 本轮指令
-    const messages = [{ role: 'system', content: buildSWSystemPrompt() }];
+    const messages = [{ role: 'system', content: await buildSWSystemPrompt() }];
     for (const round of swAgentHistory) {
         messages.push({ role: 'user', content: round.user });
         messages.push({ role: 'assistant', content: round.assistant });

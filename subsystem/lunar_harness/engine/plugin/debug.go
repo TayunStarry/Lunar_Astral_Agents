@@ -345,14 +345,6 @@ func execTestAction(action string, m map[string]any, ack func(any, error)) {
 			args = map[string]any{}
 		}
 		ack(ProbeNetwork(op, args), nil)
-	case "async":
-		// 异步子任务：run（可指定包+导出函数为任务体，否则耗时模拟）/ reportProgress / getStatus / list
-		op := asString("op")
-		if op == "" {
-			ack(nil, fmt.Errorf("async 需提供 op"))
-			return
-		}
-		ack(ProbeAsync(op, asMap("params")), nil)
 	case "http":
 		method := asString("method")
 		if method == "" {

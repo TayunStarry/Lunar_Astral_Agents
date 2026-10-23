@@ -169,6 +169,44 @@ interface EventContract {
 			cancel?: boolean
 		}
 	}
+	/** 生活开始前：可取消本次生活（取消仍消耗一次本日额度，并计为完成一次生活） */
+	before_life_starts: {
+		payload: {
+			/** 是否由 TUI 强制触发 */
+			forced: boolean
+			/** 本轮目标视频数 */
+			videosPerRound: number
+			/** 每个视频理解的切片数 */
+			slicesPerVideo: number
+			/** 本轮可回应消息次数 */
+			repliesPerRound: number
+			/** 今日已消耗的自动生活次数 */
+			dailyCount: number
+			/** 每日自动生活上限 */
+			dailyLimit: number
+		}
+		/** cancel=true 取消本次生活；reason 仅用于日志 */
+		return: {
+			cancel?: boolean
+			reason?: string
+		}
+	}
+	/** 生活结束前：纯触发通知，返回值不被使用（无取消/改写机能） */
+	before_life_ends: {
+		payload: {
+			/** 结束形态：finished=正常完成；failed=中途失败 */
+			result: 'finished' | 'failed'
+			/** 是否由 TUI 强制触发 */
+			forced: boolean
+			/** 本轮已看视频数 */
+			videosWatched: number
+			/** 本轮已用回应次数 */
+			repliesUsed: number
+			/** 失败原因（result=failed 时） */
+			reason?: string
+		}
+		return: {}
+	}
 }
 
 /** 月华事件主题 */
@@ -764,17 +802,6 @@ export const command: {
 	 * @param options { aliases?: string[] } 别名列表，与 name 一并作精确匹配
 	 */
 	register(name: string, pattern: string, handler: (match: string[], context?: Record<string, unknown>) => unknown, options?: { aliases?: string[] }): { success: boolean; error?: string }
-}
-/** 异步子任务（常驻基础能力） */
-export const async: {
-	/** 启动异步子任务，返回 taskId；taskFn 收到 (task)，task.id 即 taskId */
-	run(taskFn: (task: { id: number; data?: unknown }) => unknown, options?: { timeout?: number; data?: unknown }): { success: boolean; text?: string; error?: string }
-	/** 上报任务进度 */
-	reportProgress(taskId: number, progress: unknown): { success: boolean; error?: string }
-	/** 查询任务状态 */
-	getStatus(taskId: number): { success: boolean; taskId?: number; status?: string; progress?: unknown; error?: string }
-	/** 枚举全部任务状态，返回 { success, tasks } */
-	list(): { success: boolean; tasks?: Array<{ taskId: number; status: string; progress?: unknown }>; error?: string }
 }
 /**
  * 发起网络请求（同步 fetch，阻塞直到返回；需要权限: allow-network）

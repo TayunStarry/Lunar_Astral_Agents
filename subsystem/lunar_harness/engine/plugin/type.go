@@ -47,10 +47,6 @@ type plugin struct {
 
 	// 指令注册：指令名（含别名）→ 指令项（command.register）
 	commands map[string]*commandEntry
-	// 异步子任务：taskId → 任务状态（async.run）
-	asyncMu    sync.Mutex
-	asyncSeq   int
-	asyncTasks map[int]*asyncTask
 }
 
 // commandEntry 单个指令项（command.register 注册，引擎侧经 Command/CommandAll 触发）。
@@ -59,16 +55,6 @@ type commandEntry struct {
 	re      *regexp.Regexp
 	handler jsFunc
 	aliases []string
-}
-
-// asyncTask 单个异步子任务状态（async.run 创建）。
-type asyncTask struct {
-	id        int
-	status    string // running / done / timeout / error
-	progress  any
-	data      any
-	fn        jsFunc
-	createdAt time.Time // 创建时刻（清理已终结的过期任务记录用）
 }
 
 // eventSub 单个事件订阅项。

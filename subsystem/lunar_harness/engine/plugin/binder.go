@@ -33,7 +33,6 @@ func bindSandbox(vm *goja.Runtime, p *plugin) {
 	})
 	vm.Set("config", bindConfig(vm, p))   // 插件配置
 	vm.Set("command", bindCommand(vm, p)) // 指令系统
-	vm.Set("async", bindAsync(vm, p))     // 异步子任务
 
 	// 广播收发（allow-signal）
 	if p.hasPerm("allow-signal") {

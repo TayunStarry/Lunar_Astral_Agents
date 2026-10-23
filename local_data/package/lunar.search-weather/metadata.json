@@ -2,14 +2,14 @@
 	"id": "lunar.search-weather",
 	"icon": "icon.webp",
 	"title": "实时资讯",
-	"description": "实时天气与新闻查询模块：查询指定城市天气与当日新闻摘要",
+	"description": "实时天气与新闻查询模块：和风天气 / Open-Meteo / wttr.in 多源自动回退，支持 AQI 与当日新闻摘要；智能体可按需求选择天气查询策略",
 	"tags": [
 		"Node-LTP"
 	],
 	"tools": [
 		{
 			"name": "weather_news_query",
-			"description": "查询指定城市天气或获取当日新闻摘要的小程序"
+			"description": "查询指定城市天气（智能体可选择和风天气/Open-Meteo/wttr.in 策略，支持自动回退与空气质量）或获取当日新闻摘要"
 		}
 	],
 	"background_retention": true
