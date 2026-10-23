@@ -73,15 +73,12 @@ Thumbs.db
 **/build_*/
 **/build-*/
 
-## QwenTTS 引擎（GGML/C++）编译与下载产物
-lunar_astral/engine/QwenTTS/build_logs/
-lunar_astral/engine/QwenTTS/cpp/build/
-lunar_astral/engine/QwenTTS/cpp/ggml/build/
-lunar_astral/engine/QwenTTS/cpp/ggml/build_*/
-# ggml 自带的示例图片（GGML_BUILD_EXAMPLES=OFF，构建不使用）
-lunar_astral/engine/QwenTTS/cpp/ggml/examples/**/*.png
-lunar_astral/engine/QwenTTS/cpp/ggml/examples/**/*.jpg
-lunar_astral/engine/QwenTTS/cpp/ggml/examples/**/*.jpeg
+## TTS 引擎（GGML/C++）构建产物（build/ build_*/ 已由全局规则覆盖）
+# ggml 自带的示例数据集与示例图（GGML_BUILD_EXAMPLES=OFF，构建不使用；
+# YOLO 数据集 760 张图 ×2 引擎 + SAM 示例图，纯示例二进制）
+subsystem/lunar_harness/engine/*/cpp/ggml/examples/**/*.png
+subsystem/lunar_harness/engine/*/cpp/ggml/examples/**/*.jpg
+subsystem/lunar_harness/engine/*/cpp/ggml/examples/**/*.jpeg
 
 ## Vulkan / GPU 编译产物
 *.spv
