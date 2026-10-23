@@ -61,7 +61,7 @@ func initMemoryDBInstance(baseDir string) *MemoryDB {
 // 新架构不再有独立的记忆库模型配置：记忆库与智能体共用 agent.embedding_*，
 // 因此这里统一读取 AgentEmbeddingModel。
 func currentMemoryEmbeddingModel() string {
-	if model := strings.TrimSpace(*config.AgentEmbeddingModel); model != "" {
+	if model := strings.TrimSpace(config.AgentEmbeddingModel); model != "" {
 		return model
 	}
 	return "system-embedding"
@@ -1454,7 +1454,7 @@ func memoryImageDataURI(url string) string {
 	if rel == "" || !strings.HasPrefix(rel, "multimedia/") {
 		return url
 	}
-	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(rel))
+	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(rel))
 	data, err := os.ReadFile(abs)
 	if err != nil {
 		return url

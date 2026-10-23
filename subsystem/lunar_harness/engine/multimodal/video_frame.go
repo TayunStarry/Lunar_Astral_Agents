@@ -61,8 +61,8 @@ func ExtractVideoFrameAt(localPath string, t float64, maxDim int) (*image.RGBA, 
 			"vcodec":   "mjpeg",
 			"qscale:v": "2",
 		})
-	if *config.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*config.FfmpegPath)
+	if config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(config.FfmpegPath)
 	}
 	if err := stream.WithOutput(buf, os.Stderr).Run(); err != nil {
 		return nil, fmt.Errorf("FFmpeg 抽取 %s 处画面失败: %v", FormatSeconds(t), err)
@@ -165,7 +165,7 @@ func VideoToFrames(inputFile string) ([]MediaFrameGroup, error) {
 		return nil, fmt.Errorf("视频时长过长，最大支持1小时的视频")
 	}
 
-	quality := *config.JPEGQuality
+	quality := config.JPEGQuality
 	segments := max(int((duration-0.001)/MediaChunkSeconds)+1, 1)
 	groups := make([]MediaFrameGroup, 0, segments)
 	for i := range segments {
@@ -270,8 +270,8 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 		args["frames:v"] = strconv.Itoa(totalFrames)
 	}
 	stream := ffmpeg.Input(tempFile).Output(pattern, args)
-	if *config.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*config.FfmpegPath)
+	if config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(config.FfmpegPath)
 	}
 	if err := stream.Run(); err != nil {
 		return nil, fmt.Errorf("动态图解码失败: %w", err)

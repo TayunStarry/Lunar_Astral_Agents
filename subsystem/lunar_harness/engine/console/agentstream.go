@@ -217,11 +217,10 @@ func GetModelCallStats() ModelCallStats {
 	return meterStats
 }
 
-// summarizeArgs 生成工具参数摘要（截断 + 去空白）
+// summarizeArgs 规整工具参数（只去首尾空白，不截断）
+//
+// 参数里常有中文与转义序列：按字节截断会切出半个 rune（界面上显示为乱码），
+// 而工具参数本身是排查问题的关键信息，没有必须截断的理由——折行由渲染层处理。
 func summarizeArgs(args string) string {
-	args = strings.TrimSpace(args)
-	if len(args) > 120 {
-		return args[:120] + "…"
-	}
-	return args
+	return strings.TrimSpace(args)
 }

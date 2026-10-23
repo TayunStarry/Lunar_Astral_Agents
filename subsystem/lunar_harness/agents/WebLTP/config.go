@@ -147,8 +147,8 @@ func defaultConfig() Config {
 // resolveLunarConfigPath 定位 lunar_config.json（与 engine/config 的解析语义一致）
 func resolveLunarConfigPath() (string, error) {
 	const name = "lunar_config.json"
-	if filepath.IsAbs(*config.LocalDir) {
-		p := filepath.Join(*config.LocalDir, name)
+	if filepath.IsAbs(config.LocalDir) {
+		p := filepath.Join(config.LocalDir, name)
 		if _, err := os.Stat(p); err == nil {
 			return p, nil
 		}
@@ -156,10 +156,10 @@ func resolveLunarConfigPath() (string, error) {
 	}
 	var candidates []string
 	if exePath, err := os.Executable(); err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(exePath), *config.LocalDir, name))
+		candidates = append(candidates, filepath.Join(filepath.Dir(exePath), config.LocalDir, name))
 	}
 	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(cwd, *config.LocalDir, name))
+		candidates = append(candidates, filepath.Join(cwd, config.LocalDir, name))
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
@@ -172,7 +172,7 @@ func resolveLunarConfigPath() (string, error) {
 	return "", fmt.Errorf("无法定位配置文件")
 }
 
-// localDirFlag 暴露 LocalDir 标志（截图目录基于本地数据根目录）
-func localDirFlag() *string {
+// localDirFlag 返回本地数据根目录（截图目录基于本地数据根目录）
+func localDirFlag() string {
 	return config.LocalDir
 }

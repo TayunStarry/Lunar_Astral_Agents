@@ -132,5 +132,5 @@ func packageRoot() string {
 		return filepath.Join("local_data", "package")
 	}
 	execDir := filepath.Dir(execPath)
-	return filepath.Join(execDir, *config.LocalDir, "package")
+	return filepath.Join(execDir, config.LocalDir, "package")
 }

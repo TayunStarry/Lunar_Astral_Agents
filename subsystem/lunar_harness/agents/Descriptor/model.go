@@ -87,11 +87,11 @@ func reportModelCall(requestBody []byte, reply modelReply, elapsed time.Duration
 // resolveModel 解析模型配置（仅首次调用）
 func resolveModel() {
 	modelOnce.Do(func() {
-		modelName = strings.TrimSpace(*config.AgentMultimodalModel)
+		modelName = strings.TrimSpace(config.AgentMultimodalModel)
 		if modelName == "" {
 			modelName = "system-multimodal"
 		}
-		rawURL := strings.TrimRight(strings.TrimSpace(*config.AgentMultimodalURL), "/")
+		rawURL := strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
 		if rawURL == "" {
 			rawURL = config.LocalV1URL()
 		}
@@ -99,7 +99,7 @@ func resolveModel() {
 			rawURL += "/v1"
 		}
 		modelURL = rawURL
-		modelKey = strings.TrimSpace(*config.AgentMultimodalKey)
+		modelKey = strings.TrimSpace(config.AgentMultimodalKey)
 	})
 }
 

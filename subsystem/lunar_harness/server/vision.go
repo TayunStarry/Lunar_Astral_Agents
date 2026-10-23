@@ -11,7 +11,7 @@ package server
 //   - 动图（GIF / APNG / 动态 WebP）原样直通：缩放会坍缩成单帧，破坏下游动图理解链路
 //   - 原图 blob 永远不被修改：绘画者参考图等直读原图的场景不受叠印影响
 //
-// 变换与缓存逻辑与 base64 回退绑定（visionRead）共用同一实现（lunarloop.VisionReadBlob），
+// 变换与缓存逻辑与 base64 回退绑定（visionRead）共用同一实现（lunar.VisionReadBlob），
 // 本端点只做 HTTP 形态的包装。
 
 import (
@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/lunar_loop"
+	"LunarSubsystem/LunarHarness/lunar"
 )
 
 // VisionReadHandler 视觉读取端点处理函数
@@ -39,7 +39,7 @@ func VisionReadHandler(w http.ResponseWriter, r *http.Request) {
 			side = parsed
 		}
 	}
-	data, mime, err := lunarloop.VisionReadBlob(rel, tag, side)
+	data, mime, err := lunar.VisionReadBlob(rel, tag, side)
 	if err != nil {
 		logger.SubInfo("CoreServer", "VisionRead", "读取失败 %s: %v", rel, err)
 		http.Error(w, err.Error(), http.StatusNotFound)

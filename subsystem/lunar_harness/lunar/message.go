@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-
-	"LunarSubsystem/LunarHarness/engine/lunar_loop"
 )
 
 // MessageBatchHandler 消息批量写入（POST /write/message）。
@@ -30,11 +28,11 @@ func MessageBatchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lunarloop.EnqueueMessage(req.Messages...)
+	EnqueueMessage(req.Messages...)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(BatchResponse{
 		Success: true,
-		Length:  lunarloop.UnreadCount(),
+		Length:  UnreadCount(),
 	})
 }

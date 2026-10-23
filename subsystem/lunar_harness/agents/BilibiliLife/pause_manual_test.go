@@ -15,7 +15,7 @@ func TestManualPauseProbe(t *testing.T) {
 	if os.Getenv("BILI_LIFE_PAUSE_PROBE") != "1" {
 		t.Skip("设置 BILI_LIFE_PAUSE_PROBE=1 才真实跑生活并中断")
 	}
-	*config.LocalDir = `D:\Lunar_Astral_Agents\local_data`
+	config.LocalDir = `D:\Lunar_Astral_Agents\local_data`
 	done := make(chan error, 1)
 	go func() { done <- Run() }()
 	time.Sleep(15 * time.Second)

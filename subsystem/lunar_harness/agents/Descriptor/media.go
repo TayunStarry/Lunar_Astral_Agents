@@ -45,7 +45,7 @@ func DescribeMedia(handle, question string) (string, error) {
 		return cached, nil
 	}
 
-	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath))
+	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
 	if res.Kind == persistence.KindVideo {
 		groups, err := multimodal.VideoToFrames(abs)
 		if err != nil {

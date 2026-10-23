@@ -49,8 +49,8 @@ func AudioToWavBase64(inputFile string) (string, error) {
 		"ar":       "16000",
 		"loglevel": "error",
 	})
-	if *config.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*config.FfmpegPath)
+	if config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(config.FfmpegPath)
 	}
 	if err := stream.Run(); err != nil {
 		return "", fmt.Errorf("音频转码失败: %w", err)

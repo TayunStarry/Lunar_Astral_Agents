@@ -81,7 +81,7 @@ func ResourceRead(rawHandle string, maxBytes int) (ReadResult, error) {
 		MIME:     res.MIME,
 		BlobPath: res.BlobPath,
 	}
-	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath))
+	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
 
 	// blob 丢失 / 不可读：移除失效句柄，按统一语义提示调用方
 	if res.State != StateActive || !fileExists(abs) {
@@ -216,7 +216,7 @@ func ResourceOutline(rawHandle string) ([]ArchiveSection, string, error) {
 		return nil, "", fmt.Errorf("%s", ErrHandleInvalid)
 	}
 	// 句柄存在但实体不可读：移除失效句柄并返回统一提示
-	if abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath)); res.BlobPath != "" && !fileExists(abs) {
+	if abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath)); res.BlobPath != "" && !fileExists(abs) {
 		_ = ArchiveDatabase.DeleteResource(res.ID)
 		return nil, "", fmt.Errorf("%s", ErrFileLost)
 	}
@@ -226,7 +226,7 @@ func ResourceOutline(rawHandle string) ([]ArchiveSection, string, error) {
 	}
 	// 段落表为空但 blob 在位：现场按标题解析并回填（迁移/历史资源首次访问时补建）
 	if len(sections) == 0 && res.Kind == KindDocument && res.State == StateActive {
-		abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath))
+		abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
 		if data, err := os.ReadFile(abs); err == nil {
 			drafts := ParseMarkdownSections(stripBOM(string(data)))
 			if len(drafts) > 0 {
@@ -254,7 +254,7 @@ func ResourceResolve(rawHandle string) (ArchiveResource, error) {
 	if !found {
 		return ArchiveResource{}, fmt.Errorf("%s", ErrHandleInvalid)
 	}
-	if abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath)); res.BlobPath != "" && !fileExists(abs) {
+	if abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath)); res.BlobPath != "" && !fileExists(abs) {
 		_ = ArchiveDatabase.DeleteResource(res.ID)
 		return ArchiveResource{}, fmt.Errorf("%s", ErrFileLost)
 	}
@@ -343,7 +343,7 @@ func ResourceDelete(rawHandle string) error {
 		return fmt.Errorf("%s", ErrHandleInvalid)
 	}
 	if res.BlobPath != "" {
-		abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath))
+		abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
 		// 显式删除：仅当没有其它目录行引用同一实体时才移除物理文件（共享实体保留）
 		referenced, refErr := ArchiveDatabase.blobReferencedByOthers(res.BlobPath, res.ID)
 		if refErr == nil && !referenced {

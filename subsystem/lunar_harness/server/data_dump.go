@@ -12,7 +12,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/lunar_loop"
+	"LunarSubsystem/LunarHarness/lunar"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 )
 
@@ -20,7 +20,7 @@ import (
 //
 // 控制台需要把运行期数据落到磁盘以便离线排查，而两类数据的**产出位置不同**：
 //   - 原始日志：已在 TUI 日志管线（同进程内存环形缓冲）里 → 本包直接序列化落盘；
-//   - 智能体上下文：只在月华 goja 运行时内 → 经 lunarloop.DumpAgentContext 在 agent
+//   - 智能体上下文：Go 对话链在进程内持有 → 经 lunar.DumpAgentContext 直接导出
 //     事件循环上取回 JSON 文本，再落盘。
 //
 // 因此这里只做「取数 → 写文件 → 回执」三件事，导出内容的构造分别由上两处负责，
@@ -39,7 +39,7 @@ type DataDumpResponse struct {
 
 // dumpDir 导出目录（相对程序根目录）
 func dumpDir() string {
-	return filepath.Join(*config.LocalDir, "logs", "dump")
+	return filepath.Join(config.LocalDir, "logs", "dump")
 }
 
 // writeDumpFile 写入导出文件，返回绝对路径与字节数。
@@ -126,7 +126,7 @@ func DataDumpLogsHandler(w http.ResponseWriter, r *http.Request) {
 // 为什么单独一条：实况轮次（每轮的角色 / 思考全文 / 输出全文 / 工具调用序列 / 时长）
 // 是**独一份**的运行时资料，任何日志通道都不覆盖——
 //   - 原始日志只有一行行启动与工具文本，没有"轮次"结构；
-//   - 月华 JS 日志是 JS 层 console 输出，与模型调用轮次无对应关系；
+//   - 月华日志是对话链运行输出，与模型调用轮次没有一一对应关系；
 //   - `/debug/dump/context` 导出的是**给模型看的 messages（输入）**，
 //     不含模型思考流，也不含工具调用顺序与耗时。
 //
@@ -178,7 +178,7 @@ func DataDumpContextHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	includeImages := r.URL.Query().Get("include_images") == "1"
 
-	content, err := lunarloop.DumpAgentContext(agent, includeImages)
+	content, err := lunar.DumpAgentContext(agent, includeImages)
 	if err != nil {
 		writeJSON(w, http.StatusOK, DataDumpResponse{OK: false, Target: agent, Error: err.Error()})
 		return

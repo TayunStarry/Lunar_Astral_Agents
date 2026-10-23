@@ -22,9 +22,9 @@ import (
 // localData 以可执行文件目录为基准解析本地数据目录（绝对路径）
 func localData() string {
 	if exe, err := os.Executable(); err == nil {
-		return filepath.Join(filepath.Dir(exe), *config.LocalDir)
+		return filepath.Join(filepath.Dir(exe), config.LocalDir)
 	}
-	return *config.LocalDir
+	return config.LocalDir
 }
 
 // resolveAssetPath 解析资源相对路径为绝对路径（以可执行文件目录为基准）；
@@ -45,9 +45,9 @@ func resolveAssetPath(p string) string {
 // EnsureQwen 加载 Qwen TTS 引擎：模型目录固定，参考音频取配置（缺省月华模板音色）
 func EnsureQwen() error {
 	modelDir := filepath.Join(localData(), "models", qwenModelDirName)
-	refAudio := *config.TTSRefAudio
+	refAudio := config.TTSRefAudio
 	if refAudio == "" {
-		refAudio = filepath.Join(*config.LocalDir, qwenDefaultRefAudio)
+		refAudio = filepath.Join(config.LocalDir, qwenDefaultRefAudio)
 	}
 	return qwentts.EnsureLoaded(modelDir, resolveAssetPath(refAudio))
 }

@@ -22,7 +22,7 @@ type LogSource int
 const (
 	// SourceRaw 原始日志（stdout 拦截行 + 全部结构化日志）
 	SourceRaw LogSource = iota
-	// SourceLunarJS 月华智能体 JS 层日志（LunarCore-JavaScript）
+	// SourceLunarJS 月华日志（LunarCore：对话链 / 计划表 / 记忆 / 资源）
 	SourceLunarJS
 	// SourceLTP9JS ltp9 沙箱 JS 层日志（StarLTP console）
 	SourceLTP9JS

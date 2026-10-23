@@ -26,8 +26,8 @@ func TestEngineScreenWithoutHooks(t *testing.T) {
 	m.width, m.height = 120, 34
 	m.screen = screenEngine
 	out := m.View()
-	if !strings.Contains(out, "月华引擎") {
-		t.Fatalf("引擎屏标题缺失:\n%s", out)
+	if !strings.Contains(out, "月华对话链") {
+		t.Fatalf("对话链屏标题缺失:\n%s", out)
 	}
 	if !strings.Contains(out, "宿主未接入") {
 		t.Fatalf("未接入钩子时应明确提示:\n%s", out)
@@ -59,7 +59,7 @@ func TestEngineScreenShowsStatus(t *testing.T) {
 	m.width, m.height = 120, 40
 	m.screen = screenEngine
 	out := m.View()
-	for _, want := range []string{"运行时", "智能体脚本", "重载次数", "3 次", "连续失败", "自动重载", "开启", "r", "b"} {
+	for _, want := range []string{"对话链", "智能体", "重建次数", "3 次", "连续失败", "自动重建", "开启", "r", "b"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("状态表缺少 %q:\n%s", want, out)
 		}
@@ -168,7 +168,7 @@ func TestEngineScreenManualReload(t *testing.T) {
 	// 完成事件：清除 busy 并给出成功提示
 	model, _ = m.updateEngine(engineDoneMsg{})
 	m = model.(appModel)
-	if m.engine.busy || m.engine.err || !strings.Contains(m.engine.msg, "重载完成") {
+	if m.engine.busy || m.engine.err || !strings.Contains(m.engine.msg, "重建完成") {
 		t.Fatalf("完成事件处理错误: busy=%v err=%v msg=%q", m.engine.busy, m.engine.err, m.engine.msg)
 	}
 }

@@ -31,8 +31,8 @@ func StartIdleUnloader() {
 
 // idleUnloadMinutes 闲置卸载阈值（分钟）：非法配置回退默认值
 func idleUnloadMinutes() int {
-	if *config.TTSIdleUnloadMinutes > 0 {
-		return *config.TTSIdleUnloadMinutes
+	if config.TTSIdleUnloadMinutes > 0 {
+		return config.TTSIdleUnloadMinutes
 	}
 	return idleUnloadDefaultSeconds / 60
 }

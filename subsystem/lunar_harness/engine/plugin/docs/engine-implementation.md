@@ -433,8 +433,8 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 
 | 事件 | 触发点 | payload | return |
 |------|--------|---------|--------|
-| `before_reading_message` | `engine/lunar_loop` 的 `pullContext`（交付未读队列前） | `{ messages }` | `{ messages? }`（空数组=清空本轮） |
-| `before_sending_amessage` | `engine/lunar_loop` 的 `pushContext`（推送消息前） | `{ messages }` | `{ messages?, cancel? }` |
+| `before_reading_message` | `lunar` 包的 `pullContext`（交付未读队列前） | `{ messages }` | `{ messages? }`（空数组=清空本轮） |
+| `before_sending_amessage` | `lunar` 包的 `pushContext`（推送消息前） | `{ messages }` | `{ messages?, cancel? }` |
 | `before_query_starts` | `crystal` 的 `web_search` 执行前 | `{ instruction }` | `{ instruction?, cancel? }` |
 | `before_query_ends` | `crystal` 的 `web_search` 报告回传前 | `{ instruction, report }` | `{ report?, cancel? }` |
 | `before_life_starts` | `agents/BilibiliLife` 每次生活启动前（自动 / TUI 强制） | `{ forced, videosPerRound, slicesPerVideo, repliesPerRound, dailyCount, dailyLimit }` | `{ cancel?, reason? }`（取消仍消耗一次本日额度并计为完成） |

@@ -51,21 +51,21 @@ func TestMemoryHandlerGlobalTypeAPI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	origLocal := *config.LocalDir
-	origArchive := *config.ArchiveDBPath
-	origURL := *config.AgentEmbeddingURL
-	origModel := *config.AgentEmbeddingModel
+	origLocal := config.LocalDir
+	origArchive := config.ArchiveDBPath
+	origURL := config.AgentEmbeddingURL
+	origModel := config.AgentEmbeddingModel
 	tmp := t.TempDir()
-	*config.LocalDir = tmp
-	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
-	*config.AgentEmbeddingURL = server.URL + "/v1"
-	*config.AgentEmbeddingModel = "test-embedding"
+	config.LocalDir = tmp
+	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	config.AgentEmbeddingURL = server.URL + "/v1"
+	config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
 		_ = persistence.CloseArchiveDB()
-		*config.LocalDir = origLocal
-		*config.ArchiveDBPath = origArchive
-		*config.AgentEmbeddingURL = origURL
-		*config.AgentEmbeddingModel = origModel
+		config.LocalDir = origLocal
+		config.ArchiveDBPath = origArchive
+		config.AgentEmbeddingURL = origURL
+		config.AgentEmbeddingModel = origModel
 	})
 
 	persistence.InitMemoryDB(filepath.Join(tmp, "memory"))

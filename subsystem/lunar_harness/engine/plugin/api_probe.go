@@ -21,7 +21,7 @@ func probeDataDir() string {
 	if err != nil {
 		return filepath.Join("local_data", "database", ProbeDataDirName)
 	}
-	return filepath.Join(filepath.Dir(execPath), *config.LocalDir, "database", ProbeDataDirName)
+	return filepath.Join(filepath.Dir(execPath), config.LocalDir, "database", ProbeDataDirName)
 }
 
 // probePlugin 构造虚拟探针插件，其 DataDir 指向探针文件区（供 fileWrite/fileRead/fileDelete 的 scopedPath 使用）。

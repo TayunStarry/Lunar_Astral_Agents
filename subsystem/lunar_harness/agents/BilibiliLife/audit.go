@@ -87,8 +87,8 @@ func sampleGrayGrids(localPath string) ([][]uint8, error) {
 		"loglevel": "error",
 	}
 	stream := ffmpeg.Input(localPath).Output(pattern, args)
-	if *config.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*config.FfmpegPath)
+	if config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(config.FfmpegPath)
 	}
 	if err := stream.Run(); err != nil {
 		return nil, fmt.Errorf("ffmpeg 采样帧失败: %w", err)

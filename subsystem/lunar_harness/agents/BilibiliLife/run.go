@@ -8,7 +8,7 @@ package BilibiliLife
 //   → 首页选一个视频，停留详情页
 //   → 下载 → 60 秒切片 → 逐片抽帧理解（合成“一个视频”的整体感受）
 //   → 滚到评论区读 15 条热门评论 → 每个视频发 1 条评论
-//   → 用看过的视频发动态（「仅在动态中呼叫用户」开启时在末尾另起一行 @；
+//   → 用看过的视频发动态（「仅在动态中呼叫用户」开启时，动态发布后在评论区发一条 @；
 //     关闭时挑选一个视频发 @分享评论）
 //   → 回复这条动态下的评论（≤5 条）
 //
@@ -273,6 +273,81 @@ func (w *webSession) publishDiary(text string) (string, error) {
 		return "", fmt.Errorf("日记动态已提交但没有返回 dynamic_id")
 	}
 	return id, nil
+}
+
+// callCommentText 拼呼叫评论的可见正文：把目标用户名写成一行 @ 文本。
+func callCommentText(targets []MentionTarget) string {
+	ats := make([]string, 0, len(targets))
+	for _, target := range targets {
+		if target.Name != "" {
+			ats = append(ats, "@"+target.Name)
+		}
+	}
+	return strings.Join(ats, " ")
+}
+
+// mentionAtFields 拆分呼叫目标为评论接口需要的 at_name / at_mid（逗号分隔）。
+//
+// 只有配置了 UID 的目标才会产生真实的 @ 通知；缺 UID 的只在正文里保留 @名字。
+func mentionAtFields(targets []MentionTarget) (names, mids string) {
+	nameList := make([]string, 0, len(targets))
+	midList := make([]string, 0, len(targets))
+	for _, target := range targets {
+		if target.Name == "" || target.UID <= 0 {
+			continue
+		}
+		nameList = append(nameList, target.Name)
+		midList = append(midList, fmt.Sprintf("%d", target.UID))
+	}
+	return strings.Join(nameList, ","), strings.Join(midList, ",")
+}
+
+// postDynamicComment 在刚发布的日记动态下写一条评论（type=17）。
+//
+// 呼叫放在评论区而不是动态正文：正文里的「@名字」只是纯文本，构建不出真实的 @ 关系；
+// 评论接口带上 at_name/at_mid 才会给对方发 @ 通知。返回新评论的 rpid，
+// 供本轮回复阶段跳过自己这条呼叫评论。
+func (w *webSession) postDynamicComment(dynID, message string, targets []MentionTarget) (string, error) {
+	csrf := w.csrf()
+	if csrf == "" {
+		return "", fmt.Errorf("页面里读不到 bili_jct，无法评论动态")
+	}
+	form := url.Values{}
+	form.Set("type", "17")
+	form.Set("oid", dynID)
+	form.Set("message", message)
+	form.Set("plat", "1")
+	form.Set("csrf", csrf)
+	if names, mids := mentionAtFields(targets); names != "" {
+		form.Set("at_name", names)
+		form.Set("at_mid", mids)
+	}
+	text, err := w.pageFetchText("POST", "https://api.bilibili.com/x/v2/reply/add",
+		"application/x-www-form-urlencoded", form.Encode(), 25*time.Second)
+	if err != nil {
+		return "", err
+	}
+	var resp struct {
+		Code int    `json:"code"`
+		Msg  string `json:"message"`
+		Data struct {
+			Rpid    int64  `json:"rpid"`
+			RpidStr string `json:"rpid_str"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		return "", err
+	}
+	if resp.Code != 0 {
+		return "", fmt.Errorf("B站拒绝评论动态: code=%d %s", resp.Code, resp.Msg)
+	}
+	if resp.Data.RpidStr != "" {
+		return resp.Data.RpidStr, nil
+	}
+	if resp.Data.Rpid != 0 {
+		return fmt.Sprintf("%d", resp.Data.Rpid), nil
+	}
+	return "", nil
 }
 
 // replyDynamic 读取动态评论并逐条回复，最多 max 条。

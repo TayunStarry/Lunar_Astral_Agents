@@ -14,7 +14,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/WebLTP"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
-	"LunarSubsystem/LunarHarness/engine/lunar_loop"
+	"LunarSubsystem/LunarHarness/lunar"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/server"
 	"LunarSubsystem/LunarHarness/transport/ws"
@@ -71,13 +71,12 @@ func WireTUIDataDumpHooks() {
 	)
 }
 
-// WireTUIEngineHooks 把「月华引擎自愈」能力注入控制台：
-//   - status：读取引擎状态（运行时/脚本就绪、重载次数、连续失败、自动重载策略）；
-//   - reload：手动重载 goja 运行时（宿主侧还会顺手把崩掉的 llama-server 拉起来）。
+// WireTUIEngineHooks 把「月华对话链状态」能力注入控制台：
+//   - status：读取对话链状态（就绪、重建次数、连续失败、自动重建策略）；
+//   - reload：手动重建 Go 对话链状态（宿主侧还会顺手把崩掉的 llama-server 拉起来）。
 //
-// 为什么要给控制台一个手动入口：goja 运行时是一整块进程内状态，一旦走进死路，
-// 除了重启整个程序没有别的办法；而重启会连带重启前端窗口与全部子系统。
-// 控制台的重载按钮是"最小代价的恢复手段"，自动重载则是它的兜底自动化。
+// Go 对话链不再依赖整块可替换的脚本运行时；重建入口用于逻辑坏死或上下文损坏时
+// 以最小代价恢复，避免重启整个程序与全部子系统。
 func WireTUIEngineHooks() {
 	// 生活链模型调用也进「核心智能 实况」，用户不用只盯着日志干等。
 	// 计量回调让这些 Go 侧调用一并计入「运行状态」的模型计量。
@@ -111,7 +110,7 @@ func WireTUIEngineHooks() {
 	Descriptor.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
 	console.SetEngineHooks(
 		func() console.EngineStatus {
-			state := lunarloop.EngineState()
+			state := lunar.EngineState()
 			return console.EngineStatus{
 				RuntimeReady:        state.RuntimeReady,
 				AgentReady:          state.AgentReady,
@@ -125,15 +124,15 @@ func WireTUIEngineHooks() {
 				LastFailureAt:       state.LastFailureAt,
 				AutoReload:          state.AutoReload,
 				AutoReloadThreshold: state.AutoReloadThreshold,
-				Reloading:           lunarloop.ReloadRunning(),
+				Reloading:           lunar.ReloadRunning(),
 			}
 		},
 		func(reason string) error {
-			return lunarloop.ReloadMoonEngine(reason)
+			return lunar.ReloadMoonEngine(reason)
 		},
 	)
 
-	// 生活链已从 goja 层移除：TUI 的“开始刷视频”直接启动 Go 真实浏览器模块。
+	// 生活链已独立为 Go 模块：TUI 的“开始刷视频”直接启动真实浏览器模块。
 	// 模块在后台 goroutine 里跑完整流程，TUI 只收受理回执，不阻塞。
 	console.SetBilibiliLifeHook(BilibiliLife.Start)
 }

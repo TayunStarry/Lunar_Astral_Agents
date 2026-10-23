@@ -95,45 +95,48 @@ type menuItem struct {
 	screen screenID // 目标屏幕；值为 screenMenu 时表示退出程序（哨兵）
 }
 
-// menuItems 主菜单条目表：顺序即显示顺序，按「更新发布 / 运行观测 / 系统管理」
+// menuItems 主菜单条目表：顺序即显示顺序，按「更新发布 / 运行观测 / 系统管理 / 会话」
 // 分组组织，让同类功能聚拢、缩短查找路径。
+//
+// 快捷键按显示顺序依次占用 0-9、a-z：用户只需记住「第几个」即可，不必再记
+// 每屏各自的历史助记键。新增条目时按顺序追加，不要插空或跳号。
 var menuItems = []menuItem{
-	{key: "0", title: "资源更新 管理", group: "更新与发布", screen: screenUpdate,
+	{key: "0", title: "资源更新", group: "更新与发布", screen: screenUpdate,
 		desc: "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希），更新含主程序时自动重启"},
-	{key: "m", title: "LTPX 应用市场", group: "更新与发布", screen: screenMarket,
+	{key: "1", title: "应用市场", group: "更新与发布", screen: screenMarket,
 		desc: "浏览 / 标签筛选 / 安装 / 发布 LTPX 工具包（Gitee Release 通道）"},
-	{key: "l", title: "LTP9 授权签发", group: "更新与发布", screen: screenLTP9Auth,
+	{key: "2", title: "授权签发", group: "更新与发布", screen: screenLTP9Auth,
 		desc: "扫描包目录中的 LTP9 包，按颜色区分「已签发 / 未签发 / 需重签」，回车依据脚本现有引用的权限签发 permissions.key"},
 
-	{key: "1", title: "核心智能 实况", group: "运行观测", screen: screenAgent,
+	{key: "3", title: "推理实况", group: "运行观测", screen: screenAgent,
 		desc: "月华思考 / 输出 / 工具调用的流式显示（对话者 · 绘制者 · 演奏者 · 记忆者…）"},
-	{key: "2", title: "运行状态 显示", group: "运行观测", screen: screenStats,
+	{key: "4", title: "运行状态", group: "运行观测", screen: screenStats,
 		desc: "资源占用 / token 消耗总量 / 均次消耗 / 输出速度 / 平均上下文"},
-	{key: "3", title: "原始日志 显示", group: "运行观测", screen: screenRaw,
+	{key: "5", title: "原始日志", group: "运行观测", screen: screenRaw,
 		desc: "终端全量原始行（stdout 拦截 + 结构化日志合流）"},
-	{key: "4", title: "月华引擎 日志", group: "运行观测", screen: screenLunarJS,
-		desc: "月华智能体 JavaScript 层日志"},
-	{key: "5", title: "插件引擎 日志", group: "运行观测", screen: screenLTP9,
+	{key: "6", title: "月华日志", group: "运行观测", screen: screenLunarJS,
+		desc: "月华对话链 / 计划表 / 记忆 / 资源的运行日志（模块 LunarCore）"},
+	{key: "7", title: "插件日志", group: "运行观测", screen: screenLTP9,
 		desc: "LTP9 沙箱 JavaScript 层日志"},
-	{key: "6", title: "星月系统 警告", group: "运行观测", screen: screenGoWarn,
+	{key: "8", title: "系统警告", group: "运行观测", screen: screenGoWarn,
 		desc: "Go 模块 WARN / ERROR / FATAL 日志"},
-	{key: "7", title: "绘图引擎 日志", group: "运行观测", screen: screenDraw,
+	{key: "9", title: "绘图日志", group: "运行观测", screen: screenDraw,
 		desc: "sd.cpp 绘图引擎输出（进度 / 采样速度 / 时间统计），顶部附采样进度"},
-	{key: "d", title: "数据导出 管理", group: "运行观测", screen: screenDump,
+	{key: "a", title: "数据导出", group: "运行观测", screen: screenDump,
 		desc: "把原始日志导出为 .log（JSON Lines）、把月华主上下文或任一子智能体上下文导出为 .json"},
 
-	{key: "8", title: "前端页面 管理", group: "系统管理", screen: screenFrontend,
+	{key: "b", title: "月华链路", group: "系统管理", screen: screenEngine,
+		desc: "查看 Go 对话链状态（就绪 / 重建次数 / 连续失败）并手动重建；连续应答失败达阈值时自动重建"},
+	{key: "c", title: "前端页面", group: "系统管理", screen: screenFrontend,
 		desc: "月华 / 琉璃桌面窗口状态探测与意外关闭重启"},
-	{key: "9", title: "局域共享 管理", group: "系统管理", screen: screenProxy,
+	{key: "d", title: "局域共享", group: "系统管理", screen: screenProxy,
 		desc: "WSS → WS 反向代理，支持 IP 选择与手机扫码接入"},
-	{key: "a", title: "打包归档 管理", group: "系统管理", screen: screenArchive,
+	{key: "e", title: "打包归档", group: "系统管理", screen: screenArchive,
 		desc: "项目文件 7z 分卷打包，支持进度显示"},
-	{key: "b", title: "端口释放 管理", group: "系统管理", screen: screenPorts,
+	{key: "f", title: "端口释放", group: "系统管理", screen: screenPorts,
 		desc: "扫描指定端口范围，终止占用进程并验证释放"},
-	{key: "r", title: "月华引擎 管理", group: "系统管理", screen: screenEngine,
-		desc: "查看 goja 运行时状态（就绪 / 重载次数 / 连续失败），按 R 手动重载；连续应答失败达阈值时宿主会自动重载"},
 
-	{key: "z", title: "退出程序", group: "会话", screen: screenMenu,
+	{key: "g", title: "退出程序", group: "会话", screen: screenMenu,
 		desc: "关闭控制台并优雅停止全部子系统（感谢使用「星月智能 · 控制台」）"},
 }
 
@@ -167,11 +170,11 @@ type appModel struct {
 
 	spinner spinner.Model
 
-	rawView   logsState // [3] 原始日志
-	lunarView logsState // [4] 月华 JS 日志
-	ltp9View  logsState // [5] ltp9 JS 日志
-	drawView  logsState // [7] sd.cpp 绘图引擎日志
-	warnView  logsState // [6] Go 警告错误
+	rawView   logsState // [5] 原始日志
+	lunarView logsState // [6] 月华日志
+	ltp9View  logsState // [7] ltp9 插件日志
+	drawView  logsState // [9] sd.cpp 绘图引擎日志
+	warnView  logsState // [8] Go 警告错误
 	agent     agentState
 	stats     statsState
 	frontend  frontendState
@@ -439,15 +442,17 @@ func (m appModel) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch key.String() {
-	case "ctrl+c", "e", "q":
+	case "ctrl+c", "q":
 		return m, tea.Quit
 	case "up", "k":
 		m.menu = listMove(m.menu, -1, len(menuItems), true)
 	case "down", "j":
 		m.menu = listMove(m.menu, 1, len(menuItems), true)
-	case "home", "g":
+	// 首尾跳转只保留 Home/End：g 已分配给「退出程序」直达键，
+	// 若同时作为跳转别名，会与直达优先级互相吞掉。
+	case "home":
 		m.menu = 0
-	case "end", "G":
+	case "end":
 		m.menu = len(menuItems) - 1
 	case "enter", "right":
 		return m, m.menuAction()
@@ -824,7 +829,7 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 	case screenDump:
 		return "数据导出", dumpContextLine(m.dump), dumpKeys(m.dump)
 	case screenEngine:
-		return "月华引擎 管理", "goja lunar_loop", engineKeys(m.engine)
+		return "月华对话链 管理", "Go native", engineKeys(m.engine)
 	}
 	return "未知", "", nil
 }
@@ -834,7 +839,7 @@ func menuKeys() []keyHint {
 	return []keyHint{
 		kh("↑/↓", "选择"),
 		kh("Enter/→", "进入"),
-		kh("0-9 a b d l m z", "直达"),
+		kh("0-9 a-g", "直达"),
 		kh("?", "帮助"),
 		kh("q", "退出"),
 	}

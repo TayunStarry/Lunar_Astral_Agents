@@ -63,8 +63,9 @@ type Config struct {
 	RepliesPerRound int     `json:"replies_per_round"` // 一轮可回应几次消息（评论/动态/私信共享）
 
 	// OnlyCallUserInDynamic 仅在动态中呼叫用户（默认开启）：
-	// 开启时不再从本轮多个视频里挑一条发「@ 用户」的分享评论，而是只在日记动态末尾
-	// 另起一行 @ 目标用户；关闭时恢复原有「挑视频 + 发 @分享评论」逻辑。
+	// 开启时不再从本轮多个视频里挑一条发「@ 用户」的分享评论，而是等日记动态发出后，
+	// 在动态评论区单独写一条带 @ 的评论（带 at_name/at_mid 才构建得出真实呼叫关系）；
+	// 关闭时恢复原有「挑视频 + 发 @分享评论」逻辑。
 	OnlyCallUserInDynamic *bool `json:"only_call_user_in_dynamic"`
 }
 
@@ -111,12 +112,13 @@ func clampInt(v, lo, hi int) int {
 
 func boolPtr(v bool) *bool { return &v }
 
-// mentionNames 返回本轮分享要 @ 的全部目标：按配置顺序去重，最多 mentionMaxCount 人。
+// mentionTargets 返回本轮分享要 @ 的全部目标：按配置顺序去重，最多 mentionMaxCount 人。
 //
+// 保留 UID（评论接口的 at_mid 需要它才能构建真实 @ 关系）。
 // 开源项目不内置任何 @ 对象：未配置 mention_targets 时返回空列表，
 // 调用方据此跳过 @ 分享，避免别人部署后 @ 到作者账号。
-func (c Config) mentionNames() []string {
-	names := make([]string, 0, mentionMaxCount)
+func (c Config) mentionTargets() []MentionTarget {
+	targets := make([]MentionTarget, 0, mentionMaxCount)
 	seen := make(map[string]bool, len(c.MentionTargets))
 	for _, target := range c.MentionTargets {
 		name := strings.TrimSpace(target.Name)
@@ -124,10 +126,20 @@ func (c Config) mentionNames() []string {
 			continue
 		}
 		seen[name] = true
-		names = append(names, name)
-		if len(names) >= mentionMaxCount {
+		targets = append(targets, MentionTarget{Name: name, UID: target.UID})
+		if len(targets) >= mentionMaxCount {
 			break
 		}
+	}
+	return targets
+}
+
+// mentionNames 返回本轮分享要 @ 的全部用户名（日志与 @分享评论文案使用）。
+func (c Config) mentionNames() []string {
+	targets := c.mentionTargets()
+	names := make([]string, 0, len(targets))
+	for _, target := range targets {
+		names = append(names, target.Name)
 	}
 	return names
 }
@@ -142,7 +154,7 @@ func (c Config) onlyCallUserInDynamic() bool {
 }
 
 func configPath() string {
-	dir := strings.TrimSpace(*config.LocalDir)
+	dir := strings.TrimSpace(config.LocalDir)
 	if dir == "" {
 		dir = "local_data"
 	}

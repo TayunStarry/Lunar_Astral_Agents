@@ -125,8 +125,8 @@ func extractAllFramesAtFPS(inputFile string, fps float64) ([]image.Image, error)
 	}
 
 	stream := ffmpeg.Input(inputFile).Output("pipe:1", kwargs)
-	if *config.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*config.FfmpegPath)
+	if config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(config.FfmpegPath)
 	}
 
 	err := stream.WithOutput(buf, os.Stderr).Run()

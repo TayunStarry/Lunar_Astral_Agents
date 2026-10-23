@@ -12,10 +12,9 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
-// 月华 JS 日志的模块/子标签（与 engine 绑定自定义 console 时写入的标签保持一致）
+// 月华日志模块标签（Go 原生对话链、计划表、记忆与资源统一使用 LunarCore）
 const (
 	lunarModule = "LunarCore"
-	lunarSubJS  = "JavaScript"
 	// ltp9 沙箱日志的模块标签（engine/plugin/variable.go ServiceName）
 	ltp9Module = "StarLTP"
 	// ltp9 沙箱 console 输出携带的标记（binder.go consolePrint）
@@ -206,8 +205,8 @@ func routeLogRecord(level, module, sub, msg string) {
 	pushLog(line, SourceRaw)
 
 	switch {
-	// 月华 JS 层日志
-	case module == lunarModule && sub == lunarSubJS:
+	// 月华日志：对话链、计划表、记忆、资源等 LunarCore 全量输出
+	case module == lunarModule:
 		pushLog(line, SourceLunarJS)
 	// ltp9 沙箱 JS 层日志（console 输出带 [console.*] 标记）
 	case module == ltp9Module && strings.Contains(msg, ltp9ConsoleMark):

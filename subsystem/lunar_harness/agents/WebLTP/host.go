@@ -258,7 +258,7 @@ func captureDirForReport(saver *shotSaver) string {
 
 // LocalDirForData 本地数据根目录（截图保存基于 LocalDir；页面摘要缓存已独立到 web.db）
 func LocalDirForData() string {
-	p := *localDirFlag()
+	p := localDirFlag()
 	if p == "" {
 		p = "local_data"
 	}

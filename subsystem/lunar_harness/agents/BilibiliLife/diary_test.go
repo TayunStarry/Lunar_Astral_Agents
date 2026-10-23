@@ -15,19 +15,19 @@ import (
 func setupDiaryTest(t *testing.T) {
 	t.Helper()
 	tmp := t.TempDir()
-	origLocal := *config.LocalDir
-	origArchive := *config.ArchiveDBPath
-	origMedia := *config.MediaDBPath
-	*config.LocalDir = tmp
-	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
-	*config.MediaDBPath = filepath.Join(tmp, "database", "media.db")
+	origLocal := config.LocalDir
+	origArchive := config.ArchiveDBPath
+	origMedia := config.MediaDBPath
+	config.LocalDir = tmp
+	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	config.MediaDBPath = filepath.Join(tmp, "database", "media.db")
 	t.Cleanup(func() {
 		// 先关库再还原配置，否则 Windows 上临时目录无法删除
 		_ = persistence.CloseArchiveDB()
 		_ = persistence.CloseDomainDBs()
-		*config.LocalDir = origLocal
-		*config.ArchiveDBPath = origArchive
-		*config.MediaDBPath = origMedia
+		config.LocalDir = origLocal
+		config.ArchiveDBPath = origArchive
+		config.MediaDBPath = origMedia
 	})
 }
 
@@ -72,7 +72,7 @@ func TestDiaryAndDynamicShareSameCopy(t *testing.T) {
 		t.Fatalf("本段应为 1 标题+%d 条链接+2 行简述，实际 %d 行", len(urls), lines)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(*config.LocalDir, filepath.FromSlash(diaryDocRel)))
+	raw, err := os.ReadFile(filepath.Join(config.LocalDir, filepath.FromSlash(diaryDocRel)))
 	if err != nil {
 		t.Fatalf("读回日记文档失败: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestAppendDiaryDocumentNewestOnTop(t *testing.T) {
 		t.Fatalf("新段应为 3 行，实际 %d 行", newLines)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(*config.LocalDir, filepath.FromSlash(diaryDocRel)))
+	raw, err := os.ReadFile(filepath.Join(config.LocalDir, filepath.FromSlash(diaryDocRel)))
 	if err != nil {
 		t.Fatalf("读回日记文档失败: %v", err)
 	}
@@ -178,24 +178,25 @@ func TestBuildDynamicText(t *testing.T) {
 	}
 }
 
-// TestBuildDynamicTextWithCall 钉住「仅在动态中呼叫用户」的文案规则：
-// 呼叫必须单独占最后一行，且没有目标时与普通动态正文完全一致。
-func TestBuildDynamicTextWithCall(t *testing.T) {
-	title := "2026-10-22 12:00 刷B站日记"
-	urls := []string{"https://www.bilibili.com/video/BV1xx411c7mD"}
-	brief := "第一个视频的画面很有冲击力。"
-
-	plain := buildDynamicText(title, urls, brief)
-	withCall := buildDynamicTextWithCall(title, urls, brief, []string{"甲", " 乙 ", ""})
-	lines := strings.Split(withCall, "\n")
-	if lines[len(lines)-1] != "@甲 @乙" {
-		t.Fatalf("呼叫应单独占最后一行，实际最后一行 %q（全文 %q）", lines[len(lines)-1], withCall)
+// TestCallComment 钉住「呼叫写在动态评论区」的规则：
+// 可见正文是 @ 全部目标；at_name/at_mid 只收录配置了 UID 的目标（真实 @ 关系）。
+func TestCallComment(t *testing.T) {
+	targets := []MentionTarget{
+		{Name: "甲", UID: 1001},
+		{Name: "乙", UID: 0},
 	}
-	if strings.Join(lines[:len(lines)-1], "\n") != plain {
-		t.Fatalf("呼叫行不应改动原动态正文:\n got: %q\nwant: %q", withCall, plain)
+	if got := callCommentText(targets); got != "@甲 @乙" {
+		t.Fatalf("呼叫正文不符: %q", got)
 	}
-	if got := buildDynamicTextWithCall(title, urls, brief, nil); got != plain {
-		t.Fatalf("没有呼叫目标时应与普通动态一致，实际 %q", got)
+	names, mids := mentionAtFields(targets)
+	if names != "甲" || mids != "1001" {
+		t.Fatalf("只有带 UID 的目标才进 at 字段，实际 %q / %q", names, mids)
+	}
+	if got := callCommentText(nil); got != "" {
+		t.Fatalf("没有目标时不应产生呼叫正文，实际 %q", got)
+	}
+	if names, mids := mentionAtFields(nil); names != "" || mids != "" {
+		t.Fatalf("没有目标时不应产生 at 字段，实际 %q / %q", names, mids)
 	}
 }
 

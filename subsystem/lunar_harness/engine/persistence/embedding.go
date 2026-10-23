@@ -39,7 +39,7 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 	if !d.memoryInitialized {
 		return nil, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	embeddingURL := *config.AgentEmbeddingURL
+	embeddingURL := config.AgentEmbeddingURL
 	if embeddingURL == "" {
 		return nil, fmt.Errorf("嵌入服务 base_url 未配置")
 	}
@@ -63,8 +63,8 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if *config.AgentEmbeddingKey != "" {
-		req.Header.Set("Authorization", "Bearer "+*config.AgentEmbeddingKey)
+	if config.AgentEmbeddingKey != "" {
+		req.Header.Set("Authorization", "Bearer "+config.AgentEmbeddingKey)
 	}
 
 	resp, err := d.httpClient.Do(req)
@@ -204,7 +204,7 @@ type chatMessageResp struct {
 // 图片默认(auto)模式使用单轮调用，prompt 内同时覆盖情绪/文本(OCR)/人物特征/种类/色彩/姿态等维度
 // 最多重试 MaxTagRetries 次，全部失败则返回错误
 func (d *MemoryDB) generateTags(ctx context.Context, content string, isImage bool, orientation string, custom string) ([]string, error) {
-	if *config.AgentMultimodalURL == "" {
+	if config.AgentMultimodalURL == "" {
 		return nil, fmt.Errorf("LLM 服务 base_url 未配置")
 	}
 
@@ -266,7 +266,7 @@ func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage
 // generateTagsFromMedia 动态图标签生成：mediaRefs 为感知者式采样帧引用
 // （file 模式为慢放视频的 file:// 引用、frames 模式为图片序列帧 data URI），最多重试 MaxTagRetries 次
 func (d *MemoryDB) generateTagsFromMedia(ctx context.Context, mediaRefs []string, orientation string, custom string) ([]string, error) {
-	if *config.AgentMultimodalURL == "" {
+	if config.AgentMultimodalURL == "" {
 		return nil, fmt.Errorf("LLM 服务 base_url 未配置")
 	}
 
@@ -321,11 +321,11 @@ func (d *MemoryDB) generateTagsFromMediaOnce(ctx context.Context, mediaRefs []st
 
 // postTagRequest 发送标签生成请求并解析响应（消息构造与请求执行解耦，供静态/动态图分支复用）
 func (d *MemoryDB) postTagRequest(ctx context.Context, messages []chatMessage) ([]string, error) {
-	llmURL := *config.AgentMultimodalURL
+	llmURL := config.AgentMultimodalURL
 	apiURL := strings.TrimRight(llmURL, "/") + "/chat/completions"
 
 	reqBody := chatRequest{
-		Model:       *config.AgentMultimodalModel,
+		Model:       config.AgentMultimodalModel,
 		Messages:    messages,
 		MaxTokens:   512,
 		Temperature: 0.3,
@@ -345,8 +345,8 @@ func (d *MemoryDB) postTagRequest(ctx context.Context, messages []chatMessage) (
 		return nil, fmt.Errorf("创建 LLM 请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if *config.AgentMultimodalKey != "" {
-		req.Header.Set("Authorization", "Bearer "+*config.AgentMultimodalKey)
+	if config.AgentMultimodalKey != "" {
+		req.Header.Set("Authorization", "Bearer "+config.AgentMultimodalKey)
 	}
 
 	resp, err := d.httpClient.Do(req)

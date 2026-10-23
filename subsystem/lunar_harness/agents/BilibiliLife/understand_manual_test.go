@@ -14,7 +14,7 @@ func TestManualUnderstandProbe(t *testing.T) {
 	if os.Getenv("BILI_LIFE_UNDERSTAND_PROBE") != "1" {
 		t.Skip("设置 BILI_LIFE_UNDERSTAND_PROBE=1 才真实下载并调用模型")
 	}
-	*config.LocalDir = `D:\Lunar_Astral_Agents\local_data`
+	config.LocalDir = `D:\Lunar_Astral_Agents\local_data`
 	info, err := fetchVideoInfo("BV1ponw6vEB9")
 	if err != nil {
 		t.Fatalf("view 失败: %v", err)

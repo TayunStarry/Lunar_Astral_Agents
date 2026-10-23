@@ -89,7 +89,7 @@ func CapabilitiesHandler(w http.ResponseWriter, r *http.Request) {
 	serveBroadcastGET(w, r, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"success":        true,
-			"default_engine": *config.TTSEngine,
+			"default_engine": config.TTSEngine,
 			"engines":        engineCapabilities,
 		})
 	})

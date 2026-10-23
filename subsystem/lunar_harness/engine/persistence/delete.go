@@ -16,9 +16,9 @@ func DeleteFile(filePath string) (string, error) {
 		return "", fmt.Errorf("未指定文件")
 	}
 	// 将配置中的本地目录和请求的文件路径拼接，并清理路径格式
-	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, filePath))
+	fullPath := filepath.Clean(filepath.Join(config.LocalDir, filePath))
 	// 检查拼接后的完整路径是否在配置的本地目录下
-	if !strings.HasPrefix(fullPath, filepath.Clean(*config.LocalDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(config.LocalDir)) {
 		return "", fmt.Errorf("访问被拒绝")
 	}
 	rel, _ := relativeToLocalDir(fullPath)

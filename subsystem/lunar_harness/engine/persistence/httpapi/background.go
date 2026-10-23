@@ -24,7 +24,7 @@ func RandomBackgroundHandler(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	backgroundDir := filepath.Join(*config.LocalDir, "multimedia/background")
+	backgroundDir := filepath.Join(config.LocalDir, "multimedia/background")
 	filePath := filepath.Join(backgroundDir, filename)
 	file, err := os.Open(filePath)
 	if err != nil {

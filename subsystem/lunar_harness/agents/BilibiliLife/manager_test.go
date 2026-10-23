@@ -13,9 +13,9 @@ import (
 // 否则新增的 @ 目标要等重启才生效，表现为「永远只 @ 同一个人」。
 func TestConfigHotReload(t *testing.T) {
 	tmp := t.TempDir()
-	orig := *config.LocalDir
-	*config.LocalDir = tmp
-	t.Cleanup(func() { *config.LocalDir = orig })
+	orig := config.LocalDir
+	config.LocalDir = tmp
+	t.Cleanup(func() { config.LocalDir = orig })
 
 	path := filepath.Join(tmp, "bilibili_life.json")
 	write := func(body string, mod time.Time) {

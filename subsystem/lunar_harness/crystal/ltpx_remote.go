@@ -54,7 +54,7 @@ func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 		return defs, pkgMap
 	}
 	execDir := filepath.Dir(execPath)
-	packageDir := filepath.Join(execDir, *config.LocalDir, "package")
+	packageDir := filepath.Join(execDir, config.LocalDir, "package")
 
 	entries, err := os.ReadDir(packageDir)
 	if err != nil {

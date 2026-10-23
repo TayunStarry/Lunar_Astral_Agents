@@ -145,12 +145,12 @@ func localContentPath(img string) (string, bool) {
 	if decoded, err := url.PathUnescape(rel); err == nil {
 		rel = decoded
 	}
-	return ensureUnderLocalDir(filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(rel)))
+	return ensureUnderLocalDir(filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(rel)))
 }
 
 // ensureUnderLocalDir 确认路径位于 LocalDir 内（防止把任意本机文件读给 QQ）
 func ensureUnderLocalDir(abs string) (string, bool) {
-	base := filepath.Clean(*config.LocalDir)
+	base := filepath.Clean(config.LocalDir)
 	clean := filepath.Clean(abs)
 	if !strings.HasPrefix(clean, base+string(os.PathSeparator)) {
 		return "", false

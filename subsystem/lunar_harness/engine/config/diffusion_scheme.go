@@ -108,11 +108,11 @@ func SetDiffusionSchemes(defaultName string, schemes map[string]DiffusionScheme)
 func applySchemeLocked(scheme DiffusionScheme) {
 	// 整组覆盖而不是「非空才覆盖」：方案是成套声明，若允许空值继承，
 	// 从 A 切到未配置超分模型的 B 时会继续沿用 A 的超分模型，形成隐性串味。
-	*DiffusionModel = scheme.DiffusionModel
-	*VariationalModel = scheme.VariationalModel
-	*PromptAnalysisModel = scheme.PromptAnalysisModel
-	*PromptMmprojModel = scheme.PromptMmprojModel
-	*RealESRGANModel = scheme.RealESRGANModel
+	DiffusionModel = scheme.DiffusionModel
+	VariationalModel = scheme.VariationalModel
+	PromptAnalysisModel = scheme.PromptAnalysisModel
+	PromptMmprojModel = scheme.PromptMmprojModel
+	RealESRGANModel = scheme.RealESRGANModel
 }
 
 // DefaultDiffusionSchemeName 返回配置声明的默认方案（未配置方案时为空）
@@ -187,12 +187,12 @@ func ResolveDiffusionScheme(name string) DiffusionScheme {
 	defer diffusionSchemeMu.RUnlock()
 	if len(diffusionSchemes) == 0 {
 		return DiffusionScheme{
-			DiffusionModel:      *DiffusionModel,
-			VariationalModel:    *VariationalModel,
-			PromptAnalysisModel: *PromptAnalysisModel,
-			PromptMmprojModel:   *PromptMmprojModel,
-			RealESRGANModel:     *RealESRGANModel,
-			Steps:               *SDSteps,
+			DiffusionModel:      DiffusionModel,
+			VariationalModel:    VariationalModel,
+			PromptAnalysisModel: PromptAnalysisModel,
+			PromptMmprojModel:   PromptMmprojModel,
+			RealESRGANModel:     RealESRGANModel,
+			Steps:               SDSteps,
 		}
 	}
 	key := normalizeSchemeName(name)
@@ -204,7 +204,7 @@ func ResolveDiffusionScheme(name string) DiffusionScheme {
 		scheme = diffusionSchemes[diffusionSchemeOrder[0]]
 	}
 	if scheme.Steps <= 0 {
-		scheme.Steps = *SDSteps
+		scheme.Steps = SDSteps
 	}
 	return scheme
 }

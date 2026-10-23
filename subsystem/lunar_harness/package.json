@@ -4,23 +4,11 @@
 	"type": "module",
 	"description": "核心人格 - 月华与琉璃的统一服务端与前端宿主",
 	"main": "index.html",
-	"scripts": {
-		"release.min": "tsc && rollup -c",
-		"compile.server": "tsc ./engine/lunar_loop/TypeScript/agent/constructor.ts --removeComments --moduleResolution node --target es2022 --outDir ./node_modules/deliverable",
-		"server.side": "npm run compile.server && rollup ./node_modules/deliverable/agent/constructor.js --file ./engine/lunar_loop/agentSystem.js --format iife --name lunarBundle"
-	},
 	"keywords": [
 		"ai",
 		"chatbot",
 		"typescript"
 	],
-	"author": "",
-	"license": "SEE LICENSE IN LICENSE",
-	"devDependencies": {
-		"@rollup/plugin-node-resolve": "^16.0.3",
-		"@rollup/plugin-terser": "^1.0.0",
-		"@types/node": "^20.19.39",
-		"rollup": "^4.55.1",
-		"typescript": "^5.0.0"
-	}
+	"author": "月华",
+	"license": "SEE LICENSE IN LICENSE"
 }

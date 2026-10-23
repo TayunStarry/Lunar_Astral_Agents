@@ -52,7 +52,7 @@ func TestMentionNamesAllTargets(t *testing.T) {
 }
 
 // TestOnlyCallUserInDynamicDefault 钉住新配置项默认开启：
-// 未配置时不再挑视频发 @分享评论，只在动态末尾呼叫用户。
+// 未配置时不再挑视频发 @分享评论，改为在日记动态的评论区呼叫用户。
 func TestOnlyCallUserInDynamicDefault(t *testing.T) {
 	if !defaultConfig().onlyCallUserInDynamic() {
 		t.Fatal("「仅在动态中呼叫用户」默认应为开启")
@@ -69,9 +69,9 @@ func TestOnlyCallUserInDynamicDefault(t *testing.T) {
 // TestLoadConfigOnlyCallUserInDynamic 钉住配置项能正常读写切换（含热重载读取）。
 func TestLoadConfigOnlyCallUserInDynamic(t *testing.T) {
 	tmp := t.TempDir()
-	orig := *config.LocalDir
-	*config.LocalDir = tmp
-	t.Cleanup(func() { *config.LocalDir = orig })
+	orig := config.LocalDir
+	config.LocalDir = tmp
+	t.Cleanup(func() { config.LocalDir = orig })
 
 	path := filepath.Join(tmp, "bilibili_life.json")
 	if cfg := LoadConfig(); !cfg.onlyCallUserInDynamic() {

@@ -14,14 +14,14 @@ import (
 // TestPageCacheUsesWebDB get/put 往返且数据落在 web 领域库
 func TestPageCacheUsesWebDB(t *testing.T) {
 	tmp := t.TempDir()
-	origLocal := *config.LocalDir
-	origWeb := *config.WebDBPath
-	*config.LocalDir = tmp
-	*config.WebDBPath = filepath.Join(tmp, "database", "web.db")
+	origLocal := config.LocalDir
+	origWeb := config.WebDBPath
+	config.LocalDir = tmp
+	config.WebDBPath = filepath.Join(tmp, "database", "web.db")
 	t.Cleanup(func() {
 		_ = persistence.CloseDomainDBs()
-		*config.LocalDir = origLocal
-		*config.WebDBPath = origWeb
+		config.LocalDir = origLocal
+		config.WebDBPath = origWeb
 	})
 
 	cache, err := openPageCache(time.Hour)

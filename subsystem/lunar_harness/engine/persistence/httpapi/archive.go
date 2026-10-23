@@ -66,8 +66,8 @@ func createZip(w http.ResponseWriter, r *http.Request) {
 	// 若提供了 save_path（相对 LocalDir 的目录路径），则将 ZIP 保存到服务器并返回 JSON
 	savePath := r.FormValue("save_path")
 	if savePath != "" {
-		saveDir := filepath.Clean(filepath.Join(*config.LocalDir, savePath))
-		if !strings.HasPrefix(saveDir, filepath.Clean(*config.LocalDir)) {
+		saveDir := filepath.Clean(filepath.Join(config.LocalDir, savePath))
+		if !strings.HasPrefix(saveDir, filepath.Clean(config.LocalDir)) {
 			http.Error(w, "Archive请求[ERROR] -> 保存路径越界", http.StatusBadRequest)
 			return
 		}
@@ -80,7 +80,7 @@ func createZip(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Archive请求[ERROR] -> 保存ZIP文件失败: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		relPath, relErr := filepath.Rel(*config.LocalDir, fullSavePath)
+		relPath, relErr := filepath.Rel(config.LocalDir, fullSavePath)
 		if relErr != nil {
 			relPath = zipName
 		}
@@ -135,7 +135,7 @@ func CreateZipHandler(w http.ResponseWriter, r *http.Request) {
 		zipName += ".zip"
 	}
 
-	localDir := filepath.Clean(*config.LocalDir)
+	localDir := filepath.Clean(config.LocalDir)
 	zipData, err := persistence.CreateZipFromPaths(localDir, req.Paths, zipName)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": err.Error()})
@@ -356,7 +356,7 @@ func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 确定目标安装目录
-	packageDir := filepath.Join(*config.LocalDir, "package", packageName)
+	packageDir := filepath.Join(config.LocalDir, "package", packageName)
 
 	// 如果目标目录已存在，先删除
 	if _, statErr := os.Stat(packageDir); statErr == nil {
@@ -460,7 +460,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 构建包目录路径
-	packageDir := filepath.Join(*config.LocalDir, "package", req.PackageName)
+	packageDir := filepath.Join(config.LocalDir, "package", req.PackageName)
 
 	// 检查目录是否存在
 	if _, statErr := os.Stat(packageDir); os.IsNotExist(statErr) {
@@ -492,14 +492,14 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 		// 保存到指定目录
 		savePath := req.SavePath
 		if savePath == "" {
-			savePath = filepath.Join(*config.LocalDir, "package", "archive")
+			savePath = filepath.Join(config.LocalDir, "package", "archive")
 		}
 		// 确保是相对路径
-		savePath = strings.TrimPrefix(savePath, *config.LocalDir)
+		savePath = strings.TrimPrefix(savePath, config.LocalDir)
 		savePath = strings.TrimPrefix(savePath, "/")
 		savePath = strings.TrimPrefix(savePath, "\\")
 
-		fullSavePath := filepath.Join(*config.LocalDir, savePath, fileName)
+		fullSavePath := filepath.Join(config.LocalDir, savePath, fileName)
 		if mkdirErr := os.MkdirAll(filepath.Dir(fullSavePath), 0755); mkdirErr != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -582,10 +582,10 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	packageDir := filepath.Join(*config.LocalDir, "package", packageName)
+	packageDir := filepath.Join(config.LocalDir, "package", packageName)
 
 	// 安全检查：确保在 package 目录下
-	if !strings.HasPrefix(filepath.Clean(packageDir), filepath.Clean(filepath.Join(*config.LocalDir, "package"))) {
+	if !strings.HasPrefix(filepath.Clean(packageDir), filepath.Clean(filepath.Join(config.LocalDir, "package"))) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -642,8 +642,8 @@ func ZipMetadataHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 校验路径在 LocalDir 内且为 .zip 文件
-	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, filepath.FromSlash(req.Path)))
-	localDir := filepath.Clean(*config.LocalDir)
+	fullPath := filepath.Clean(filepath.Join(config.LocalDir, filepath.FromSlash(req.Path)))
+	localDir := filepath.Clean(config.LocalDir)
 	if !strings.HasPrefix(fullPath, localDir) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "路径越界"})
 		return
@@ -698,7 +698,7 @@ func ExtractZipHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	localDir := filepath.Clean(*config.LocalDir)
+	localDir := filepath.Clean(config.LocalDir)
 	// 校验 ZIP 路径在 LocalDir 内且为 .zip 文件
 	zipPath := filepath.Clean(filepath.Join(localDir, filepath.FromSlash(req.Path)))
 	if !strings.HasPrefix(zipPath, localDir) {

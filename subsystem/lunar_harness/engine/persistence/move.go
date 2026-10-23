@@ -22,7 +22,7 @@ func ExecuteMove(req MoveItemRequest) MoveResponse {
 		return response
 	}
 
-	localDir := filepath.Clean(*config.LocalDir)
+	localDir := filepath.Clean(config.LocalDir)
 
 	// 解析并校验目标目录
 	var targetBase string

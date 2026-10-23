@@ -64,6 +64,7 @@ type lifeState struct {
 	Current      *videoRecord   `json:"current,omitempty"`
 	ShareDone    bool           `json:"share_done,omitempty"` // 全轮唯一的 @分享评论是否已发
 	DynID        string         `json:"dyn_id,omitempty"`
+	CallRpid     string         `json:"call_rpid,omitempty"` // 动态评论区里那条 @ 呼叫评论的 rpid（回复阶段跳过它）
 	DiaryHandle  string         `json:"diary_handle,omitempty"` // 本轮日记落地的句柄（@D.xxx）
 	DiaryLines   int            `json:"diary_lines,omitempty"`  // 本轮日记段的总行数（标题+正文）
 	ReplyTargets []replyTarget  `json:"reply_targets,omitempty"`
@@ -147,7 +148,7 @@ func (m *lifeManager) refreshConfigLocked() {
 }
 
 func localRoot() string {
-	dir := strings.TrimSpace(*config.LocalDir)
+	dir := strings.TrimSpace(config.LocalDir)
 	if dir == "" {
 		return "local_data"
 	}
@@ -899,18 +900,27 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		}
 		s.DiaryHandle = handle
 		s.DiaryLines = lines
-		// 开启「仅在动态中呼叫用户」时，动态正文末尾单独一行 @ 目标用户；
-		// 关闭时沿用原有逻辑（呼叫内容已在 phaseShare 的 @分享评论里）。
-		var callNames []string
-		if r.cfg.onlyCallUserInDynamic() {
-			callNames = r.cfg.mentionNames()
-		}
-		dynamic := buildDynamicTextWithCall(title, urls, brief, callNames)
+		// 动态正文不含 @：文本里的「@名字」构建不出真实呼叫关系。
+		dynamic := buildDynamicText(title, urls, brief)
 		dynID, err := r.browser.publishDiary(dynamic)
 		if err != nil {
 			return false, err
 		}
 		s.DynID = dynID
+		// 「仅在动态中呼叫用户」开启时，动态发出后在评论区单独发一条 @ 评论；
+		// 关闭时沿用原有逻辑（呼叫内容已在 phaseShare 的 @分享评论里）。
+		// 呼叫失败不终止本轮：动态与日记已经落地，缺一条呼叫不该整轮作废。
+		if r.cfg.onlyCallUserInDynamic() {
+			if targets := r.cfg.mentionTargets(); len(targets) > 0 {
+				rpid, err := r.browser.postDynamicComment(dynID, callCommentText(targets), targets)
+				if err != nil {
+					logger.Warn("BilibiliLife", "动态评论区呼叫（@%s）失败: %v", strings.Join(r.cfg.mentionNames(), "、"), err)
+				} else {
+					s.CallRpid = rpid
+					logger.Info("BilibiliLife", "已在动态评论区呼叫（@%s）", strings.Join(r.cfg.mentionNames(), "、"))
+				}
+			}
+		}
 		s.Phase = phaseReplies
 		r.saveState()
 		return false, m.pauseIfNeeded()
@@ -928,6 +938,16 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			if err != nil {
 				logger.Warn("BilibiliLife", "读取动态评论失败: %v", err)
 				targets = nil
+			}
+			// 跳过自己刚发的 @ 呼叫评论，不要自问自答
+			if s.CallRpid != "" {
+				kept := targets[:0]
+				for _, target := range targets {
+					if target.Rpid != s.CallRpid {
+						kept = append(kept, target)
+					}
+				}
+				targets = kept
 			}
 			s.ReplyTargets = targets
 			r.saveState()

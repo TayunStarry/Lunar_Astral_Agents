@@ -50,7 +50,7 @@ func VRAMGuardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	unloaded, err := unloadLoadedGPUModels(*config.ModelPort)
+	unloaded, err := unloadLoadedGPUModels(config.ModelPort)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("VRAM守卫 → 卸载模型失败: %v", err), http.StatusServiceUnavailable)
 		return

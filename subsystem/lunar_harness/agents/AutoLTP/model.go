@@ -15,9 +15,9 @@ import (
 // autoConfig 惰性加载模型配置（模型名/URL/Key），仅首次调用时解析一次。
 func autoConfig() {
 	autoConfigOnce.Do(func() {
-		autoModel = stringOr(*config.AgentMultimodalModel, "system-multimodal")
-		autoURL = normV1(stringOr(*config.AgentMultimodalURL, config.LocalV1URL()))
-		autoKey = stringOr(*config.AgentMultimodalKey, "")
+		autoModel = stringOr(config.AgentMultimodalModel, "system-multimodal")
+		autoURL = normV1(stringOr(config.AgentMultimodalURL, config.LocalV1URL()))
+		autoKey = stringOr(config.AgentMultimodalKey, "")
 	})
 }
 

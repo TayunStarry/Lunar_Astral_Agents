@@ -39,7 +39,7 @@ func (d *ArchiveDB) DedupeDuplicateHashes() (int, error) {
 		return 0, err
 	}
 
-	localDir := filepath.Clean(*config.LocalDir)
+	localDir := filepath.Clean(config.LocalDir)
 	removed := 0
 	for _, list := range groups {
 		if len(list) < 2 {
@@ -90,7 +90,7 @@ func dedupePriority(res ArchiveResource) int {
 	if !IsStoragePath(res.BlobPath) {
 		return -1
 	}
-	abs := filepath.Join(filepath.Clean(*config.LocalDir), filepath.FromSlash(res.BlobPath))
+	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
 	if res.State != StateActive || !fileExists(abs) {
 		return -1
 	}

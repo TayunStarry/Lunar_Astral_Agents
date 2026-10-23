@@ -26,7 +26,7 @@ func HashRenameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := persistence.HashRenameDir(filepath.Clean(*config.LocalDir), req.Path)
+	response, err := persistence.HashRenameDir(filepath.Clean(config.LocalDir), req.Path)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, response)
 		return

@@ -118,18 +118,18 @@ func reportModelCall(requestBody []byte, completionText string, usage *modelUsag
 
 func resolveModel() {
 	modelOnce.Do(func() {
-		modelName = strings.TrimSpace(*config.AgentMultimodalModel)
+		modelName = strings.TrimSpace(config.AgentMultimodalModel)
 		if modelName == "" {
 			modelName = "system-multimodal"
 		}
-		modelURL = strings.TrimRight(strings.TrimSpace(*config.AgentMultimodalURL), "/")
+		modelURL = strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
 		if modelURL == "" {
 			modelURL = config.LocalV1URL()
 		}
 		if !strings.HasSuffix(modelURL, "/v1") {
 			modelURL += "/v1"
 		}
-		modelKey = strings.TrimSpace(*config.AgentMultimodalKey)
+		modelKey = strings.TrimSpace(config.AgentMultimodalKey)
 	})
 }
 

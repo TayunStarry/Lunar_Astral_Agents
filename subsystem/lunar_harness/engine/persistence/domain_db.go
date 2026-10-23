@@ -53,7 +53,7 @@ var (
 	// mediaDatabase 媒体派生数据：媒体理解摘要 + 视觉副本簿记。
 	mediaDatabase = &domainDB{
 		label: "媒体派生",
-		path:  func() string { return *config.MediaDBPath },
+		path:  func() string { return config.MediaDBPath },
 		schema: []string{
 			kvTable("video_summary"),
 			`CREATE TABLE IF NOT EXISTS vision_cache (
@@ -71,7 +71,7 @@ var (
 	// webDatabase 网络检索缓存：页面摘要。
 	webDatabase = &domainDB{
 		label: "网络检索",
-		path:  func() string { return *config.WebDBPath },
+		path:  func() string { return config.WebDBPath },
 		schema: []string{
 			`CREATE TABLE IF NOT EXISTS web_ltp_page_cache (
 				url        TEXT PRIMARY KEY,
@@ -86,13 +86,13 @@ var (
 	// textDatabase 文本内容索引：文件标识 → 分块集合。
 	textDatabase = &domainDB{
 		label:  "文本索引",
-		path:   func() string { return *config.TextDBPath },
+		path:   func() string { return config.TextDBPath },
 		schema: []string{kvTable("file_mapping")},
 	}
 	// characterDatabase 自定义角色库：绘图角色档案。
 	characterDatabase = &domainDB{
 		label:  "自定义角色",
-		path:   func() string { return *config.CharacterDBPath },
+		path:   func() string { return config.CharacterDBPath },
 		schema: []string{kvTable("painter_characters")},
 	}
 )
@@ -258,7 +258,7 @@ func copyTableRows(src *sql.DB, srcTable string, dst *sql.DB, dstTable string, c
 // backupDatabase 迁移前把整库快照到 {LocalDir}/backup/database/。
 // 使用 VACUUM INTO 获取一致快照（WAL 下也不会漏事务）；失败则中止迁移，避免无备份删表。
 func backupDatabase(handle *sql.DB, dbPath, tag string) error {
-	dir := filepath.Join(*config.LocalDir, "backup", "database")
+	dir := filepath.Join(config.LocalDir, "backup", "database")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("创建备份目录失败: %w", err)
 	}

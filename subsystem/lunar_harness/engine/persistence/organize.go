@@ -17,8 +17,8 @@ func ExecuteOrganize(req OrganizeRequest) OrganizeResponse {
 	}
 
 	// 解析基础路径
-	basePath := filepath.Clean(filepath.Join(*config.LocalDir, req.BasePath))
-	localDir := filepath.Clean(*config.LocalDir)
+	basePath := filepath.Clean(filepath.Join(config.LocalDir, req.BasePath))
+	localDir := filepath.Clean(config.LocalDir)
 
 	// 验证基础路径在 LocalDir 内
 	if !strings.HasPrefix(basePath, localDir) {

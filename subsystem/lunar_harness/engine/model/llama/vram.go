@@ -35,10 +35,10 @@ type routerModel struct {
 // 卸载后的模型在下次被使用时（如收到聊天请求）会由路由服务器按需自动重新加载，无需手动恢复。
 // 返回守卫结束后的可用显存（MiB，0 表示未知），供画图模块决定是否进一步降低显存占用。
 func EnsureDiffusionVRAM() (int, error) {
-	if !*config.ImageVRAMGuard || *config.ImageVRAMGuardMiB <= 0 {
+	if !config.ImageVRAMGuard || config.ImageVRAMGuardMiB <= 0 {
 		return 0, nil
 	}
-	threshold := *config.ImageVRAMGuardMiB
+	threshold := config.ImageVRAMGuardMiB
 
 	freeMiB, err := queryFreeVRAMMiB()
 	if err != nil {
@@ -51,7 +51,7 @@ func EnsureDiffusionVRAM() (int, error) {
 
 	logger.Info("LlamaProxy", "可用显存 %d MiB 低于阈值 %d MiB, 正在卸载已加载的模型...", freeMiB, threshold)
 
-	unloaded, err := unloadLoadedGPUModels(*config.ModelPort)
+	unloaded, err := unloadLoadedGPUModels(config.ModelPort)
 	if err != nil {
 		return freeMiB, fmt.Errorf("卸载模型失败: %w", err)
 	}
@@ -81,7 +81,7 @@ func EnsureDiffusionVRAM() (int, error) {
 // 与 unloadLoadedGPUModels 的全量卸载不同，本函数为定向卸载：不跳过纯 CPU 模型
 // （如 ASR 的音频编码器 mmproj 不受 n-gpu-layers 控制仍可能占用显存）。
 func UnloadModelByID(modelID string) (bool, error) {
-	models, err := fetchRouterModels(*config.ModelPort)
+	models, err := fetchRouterModels(config.ModelPort)
 	if err != nil {
 		return false, err
 	}
@@ -89,7 +89,7 @@ func UnloadModelByID(modelID string) (bool, error) {
 		if m.ID != modelID || m.Status.Value != "loaded" {
 			continue
 		}
-		if err := unloadRouterModel(*config.ModelPort, modelID); err != nil {
+		if err := unloadRouterModel(config.ModelPort, modelID); err != nil {
 			return false, err
 		}
 		logger.Info("LlamaProxy", "已定向卸载模型[%s]释放资源", modelID)

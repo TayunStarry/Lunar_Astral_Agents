@@ -85,11 +85,11 @@ func scopeTestDocs() (map[string][]Document, string, string) {
 func TestMemoryQueryFastScopeSkipsFarCollections(t *testing.T) {
 	server := scopeEmbeddingServer(t)
 	defer server.Close()
-	origURL, origModel := *config.AgentEmbeddingURL, *config.AgentEmbeddingModel
-	*config.AgentEmbeddingURL = server.URL + "/v1"
-	*config.AgentEmbeddingModel = "test-embedding"
+	origURL, origModel := config.AgentEmbeddingURL, config.AgentEmbeddingModel
+	config.AgentEmbeddingURL = server.URL + "/v1"
+	config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
-		*config.AgentEmbeddingURL, *config.AgentEmbeddingModel = origURL, origModel
+		config.AgentEmbeddingURL, config.AgentEmbeddingModel = origURL, origModel
 	})
 
 	docs, idNear, idFar := scopeTestDocs()
@@ -122,11 +122,11 @@ func TestMemoryQueryFastScopeSkipsFarCollections(t *testing.T) {
 func TestMemoryQueryFastScopeFallsBackWhenFirstMisses(t *testing.T) {
 	server := scopeEmbeddingServer(t)
 	defer server.Close()
-	origURL, origModel := *config.AgentEmbeddingURL, *config.AgentEmbeddingModel
-	*config.AgentEmbeddingURL = server.URL + "/v1"
-	*config.AgentEmbeddingModel = "test-embedding"
+	origURL, origModel := config.AgentEmbeddingURL, config.AgentEmbeddingModel
+	config.AgentEmbeddingURL = server.URL + "/v1"
+	config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
-		*config.AgentEmbeddingURL, *config.AgentEmbeddingModel = origURL, origModel
+		config.AgentEmbeddingURL, config.AgentEmbeddingModel = origURL, origModel
 	})
 
 	_, idNear, idFar := scopeTestDocs()

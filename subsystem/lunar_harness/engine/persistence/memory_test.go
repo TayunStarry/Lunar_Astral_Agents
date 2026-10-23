@@ -171,7 +171,7 @@ func TestDefaultCollectionsCoverage(t *testing.T) {
 // multimedia/memory/<分组>/，同时改写文档 URL。
 func TestMigrateLegacyMemoryImages(t *testing.T) {
 	isolateStorage(t)
-	base := filepath.Clean(*config.LocalDir)
+	base := filepath.Clean(config.LocalDir)
 	const collection = "测试分组"
 	legacyRel := path.Join(StorageRootMultimedia, collection, "legacy.png")
 	legacyAbs := filepath.Join(base, filepath.FromSlash(legacyRel))
@@ -220,13 +220,13 @@ func TestTagRequestDisablesThinking(t *testing.T) {
 	}))
 	defer server.Close()
 
-	origURL := *config.AgentMultimodalURL
-	origModel := *config.AgentMultimodalModel
-	*config.AgentMultimodalURL = server.URL
-	*config.AgentMultimodalModel = "test-multimodal"
+	origURL := config.AgentMultimodalURL
+	origModel := config.AgentMultimodalModel
+	config.AgentMultimodalURL = server.URL
+	config.AgentMultimodalModel = "test-multimodal"
 	t.Cleanup(func() {
-		*config.AgentMultimodalURL = origURL
-		*config.AgentMultimodalModel = origModel
+		config.AgentMultimodalURL = origURL
+		config.AgentMultimodalModel = origModel
 	})
 
 	d := &MemoryDB{httpClient: server.Client()}

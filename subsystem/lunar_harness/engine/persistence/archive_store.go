@@ -133,7 +133,7 @@ func EnsureArchiveInitialized() error {
 	if ArchiveDatabase != nil && ArchiveDatabase.initialized && ArchiveDatabase.db != nil {
 		return nil
 	}
-	return InitArchiveDB(*config.ArchiveDBPath)
+	return InitArchiveDB(config.ArchiveDBPath)
 }
 
 func (d *ArchiveDB) init(dbPath string) error {

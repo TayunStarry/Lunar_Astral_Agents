@@ -144,22 +144,22 @@ func createWebView() webview.WebView {
 	}
 
 	logger.SubInfo("browser", "createWebView", "调用 webview.New")
-	w := webview.New(*config.Developer)
+	w := webview.New(config.Developer)
 	if w == nil {
 		logger.SubError("browser", "createWebView", "webview.New 返回 nil")
 		return nil
 	}
 
 	logger.SubInfo("browser", "createWebView", "设置窗口标题和尺寸")
-	w.SetTitle(*config.WebViewTitle)
-	w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintNone)
+	w.SetTitle(config.WebViewTitle)
+	w.SetSize(config.WebViewWidth, config.WebViewHeight, webview.HintNone)
 
-	if *config.WebViewMinWidth > 0 && *config.WebViewMinHeight > 0 {
-		w.SetSize(*config.WebViewMinWidth, *config.WebViewMinHeight, webview.HintMin)
+	if config.WebViewMinWidth > 0 && config.WebViewMinHeight > 0 {
+		w.SetSize(config.WebViewMinWidth, config.WebViewMinHeight, webview.HintMin)
 	}
 
-	if !*config.WebViewResizable {
-		w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintFixed)
+	if !config.WebViewResizable {
+		w.SetSize(config.WebViewWidth, config.WebViewHeight, webview.HintFixed)
 	}
 
 	webviewInstance = w

@@ -81,12 +81,12 @@ func TestVAEBackendMode(t *testing.T) {
 		"auto": "auto", "": "auto", "whatever": "auto",
 	}
 	for in, want := range cases {
-		saved := *config.SDVaeBackend
-		*config.SDVaeBackend = in
+		saved := config.SDVaeBackend
+		config.SDVaeBackend = in
 		if got := vaeBackendMode(); got != want {
 			t.Fatalf("vaeBackendMode(%q)=%q，期望 %q", in, got, want)
 		}
-		*config.SDVaeBackend = saved
+		config.SDVaeBackend = saved
 	}
 }
 

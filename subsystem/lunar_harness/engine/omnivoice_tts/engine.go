@@ -153,7 +153,7 @@ func resolveProcs(dll windows.Handle) error {
 
 // installLogCallback 接管引擎原生日志。
 // ov_log 在未注册回调时默认直写 stderr，而宿主 TUI 独占终端屏幕，
-// 这些输出会撕裂界面；注册回调后统一汇入日志管线（可在「月华 JS 日志」
+// 这些输出会撕裂界面；注册回调后统一汇入日志管线（可在「月华 日志」
 // 之外的原始日志视图查阅），既不丢诊断信息也不再污染屏幕。
 func installLogCallback() {
 	if ttsProcs.logSet == 0 {

@@ -49,15 +49,15 @@ func TestForwardImageName(t *testing.T) {
 // TestAdmitForwardImageDataURI 只有 file 引用、下载后为 data URI 的转发图片
 // 必须能收进资源归档并返回句柄，而不是退化成 [图片]。
 func TestAdmitForwardImageDataURI(t *testing.T) {
-	origLocal := *config.LocalDir
-	origArchive := *config.ArchiveDBPath
+	origLocal := config.LocalDir
+	origArchive := config.ArchiveDBPath
 	tmp := t.TempDir()
-	*config.LocalDir = tmp
-	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	config.LocalDir = tmp
+	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
 	t.Cleanup(func() {
 		_ = file.CloseArchiveDB()
-		*config.LocalDir = origLocal
-		*config.ArchiveDBPath = origArchive
+		config.LocalDir = origLocal
+		config.ArchiveDBPath = origArchive
 	})
 
 	const onePixelPNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="

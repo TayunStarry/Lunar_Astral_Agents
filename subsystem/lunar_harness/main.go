@@ -26,7 +26,7 @@ func main() {
 	// Windows 允许同一端口被多个套接字绑定（Go 不再设置 SO_EXCLUSIVEADDRUSE），
 	// 重复启动时两个实例会同时「监听成功」——后启动者接管 HTTP 端口、两边各自拉起模型服务
 	// 并互抢端口，表现为「前端 404 → 前后端一起崩溃退出」，且因为没有可见提示而被当成崩溃。
-	ln, err := server.ListenInstance(*config.BasicPort, *config.AllowLAN)
+	ln, err := server.ListenInstance(config.BasicPort, config.AllowLAN)
 	if err != nil {
 		exitVisible(err.Error() + "\n  已有一个「星月智能」在运行：请勿重复启动。\n" +
 			"  如需并存多个实例，请用 -basic-port 指定不同端口。")
@@ -36,7 +36,7 @@ func main() {
 
 	// 控制台日志镜像默认关闭：日志仍进 TUI 的「原始日志」视图与「数据导出」，
 	// 只有 lunar_config.json 的 system.console_log=true 时才额外落盘 local_data/logs/console.log。
-	console.SetConsoleLogEnabled(*config.ConsoleLogEnabled)
+	console.SetConsoleLogEnabled(config.ConsoleLogEnabled)
 
 	// 日志管线安装必须最早期：接管 stdout/stderr，启动期日志不逃逸到终端
 	console.Install()
@@ -72,9 +72,9 @@ func main() {
 	// 实测教训：代理屏曾把「代理端口」提示写死为 36790——那正是模型服务端口（BasicPort+1）。
 	// 用户照提示填写后，HTTPS 代理（Windows 允许多端口绑定）接管了模型服务端口，程序自身
 	// 发往模型的请求打到 TLS 代理上，报 TLS 握手错误/连接重置/嵌入请求 EOF，连锁导致记忆库失败。
-	console.SetProxyDefaults(*config.BasicPort, *config.ProxyPort, map[int]string{
-		*config.BasicPort: "Web 服务（前端与 API）",
-		*config.ModelPort: "模型服务（llama-server）",
+	console.SetProxyDefaults(config.BasicPort, config.ProxyPort, map[int]string{
+		config.BasicPort: "Web 服务（前端与 API）",
+		config.ModelPort: "模型服务（llama-server）",
 	})
 
 	// 装配各子系统（传输层 / 人格层 / 引擎层 / HTTP 服务；日志经管线进入 TUI 视图）
@@ -89,7 +89,7 @@ func main() {
 	// LTP9 授权钩子：控制台「LTP9 授权签发」屏据此扫描包目录、读取授权现状并签发 permissions.key
 	app.WireTUILTP9AuthHooks()
 
-	// 引擎自愈钩子：控制台「月华引擎 管理」屏据此展示 goja 运行时状态并手动重载
+	// 对话链状态钩子：控制台「月华对话链 管理」屏据此展示 Go 对话链状态并手动重建
 	app.WireTUIEngineHooks()
 
 	// 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）

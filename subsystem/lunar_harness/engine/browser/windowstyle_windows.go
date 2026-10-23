@@ -33,13 +33,13 @@ func applyWindowStyle(w webview.WebView) {
 		return
 	}
 
-	if *config.WebViewIconPath != "" {
-		setWindowIcon(hwnd, *config.WebViewIconPath)
+	if config.WebViewIconPath != "" {
+		setWindowIcon(hwnd, config.WebViewIconPath)
 	}
 
-	if *config.WebViewCaptionColor != "" ||
-		*config.WebViewBorderColor != "" ||
-		*config.WebViewDarkTitleBar {
+	if config.WebViewCaptionColor != "" ||
+		config.WebViewBorderColor != "" ||
+		config.WebViewDarkTitleBar {
 		setTitleBarStyle(hwnd)
 	}
 }
@@ -100,15 +100,15 @@ func resolveIconPath(path string) string {
 
 // setTitleBarStyle 通过 DWM 设置标题栏背景色、边框色与深色模式
 func setTitleBarStyle(hwnd uintptr) {
-	if color, ok := parseHexColor(*config.WebViewCaptionColor); ok {
+	if color, ok := parseHexColor(config.WebViewCaptionColor); ok {
 		procDwmSetWindowAttribute.Call(hwnd, uintptr(dwmwaCaptionColor),
 			uintptr(unsafe.Pointer(&color)), unsafe.Sizeof(color))
 	}
-	if color, ok := parseHexColor(*config.WebViewBorderColor); ok {
+	if color, ok := parseHexColor(config.WebViewBorderColor); ok {
 		procDwmSetWindowAttribute.Call(hwnd, uintptr(dwmwaBorderColor),
 			uintptr(unsafe.Pointer(&color)), unsafe.Sizeof(color))
 	}
-	if *config.WebViewDarkTitleBar {
+	if config.WebViewDarkTitleBar {
 		dark := uint32(1)
 		procDwmSetWindowAttribute.Call(hwnd, uintptr(dwmwaUseImmersiveDarkMode),
 			uintptr(unsafe.Pointer(&dark)), unsafe.Sizeof(dark))

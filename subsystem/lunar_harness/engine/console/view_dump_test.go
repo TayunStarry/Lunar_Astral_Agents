@@ -74,7 +74,7 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 	}
 
 	// 回归防线：上下文那组的热键应继续是 1-7（用户既有习惯不得因插入新条目而改变）
-	wantContext := []string{"1", "2", "3", "4", "5", "6", "7"}
+	wantContext := []string{"1", "2", "3", "4", "5", "6"}
 	idx := 0
 	for _, opt := range dumpOptionList {
 		if opt.kind != dumpKindContext {

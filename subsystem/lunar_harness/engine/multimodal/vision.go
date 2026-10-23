@@ -69,7 +69,7 @@ func VisionTransform(inAbsPath, cacheAbsPath string, side int, tag string) ([]by
 	}
 	// 编码 JPEG 副本（视觉模型消费件，体积优先；透明通道按黑底压平，可接受）
 	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, work, &jpeg.Options{Quality: *config.JPEGQuality}); err != nil {
+	if err := jpeg.Encode(&buf, work, &jpeg.Options{Quality: config.JPEGQuality}); err != nil {
 		return nil, "", false, fmt.Errorf("编码副本失败: %w", err)
 	}
 	// 落盘缓存（失败不阻断返回，下次请求重建）

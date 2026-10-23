@@ -9,7 +9,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/lunar_loop"
+	"LunarSubsystem/LunarHarness/lunar"
 	file "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/server"
 	"LunarSubsystem/LunarHarness/transport/enginebus"
@@ -17,10 +17,10 @@ import (
 	"LunarSubsystem/LunarHarness/transport/ws"
 )
 
-// Assemble 装配各子系统：传输层 → HTTP 服务 → 服务层（月华生产者 / 琉璃）→ 消费层（goja 运行时）。
+// Assemble 装配各子系统：传输层 → HTTP 服务 → 服务层（月华生产者 / 琉璃）→ 消费层（Go 对话链）。
 // 各层按依赖顺序初始化，跨层依赖（引擎总线发送函数、结构化消息桥接）在此注入，
 // 避免包间反向依赖，亦避免各人格包互相 import。
-// 消费层（月华智能体运行时与 LTP9 插件沙箱）的 goja 运行时排在末段启动，
+// 消费层（月华对话链与 LTP9 插件沙箱）排在末段启动，
 // 保证其思考循环/插件加载之时，HTTP、llama 代理、记忆库与 LTPX 协调层均已就绪。
 func Assemble() {
 	// ==== 传输层：统一 WebSocket 集线器 ====
@@ -36,13 +36,13 @@ func Assemble() {
 		}
 	})
 	// 注册引擎消息观察者：方法名 OnXxx 反射映射到消息 type（OnAnimationList → animation_list）
-	enginebus.Instance.Subscribe(lunarloop.AnimationObserver{})
-	enginebus.Instance.Subscribe(lunarloop.TelemetryObserver{})
+	enginebus.Instance.Subscribe(lunar.AnimationObserver{})
+	enginebus.Instance.Subscribe(lunar.TelemetryObserver{})
 	logger.Info("LunarHarness", "引擎消息总线（反射 + 透传）已启动")
 
 	// ==== 跨层注入：结构化广播 & 下行桥接 ====
 	// 智能体下行走结构化广播（type/data），QQ 桥接挂在结构化旁路上（原始字节广播不触发）
-	lunarloop.PushMessageFunc = ws.Instance.BroadcastMessage
+	lunar.PushMessageFunc = ws.Instance.BroadcastMessage
 	ws.OnStructuredMessage = napcat.BridgeStructuredMessage
 
 	// ==== 前端静态资源：月华消息终端（/）与琉璃桌面（/desktop/） ====
@@ -96,19 +96,18 @@ func Assemble() {
 	// ==== 入站消费：ltp9/* 调试信封交由 LTP9 引擎处理 ====
 	ws.Instance.SubscribeInbound("ltp9", crystal.HandleInbound)
 
-	// ==== 消费层启动：月华智能体运行时（goja + agentSystem.js，每秒思考循环） ====
+	// ==== 消费层启动：月华 Go 原生对话链（每秒思考循环） ====
 	// 必须最后启动：思考循环一经运行即可能消费计划表等到期任务，若此时 llama 模型、
-	// 记忆库、LTP9/LTPX 协调层尚未就绪，到期任务会在依赖缺失下执行，导致 llama 代理
-	// 报错与月华智能体事件循环长时间阻塞。
+	// 记忆库、LTP9/LTPX 协调层尚未就绪，到期任务会在依赖缺失下执行。
 	if err := startLunarAgent(); err != nil {
 		logger.Fatal("LunarHarness", "月华智能体运行时启动失败: %v", err)
 	}
-	logger.Info("LunarHarness", "月华智能体运行时（goja）已启动")
+	logger.Info("LunarHarness", "月华智能体运行时（Go 对话链）已启动")
 }
 
 // lunarWindowSpec 月华消息终端窗口规格
 func lunarWindowSpec() browser.DesktopWindowSpec {
-	base := fmt.Sprintf("http://127.0.0.1:%d", *config.BasicPort)
+	base := fmt.Sprintf("http://127.0.0.1:%d", config.BasicPort)
 	return browser.DesktopWindowSpec{
 		ID:       WindowLunar,
 		URL:      base + "/",
@@ -121,7 +120,7 @@ func lunarWindowSpec() browser.DesktopWindowSpec {
 
 // crystalWindowSpec 琉璃桌面窗口规格（启动打开与 LTPX 前端守护唤起共用）
 func crystalWindowSpec() browser.DesktopWindowSpec {
-	base := fmt.Sprintf("http://127.0.0.1:%d", *config.BasicPort)
+	base := fmt.Sprintf("http://127.0.0.1:%d", config.BasicPort)
 	return browser.DesktopWindowSpec{
 		ID:       WindowCrystal,
 		URL:      base + server.DesktopPrefix,

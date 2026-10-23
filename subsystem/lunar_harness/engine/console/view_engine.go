@@ -1,8 +1,8 @@
 package console
 
-// ==== 月华引擎管理屏 ====
+// ==== 月华对话链管理屏 ====
 //
-// 保留 goja 运行时的状态与手动重载；生活链已从 goja 层移除，
+// 展示 Go 对话链状态并支持手动重建；生活链已独立为 Go 模块，
 // 这里只提供一个“开始刷视频”的入口，实际浏览器操作由宿主 Go 模块完成。
 
 import (
@@ -13,7 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// engineDoneMsg 手动重载完成
+// engineDoneMsg 手动重建完成
 type engineDoneMsg struct{ err error }
 
 // biliLifeStartedMsg “开始刷视频”请求的受理结果
@@ -24,7 +24,7 @@ type biliLifeStartedMsg struct {
 
 // engineState 引擎屏的本地状态
 type engineState struct {
-	// busy 手动重载进行中
+	// busy 手动重建进行中
 	busy bool
 	// msg 最近一次手动操作结果
 	msg string
@@ -39,9 +39,9 @@ type engineState struct {
 // engineKeys 引擎屏键位
 func engineKeys(s engineState) []keyHint {
 	if s.busy {
-		return []keyHint{kh("r", "重载进行中…"), kh("Esc", "返回")}
+		return []keyHint{kh("r", "重建进行中…"), kh("Esc", "返回")}
 	}
-	return []keyHint{kh("r", "重载引擎"), kh("b", "开始刷视频"), kh("Esc", "返回")}
+	return []keyHint{kh("r", "重建对话链"), kh("b", "开始刷视频"), kh("Esc", "返回")}
 }
 
 // updateEngine 引擎屏事件
@@ -60,8 +60,8 @@ func (m appModel) updateEngine(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.engine.busy = true
 			m.engine.msg = ""
-			m.setBusy("重载月华引擎")
-			return m, reloadEngineCmd("手动重载（控制台）")
+			m.setBusy("重建月华对话链")
+			return m, reloadEngineCmd("手动重建（控制台）")
 		case "B", "b":
 			m.engine.biliMsg = "正在启动浏览器…"
 			m.engine.biliErr = false
@@ -71,13 +71,13 @@ func (m appModel) updateEngine(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case engineDoneMsg:
 		m.engine.busy = false
 		if msg.err != nil {
-			m.engine.msg = "重载失败: " + msg.err.Error()
+			m.engine.msg = "重建失败: " + msg.err.Error()
 			m.engine.err = true
-			m.setNotice("月华引擎重载失败", true)
+			m.setNotice("月华对话链重建失败", true)
 		} else {
-			m.engine.msg = "重载完成，思考链已恢复"
+			m.engine.msg = "重建完成，对话链已恢复"
 			m.engine.err = false
-			m.setNotice("月华引擎已重载", false)
+			m.setNotice("月华对话链已重建", false)
 		}
 		return m, nil
 	case biliLifeStartedMsg:
@@ -95,7 +95,7 @@ func (m appModel) updateEngine(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// reloadEngineCmd 生成“重载引擎”命令
+// reloadEngineCmd 生成“重建对话链”命令
 func reloadEngineCmd(reason string) tea.Cmd {
 	return func() tea.Msg {
 		return engineDoneMsg{err: reloadMoonEngine(reason)}
@@ -111,16 +111,16 @@ func startBilibiliLifeCmd() tea.Cmd {
 	}
 }
 
-// viewEngine 引擎屏渲染：引擎状态 + 手动重载 + 开始刷视频
+// viewEngine 对话链屏渲染：状态 + 手动重建 + 开始刷视频
 func (m appModel) viewEngine() string {
-	f := m.frameFor("月华引擎 管理", "goja lunar_loop", engineKeys(m.engine))
+	f := m.frameFor("月华对话链 管理", "Go native", engineKeys(m.engine))
 	w, h := f.bodySize()
 
 	status, wired := getEngineStatus()
-	lines := append([]string{}, sectionRule("引擎状态", w), "")
+	lines := append([]string{}, sectionRule("对话链状态", w), "")
 	if !wired {
 		lines = append(lines,
-			"  "+warnStyle.Render("宿主未接入引擎自愈钩子（当前构建不支持重载）"),
+			"  "+warnStyle.Render("宿主未接入对话链状态钩子（当前构建不支持重建）"),
 			"  "+dimStyle.Render("若界面出现「对话链停摆」，只能重启程序恢复。"),
 		)
 		return f.render(fitLines(lines, h))
@@ -173,12 +173,12 @@ func (m appModel) viewEngine() string {
 		}
 	}
 
-	addKV("运行时", runtimeText)
-	addKV("智能体脚本", agentText)
+	addKV("对话链", runtimeText)
+	addKV("智能体", agentText)
 	addKV("启动时间", bootText)
-	addKV("重载次数", fmt.Sprintf("%d 次", status.ReloadCount))
-	addKV("最近重载", reloadText)
-	addWrap("重载结果", status.LastReloadResult)
+	addKV("重建次数", fmt.Sprintf("%d 次", status.ReloadCount))
+	addKV("最近重建", reloadText)
+	addWrap("重建结果", status.LastReloadResult)
 	addKV("连续失败", failText)
 	if status.LastFailure != "" {
 		when := ""
@@ -187,12 +187,12 @@ func (m appModel) viewEngine() string {
 		}
 		addWrap("最近失败", when+status.LastFailure)
 	}
-	addKV("自动重载", autoText)
+	addKV("自动重建", autoText)
 
-	lines = append(lines, "", sectionRule("手动重载", w), "")
+	lines = append(lines, "", sectionRule("手动重建", w), "")
 	hint := []string{
-		"按 " + keyStyle.Render("r") + " 换一块干净的 goja 运行时：尽力带回对话上下文（图片会省略），",
-		"模型服务若已停止会一并拉起。重载期间对话链暂停，通常数秒；需重启模型服务时更久。",
+		"按 " + keyStyle.Render("r") + " 清空并重建 Go 对话链状态（上下文会重置），",
+		"模型服务若已停止会一并拉起。重建期间对话链暂停；模型服务若已停止会一并拉起。",
 	}
 	for _, one := range hint {
 		for _, seg := range wrapPlain(one, maxInt(20, w-4)) {
@@ -226,7 +226,7 @@ func (m appModel) viewEngine() string {
 	}
 
 	if m.engine.busy {
-		lines = append(lines, "", "  "+selectStyle.Render(m.spinner.View()+" 正在重载…"))
+		lines = append(lines, "", "  "+selectStyle.Render(m.spinner.View()+" 正在重建…"))
 	} else if m.engine.msg != "" {
 		lines = append(lines, "")
 		if m.engine.err {
@@ -243,7 +243,7 @@ func (m appModel) viewEngine() string {
 			f.status = okStyle.Render("B站生活 ✓ " + m.engine.biliMsg)
 		}
 	} else {
-		f.status = dimStyle.Render("goja 运行时")
+		f.status = dimStyle.Render("Go 对话链")
 	}
 	return f.render(lines)
 }

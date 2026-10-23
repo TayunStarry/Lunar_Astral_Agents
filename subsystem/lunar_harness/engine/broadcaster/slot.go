@@ -29,7 +29,7 @@ func resolveEngine(override string) string {
 	case EngineQwen, EngineKokoro, EngineOmniVoice:
 		return override
 	}
-	return *config.TTSEngine
+	return config.TTSEngine
 }
 
 // currentEngine 读取在位引擎名（"" = 空槽）
@@ -110,7 +110,7 @@ func Snapshot() SlotSnapshot {
 	snap := SlotSnapshot{
 		Engine:        currentEngine(),
 		State:         SlotState(stateNames[slotStateVal.Load()]),
-		DefaultEngine: *config.TTSEngine,
+		DefaultEngine: config.TTSEngine,
 		LastUsedUnix:  slotLastUseUnix.Load(),
 		SwitchCount:   switchCount.Load(),
 	}

@@ -3,9 +3,8 @@
 #   1. 图标编译（rsrc）
 #   2. 关闭运行中的 Lunar_Astral_Agents.exe
 #   3. QwenTTS / OmniVoiceTTS 引擎库按需构建（GGML → C++，产出运行时动态加载的 DLL）
-#   4. 月华智能体 TypeScript 打包（tsc + rollup → agentSystem.js）
-#   5. 端点自述文档生成（解析 server/variable.go 的统一路由注册表）
-#   6. CGO 编译输出到仓库根目录：Lunar_Astral_Agents.exe
+#   4. 端点自述文档生成（解析 server/variable.go 的统一路由注册表）
+#   5. CGO 编译输出到仓库根目录：Lunar_Astral_Agents.exe
 
 param(
     [ValidateSet("windows", "linux", "darwin")]
@@ -142,39 +141,7 @@ function Invoke-TtsLibBuildIfNeeded {
     }
 }
 
-# ---------- 月华智能体 TypeScript 打包 ----------
-# tsc 依据 tsconfig 编译 engine/lunar_loop/TypeScript，rollup 打包为
-# engine/lunar_loop/agentSystem.js（由该包 go:embed 嵌入，与执行它的 goja 引擎同居）。
-function Invoke-AgentBundleBuild {
-    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-        throw "未找到 npm，无法打包智能体脚本（请安装 Node.js）"
-    }
-
-    Push-Location $ScriptDir
-    try {
-        if (-not (Test-Path (Join-Path $ScriptDir "node_modules"))) {
-            Write-Host "node_modules 缺失，执行 npm install..." -ForegroundColor Yellow
-            $installExit = Invoke-NativeCommand { npm install --no-audit --no-fund }
-            if ($installExit -ne 0) { throw "npm install 执行失败" }
-        }
-
-        Write-Host "打包月华智能体脚本（npm run server.side）..." -ForegroundColor Cyan
-        $exitCode = Invoke-NativeCommand { npm run server.side }
-        if ($exitCode -ne 0) { throw "npm run server.side 执行失败" }
-    }
-    finally {
-        Pop-Location
-    }
-
-    $bundle = Join-Path $ScriptDir "engine\lunar_loop\agentSystem.js"
-    if (-not (Test-Path $bundle)) {
-        throw "智能体脚本未产出: $bundle"
-    }
-    $bundleSize = [math]::Round((Get-Item $bundle).Length / 1KB, 1)
-    Write-Host "  [OK] agentSystem.js ($bundleSize KB)" -ForegroundColor Green
-}
-
-# ---------- 编译时生成端点自述文档 ----------
+# ---------- 端点自述文档生成 ----------
 # 调用共享生成器解析 server/variable.go 中的 SystemEndpoints 统一路由注册表，
 # 生成 server/endpoint_docs.gen.json（由 server 包经 go:embed 嵌入，经 /api-docs 提供）。
 # 生成器运行在宿主平台，必须在设置 GOOS/GOARCH 之前执行。
@@ -223,9 +190,6 @@ try {
     Invoke-TtsLibBuildIfNeeded -Name "OmniVoiceTTS" `
         -DllPath (Join-Path $repoRoot "local_data\models\OmniVoice\omnivoice.dll") `
         -BuildScript (Join-Path $ScriptDir "engine\omnivoice_tts\build.ps1")
-
-    # 打包月华智能体脚本（须在 go build 之前：agentSystem.js 经 go:embed 嵌入）
-    Invoke-AgentBundleBuild
 
     # 生成端点自述文档（须在设置 GOOS/GOARCH 之前）
     Invoke-EndpointDocsGenerate

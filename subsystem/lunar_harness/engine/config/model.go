@@ -1,37 +1,33 @@
 package config
 
-import "flag"
-
 var (
 	// AgentEmbeddingModel 核心智能体嵌入模型名称
-	AgentEmbeddingModel = flag.String("agent-embedding-model", "system-embedding", "核心智能体嵌入模型名称")
+	AgentEmbeddingModel = "system-embedding"
 	// AgentEmbeddingURL 核心智能体嵌入服务 API 地址
-	AgentEmbeddingURL = flag.String("agent-embedding-url", "http://127.0.0.1:36789/v1", "核心智能体嵌入服务 API 地址")
+	AgentEmbeddingURL = "http://127.0.0.1:36789/v1"
 	// AgentEmbeddingKey 核心智能体嵌入服务 API 密钥
-	AgentEmbeddingKey = flag.String("agent-embedding-key", "", "核心智能体嵌入服务 API 密钥")
+	AgentEmbeddingKey = ""
 	// AgentMultimodalModel 核心智能体多模态模型名称
-	AgentMultimodalModel = flag.String("agent-multimodal-model", "system-multimodal", "核心智能体多模态模型名称")
+	AgentMultimodalModel = "system-multimodal"
 	// AgentMultimodalURL 核心智能体多模态服务 API 地址
-	AgentMultimodalURL = flag.String("agent-multimodal-url", "http://127.0.0.1:36789/v1", "核心智能体多模态服务 API 地址")
+	AgentMultimodalURL = "http://127.0.0.1:36789/v1"
 	// AgentMultimodalKey 核心智能体多模态服务 API 密钥
-	AgentMultimodalKey = flag.String("agent-multimodal-key", "", "核心智能体多模态服务 API 密钥")
-	// AgentASRModel 核心智能体语音识别模型名称（月华 models.ini 中的预设名）
-	AgentASRModel = flag.String("agent-asr-model", "system-asr", "核心智能体语音识别模型名称")
+	AgentMultimodalKey = ""
+	// AgentASRModel 核心智能体语音识别模型名称
+	AgentASRModel = "system-asr"
 
-	// 记忆库不再有独立的模型配置：记忆库与月华共用上面的 agent.* 模型路由。
-
-	// MmprojModel 多模态投影模型路径，用于图像与文本的联合编码
-	MmprojModel = flag.String("mmproj-model", *LocalDir+"/models/mmproj-Qwen3.GGUF", "多模态投影模型路径, 用于图像与文本的联合编码")
-	// AsrModel ASR语音识别模型路径，用于语音识别
-	AsrModel = flag.String("asr-model", *LocalDir+"/models/Qwen3-ASR-0.6B", "ASR模型路径, 用于语音识别")
-	// DiffusionModel 扩散模型路径，用于图像生成
-	DiffusionModel = flag.String("diffusion-model", *LocalDir+"/models/Qwen3.GGUF", "扩散模型路径, 用于图像生成")
-	// VariationalModel VAE模型路径，用于图像编码与解码
-	VariationalModel = flag.String("variational-model", *LocalDir+"/models/Qwen3.GGUF", "VAE模型路径, 用于图像编码与解码")
-	// PromptAnalysisModel 提示分析模型路径，用于理解图像提示词与负面提示词
-	PromptAnalysisModel = flag.String("prompt-analysis-model", *LocalDir+"/models/Qwen3.GGUF", "提示分析模型路径, 用于理解图像提示词与负面提示词")
-	// PromptMmprojModel 多模态投影模型路径，用于图像与文本的联合编码(因版本原因, 暂不可用)
-	PromptMmprojModel = flag.String("prompt-mmproj-model", "", "多模态投影模型路径，用于图像与文本的联合编码(因版本原因, 暂不可用)")
-	// RealESRGANModel RealESRGAN模型路径，用于图像超分辨率
-	RealESRGANModel = flag.String("real-esrgan-model", *LocalDir+"/models/Qwen3.pth", "RealESRGAN模型路径, 用于图像超分辨率")
+	// MmprojModel 多模态投影模型路径
+	MmprojModel = LocalDir + "/models/mmproj-Qwen3.GGUF"
+	// AsrModel ASR 语音识别模型路径
+	AsrModel = LocalDir + "/models/Qwen3-ASR-0.6B"
+	// DiffusionModel 扩散模型路径
+	DiffusionModel = LocalDir + "/models/Qwen3.GGUF"
+	// VariationalModel VAE 模型路径
+	VariationalModel = LocalDir + "/models/Qwen3.GGUF"
+	// PromptAnalysisModel 提示分析模型路径
+	PromptAnalysisModel = LocalDir + "/models/Qwen3.GGUF"
+	// PromptMmprojModel 多模态投影模型路径（暂不可用）
+	PromptMmprojModel = ""
+	// RealESRGANModel RealESRGAN 模型路径
+	RealESRGANModel = LocalDir + "/models/Qwen3.pth"
 )

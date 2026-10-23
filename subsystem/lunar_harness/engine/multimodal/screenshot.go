@@ -22,7 +22,7 @@ import (
 )
 
 func init() {
-	logger.SetDevMode(*config.Developer)
+	logger.SetDevMode(config.Developer)
 }
 
 // GetDisplays 获取所有显示器信息
@@ -320,8 +320,8 @@ func convertImageWithFFmpeg(input []byte) ([]byte, error) {
 	defer cancel()
 
 	ffmpegPath := "ffmpeg"
-	if *config.FfmpegPath != "" {
-		ffmpegPath = *config.FfmpegPath
+	if config.FfmpegPath != "" {
+		ffmpegPath = config.FfmpegPath
 	}
 
 	cmd := exec.CommandContext(ctx, ffmpegPath,
@@ -519,7 +519,7 @@ func applyScale(img *image.RGBA, scaleStr string) (*image.RGBA, error) {
 	}
 
 	// 使用配置的最大尺寸限制
-	return ResizeToFit(img, *config.MaxWidth, *config.MaxHeight), nil
+	return ResizeToFit(img, config.MaxWidth, config.MaxHeight), nil
 }
 
 // 编码图片
@@ -527,7 +527,7 @@ func encodeImage(buf *bytes.Buffer, img *image.RGBA, format string, quality int)
 	switch strings.ToLower(format) {
 	case "jpg", "jpeg":
 		if quality < 1 || quality > 100 {
-			quality = *config.JPEGQuality // 默认质量
+			quality = config.JPEGQuality // 默认质量
 		}
 		return jpeg.Encode(buf, img, &jpeg.Options{Quality: quality})
 	case "png":

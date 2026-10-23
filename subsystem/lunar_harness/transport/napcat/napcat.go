@@ -232,14 +232,14 @@ func outboundImageSource(img string) string {
 	if strings.HasPrefix(raw, "data:") {
 		return "base64://" + normalizeBase64Image(raw)
 	}
-	base := fmt.Sprintf("http://127.0.0.1:%d", *config.BasicPort)
+	base := fmt.Sprintf("http://127.0.0.1:%d", config.BasicPort)
 	if strings.HasPrefix(raw, "/") {
 		return base + raw
 	}
 	rel := strings.TrimPrefix(filepath.ToSlash(raw), "./")
 	// 本地绝对路径：位于 LocalDir 内时转成服务路径；否则原样交给 NapCat（它支持本地文件）
 	if filepath.IsAbs(raw) {
-		localDir := filepath.Clean(*config.LocalDir)
+		localDir := filepath.Clean(config.LocalDir)
 		if strings.HasPrefix(filepath.Clean(raw), localDir+string(os.PathSeparator)) {
 			if r, err := filepath.Rel(localDir, filepath.Clean(raw)); err == nil {
 				rel = filepath.ToSlash(r)

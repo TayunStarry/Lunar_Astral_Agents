@@ -253,7 +253,7 @@ func ensureMemory() error {
 		// 若宿主尚未初始化全局记忆库，则自建实例（baseDir 沿用项目 MemoryDBDir），
 		// 使 engine.memory 在引擎自足场景下也能工作，而不仅依赖宿主预先 InitMemoryDB。
 		if !module.IsMemoryInitialized() {
-			module.InitMemoryDB(*config.MemoryDBDir)
+			module.InitMemoryDB(config.MemoryDBDir)
 		}
 		memoryErr = module.MemoryInitInstance()
 	})

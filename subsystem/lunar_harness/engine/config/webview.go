@@ -1,26 +1,24 @@
 package config
 
-import "flag"
-
 var (
 	// WebViewTitle webview 窗口标题
-	WebViewTitle = flag.String("webview-title", "嵌入式 webview 窗口", "webview 窗口标题")
+	WebViewTitle = "嵌入式 webview 窗口"
 	// WebViewWidth webview 窗口宽度
-	WebViewWidth = flag.Int("webview-width", 648, "webview 窗口宽度")
+	WebViewWidth = 648
 	// WebViewHeight webview 窗口高度
-	WebViewHeight = flag.Int("webview-height", 648, "webview 窗口高度")
+	WebViewHeight = 648
 	// WebViewMinWidth webview 窗口最小宽度
-	WebViewMinWidth = flag.Int("webview-min-width", 324, "webview 窗口最小宽度")
+	WebViewMinWidth = 324
 	// WebViewMinHeight webview 窗口最小高度
-	WebViewMinHeight = flag.Int("webview-min-height", 324, "webview 窗口最小高度")
+	WebViewMinHeight = 324
 	// WebViewResizable webview 窗口是否可调整大小
-	WebViewResizable = flag.Bool("webview-resizable", true, "webview 窗口是否可调整大小")
-	// WebViewIconPath webview 窗口图标（.ico 文件路径，空则不设置，使用默认图标）
-	WebViewIconPath = flag.String("webview-icon", "", "webview 窗口图标 .ico 文件路径（空则不设置）")
+	WebViewResizable = true
+	// WebViewIconPath webview 窗口图标 .ico 文件路径（空则不设置）
+	WebViewIconPath = ""
 	// WebViewCaptionColor webview 标题栏背景色（#RRGGBB，仅 Windows 11 生效）
-	WebViewCaptionColor = flag.String("webview-caption-color", "", "webview 标题栏背景色，格式 #RRGGBB（仅 Windows 11 生效）")
+	WebViewCaptionColor = ""
 	// WebViewBorderColor webview 窗口边框色（#RRGGBB，仅 Windows 11 生效）
-	WebViewBorderColor = flag.String("webview-border-color", "", "webview 窗口边框色，格式 #RRGGBB（仅 Windows 11 生效）")
-	// WebViewDarkTitleBar webview 标题栏深色模式开关（Windows 10 1809+/Windows 11）
-	WebViewDarkTitleBar = flag.Bool("webview-dark-titlebar", false, "webview 标题栏使用深色模式（Win10 1809+/Win11）")
+	WebViewBorderColor = ""
+	// WebViewDarkTitleBar webview 标题栏使用深色模式
+	WebViewDarkTitleBar = false
 )

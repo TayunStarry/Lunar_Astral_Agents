@@ -480,11 +480,11 @@ type webChatMessage struct {
 
 // webviewSummarize 调用月华多模态模型（/v1 协议）把元素提取结果总结为中文要点
 func webviewSummarize(page webExtract, queryHint string) (string, error) {
-	model := strings.TrimSpace(*config.AgentMultimodalModel)
+	model := strings.TrimSpace(config.AgentMultimodalModel)
 	if model == "" {
 		model = "system-multimodal"
 	}
-	baseURL := strings.TrimRight(strings.TrimSpace(*config.AgentMultimodalURL), "/")
+	baseURL := strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
 	if baseURL == "" {
 		baseURL = config.LocalV1URL()
 	}
@@ -522,7 +522,7 @@ func webviewSummarize(page webExtract, queryHint string) (string, error) {
 		return "", fmt.Errorf("创建摘要请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if key := strings.TrimSpace(*config.AgentMultimodalKey); key != "" {
+	if key := strings.TrimSpace(config.AgentMultimodalKey); key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
 	client := &http.Client{Timeout: 90 * time.Second}

@@ -9,8 +9,7 @@ import (
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/lunar_loop"
-	"LunarSubsystem/LunarHarness/engine/lunar_loop/container"
+	"LunarSubsystem/LunarHarness/lunar"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
 	"LunarSubsystem/LunarHarness/transport/napcat"
@@ -27,18 +26,17 @@ func assembleLunar() error {
 	}
 
 	// ==== 本地数据目录 ====
-	if err := os.MkdirAll(*config.LocalDir, 0755); err != nil {
+	if err := os.MkdirAll(config.LocalDir, 0755); err != nil {
 		return err
 	}
 
 	// ==== llama.cpp 本地模型代理 ====
 	llama.Init()
 
-	// 引擎自愈：重载月华 goja 运行时前先确认模型服务还活着。
-	// 实测事故：llama.cpp 内部断言（causal_attn / n_ubatch）失败会让进程直接退出，
-	// 此后所有请求都是 "Could not establish connection"；此时只重建 goja 运行时毫无意义，
-	// 必须把模型服务一并拉起来，思考链才真的恢复。
-	lunarloop.SetModelEnsureHook(func() error {
+	// 模型服务保活：重建对话链状态前先确认模型服务还活着。
+	// 实测事故：llama.cpp 内部断言失败会让进程直接退出，此后所有请求都是
+	// "Could not establish connection"；此时只重建链状态毫无意义，必须把模型服务一并拉起来。
+	lunar.SetModelEnsureHook(func() error {
 		if llama.Alive() {
 			return nil
 		}
@@ -55,17 +53,15 @@ func assembleLunar() error {
 	return nil
 }
 
-// startLunarAgent 启动月华的 JavaScript 智能体运行时（goja + agentSystem.js）。
-// 该运行时一经启动即进入每秒思考循环，可能立即消费计划表等到期任务，故必须排在
-// 全部服务层（HTTP / llama 代理 / 记忆库）与琉璃消费层（LTP9 / LTPX broker）之后启动；
-// 否则到期任务会在依赖尚未就绪时执行，导致应答链报错或事件循环长时间阻塞。
+// startLunarAgent 启动月华的 Go 原生智能体（每秒思考循环）。
+// 该循环一经启动即可能消费计划表等到期任务，故必须排在全部服务层与琉璃消费层之后启动。
 func startLunarAgent() error {
-	return lunarloop.RunAgentContext()
+	return lunar.Start()
 }
 
 // shutdownLunar 关闭月华人格局持有的资源
 func shutdownLunar() {
-	container.Close()
+	lunar.Stop()
 	napcat.StopBridge()
 	llama.Close()
 }
@@ -85,9 +81,9 @@ func initNapcatBridge() {
 	exeDir := filepath.Dir(exePath)
 	// QQ 桥接配置已迁到专用 napcat_config.json（新默认）；专用文件不存在时
 	// 回退旧版 lunar_config.json 的 bridging 组，保证升级用户的桥接不失效
-	configPath := filepath.Join(exeDir, *config.LocalDir, "napcat_config.json")
+	configPath := filepath.Join(exeDir, config.LocalDir, "napcat_config.json")
 	if _, err := os.Stat(configPath); err != nil {
-		configPath = filepath.Join(exeDir, *config.LocalDir, "lunar_config.json")
+		configPath = filepath.Join(exeDir, config.LocalDir, "lunar_config.json")
 	}
 
 	if err := napcat.LoadBridgingConfig(configPath); err != nil {
@@ -98,7 +94,7 @@ func initNapcatBridge() {
 	// QQ 消息（OpenAI 格式）按到达顺序推送到智能体统一未读队列
 	napcat.SendMessageToAgent = func(messages []map[string]any) {
 		for _, msg := range messages {
-			lunarloop.EnqueueMessage(lunarloop.PostMessage{
+			lunar.EnqueueMessage(lunar.PostMessage{
 				Role:    "user",
 				Content: msg["content"],
 				Source:  "qq",
@@ -109,12 +105,12 @@ func initNapcatBridge() {
 	// 视频/音频地址包装为媒体URL内容项，按到达顺序写入统一未读队列
 	napcat.SendVideoToAgent = func(urls []string) {
 		for _, url := range urls {
-			lunarloop.EnqueueMediaURL("video_url", url, "qq")
+			lunar.EnqueueMediaURL("video_url", url, "qq")
 		}
 	}
 	napcat.SendAudioToAgent = func(urls []string) {
 		for _, url := range urls {
-			lunarloop.EnqueueMediaURL("audio_url", url, "qq")
+			lunar.EnqueueMediaURL("audio_url", url, "qq")
 		}
 	}
 

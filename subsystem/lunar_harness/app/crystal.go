@@ -15,12 +15,12 @@ import (
 func assembleCrystal() error {
 	// ==== 统一资源目录（SQLite archive.db：句柄 / 元数据 / 段落结构） ====
 	// 必须先于月华智能体运行时启动：入库层在对话链路里即被调用。
-	if err := file.InitArchiveDB(*config.ArchiveDBPath); err != nil {
+	if err := file.InitArchiveDB(config.ArchiveDBPath); err != nil {
 		logger.Warn("LunarHarness", "统一资源目录初始化失败: %v (不影响服务启动)", err)
 	}
 
 	// ==== 知识库（SQLite，仅用户/插件自建表） ====
-	if err := file.InitKnowledgeDB(*config.KnowledgeDBPath); err != nil {
+	if err := file.InitKnowledgeDB(config.KnowledgeDBPath); err != nil {
 		logger.Warn("LunarHarness", "知识库初始化失败: %v (不影响服务启动)", err)
 	}
 
@@ -31,7 +31,7 @@ func assembleCrystal() error {
 	}
 
 	// ==== 记忆库存储目录（仅准备本地存储结构，不产生网络请求） ====
-	file.InitMemoryDB(*config.MemoryDBDir)
+	file.InitMemoryDB(config.MemoryDBDir)
 
 	// ==== 记忆库实例与默认分组（与月华 JS agent 行为对齐） ====
 	initMemoryDatabase()

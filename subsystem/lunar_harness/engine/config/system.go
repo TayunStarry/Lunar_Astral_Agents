@@ -1,29 +1,21 @@
 package config
 
-import (
-	"flag"
-	"sync"
-)
+import "sync"
 
 // Developer 调试模式开关，用于开启调试日志
-var Developer = flag.Bool("developer", false, "启用调试模式, 显示详细日志")
+var Developer = false
 
-// SyncFetchTimeout syncFetch 网络请求超时时间（秒），默认 300 秒。
-// 用于防止模型重载/推理期间 HTTP 请求无限挂起，阻塞 goja 事件循环。
-var SyncFetchTimeout = flag.Int("sync-fetch-timeout", 300, "syncFetch 网络请求超时时间(秒)")
+// SyncFetchTimeout 模型与宿主内部请求超时时间（秒），默认 300 秒。
+var SyncFetchTimeout = 300
 
 // AllowLAN 是否允许局域网访问引擎 HTTP/WS 服务。
-// 默认 false：引擎仅绑定 127.0.0.1 回环地址；置 true（lunar_config.json 的 server.allow_lan）才绑定全部网卡。
-var AllowLAN = flag.Bool("allow-lan", false, "允许局域网访问引擎服务（默认仅本机回环可访问）")
+var AllowLAN = false
 
 // InsecureTLS 插件沙箱网络是否跳过 TLS 证书校验。
-// 默认 false：fetch/http/download 校验服务端证书；置 true（lunar_config.json 的 server.insecure_tls）恢复旧的跳过行为。
-var InsecureTLS = flag.Bool("insecure-tls", false, "插件网络请求跳过 TLS 证书校验（不推荐）")
+var InsecureTLS = false
 
 // ConsoleLogEnabled 是否把控制台输出镜像落盘到 local_data/logs/console.log。
-// 默认 false：日志只进 TUI 内存视图与「数据导出」，不再启动即写文件；
-// 置 true（lunar_config.json 的 system.console_log）才额外保留一份可滚动的控制台日志。
-var ConsoleLogEnabled = flag.Bool("console-log", false, "将控制台输出镜像到 local_data/logs/console.log（默认关闭）")
+var ConsoleLogEnabled = false
 
 // 系统运行状态变量
 var (
@@ -45,44 +37,24 @@ var (
 
 // 定义文件扩展名与 MIME 类型的映射关系
 var MimeMap = map[string]string{
-	// HTML 文件的 MIME 类型
-	".html": "text/html",
-	// HTML 短扩展名文件的 MIME 类型
-	".htm": "text/html",
-	// CSS 文件的 MIME 类型
-	".css": "text/css",
-	// JavaScript 文件的 MIME 类型
-	".js": "application/javascript",
-	// JSON 文件的 MIME 类型
-	".json": "application/json",
-	// VS Code 工作区配置文件，本质是 JSON 格式
+	".html":           "text/html",
+	".htm":            "text/html",
+	".css":            "text/css",
+	".js":             "application/javascript",
+	".json":           "application/json",
 	".code-workspace": "application/json",
-	// PNG 图片文件的 MIME 类型
-	".png": "image/png",
-	// JPG 图片文件的 MIME 类型
-	".jpg": "image/jpeg",
-	// JPEG 图片文件的 MIME 类型
-	".jpeg": "image/jpeg",
-	// GIF 图片文件的 MIME 类型
-	".gif": "image/gif",
-	// SVG 图片文件的 MIME 类型
-	".svg": "image/svg+xml",
-	// ICO 图标文件的 MIME 类型
-	".ico": "image/x-icon",
-	// 文本文件的 MIME 类型
-	".txt": "text/plain",
-	// XML 文件的 MIME 类型
-	".xml": "application/xml",
-	// PDF 文件的 MIME 类型
-	".pdf": "application/pdf",
-	// WOFF 字体文件的 MIME 类型
-	".woff": "font/woff",
-	// WOFF2 字体文件的 MIME 类型
-	".woff2": "font/woff2",
-	// TTF 字体文件的 MIME 类型
-	".ttf": "font/ttf",
-	// EOT 字体文件的 MIME 类型
-	".eot": "application/vnd.ms-fontobject",
-	// OTF 字体文件的 MIME 类型
-	".otf": "font/otf",
+	".png":            "image/png",
+	".jpg":            "image/jpeg",
+	".jpeg":           "image/jpeg",
+	".gif":            "image/gif",
+	".svg":            "image/svg+xml",
+	".ico":            "image/x-icon",
+	".txt":            "text/plain",
+	".xml":            "application/xml",
+	".pdf":            "application/pdf",
+	".woff":           "font/woff",
+	".woff2":          "font/woff2",
+	".ttf":            "font/ttf",
+	".eot":            "application/vnd.ms-fontobject",
+	".otf":            "font/otf",
 }

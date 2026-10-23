@@ -13,9 +13,9 @@ import (
 func setupSeenTest(t *testing.T) {
 	t.Helper()
 	tmp := t.TempDir()
-	orig := *config.LocalDir
-	*config.LocalDir = tmp
-	t.Cleanup(func() { *config.LocalDir = orig })
+	orig := config.LocalDir
+	config.LocalDir = tmp
+	t.Cleanup(func() { config.LocalDir = orig })
 }
 
 // TestSeenMarkAndSnapshot 钉住「选中即记为已看、下一轮选片可据此剔除」。
@@ -31,7 +31,7 @@ func TestSeenMarkAndSnapshot(t *testing.T) {
 		t.Fatal("标记后应出现在已看快照里")
 	}
 	// 落盘：重新读文件也应存在
-	if _, err := os.Stat(filepath.Join(*config.LocalDir, "database", "bilibili_life", "seen.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(config.LocalDir, "database", "bilibili_life", "seen.json")); err != nil {
 		t.Fatalf("已看记录未落盘: %v", err)
 	}
 

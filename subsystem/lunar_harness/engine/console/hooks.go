@@ -189,22 +189,22 @@ func SignLTP9Auth(dir string) (LTP9AuthStatus, error) {
 	return hook(dir)
 }
 
-// ==== 月华引擎（goja lunar_loop）自愈钩子 ====
+// ==== 月华对话链自愈钩子 ====
 //
 // 为什么要有这一屏：goja 运行时是一整块进程内状态（角色实例、对话上下文、思考中标记、
 // 每秒 tick 的 setInterval）。它走进死路时——实测一次 llama-server 崩溃即可——
 // 进程内没有任何自愈入口，用户只能重启整个程序（连带前端窗口与全部子系统）。
 // 这里给它一个"最小代价的恢复手段"：手动重载 + 状态可见，自动重载则由宿主侧兜底。
 
-// EngineStatus 月华引擎状态摘要（渲染数据源，由宿主注入的 status 钩子提供）
+// EngineStatus 月华对话链状态摘要（渲染数据源，由宿主注入的 status 钩子提供）
 type EngineStatus struct {
-	// RuntimeReady goja 运行时是否存在
+	// RuntimeReady 对话链循环是否在运行
 	RuntimeReady bool
-	// AgentReady agentSystem.js 是否已成功加载
+	// AgentReady 智能体是否已就绪
 	AgentReady bool
 	// BootedAt 最近一次成功启动的时刻
 	BootedAt time.Time
-	// ReloadCount 累计重载次数
+	// ReloadCount 累计重建次数
 	ReloadCount int
 	// LastReloadAt / LastReloadReason / LastReloadResult 最近一次重载的时刻、原因与结果
 	LastReloadAt     time.Time

@@ -361,7 +361,7 @@ func ScanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	execDir := filepath.Dir(execPath)
-	packageDir := filepath.Join(execDir, *config.LocalDir, "package")
+	packageDir := filepath.Join(execDir, config.LocalDir, "package")
 
 	entries, err := os.ReadDir(packageDir)
 	if err != nil {

@@ -26,12 +26,12 @@ func setupArchiveTest(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
 	// 覆盖全局配置指向临时目录（测试结束后由 defer 还原）
-	origLocal := *config.LocalDir
-	origArchive := *config.ArchiveDBPath
-	origMedia := *config.MediaDBPath
-	*config.LocalDir = tmp
-	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
-	*config.MediaDBPath = filepath.Join(tmp, "database", "media.db")
+	origLocal := config.LocalDir
+	origArchive := config.ArchiveDBPath
+	origMedia := config.MediaDBPath
+	config.LocalDir = tmp
+	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	config.MediaDBPath = filepath.Join(tmp, "database", "media.db")
 	// 重置单例，保证每个测试从干净状态开始
 	ArchiveDatabase = nil
 	archiveSeqLoaded = false
@@ -40,9 +40,9 @@ func setupArchiveTest(t *testing.T) string {
 		// 先关闭 SQLite 连接，否则 Windows 上临时目录无法删除
 		_ = CloseArchiveDB()
 		_ = CloseDomainDBs()
-		*config.LocalDir = origLocal
-		*config.ArchiveDBPath = origArchive
-		*config.MediaDBPath = origMedia
+		config.LocalDir = origLocal
+		config.ArchiveDBPath = origArchive
+		config.MediaDBPath = origMedia
 		ArchiveDatabase = nil
 		archiveSeqLoaded = false
 		archiveSeqCache = map[string]int64{}
@@ -50,7 +50,7 @@ func setupArchiveTest(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(tmp, "multimedia"), 0755); err != nil {
 		t.Fatalf("准备临时目录失败: %v", err)
 	}
-	if err := InitArchiveDB(*config.ArchiveDBPath); err != nil {
+	if err := InitArchiveDB(config.ArchiveDBPath); err != nil {
 		t.Fatalf("初始化资源目录失败: %v", err)
 	}
 	return tmp
@@ -231,7 +231,7 @@ func TestArchiveLostDegrade(t *testing.T) {
 		t.Fatalf("入库失败: %v", err)
 	}
 	// 模拟回收：删除 blob 并标记 lost
-	abs := filepath.Join(*config.LocalDir, filepath.FromSlash(result.BlobPath))
+	abs := filepath.Join(config.LocalDir, filepath.FromSlash(result.BlobPath))
 	if err := os.Remove(abs); err != nil {
 		t.Fatalf("删除 blob 失败: %v", err)
 	}
@@ -382,7 +382,7 @@ func TestArchiveWorkspaceRealFile(t *testing.T) {
 		t.Errorf("章节锚点应带回命中章节标题")
 	}
 	// 临时目录中的内容仓库应持有实体副本，且原文件仍在仓库根
-	if !fileExists(filepath.Join(*config.LocalDir, filepath.FromSlash(result.BlobPath))) {
+	if !fileExists(filepath.Join(config.LocalDir, filepath.FromSlash(result.BlobPath))) {
 		t.Errorf("内容仓库未落地实体: %s", result.BlobPath)
 	}
 	if !fileExists(target) {
@@ -580,7 +580,7 @@ func TestArchiveOwnedBlobLayout(t *testing.T) {
 		0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04,
 		0x08, 0x02, 0x00, 0x00, 0x00,
 	}
-	protectedDir := filepath.Join(*config.LocalDir, "multimedia")
+	protectedDir := filepath.Join(config.LocalDir, "multimedia")
 	if err := os.MkdirAll(protectedDir, 0755); err != nil {
 		t.Fatalf("准备媒体目录失败: %v", err)
 	}
@@ -614,7 +614,7 @@ func TestArchiveOwnedBlobLayout(t *testing.T) {
 	}
 
 	// 实体必须真的落地，且能按句柄取回
-	abs := filepath.Join(*config.LocalDir, filepath.FromSlash(doc.BlobPath))
+	abs := filepath.Join(config.LocalDir, filepath.FromSlash(doc.BlobPath))
 	if !fileExists(abs) {
 		t.Fatalf("归档副本未落地: %s", abs)
 	}
@@ -638,7 +638,7 @@ func TestArchiveSeqPersistAcrossRestart(t *testing.T) {
 	}
 	archiveSeqLoaded = false
 	archiveSeqCache = map[string]int64{}
-	if err := InitArchiveDB(*config.ArchiveDBPath); err != nil {
+	if err := InitArchiveDB(config.ArchiveDBPath); err != nil {
 		t.Fatalf("重启后初始化失败: %v", err)
 	}
 
@@ -892,7 +892,7 @@ func TestArchiveAdmitCorrectsImageExtByContent(t *testing.T) {
 	if !strings.HasSuffix(result.BlobPath, ".gif") {
 		t.Errorf("落盘扩展名应按内容纠正为 .gif，实际 %s", result.BlobPath)
 	}
-	if _, statErr := os.Stat(filepath.Join(*config.LocalDir, filepath.FromSlash(result.BlobPath))); statErr != nil {
+	if _, statErr := os.Stat(filepath.Join(config.LocalDir, filepath.FromSlash(result.BlobPath))); statErr != nil {
 		t.Errorf("纠正后的实体未落盘: %v", statErr)
 	}
 }

@@ -73,6 +73,8 @@ type ModelConfig struct {
 		MultimodalModel string `json:"multimodal_model"` // 多模态模型名称
 		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
 		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
+		// 语音识别模型名称（ASR）
+		ASRModel string `json:"asr_model"`
 		// 视频解读输入模式：file=写媒体目录后以 file:// 引用交 llama-server 抽帧（默认）；
 		// frames=本地抽帧为图片序列帧（base64）后以多个 image_url 提交，供不支持 file:// 的架构使用
 		VideoInput string `json:"video_input"`
@@ -82,11 +84,11 @@ type ModelConfig struct {
 		VisionMaxSide int `json:"vision_max_side"`
 		// 视觉副本缓存池容量上限（MB），超限按最久未用淘汰，默认 512
 		VisionCacheCapMB int `json:"vision_cache_cap_mb"`
-		// 引擎自愈：应答连续失败达阈值时自动重载月华引擎（goja lunar_loop）
+		// 引擎自愈：应答连续失败达阈值时自动重建月华对话链状态
 		// 指针语义：未配置时保持默认（开启、阈值 2 次）
 		AutoReload         *bool `json:"auto_reload,omitempty"`
 		AutoReloadFailures *int  `json:"auto_reload_failures,omitempty"`
-		// 追加设定：逐行附加到「月华 · 对话者」系统提示词末尾（由月华 TypeScript 侧读取；
+		// 追加设定：逐行附加到「月华 · 对话者」系统提示词末尾（由 Go 对话链读取；
 		// 未配置或空数组时不追加任何内容）
 		AppendSettings []string `json:"append_settings"`
 	} `json:"agent"`
@@ -116,6 +118,10 @@ type ModelConfig struct {
 		// 调用方未指定时的默认步数与边长
 		SDSteps     *int `json:"sd_steps,omitempty"`
 		SDImageSize *int `json:"sd_image_size,omitempty"`
+		// 图生图/合照按参考图比例推导尺寸时的总像素预算上限（百万像素，默认 1.6）
+		PixelBudgetMP *float64 `json:"pixel_budget_mp,omitempty"`
+		// 图生图的提示词引导系数覆盖值（<=0 表示不覆盖，按 1.0）
+		Img2ImgCFG *float64 `json:"img2img_cfg,omitempty"`
 	} `json:"diffusion"`
 	// NapCat QQ 桥接。仅由月华的 bridging/napcat 读取，此处声明结构以集中呈现配置契约。
 	Bridging struct {
@@ -205,6 +211,8 @@ type ModelConfig struct {
 
 // init 加载配置文件
 func init() {
+	// 先把全部配置项注册为命令行参数（必须在 flag.Parse 之前）
+	RegisterFlags()
 	// 测试二进制会注入 -test.* 标志（Go 1.24+ 如 -test.testlogfile），本包 init 阶段它们尚未
 	// 注册（testing.Init 才注册），直接 flag.Parse() 会因标志未定义而失败。这里把它们从本次
 	// 解析列表剔除，但保持 os.Args 原样——测试框架（testing.Main）随后仍能读取自己的 -test.*
@@ -229,7 +237,7 @@ func init() {
 	// 提取可执行文件所在的目录
 	exeDir := filepath.Dir(exePath)
 	// 拼接配置文件 lunar_config.json 的完整路径
-	configPath := filepath.Join(exeDir, *LocalDir, "lunar_config.json")
+	configPath := filepath.Join(exeDir, LocalDir, "lunar_config.json")
 	// 读取配置文件内容
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -266,23 +274,23 @@ func applyConfig(parameter *ModelConfig) []string {
 	// ==== 模型文件路径（models） ====
 	// 如果配置文件中 DiffusionModel 字段非空，则更新全局配置
 	if parameter.Models.DiffusionModel != "" {
-		*DiffusionModel = parameter.Models.DiffusionModel
+		DiffusionModel = parameter.Models.DiffusionModel
 	}
 	// 如果配置文件中 VariationalModel 字段非空，则更新全局配置
 	if parameter.Models.VariationalModel != "" {
-		*VariationalModel = parameter.Models.VariationalModel
+		VariationalModel = parameter.Models.VariationalModel
 	}
 	// 如果配置文件中 PromptAnalysisModel 字段非空，则更新全局配置
 	if parameter.Models.PromptAnalysisModel != "" {
-		*PromptAnalysisModel = parameter.Models.PromptAnalysisModel
+		PromptAnalysisModel = parameter.Models.PromptAnalysisModel
 	}
 	// 如果配置文件中 PromptMmprojModel 字段非空，则更新全局配置
 	if parameter.Models.PromptMmprojModel != "" {
-		*PromptMmprojModel = parameter.Models.PromptMmprojModel
+		PromptMmprojModel = parameter.Models.PromptMmprojModel
 	}
 	// 如果配置文件中 RealESRGANModel 字段非空，则更新全局配置
 	if parameter.Models.RealESRGANModel != "" {
-		*RealESRGANModel = parameter.Models.RealESRGANModel
+		RealESRGANModel = parameter.Models.RealESRGANModel
 	}
 	// 绘图模型方案（models.schemes）：注册后立即启用默认方案。
 	// 未配置方案时保持上面的扁平模型路径，行为与旧配置一致。
@@ -306,22 +314,35 @@ func applyConfig(parameter *ModelConfig) []string {
 	// 旧版 lunar_config.json 的 memory 节会被 JSON 解码忽略；迁移提示由文档说明。
 	// ==== 核心智能体配置（agent） ====
 	if parameter.Agent.EmbeddingModel != "" {
-		*AgentEmbeddingModel = parameter.Agent.EmbeddingModel
+		AgentEmbeddingModel = parameter.Agent.EmbeddingModel
 	}
 	if parameter.Agent.EmbeddingURL != "" {
-		*AgentEmbeddingURL = parameter.Agent.EmbeddingURL
+		AgentEmbeddingURL = parameter.Agent.EmbeddingURL
 	}
 	if parameter.Agent.EmbeddingKey != "" {
-		*AgentEmbeddingKey = parameter.Agent.EmbeddingKey
+		AgentEmbeddingKey = parameter.Agent.EmbeddingKey
 	}
 	if parameter.Agent.MultimodalModel != "" {
-		*AgentMultimodalModel = parameter.Agent.MultimodalModel
+		AgentMultimodalModel = parameter.Agent.MultimodalModel
 	}
 	if parameter.Agent.MultimodalURL != "" {
-		*AgentMultimodalURL = parameter.Agent.MultimodalURL
+		AgentMultimodalURL = parameter.Agent.MultimodalURL
 	}
 	if parameter.Agent.MultimodalKey != "" {
-		*AgentMultimodalKey = parameter.Agent.MultimodalKey
+		AgentMultimodalKey = parameter.Agent.MultimodalKey
+	}
+	if parameter.Agent.ASRModel != "" {
+		AgentASRModel = parameter.Agent.ASRModel
+	}
+	// Go 原生对话链直接消费的用户显示名与追加设定
+	AgentUserName = parameter.Agent.UserName
+	AgentAppendSettings = append([]string(nil), parameter.Agent.AppendSettings...)
+	// 绘图尺寸预算与图生图 CFG 覆盖
+	if parameter.Diffusion.PixelBudgetMP != nil && *parameter.Diffusion.PixelBudgetMP > 0 {
+		DiffusionPixelBudgetMP = *parameter.Diffusion.PixelBudgetMP
+	}
+	if parameter.Diffusion.Img2ImgCFG != nil && *parameter.Diffusion.Img2ImgCFG > 0 {
+		DiffusionImg2ImgCFG = *parameter.Diffusion.Img2ImgCFG
 	}
 	// ==== 多模态解读配置（agent.video_input；兼容旧 multimodal 节） ====
 	// 视频解读输入模式：仅接受 file / frames，未配置或取值非法时保持默认 file（历史行为）
@@ -332,91 +353,91 @@ func applyConfig(parameter *ModelConfig) []string {
 	}
 	switch videoInput {
 	case "frames":
-		*VideoInputMode = "frames"
+		VideoInputMode = "frames"
 	case "file":
-		*VideoInputMode = "file"
+		VideoInputMode = "file"
 	}
 	// ==== 静态图思维链形态（agent.image_input / agent.vision_max_side） ====
 	// url=视觉读取端点（默认）；base64=视觉读取管线直出的副本（供无法回取本机 URL 的云端模型）。
 	// 两种形态都是 ≤ vision_max_side 的副本，原图永远不进入思维链（见 docs/adr/0008）。
 	switch parameter.Agent.ImageInput {
 	case "url":
-		*ImageInputMode = "url"
+		ImageInputMode = "url"
 	case "base64":
-		*ImageInputMode = "base64"
+		ImageInputMode = "base64"
 	case "":
 		// 未配置时保持默认
 	default:
-		log.Printf("[Config][WARN] -> agent.image_input 取值非法: %q（允许 url/base64），保持默认 %s", parameter.Agent.ImageInput, *ImageInputMode)
+		log.Printf("[Config][WARN] -> agent.image_input 取值非法: %q（允许 url/base64），保持默认 %s", parameter.Agent.ImageInput, ImageInputMode)
 	}
 	if parameter.Agent.VisionMaxSide > 0 {
-		*VisionMaxSide = parameter.Agent.VisionMaxSide
+		VisionMaxSide = parameter.Agent.VisionMaxSide
 	}
 	if parameter.Agent.VisionCacheCapMB > 0 {
-		*VisionCacheCapMB = parameter.Agent.VisionCacheCapMB
+		VisionCacheCapMB = parameter.Agent.VisionCacheCapMB
 	}
-	// ==== 引擎自愈（自动重载月华 goja 运行时）====
+	// ==== 对话链自愈（自动重建月华对话链状态）====
 	// 仅在配置显式给出时覆盖默认值（开启 / 连续失败 2 次）
 	if parameter.Agent.AutoReload != nil {
-		*EngineAutoReload = *parameter.Agent.AutoReload
+		EngineAutoReload = *parameter.Agent.AutoReload
 	}
 	if parameter.Agent.AutoReloadFailures != nil && *parameter.Agent.AutoReloadFailures > 0 {
-		*EngineAutoReloadFailures = *parameter.Agent.AutoReloadFailures
+		EngineAutoReloadFailures = *parameter.Agent.AutoReloadFailures
 	}
 	// ==== 月华语音合成（tts） ====
 	// 引擎枚举：仅接受 Qwen / Kokoro / OmniVoice，未配置保持默认 Qwen，非法取值告警并保留默认
 	switch parameter.TTS.Engine {
 	case "Qwen", "Kokoro", "OmniVoice":
-		*TTSEngine = parameter.TTS.Engine
+		TTSEngine = parameter.TTS.Engine
 	case "":
 		// 未配置时保持默认引擎
 	default:
-		log.Printf("[Config][WARN] -> tts.engine 取值非法: %q（允许 Qwen/Kokoro/OmniVoice），保持默认 %s", parameter.TTS.Engine, *TTSEngine)
+		log.Printf("[Config][WARN] -> tts.engine 取值非法: %q（允许 Qwen/Kokoro/OmniVoice），保持默认 %s", parameter.TTS.Engine, TTSEngine)
 	}
 	if parameter.TTS.RefAudio != "" {
-		*TTSRefAudio = parameter.TTS.RefAudio
+		TTSRefAudio = parameter.TTS.RefAudio
 	}
 	if parameter.TTS.RefText != "" {
-		*TTSRefText = parameter.TTS.RefText
+		TTSRefText = parameter.TTS.RefText
 	}
 	if parameter.TTS.Voice != "" {
-		*TTSVoice = parameter.TTS.Voice
+		TTSVoice = parameter.TTS.Voice
 	}
 	// 音色混合列表：数组无法经命令行覆盖，仅由配置文件填充
 	if parameter.TTS.Mix != nil {
 		TTSMix = parameter.TTS.Mix
 	}
 	if parameter.TTS.Speed != nil {
-		*TTSSpeed = *parameter.TTS.Speed
+		TTSSpeed = *parameter.TTS.Speed
 	}
 	if parameter.TTS.Lang != "" {
-		*TTSLang = parameter.TTS.Lang
+		TTSLang = parameter.TTS.Lang
 	}
 	if parameter.TTS.Instruct != "" {
-		*TTSInstruct = parameter.TTS.Instruct
+		TTSInstruct = parameter.TTS.Instruct
 	}
 	if parameter.TTS.Seed != nil {
-		*TTSSeed = *parameter.TTS.Seed
+		TTSSeed = *parameter.TTS.Seed
 	}
 	if parameter.TTS.DisablePostproc != nil {
-		*TTSDisablePostproc = *parameter.TTS.DisablePostproc
+		TTSDisablePostproc = *parameter.TTS.DisablePostproc
 	}
 	// 闲置卸载阈值：仅接受正数分钟，非法取值（<=0）保留默认 5 分钟
 	if parameter.TTS.IdleUnloadMinutes != nil && *parameter.TTS.IdleUnloadMinutes > 0 {
-		*TTSIdleUnloadMinutes = *parameter.TTS.IdleUnloadMinutes
+		TTSIdleUnloadMinutes = *parameter.TTS.IdleUnloadMinutes
 	}
 	// ==== 月华客户端显示配置（system.character_renderer） ====
 	// 渲染器枚举：仅接受 bedrock / live2d，未配置保持默认 bedrock，非法取值告警并保留默认
 	switch parameter.System.CharacterRenderer {
 	case "bedrock", "live2d":
-		*CharacterRenderer = parameter.System.CharacterRenderer
+		CharacterRenderer = parameter.System.CharacterRenderer
 	case "":
 		// 未配置时保持默认渲染器
 	default:
-		log.Printf("[Config][WARN] -> system.character_renderer 取值非法: %q（允许 bedrock/live2d），保持默认 %s", parameter.System.CharacterRenderer, *CharacterRenderer)
+		log.Printf("[Config][WARN] -> system.character_renderer 取值非法: %q（允许 bedrock/live2d），保持默认 %s", parameter.System.CharacterRenderer, CharacterRenderer)
 	}
 	if parameter.System.Live2DModel != "" {
-		*Live2DModel = parameter.System.Live2DModel
+		Live2DModel = parameter.System.Live2DModel
 	}
 	// ==== Gitee Release 发布通道（release） ====
 	// 更新包与 LTPX 应用市场共用同一仓库：两条通道在仓库内以「描述标记 + 附件名前缀」
@@ -480,82 +501,82 @@ func applyConfig(parameter *ModelConfig) []string {
 	// ==== 图像生成行为与资源策略（diffusion） ====
 	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置
 	if parameter.Diffusion.AllowDiffusion == true {
-		*AllowDiffusion = true
+		AllowDiffusion = true
 	} else {
-		*AllowDiffusion = false
+		AllowDiffusion = false
 	}
 	// 画图前显存守卫配置：仅在配置文件中显式给出时才覆盖默认值
 	if parameter.Diffusion.ImageVRAMGuard != nil {
-		*ImageVRAMGuard = *parameter.Diffusion.ImageVRAMGuard
+		ImageVRAMGuard = *parameter.Diffusion.ImageVRAMGuard
 	}
 	if parameter.Diffusion.ImageVRAMGuardMiB != nil {
-		*ImageVRAMGuardMiB = *parameter.Diffusion.ImageVRAMGuardMiB
+		ImageVRAMGuardMiB = *parameter.Diffusion.ImageVRAMGuardMiB
 	}
 	// sd.cpp 权重内存卸载与提示词编码器 CPU 运行配置：仅在配置文件中显式给出时才覆盖默认值
 	if parameter.Diffusion.SDOffloadToCPU != nil && *parameter.Diffusion.SDOffloadToCPU != "" {
-		*SDOffloadToCPU = *parameter.Diffusion.SDOffloadToCPU
+		SDOffloadToCPU = *parameter.Diffusion.SDOffloadToCPU
 	}
 	if parameter.Diffusion.SDTextEncoderOnCPU != nil {
-		*SDTextEncoderOnCPU = *parameter.Diffusion.SDTextEncoderOnCPU
+		SDTextEncoderOnCPU = *parameter.Diffusion.SDTextEncoderOnCPU
 	}
 	// VAE 分片解码策略：仅在配置文件显式给出非空值时才覆盖默认值（默认 off）
 	if parameter.Diffusion.SDVaeTiling != nil && *parameter.Diffusion.SDVaeTiling != "" {
-		*SDVaeTiling = *parameter.Diffusion.SDVaeTiling
+		SDVaeTiling = *parameter.Diffusion.SDVaeTiling
 	}
 	if parameter.Diffusion.SDVaeTileSize != nil && *parameter.Diffusion.SDVaeTileSize != "" {
-		*SDVaeTileSize = *parameter.Diffusion.SDVaeTileSize
+		SDVaeTileSize = *parameter.Diffusion.SDVaeTileSize
 	}
 	if parameter.Diffusion.SDVaeTileOverlap != nil {
-		*SDVaeTileOverlap = *parameter.Diffusion.SDVaeTileOverlap
+		SDVaeTileOverlap = *parameter.Diffusion.SDVaeTileOverlap
 	}
 	// VAE 解码后端与 direct conv：仅显式给出时覆盖（默认 auto / 关闭）
 	if parameter.Diffusion.SDVaeBackend != nil && *parameter.Diffusion.SDVaeBackend != "" {
-		*SDVaeBackend = *parameter.Diffusion.SDVaeBackend
+		SDVaeBackend = *parameter.Diffusion.SDVaeBackend
 	}
 	if parameter.Diffusion.SDVaeConvDirect != nil {
-		*SDVaeConvDirect = *parameter.Diffusion.SDVaeConvDirect
+		SDVaeConvDirect = *parameter.Diffusion.SDVaeConvDirect
 	}
 	// 显存预算与采样策略：空字符串表示"使用引擎自动决策"，因此只在非空时覆盖
 	if parameter.Diffusion.SDMaxVRAM != nil {
-		*SDMaxVRAM = *parameter.Diffusion.SDMaxVRAM
+		SDMaxVRAM = *parameter.Diffusion.SDMaxVRAM
 	}
 	if parameter.Diffusion.SDSampler != nil && *parameter.Diffusion.SDSampler != "" {
-		*SDSampler = *parameter.Diffusion.SDSampler
+		SDSampler = *parameter.Diffusion.SDSampler
 	}
 	if parameter.Diffusion.SDScheduler != nil && *parameter.Diffusion.SDScheduler != "" {
-		*SDScheduler = *parameter.Diffusion.SDScheduler
+		SDScheduler = *parameter.Diffusion.SDScheduler
 	}
 	if parameter.Diffusion.SDFlowShift != nil {
-		*SDFlowShift = *parameter.Diffusion.SDFlowShift
+		SDFlowShift = *parameter.Diffusion.SDFlowShift
 	}
 	if parameter.Diffusion.SDFlashAttention != nil {
-		*SDFlashAttention = *parameter.Diffusion.SDFlashAttention
+		SDFlashAttention = *parameter.Diffusion.SDFlashAttention
 	}
 	// 缺省步数与边长：仅接受正数，避免非法配置把生成参数打成 0
 	if parameter.Diffusion.SDSteps != nil && *parameter.Diffusion.SDSteps > 0 {
-		*SDSteps = *parameter.Diffusion.SDSteps
+		SDSteps = *parameter.Diffusion.SDSteps
 	}
 	if parameter.Diffusion.SDImageSize != nil && *parameter.Diffusion.SDImageSize > 0 {
-		*SDImageSize = *parameter.Diffusion.SDImageSize
+		SDImageSize = *parameter.Diffusion.SDImageSize
 	}
 	// ==== 服务运行与调试（system） ====
 	// 如果配置文件中 Developer 字段非空，则更新全局配置
 	if parameter.System.Developer == true {
-		*Developer = true
+		Developer = true
 	} else {
-		*Developer = false
+		Developer = false
 	}
 	// 引擎服务绑定范围与插件 TLS 校验：仅在配置文件中显式给出时才覆盖安全默认值
 	if parameter.System.AllowLAN != nil {
-		*AllowLAN = *parameter.System.AllowLAN
+		AllowLAN = *parameter.System.AllowLAN
 	}
 	if parameter.System.InsecureTLS != nil {
-		*InsecureTLS = *parameter.System.InsecureTLS
+		InsecureTLS = *parameter.System.InsecureTLS
 	}
 	// ==== 控制台日志（system.console_log） ====
 	// 控制台日志镜像：仅在配置中显式开启时落盘，未配置保持默认关闭
 	if parameter.System.ConsoleLog != nil {
-		*ConsoleLogEnabled = *parameter.System.ConsoleLog
+		ConsoleLogEnabled = *parameter.System.ConsoleLog
 	}
 	// ==== 旧 tui 节（已取消） ====
 	// 程序只剩控制台一种形态：前端窗口全部关闭不再退出进程，故该节已无对应功能，

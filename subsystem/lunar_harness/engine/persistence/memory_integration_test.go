@@ -66,16 +66,16 @@ func startFakeEmbeddingServer(t *testing.T) *httptest.Server {
 // isolateStorage 把 LocalDir 与资源目录数据库指向临时目录，避免测试写入仓库数据。
 func isolateStorage(t *testing.T) {
 	t.Helper()
-	origLocal := *config.LocalDir
-	origArchive := *config.ArchiveDBPath
+	origLocal := config.LocalDir
+	origArchive := config.ArchiveDBPath
 	tmp := t.TempDir()
-	*config.LocalDir = tmp
-	*config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	config.LocalDir = tmp
+	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
 	t.Cleanup(func() {
 		// 先关闭 SQLite 连接，否则 Windows 上临时目录因文件占用无法删除
 		_ = CloseArchiveDB()
-		*config.LocalDir = origLocal
-		*config.ArchiveDBPath = origArchive
+		config.LocalDir = origLocal
+		config.ArchiveDBPath = origArchive
 	})
 }
 
@@ -84,13 +84,13 @@ func TestMemoryEndToEndTypeRouting(t *testing.T) {
 	defer server.Close()
 
 	isolateStorage(t)
-	origURL := *config.AgentEmbeddingURL
-	origModel := *config.AgentEmbeddingModel
-	*config.AgentEmbeddingURL = server.URL + "/v1"
-	*config.AgentEmbeddingModel = "test-embedding"
+	origURL := config.AgentEmbeddingURL
+	origModel := config.AgentEmbeddingModel
+	config.AgentEmbeddingURL = server.URL + "/v1"
+	config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
-		*config.AgentEmbeddingURL = origURL
-		*config.AgentEmbeddingModel = origModel
+		config.AgentEmbeddingURL = origURL
+		config.AgentEmbeddingModel = origModel
 	})
 
 	d := initMemoryDBInstance(t.TempDir())
@@ -161,19 +161,19 @@ func TestMemoryAddImageDedupByContent(t *testing.T) {
 	defer server.Close()
 
 	isolateStorage(t)
-	origURL := *config.AgentEmbeddingURL
-	origModel := *config.AgentEmbeddingModel
-	origMMURL := *config.AgentMultimodalURL
-	origMMModel := *config.AgentMultimodalModel
-	*config.AgentEmbeddingURL = server.URL + "/v1"
-	*config.AgentEmbeddingModel = "test-embedding"
-	*config.AgentMultimodalURL = server.URL + "/v1"
-	*config.AgentMultimodalModel = "test-multimodal"
+	origURL := config.AgentEmbeddingURL
+	origModel := config.AgentEmbeddingModel
+	origMMURL := config.AgentMultimodalURL
+	origMMModel := config.AgentMultimodalModel
+	config.AgentEmbeddingURL = server.URL + "/v1"
+	config.AgentEmbeddingModel = "test-embedding"
+	config.AgentMultimodalURL = server.URL + "/v1"
+	config.AgentMultimodalModel = "test-multimodal"
 	t.Cleanup(func() {
-		*config.AgentEmbeddingURL = origURL
-		*config.AgentEmbeddingModel = origModel
-		*config.AgentMultimodalURL = origMMURL
-		*config.AgentMultimodalModel = origMMModel
+		config.AgentEmbeddingURL = origURL
+		config.AgentEmbeddingModel = origModel
+		config.AgentMultimodalURL = origMMURL
+		config.AgentMultimodalModel = origMMModel
 	})
 
 	d := initMemoryDBInstance(t.TempDir())
@@ -199,7 +199,7 @@ func TestMemoryAddImageDedupByContent(t *testing.T) {
 	if !strings.Contains(entry.URL, "/multimedia/memory/") {
 		t.Fatalf("新版图片应落在 multimedia/memory/<分组>/，实得 %s", entry.URL)
 	}
-	imageAbs := filepath.Join(*config.LocalDir, filepath.FromSlash(strings.TrimPrefix(entry.URL, "/file/read/")))
+	imageAbs := filepath.Join(config.LocalDir, filepath.FromSlash(strings.TrimPrefix(entry.URL, "/file/read/")))
 	if _, err := os.Stat(imageAbs); err != nil {
 		t.Fatalf("图片实体未落盘: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestMemoryAddImageDedupByContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("读取第二张图片失败: %v", err)
 	}
-	secondAbs := filepath.Join(*config.LocalDir, filepath.FromSlash(strings.TrimPrefix(secondEntry.URL, "/file/read/")))
+	secondAbs := filepath.Join(config.LocalDir, filepath.FromSlash(strings.TrimPrefix(secondEntry.URL, "/file/read/")))
 	if _, err := os.Stat(secondAbs); err != nil {
 		t.Fatalf("第二张图片实体不存在: %v", err)
 	}
@@ -262,13 +262,13 @@ func TestMemoryNameEmbeddingPersisted(t *testing.T) {
 	defer server.Close()
 
 	isolateStorage(t)
-	origURL := *config.AgentEmbeddingURL
-	origModel := *config.AgentEmbeddingModel
-	*config.AgentEmbeddingURL = server.URL + "/v1"
-	*config.AgentEmbeddingModel = "test-embedding"
+	origURL := config.AgentEmbeddingURL
+	origModel := config.AgentEmbeddingModel
+	config.AgentEmbeddingURL = server.URL + "/v1"
+	config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
-		*config.AgentEmbeddingURL = origURL
-		*config.AgentEmbeddingModel = origModel
+		config.AgentEmbeddingURL = origURL
+		config.AgentEmbeddingModel = origModel
 	})
 
 	base := t.TempDir()

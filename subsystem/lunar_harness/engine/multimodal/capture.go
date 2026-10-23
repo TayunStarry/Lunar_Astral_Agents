@@ -33,10 +33,10 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 
 	// 默认值
 	if req.Format == "" {
-		req.Format = *config.Format
+		req.Format = config.Format
 	}
 	if req.Quality == 0 {
-		req.Quality = *config.JPEGQuality
+		req.Quality = config.JPEGQuality
 	}
 	if req.Mode == "" {
 		req.Mode = ModeAuto
