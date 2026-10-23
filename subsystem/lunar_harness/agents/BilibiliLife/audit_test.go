@@ -90,9 +90,19 @@ func TestGrayGrid(t *testing.T) {
 	}
 }
 
-// TestAuditRejectLimitConstant 钉住连续拒绝上限，防止选片死循环。
-func TestAuditRejectLimitConstant(t *testing.T) {
-	if auditRejectMaxLimit < 1 || auditRejectMaxLimit > 5 {
-		t.Fatalf("连续拒绝上限应在 1-5 之间，实际 %d", auditRejectMaxLimit)
+// TestAuditRejectLimit 钉住放弃本轮的阈值：本轮视频观看额度 × 3。
+// 额度 3 时应为连续 9 个视频未通过审核才放弃；额度非法时按最小额度兜底，
+// 防止审核器与推荐池拉扯成死循环，也防止 0 阈值让一轮一开场就被放弃。
+func TestAuditRejectLimit(t *testing.T) {
+	if got := auditRejectLimit(3); got != 9 {
+		t.Fatalf("观看额度 3 时放弃阈值应为 9，实际 %d", got)
+	}
+	for _, quota := range []int{videoMinCount, defaultVideosPerRound, videoMaxCount} {
+		if got := auditRejectLimit(quota); got != quota*auditRejectQuotaFactor {
+			t.Fatalf("额度 %d 的阈值应为 %d，实际 %d", quota, quota*auditRejectQuotaFactor, got)
+		}
+	}
+	if got := auditRejectLimit(0); got != videoMinCount*auditRejectQuotaFactor {
+		t.Fatalf("额度 0 应兜底为 %d，实际 %d", videoMinCount*auditRejectQuotaFactor, got)
 	}
 }

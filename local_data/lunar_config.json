@@ -4,9 +4,9 @@
 		"schemes": {
 			"turbo": {
 				"label": "速度优先",
-				"diffusion_model": "./local_data/models/Qwen-image-2.1/qwen-image-2.1-turbo-Q4_K_M.gguf",
-				"variational_model": "./local_data/models/Qwen-image-2.1/qwen_image_2.1_vae_bf16.safetensors",
-				"prompt_analysis_model": "./local_data/models/Qwen-image-2.1/Qwen3-VL-8B-Instruct-Q4_K_M.gguf",
+				"diffusion_model": "./local_data/models/z_image_turbo/z-image-turbo-Q4_K_M-UD.gguf",
+				"variational_model": "./local_data/models/z_image_turbo/diffusion_pytorch_model.safetensors",
+				"prompt_analysis_model": "./local_data/models/z_image_turbo/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
 				"prompt_mmproj_model": null,
 				"real_esrgan_model": "./local_data/models/4x-AnimeSharp.pth",
 				"steps": 8

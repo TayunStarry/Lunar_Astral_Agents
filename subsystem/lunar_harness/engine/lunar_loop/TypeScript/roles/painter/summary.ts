@@ -1,5 +1,4 @@
 import type { ToolCallItem } from '../../config/model';
-import { interactEvent } from '../../capabilities/ltp-event';
 import { resolveImageRef } from '../../capabilities/image-tag';
 import { normalizeStrength } from './frame';
 import { normalizeGroupRoles, characterLabel } from './characters';
@@ -65,12 +64,6 @@ export function collectPaintingDetail(
 export function buildPaintingSummary(paintings: PaintingDetail[]): string {
 	// 检查是否有作品
 	if (paintings.length === 0) return '月华没有绘制任何作品';
-	// 事件 -> 绘制画作前：推送作品详情，插件可改写后再汇总
-	const feedback: PaintingDetail[] = interactEvent('draw_painting_before', { paintings }).return;
-	// 插件可改写作品详情，如添加乐器、速度、结构等
-	if (feedback && Array.isArray(feedback) && feedback.every(p => p.toolName && p.promptSummary)) {
-		paintings = feedback;
-	}
 	const parts: string[] = [];
 	for (const p of paintings) {
 		if (p.toolName === 'portrait') {

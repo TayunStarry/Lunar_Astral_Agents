@@ -147,7 +147,7 @@ type LTPXResultRequest struct {
 // LTPXRemoteEventRequest 事件推送请求体（POST /ltpx/event）
 // 调用方在每个「xx事件发生前」触发点把原始负载推送过来，经 LTP9 引擎派发到订阅插件。
 type LTPXRemoteEventRequest struct {
-	Topic   string `json:"topic,omitempty"` // 事件主题（如 message_received_before）
+	Topic   string `json:"topic,omitempty"` // 事件主题（如 before_reading_message）
 	Event   string `json:"event,omitempty"` // 事件中文名（备用，优先用 topic）
 	Payload any    `json:"payload,omitempty"`
 	Time    int64  `json:"time,omitempty"` // 事件发生时间戳（Unix 秒）

@@ -96,14 +96,6 @@ type LTPXRemoteStatusResult struct {
 	Tools []LTPXRemoteToolRef `json:"tools,omitempty"` // 可调用应用清单（tool 枚举 + details 数据源）
 }
 
-// LTPXRemoteEventResult 月华事件推送结果（同步返回给 JS 端）
-type LTPXRemoteEventResult struct {
-	Modified bool `json:"modified"` // 是否有插件通过 modifiedData 改写了负载
-	Data     any  `json:"data"`     // 插件处理后的负载；未改写时为 null（调用方用原始数据）
-	Returned bool `json:"returned"` // 是否有插件通过 return 回传了本次事件的业务结果
-	Return   any  `json:"return"`   // 插件经 return 回传的业务结果；无回传时为 null（调用方走本地默认处理）
-}
-
 // PushContextData 推送上下文数据
 type PushContextData struct {
 	Type    string `json:"type"`

@@ -3,7 +3,6 @@
 // ============================================================
 
 import { GlobalConfig } from '../../config/global';
-import { interactEvent } from '../../capabilities/ltp-event';
 import type { ScheduleItem } from './defs';
 import { scheduleTools, PRESET_DAILY_TASKS, SCHEDULE_OVERDUE_ABANDON_MS, SCHEDULE_TRIGGER_PREFIX } from './defs';
 import { normalizeTime, dailyTaskTime, formatDate } from './time';
@@ -306,10 +305,7 @@ export function checkDueItems(): ScheduleItem[] {
 export function flushDueScheduleItems(): ScheduleItem[] {
 	const due = checkDueItems();
 	for (const item of due) {
-		// 事件 -> 执行计划前：推送到期计划，插件可经 return.plan 改写计划内容
-		const feedback: { plan?: string } = interactEvent('execution_schedule_before', { plan: item.content }).return;
-		const content = (feedback && typeof feedback.plan === 'string') ? feedback.plan : item.content;
-		GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${content}` });
+		GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` });
 	}
 	return due;
 }

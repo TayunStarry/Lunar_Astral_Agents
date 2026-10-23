@@ -514,22 +514,6 @@ var lunarBundle = (function (exports) {
     GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
     GlobalConfig.LTPfunction.set('dispatch_screenshoter', handleDispatchScreenshoter);
 
-    function interactEvent(topic, payload) {
-        try {
-            const resultJSON = ltpInteractEvent(topic, JSON.stringify(payload ?? {}));
-            if (!resultJSON)
-                return {};
-            const res = JSON.parse(resultJSON);
-            if (res && res.returned && res.return !== null && res.return !== undefined) {
-                return { return: res.return };
-            }
-        }
-        catch (e) {
-            console.error('LTPX 事件交互失败:', e);
-        }
-        return {};
-    }
-
     const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
     const SCHEDULE_OVERDUE_ABANDON_MS = 30 * 60 * 1000;
     const PRESET_DAILY_TASKS = [
@@ -998,9 +982,7 @@ var lunarBundle = (function (exports) {
     function flushDueScheduleItems() {
         const due = checkDueItems();
         for (const item of due) {
-            const feedback = interactEvent('execution_schedule_before', { plan: item.content }).return;
-            const content = (feedback && typeof feedback.plan === 'string') ? feedback.plan : item.content;
-            GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${content}` });
+            GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` });
         }
         return due;
     }
@@ -2162,10 +2144,6 @@ var lunarBundle = (function (exports) {
     function buildPaintingSummary(paintings) {
         if (paintings.length === 0)
             return '月华没有绘制任何作品';
-        const feedback = interactEvent('draw_painting_before', { paintings }).return;
-        if (feedback && Array.isArray(feedback) && feedback.every(p => p.toolName && p.promptSummary)) {
-            paintings = feedback;
-        }
         const parts = [];
         for (const p of paintings) {
             if (p.toolName === 'portrait') {
@@ -3281,10 +3259,6 @@ var lunarBundle = (function (exports) {
     function buildMusicSummary(pieces) {
         if (pieces.length === 0)
             return '月华没有演奏任何作品';
-        const feedback = interactEvent('play_music_before', { pieces }).return;
-        if (feedback && Array.isArray(feedback) && feedback.every(p => p.title && p.instruments && p.tempo && p.structure && p.key && p.meter && p.abcLength !== undefined)) {
-            pieces = feedback;
-        }
         const parts = [];
         for (const p of pieces) {
             let desc = `月华演奏了《${p.title}》`;
@@ -5155,10 +5129,6 @@ var lunarBundle = (function (exports) {
             let records = this.retrieveRagRecords(userMessages);
             if (records.length === 0)
                 return '';
-            const feedback = interactEvent('build_memory_before', { userMessages, records }).return;
-            if (feedback && Array.isArray(feedback) && feedback.length > 0 && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
-                records = feedback;
-            }
             return this.buildTimeline(records);
         }
         buildTimeline(records) {
@@ -5583,9 +5553,6 @@ var lunarBundle = (function (exports) {
                 return;
             }
             updatePreviousMemories();
-            const feedback = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext }).return;
-            if (feedback && Array.isArray(feedback.messages))
-                GlobalConfig.unreadContext = feedback.messages;
             await createChatMessage();
             if (!GlobalConfig.finalResponse.trim().length) {
                 const failure = GlobalConfig.lastFailure;
@@ -5604,15 +5571,11 @@ var lunarBundle = (function (exports) {
                 throw new Error('清洗后的文本为空');
             const replyText = displayText.trim() || validMessage;
             if (actionBlocks.length) {
-                const feedback = interactEvent('take_action_before', { actions: actionBlocks }).return;
-                const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
-                await performMatchedAction(actBlocks.join(' ').trim() || validMessage);
+                await performMatchedAction(actionBlocks.join(' ').trim() || validMessage);
                 pushAssistantImage([await queryEmotionSticker(validMessage)], true);
             }
             else if (validMessage.length <= 36 && Math.random() < 0.15) {
-                const feedback = interactEvent('express_emotions_before', { text: validMessage }).return;
-                const emoText = (feedback && typeof feedback.text === 'string') ? feedback.text : validMessage;
-                pushAssistantImage([await queryEmotionSticker(emoText)], true);
+                pushAssistantImage([await queryEmotionSticker(validMessage)], true);
             }
             thinkingBlocks.forEach(thinking => pushAssistantContext('text', thinking, ''));
             codeBlocks.forEach(code => pushAssistantContext('text', code, ''));

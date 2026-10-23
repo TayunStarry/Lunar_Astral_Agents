@@ -29,6 +29,8 @@ type phase string
 
 const (
 	phaseLogin         phase = "login"
+	phaseInbox         phase = "inbox"
+	phaseInboxReply    phase = "inbox_reply"
 	phaseSelect        phase = "select"
 	phaseDownload      phase = "download"
 	phaseUnderstand    phase = "understand"
@@ -68,10 +70,14 @@ type lifeState struct {
 	ReplyIndex   int            `json:"reply_index"`
 	RepliesUsed  int            `json:"replies_used,omitempty"` // 已用掉的回应额度（评论/动态/私信共享）
 	ReplyChecked bool           `json:"reply_checked"`
-	AuditRejects int            `json:"audit_rejects,omitempty"` // 本轮被静态画面审核拒绝的视频数
-	Progress     string         `json:"progress"`
-	StartedAt    string         `json:"started_at"`
-	Forced       bool           `json:"forced"`
+	// 未读消息（回复我的 / @我的）在进入看视频前先处理
+	InboxChecked bool        `json:"inbox_checked,omitempty"`
+	InboxTargets []inboxItem `json:"inbox_targets,omitempty"`
+	InboxIndex   int         `json:"inbox_index"`
+	AuditRejects int         `json:"audit_rejects,omitempty"` // 本轮被静态画面审核拒绝的视频数
+	Progress     string      `json:"progress"`
+	StartedAt    string      `json:"started_at"`
+	Forced       bool        `json:"forced"`
 }
 
 type runner struct {
@@ -214,9 +220,9 @@ func newRunner(cfg Config, forced bool) *runner {
 	if cfg.RepliesPerRound <= 0 {
 		cfg.RepliesPerRound = defaultRepliesPerRound
 	}
-	logger.Info("BilibiliLife", "本轮选片偏好：参考词 %d 个；过滤词 %d 个；@目标 %d 个；目标视频 %d 个；每视频 %d 个切片",
+	logger.Info("BilibiliLife", "本轮选片偏好：参考词 %d 个；过滤词 %d 个；@目标 %d 个；目标视频 %d 个；每视频 %d 个切片；仅在动态呼叫用户=%v",
 		len(cfg.PreferenceKeywords), len(cfg.BlockedKeywords), len(cfg.MentionTargets),
-		cfg.VideosPerRound, cfg.SlicesPerVideo)
+		cfg.VideosPerRound, cfg.SlicesPerVideo, cfg.onlyCallUserInDynamic())
 	return &runner{
 		cfg: cfg,
 		state: &lifeState{
@@ -548,7 +554,59 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			}
 			return false, err
 		}
-		s.Phase = phaseSelect
+		s.Phase = phaseInbox
+		r.saveState()
+		return false, m.pauseIfNeeded()
+
+	case phaseInbox:
+		// 必须在选片之前完成：先把评论区追评、动态回复与 @月华 处理掉
+		if s.InboxChecked {
+			s.Phase = phaseInboxReply
+			return false, nil
+		}
+		m.setProgress("正在检查 B 站未读消息…")
+		items, err := r.browser.fetchInboxItems()
+		if err != nil {
+			logger.Warn("BilibiliLife", "读取 B 站未读消息失败（本轮跳过）: %v", err)
+			items = nil
+		}
+		s.InboxTargets = filterUnreadInbox(items, loadInboxSeen(), time.Now())
+		s.InboxIndex = 0
+		s.InboxChecked = true
+		if len(s.InboxTargets) == 0 {
+			logger.Info("BilibiliLife", "没有需要回应的未读消息，开始刷视频")
+			s.Phase = phaseSelect
+		} else {
+			logger.Info("BilibiliLife", "发现 %d 条未读消息，先回应再刷视频", len(s.InboxTargets))
+			s.Phase = phaseInboxReply
+		}
+		r.saveState()
+		return false, m.pauseIfNeeded()
+
+	case phaseInboxReply:
+		// 逐条回应，每条一个可中断小步骤；额度与动态回复共享
+		if s.InboxIndex >= len(s.InboxTargets) || s.RepliesUsed >= r.cfg.RepliesPerRound {
+			if remaining := len(s.InboxTargets) - s.InboxIndex; remaining > 0 {
+				logger.Info("BilibiliLife", "本轮回应额度已用完，剩余 %d 条未读留到下一轮", remaining)
+			}
+			s.Phase = phaseSelect
+			r.saveState()
+			return false, m.pauseIfNeeded()
+		}
+		item := s.InboxTargets[s.InboxIndex]
+		m.setProgress(fmt.Sprintf("正在回应 B 站未读消息 %d/%d…", s.RepliesUsed+1, r.cfg.RepliesPerRound))
+		text, err := generateInboxReply(item)
+		if err == nil {
+			err = r.browser.postInboxReply(item, text)
+		}
+		if err != nil {
+			logger.Warn("BilibiliLife", "回应未读消息失败 → %s: %v", item.User, err)
+		} else {
+			logger.Info("BilibiliLife", "已回应 B 站未读消息 → %s：%s", item.User, text)
+			markInboxSeen(item)
+		}
+		s.InboxIndex++
+		s.RepliesUsed++
 		r.saveState()
 		return false, m.pauseIfNeeded()
 
@@ -620,14 +678,15 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			logger.Warn("BilibiliLife", "视频内容审核失败（放行）: %v", auditErr)
 		} else if rejected {
 			s.AuditRejects++
-			logger.Info("BilibiliLife", "《%s》(%s) 未通过内容审核（第 %d 次），重新选片（不占观看额度）",
-				cur.Info.Title, cur.Info.Bvid, s.AuditRejects)
+			limit := auditRejectLimit(r.cfg.VideosPerRound)
+			logger.Info("BilibiliLife", "《%s》(%s) 未通过内容审核（第 %d/%d 次），重新选片（不占观看额度）",
+				cur.Info.Title, cur.Info.Bvid, s.AuditRejects, limit)
 			_ = os.Remove(local)
 			cur.LocalPath = ""
 			cur.Segments = nil
 			s.Current = nil
-			if s.AuditRejects >= auditRejectMaxLimit {
-				return false, fmt.Errorf("连续 %d 个视频未通过静态画面审核，放弃本轮", s.AuditRejects)
+			if s.AuditRejects >= limit {
+				return false, fmt.Errorf("连续 %d 个视频未通过静态画面审核（阈值 %d），放弃本轮", s.AuditRejects, limit)
 			}
 			s.Phase = phaseSelect
 			r.saveState()
@@ -757,6 +816,15 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			s.Phase = phaseDiary
 			return false, nil
 		}
+		// 「仅在动态中呼叫用户」开启时：完全跳过「从多个视频里挑一条 + 生成 @评论」，
+		// 改为在 phaseDiary 的动态末尾另起一行 @ 目标用户。
+		if r.cfg.onlyCallUserInDynamic() {
+			logger.Info("BilibiliLife", "已开启「仅在动态中呼叫用户」，跳过视频 @分享评论")
+			s.ShareDone = true
+			s.Phase = phaseDiary
+			r.saveState()
+			return false, m.pauseIfNeeded()
+		}
 		// 没配置 mention_targets 就不发 @ 分享：开源项目不内置任何 @ 对象，
 		// 避免别人部署后 @ 到作者或无关账号。
 		names := r.cfg.mentionNames()
@@ -812,7 +880,13 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		}
 		s.DiaryHandle = handle
 		s.DiaryLines = lines
-		dynamic := buildDynamicText(title, urls, brief)
+		// 开启「仅在动态中呼叫用户」时，动态正文末尾单独一行 @ 目标用户；
+		// 关闭时沿用原有逻辑（呼叫内容已在 phaseShare 的 @分享评论里）。
+		var callNames []string
+		if r.cfg.onlyCallUserInDynamic() {
+			callNames = r.cfg.mentionNames()
+		}
+		dynamic := buildDynamicTextWithCall(title, urls, brief, callNames)
 		dynID, err := r.browser.publishDiary(dynamic)
 		if err != nil {
 			return false, err
@@ -857,6 +931,12 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 				logger.Warn("BilibiliLife", "回复 %s 失败: %v", target.User, err)
 			} else {
 				logger.Info("BilibiliLife", "动态回复已发布 → %s：%s", target.User, text)
+				// 记入未读去重表：下一轮消息中心再拉到这条互动时不再重复回复。
+				// source/reply 两个键都记，兼容消息中心把这条评论放在不同字段的情况。
+				markInboxSeenKeys([]string{
+					fmt.Sprintf("reply:17:%s:%s", s.DynID, target.Rpid),
+					fmt.Sprintf("source:17:%s:%s", s.DynID, target.Rpid),
+				})
 			}
 			s.RepliesUsed++
 			s.ReplyIndex++

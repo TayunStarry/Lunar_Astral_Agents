@@ -6,7 +6,7 @@ import (
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/ltp9"
+	"LunarSubsystem/LunarHarness/engine/plugin"
 	"LunarSubsystem/LunarHarness/transport/ws"
 	"encoding/json"
 	"fmt"
@@ -27,8 +27,8 @@ import (
 //      → 通过 /ws 广播给前端 → 前端打开包页面并 postMessage 投递给包 → 包执行（含页面展示）
 //      → 回执 /ltpx/result 写入结果通道；月华在进程内经结果通道取回
 //      （内置 Auto-LTP / Web-LTP 智能体同样异步受理，在 goroutine 中执行后写入结果通道）
-//   3. 月华在每个「xx事件发生前」触发点把原始负载推送给 LTP9 插件处理；
-//      无插件订阅/未改写/未回传时，月华回退使用原始数据
+//   3. LTP9 事件全部由 Go 边界触发（读取消息前 / 消息发送前 / 查询开始与结束前），
+//      goja 对话链不再发送或处理事件；无插件订阅/未改写/未回传时沿用原始数据
 //   4. 琉璃核心不随包增删而改动：加载/卸载工具只影响扫描结果
 //
 // 合并为单进程后已无「心跳探测 / 在线判定」环节：工具提供方与消费方同处一个进程，
@@ -344,12 +344,27 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 					writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: fmt.Sprintf("网络搜索执行异常: %v", rec)})
 				}
 			}()
-			text, err := WebLTP.Run(instruction)
+			// 查询开始前事件：插件改写指令或取消本次搜索
+			queryInstruction, allow := applyBeforeQueryStarts(instruction)
+			if !allow {
+				logger.Info("CrystalAstral", "Web-LTP 网络搜索被 LTP9 插件取消 (request_id=%s)", requestID)
+				writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: "网络搜索请求已被 LTP9 插件取消"})
+				return
+			}
+			text, err := WebLTP.Run(queryInstruction)
 			resp := LTPXRemoteCallResponse{Text: text}
 			if err != nil {
 				resp.Success, resp.Error = false, err.Error()
 			} else {
+				// 查询结束前事件：插件改写/追加报告或取消本次交付
+				report, deliver := applyBeforeQueryEnds(queryInstruction, text)
+				if !deliver {
+					logger.Info("CrystalAstral", "Web-LTP 搜索报告被 LTP9 插件取消 (request_id=%s)", requestID)
+					writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: "网络搜索报告已被 LTP9 插件取消"})
+					return
+				}
 				resp.Success = true
+				resp.Text = report
 				if resp.Text == "" {
 					resp.Text = "搜索已完成"
 				}

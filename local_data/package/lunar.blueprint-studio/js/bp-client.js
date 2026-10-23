@@ -1,5 +1,5 @@
 // ==== 蓝图后端执行客户端 ====
-// 调度循环已迁移至引擎（engine/9.1-Flash blueprint.go）：前端提交图数据（ltp9/bp_run），
+// 调度循环已迁移至引擎（engine/plugin blueprint.go）：前端提交图数据（ltp9/bp_run），
 // 后端逐节点执行并推送状态（ltp9/bp_node），浏览器专属节点经 ltp9/bp_exec 协作执行，
 // 前端回报 ltp9/bp_exec_result，运行收尾推送 ltp9/bp_done。
 // 前端职责：图显示 / 状态渲染 / 参数编辑 / 持久化 / 浏览器节点执行。

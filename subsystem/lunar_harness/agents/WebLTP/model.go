@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // loggerWarn 统一日志入口
@@ -34,16 +35,24 @@ var (
 	observerBegin func(role string)
 	observerDelta func(role, kind, text string)
 	observerEnd   func(role string)
+	// observerMeter 模型调用计量回调：网络搜索的调用同样计入「运行状态」的模型计量
+	observerMeter func(prompt, completion int64, generation time.Duration, estimated bool)
 )
+
+// modelUsage OpenAI 兼容响应中的 token 用量
+type modelUsage struct {
+	Prompt     int64 `json:"prompt_tokens"`
+	Completion int64 `json:"completion_tokens"`
+}
 
 // webSearchModelRole 网络搜索的实况角色标签（TUI 显示）
 const webSearchModelRole = "网络搜索"
 
-// SetModelObserver 注入实况观察者（app 层启动时调用）
-func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string)) {
+// SetModelObserver 注入实况观察者与计量回调（app 层启动时调用）
+func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion int64, generation time.Duration, estimated bool)) {
 	observerMu.Lock()
 	defer observerMu.Unlock()
-	observerBegin, observerDelta, observerEnd = begin, delta, end
+	observerBegin, observerDelta, observerEnd, observerMeter = begin, delta, end, meter
 }
 
 // observeBegin 通知实况开始
@@ -77,6 +86,24 @@ func observeEnd() {
 	if fn != nil {
 		fn(webSearchModelRole)
 	}
+}
+
+// reportModelCall 把一次调用计入「运行状态」的模型计量：
+// 优先用服务端回传的真实 usage，缺失时按请求体与输出文本长度估算（标记 estimated）。
+func reportModelCall(requestBody []byte, completionText string, usage *modelUsage, elapsed time.Duration) {
+	observerMu.Lock()
+	fn := observerMeter
+	observerMu.Unlock()
+	if fn == nil {
+		return
+	}
+	if usage != nil && (usage.Prompt > 0 || usage.Completion > 0) {
+		fn(usage.Prompt, usage.Completion, elapsed, false)
+		return
+	}
+	prompt := int64(utf8.RuneCountInString(string(requestBody))) / 3
+	completion := int64(utf8.RuneCountInString(completionText))
+	fn(prompt, completion, elapsed, true)
 }
 
 func resolveModel() {
@@ -117,6 +144,8 @@ func chatText(messages []chatMessage) (string, error) {
 		"model":    modelName,
 		"messages": messages,
 		"stream":   true,
+		// 让服务端在流末回传 usage，模型计量才拿得到真实 token
+		"stream_options": map[string]any{"include_usage": true},
 	})
 	if err != nil {
 		return "", fmt.Errorf("序列化请求失败: %w", err)
@@ -129,6 +158,7 @@ func chatText(messages []chatMessage) (string, error) {
 	if modelKey != "" {
 		req.Header.Set("Authorization", "Bearer "+modelKey)
 	}
+	start := time.Now()
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("请求失败: %w", err)
@@ -140,7 +170,12 @@ func chatText(messages []chatMessage) (string, error) {
 	}
 	// 服务端可能忽略 stream 参数直接返回 JSON：两种形态都要兼容
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
-		return readModelStream(resp.Body)
+		text, reasoning, usage, err := readModelStream(resp.Body)
+		if err != nil {
+			return "", err
+		}
+		reportModelCall(body, text+reasoning, usage, time.Since(start))
+		return text, nil
 	}
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -149,9 +184,11 @@ func chatText(messages []chatMessage) (string, error) {
 	var chatResp struct {
 		Choices []struct {
 			Message struct {
-				Content string `json:"content"`
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage *modelUsage `json:"usage"`
 		Error *struct {
 			Message string `json:"message"`
 		} `json:"error"`
@@ -167,14 +204,17 @@ func chatText(messages []chatMessage) (string, error) {
 	}
 	text := strings.TrimSpace(chatResp.Choices[0].Message.Content)
 	observeDelta("content", text)
+	reportModelCall(body, text+chatResp.Choices[0].Message.ReasoningContent, chatResp.Usage, time.Since(start))
 	return text, nil
 }
 
-// readModelStream 解析 OpenAI 兼容 SSE，边收边送实况
-func readModelStream(body io.Reader) (string, error) {
+// readModelStream 解析 OpenAI 兼容 SSE，边收边送实况；同时取回思考文本与用量
+func readModelStream(body io.Reader) (string, string, *modelUsage, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	var content strings.Builder
+	var reasoning strings.Builder
+	var usage *modelUsage
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -191,6 +231,7 @@ func readModelStream(body io.Reader) (string, error) {
 					ReasoningContent string `json:"reasoning_content"`
 				} `json:"delta"`
 			} `json:"choices"`
+			Usage *modelUsage `json:"usage"`
 			Error *struct {
 				Message string `json:"message"`
 			} `json:"error"`
@@ -199,10 +240,14 @@ func readModelStream(body io.Reader) (string, error) {
 			continue
 		}
 		if chunk.Error != nil && chunk.Error.Message != "" {
-			return "", fmt.Errorf("模型 API 错误: %s", chunk.Error.Message)
+			return "", "", nil, fmt.Errorf("模型 API 错误: %s", chunk.Error.Message)
+		}
+		if chunk.Usage != nil {
+			usage = chunk.Usage
 		}
 		for _, choice := range chunk.Choices {
 			if choice.Delta.ReasoningContent != "" {
+				reasoning.WriteString(choice.Delta.ReasoningContent)
 				observeDelta("think", choice.Delta.ReasoningContent)
 			}
 			if choice.Delta.Content != "" {
@@ -212,13 +257,13 @@ func readModelStream(body io.Reader) (string, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("读取模型流失败: %w", err)
+		return "", "", nil, fmt.Errorf("读取模型流失败: %w", err)
 	}
 	text := strings.TrimSpace(content.String())
 	if text == "" {
-		return "", fmt.Errorf("模型 API 返回空响应")
+		return "", "", nil, fmt.Errorf("模型 API 返回空响应")
 	}
-	return text, nil
+	return text, reasoning.String(), usage, nil
 }
 
 // ExtractQuery 把月华的自然语言指令提炼为必应检索词；失败时返回原指令。

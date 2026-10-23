@@ -37,10 +37,20 @@ const (
 	stasisMinRun = 5
 	// stasisMaxSamples 采样帧数上限（600 秒视频 @2s/帧 = 300 帧）
 	stasisMaxSamples = 300
-	// auditRejectMaxLimit 单轮允许连续被审核拒绝的视频数：连续超限则放弃本轮，
-	// 避免审核器与推荐池互相拉扯造成无限选片循环
-	auditRejectMaxLimit = 3
+	// auditRejectQuotaFactor 单轮允许的审核失败次数相对观看额度的倍数：
+	// 放弃阈值 = 本轮视频观看额度 × 该倍数（额度 3 → 连续 9 个视频未通过才放弃），
+	// 避免审核器与推荐池互相拉扯造成无限选片循环，也避免一两部片子就中止一轮。
+	auditRejectQuotaFactor = 3
 )
+
+// auditRejectLimit 本轮允许的静态画面审核失败次数（观看额度 × 3）。
+// 额度非法（<=0）时按最小额度兜底，避免 0 阈值让本轮一开场就被放弃。
+func auditRejectLimit(videosPerRound int) int {
+	if videosPerRound < videoMinCount {
+		videosPerRound = videoMinCount
+	}
+	return videosPerRound * auditRejectQuotaFactor
+}
 
 // auditVideoStasis 检测视频是否存在静态/高度雷同的连续画面段。
 //

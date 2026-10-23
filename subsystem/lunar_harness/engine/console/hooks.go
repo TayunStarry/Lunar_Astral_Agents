@@ -130,7 +130,7 @@ func DumpContext(target string) (DataDumpResult, error) {
 // ==== LTP9 授权签发钩子注入 ====
 //
 // 为什么由宿主实现：签发要「取 execute.js 的哈希 → 整体加密权限清单 → 覆盖写
-// permissions.key」，这套规则必须与 LTP9 引擎的解码侧（engine/ltp9/permission.go）
+// permissions.key」，这套规则必须与 LTP9 引擎的解码侧（engine/plugin/permission.go）
 // 严格对应；两侧放在同一处实现（引擎侧）才不会出现「控制台签发的密钥引擎解不开」。
 // 控制台只负责扫包、呈现授权状态与触发签发，不复制这套密码学规则。
 

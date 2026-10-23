@@ -50,7 +50,6 @@ globalThis.fileView = (p) => {
 };
 globalThis.address = () => ['http://127.0.0.1:0/v1', null];
 globalThis.url = () => 'http://127.0.0.1:0';
-globalThis.ltpInteractEvent = () => ({ return: undefined });
 globalThis.readResource = () => ({ base64: '', mime: 'image/png', lost: false, truncated: false });
 globalThis.resourceList = () => [[], null];
 globalThis.resourceRead = () => [null, null];

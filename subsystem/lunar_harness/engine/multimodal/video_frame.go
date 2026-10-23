@@ -4,7 +4,7 @@ package multimodal
 //
 // 本文件承载两类内容：
 //  1. 抽帧基础组元（ExtractVideoFrameAt / EquidistantTimes / MaxVideoFrames / FormatSeconds）
-//     —— 上提自 LTP9 引擎的 video.frames 实现（crystal_astral/engine/9.1-Flash/api_media.go），
+//     —— 上提自 LTP9 引擎的 video.frames 实现（engine/plugin/api_media.go），
 //     作为全项目唯一的抽帧实现，供插件 API 与月华感知者共用，避免重复算法。
 //  2. 序列帧解读链路（VideoToFrames / AnimatedImageToFrames）
 //     —— 供不支持 llama-server 「媒体目录 + file:// 引用」机制的架构（如云端 OpenAI 兼容 API）使用：

@@ -1,10 +1,9 @@
 import { GlobalConfig } from '../config/global';
 import { ChatCache } from '../config/config';
-import { MultimodalMessage, PostMessage } from '../config/model';
+import { MultimodalMessage } from '../config/model';
 import { flushDueScheduleItems } from '../tools/schedule/index';
 import { parseContent, cleanTextForTTS } from '../text/index';
 import { dialogueRole, randomDefaultMessage } from '../roles/index';
-import { interactEvent } from '../capabilities/ltp-event';
 import { queryEmotionSticker } from '../capabilities/memory';
 import { persistConversation, pushAssistantContext, pushAssistantImage } from '../io/conversation';
 import { guardASRUnload } from './turn/guards';
@@ -81,10 +80,8 @@ export async function runDialogueTurn(incoming: MultimodalMessage[]): Promise<vo
         }
         // 更新远期记忆摘要
         updatePreviousMemories();
-        // 事件 -> 收到消息前：把待处理的消息上下文（含内嵌的视频/音频URL内容项）推送到琉璃，插件可经 return.messages 改写后再消费
-        const feedback: { messages?: PostMessage[] } = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext }).return;
-        // 如果插件返回了新的消息上下文，更新全局上下文
-        if (feedback && Array.isArray(feedback.messages)) GlobalConfig.unreadContext = feedback.messages;
+        // 读取消息前的改写已由 Go 侧在交付未读队列时完成（before_reading_message），
+        // 对话链不再自行触发事件。
         // 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
         await createChatMessage();
         // 如果消息响应为空：先分清「模型说没话说」与「模型根本没接通」再决定怎么回应
@@ -110,21 +107,15 @@ export async function runDialogueTurn(incoming: MultimodalMessage[]): Promise<vo
         const replyText = displayText.trim() || validMessage;
         // 如果解析出行动区内容：在引擎 animation_list 缓存中匹配动作 → 执行最高匹配度动作（附带小幅随机位移）
         if (actionBlocks.length) {
-            // 事件 -> 做出行动前：推送行动块，插件可经 return.actions 改写匹配参考文本
-            const feedback: { actions?: string[] } = interactEvent('take_action_before', { actions: actionBlocks }).return;
-            const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
             // 以行动区内容为匹配参考文本（为空时回退正文），在动作词表中匹配后执行最高匹配度动作
-            await performMatchedAction(actBlocks.join(' ').trim() || validMessage);
+            await performMatchedAction(actionBlocks.join(' ').trim() || validMessage);
             // 从记忆库匹配表情包并推送图片数据
             pushAssistantImage([await queryEmotionSticker(validMessage)], true);
         }
         // 未解析出行动区内容，且正文长度小于等于36字时，按概率基于正文推理表情包
         else if (validMessage.length <= 36 && Math.random() < 0.15) {
-            // 事件 -> 表达情感前：推送正文，插件可经 return.text 改写表情参考文本
-            const feedback: { text?: string } = interactEvent('express_emotions_before', { text: validMessage }).return;
-            const emoText = (feedback && typeof feedback.text === 'string') ? feedback.text : validMessage;
             // 从记忆库匹配表情包并推送图片数据
-            pushAssistantImage([await queryEmotionSticker(emoText)], true);
+            pushAssistantImage([await queryEmotionSticker(validMessage)], true);
         }
         // 第一步：按顺序逐一发送思考区内容（不参与语音合成）
         thinkingBlocks.forEach(thinking => pushAssistantContext('text', thinking, ''))

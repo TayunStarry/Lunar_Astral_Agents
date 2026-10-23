@@ -15,7 +15,20 @@ import (
 const ServiceName = "StarLTP"
 
 // EngineBuild 引擎构建标记：每次改动沙箱绑定/回调执行逻辑时递增，供运行实例自证版本。
-const EngineBuild = "2026-09-17"
+const EngineBuild = "2026-10-23"
+
+// ==== 月华事件主题（全部由 Go 侧边界触发，goja 不再发起事件） ====
+
+const (
+	// EventBeforeReadingMessage 读取消息前：改写即将交付给月华的消息
+	EventBeforeReadingMessage = "before_reading_message"
+	// EventBeforeSendingMessage 消息发送前：改写、追加或取消即将发出的消息
+	EventBeforeSendingMessage = "before_sending_amessage"
+	// EventBeforeQueryStarts 查询开始前：改写或取消网络搜索请求
+	EventBeforeQueryStarts = "before_query_starts"
+	// EventBeforeQueryEnds 查询结束前：改写或取消搜索报告
+	EventBeforeQueryEnds = "before_query_ends"
+)
 
 // LTP9Tag metadata.json 标识 LTP9 包的标签。
 const LTP9Tag = "LTP9"

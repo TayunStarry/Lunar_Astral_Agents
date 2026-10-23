@@ -16,7 +16,7 @@ import (
 const (
 	lunarModule = "LunarCore"
 	lunarSubJS  = "JavaScript"
-	// ltp9 沙箱日志的模块标签（engine/ltp9/variable.go ServiceName）
+	// ltp9 沙箱日志的模块标签（engine/plugin/variable.go ServiceName）
 	ltp9Module = "StarLTP"
 	// ltp9 沙箱 console 输出携带的标记（binder.go consolePrint）
 	ltp9ConsoleMark = "[console."

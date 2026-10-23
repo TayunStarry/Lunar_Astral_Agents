@@ -1,7 +1,7 @@
 package crystal
 
 // ==== LTP9 宿主侧接线（StarLTP 引擎的宿主服务胶水） ====
-// 引擎本体与调试信封处理位于 engine/9.1-Flash（package StarLTP）；
+// 引擎本体与调试信封处理位于 engine/plugin（package StarLTP）；
 // 本文件只承载依赖宿主服务的能力：
 //   - 前端智能体通道（agent.synergy → Mini-LTP / Node-LTP，经 /ws ltpx_call 链路）
 //   - 调试回执推送（/ws 集线器广播）
@@ -21,8 +21,8 @@ import (
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	StarLTP "LunarSubsystem/LunarHarness/engine/ltp9"
 	Multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
+	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
 	"LunarSubsystem/LunarHarness/transport/ws"
 )
 

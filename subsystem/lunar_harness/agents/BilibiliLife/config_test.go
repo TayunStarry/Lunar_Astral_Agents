@@ -1,6 +1,12 @@
 package BilibiliLife
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"LunarSubsystem/LunarHarness/engine/config"
+)
 
 func TestFilterAndScoreBlocksPoliticsAndConfrontation(t *testing.T) {
 	cfg := defaultConfig()
@@ -42,6 +48,46 @@ func TestMentionNamesAllTargets(t *testing.T) {
 	// 未配置时返回空：调用方据此跳过 @ 分享，绝不内置默认 @ 对象
 	if got := (Config{}).mentionNames(); len(got) != 0 {
 		t.Fatalf("未配置 mention_targets 时不应产生任何 @ 目标，实际 %v", got)
+	}
+}
+
+// TestOnlyCallUserInDynamicDefault 钉住新配置项默认开启：
+// 未配置时不再挑视频发 @分享评论，只在动态末尾呼叫用户。
+func TestOnlyCallUserInDynamicDefault(t *testing.T) {
+	if !defaultConfig().onlyCallUserInDynamic() {
+		t.Fatal("「仅在动态中呼叫用户」默认应为开启")
+	}
+	if !(Config{}).onlyCallUserInDynamic() {
+		t.Fatal("零值配置也应按开启处理")
+	}
+	off := false
+	if (Config{OnlyCallUserInDynamic: &off}).onlyCallUserInDynamic() {
+		t.Fatal("显式关闭时应返回 false")
+	}
+}
+
+// TestLoadConfigOnlyCallUserInDynamic 钉住配置项能正常读写切换（含热重载读取）。
+func TestLoadConfigOnlyCallUserInDynamic(t *testing.T) {
+	tmp := t.TempDir()
+	orig := *config.LocalDir
+	*config.LocalDir = tmp
+	t.Cleanup(func() { *config.LocalDir = orig })
+
+	path := filepath.Join(tmp, "bilibili_life.json")
+	if cfg := LoadConfig(); !cfg.onlyCallUserInDynamic() {
+		t.Fatal("配置文件缺失时应默认开启")
+	}
+	if err := os.WriteFile(path, []byte(`{"only_call_user_in_dynamic": false}`), 0o644); err != nil {
+		t.Fatalf("写入配置失败: %v", err)
+	}
+	if cfg := LoadConfig(); cfg.onlyCallUserInDynamic() {
+		t.Fatal("配置为 false 时应关闭")
+	}
+	if err := os.WriteFile(path, []byte(`{"only_call_user_in_dynamic": true}`), 0o644); err != nil {
+		t.Fatalf("写入配置失败: %v", err)
+	}
+	if cfg := LoadConfig(); !cfg.onlyCallUserInDynamic() {
+		t.Fatal("配置为 true 时应开启")
 	}
 }
 

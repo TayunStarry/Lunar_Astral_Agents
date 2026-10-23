@@ -6,6 +6,7 @@ package BilibiliLife
 //   - 链接逐条列举这一轮看过的每个视频（不只是发 @ 的那一条），可按任一 URL 回溯摘要库；
 //   - 简述 2-4 行，10 行是硬上限而不是目标（简述就该短，不用满）；
 //   - 同一份文案两处落地：documents/月华刷B站日记.md（新日记置顶）与 B 站动态；
+//     开启「仅在动态中呼叫用户」时，动态末尾额外多一行 @，句柄文档不写该行；
 //   - 文档经 ResourceAdmitDocument 登记：文本类按「同名即同一份文档」复用既有句柄，
 //     @D.xxx 不随内容变化，回执行号按本段实际行数计算。
 
@@ -70,6 +71,31 @@ func noteLines(title string, videoURLs []string, brief string) []string {
 // buildDynamicText 拼 B 站动态正文（行式格式，无 markdown、无空行）。
 func buildDynamicText(title string, videoURLs []string, brief string) string {
 	return strings.Join(noteLines(title, videoURLs, brief), "\n")
+}
+
+// callUserLine 把本轮要呼叫的用户拼成一行 @ 文本；没有目标时返回空串。
+func callUserLine(names []string) string {
+	ats := make([]string, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		ats = append(ats, "@"+name)
+	}
+	return strings.Join(ats, " ")
+}
+
+// buildDynamicTextWithCall 在动态正文末尾另起一行呼叫目标用户。
+//
+// 仅在「仅在动态中呼叫用户」开启时使用：动态正文保持原有行式格式，
+// 呼叫单独占最后一行，不混进简述，也不写进日记句柄文档。
+func buildDynamicTextWithCall(title string, videoURLs []string, brief string, names []string) string {
+	text := buildDynamicText(title, videoURLs, brief)
+	if line := callUserLine(names); line != "" {
+		text += "\n" + line
+	}
+	return text
 }
 
 // appendDiaryDocument 把一段新日记插入句柄文档顶部，返回文档句柄与本段总行数。

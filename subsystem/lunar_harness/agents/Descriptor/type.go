@@ -81,8 +81,28 @@ type chatResponse struct {
 		// Message 助手消息
 		Message chatMessage `json:"message"`
 	} `json:"choices"`
+	// Usage token 用量
+	Usage *modelUsage `json:"usage"`
 	// Error 错误信息
 	Error *chatError `json:"error"`
+}
+
+// modelUsage OpenAI 兼容响应中的 token 用量
+type modelUsage struct {
+	// Prompt 上下文 token 数
+	Prompt int64 `json:"prompt_tokens"`
+	// Completion 输出 token 数
+	Completion int64 `json:"completion_tokens"`
+}
+
+// modelReply 一次模型调用的结果（助手消息 + 思考文本 + 服务端用量）
+type modelReply struct {
+	// Message 助手消息（可能携带工具调用）
+	Message chatMessage
+	// Reasoning 思考全文（仅流式响应有值）
+	Reasoning string
+	// Usage 服务端回传的 token 用量（未回传时为 nil）
+	Usage *modelUsage
 }
 
 // chatError 模型错误信息
@@ -119,6 +139,8 @@ type streamChunk struct {
 			} `json:"tool_calls"`
 		} `json:"delta"`
 	} `json:"choices"`
+	// Usage token 用量（include_usage 时随最后一个分片回传）
+	Usage *modelUsage `json:"usage"`
 	// Error 错误信息
 	Error *chatError `json:"error"`
 }

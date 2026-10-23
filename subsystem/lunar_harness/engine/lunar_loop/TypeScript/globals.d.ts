@@ -503,19 +503,6 @@ declare global {
      */
     function callLTPXRemoteTool(toolName: string, argumentsJSON: string): Promise<string>;
     /**
-     * 同步推送事件并接收 LTP9 插件处理结果（事件触发点调用）
-     *
-     * 把「xx事件发生前」的原始负载推送到 LTP9 引擎派发面，同步阻塞等待插件处理完成。
-     * 无插件订阅 / 插件未改写 / 未回传业务结果时 returned=false
-     * （调用方应回退本地默认处理）。
-     *
-     * @param {string} topic 事件主题（如 message_received_before）
-     * @param {string} payloadJSON 事件负载 JSON 字符串（可为 "{}"）
-     *
-     * @returns {string} JSON 字符串：{ modified: boolean, data: any, returned: boolean, return: any }
-     */
-    function ltpInteractEvent(topic: string, payloadJSON: string): string;
-    /**
      * 导出智能体上下文（TUI「数据导出」调用；由 Go 侧经运行时触发本函数）
      *
      * 双向桥：宿主请求 → 本函数序列化上下文为 JSON 文本 → 由宿主落盘为 .json 文件。

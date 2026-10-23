@@ -62,7 +62,6 @@ globalThis.url = () => ['http://127.0.0.1:0'];
 // 图片入库桩：返回一个句柄 + blob 路径，供 attachImageTags 改写为视觉副本
 globalThis.resourceAdmit = () => [{ handle: '@I.900', id: 900, blob_path: 'multimedia/stub.png' }, null];
 globalThis.upscaleImage = () => [null, null];
-globalThis.ltpInteractEvent = () => ({ return: undefined });
 // 绘图模型方案桩：记录切换请求，未知方案按 Go 侧行为返回错误
 const schemeCalls = [];
 globalThis.setDiffusionScheme = (name) => {

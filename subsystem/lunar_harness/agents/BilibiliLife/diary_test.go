@@ -178,6 +178,27 @@ func TestBuildDynamicText(t *testing.T) {
 	}
 }
 
+// TestBuildDynamicTextWithCall 钉住「仅在动态中呼叫用户」的文案规则：
+// 呼叫必须单独占最后一行，且没有目标时与普通动态正文完全一致。
+func TestBuildDynamicTextWithCall(t *testing.T) {
+	title := "2026-10-22 12:00 刷B站日记"
+	urls := []string{"https://www.bilibili.com/video/BV1xx411c7mD"}
+	brief := "第一个视频的画面很有冲击力。"
+
+	plain := buildDynamicText(title, urls, brief)
+	withCall := buildDynamicTextWithCall(title, urls, brief, []string{"甲", " 乙 ", ""})
+	lines := strings.Split(withCall, "\n")
+	if lines[len(lines)-1] != "@甲 @乙" {
+		t.Fatalf("呼叫应单独占最后一行，实际最后一行 %q（全文 %q）", lines[len(lines)-1], withCall)
+	}
+	if strings.Join(lines[:len(lines)-1], "\n") != plain {
+		t.Fatalf("呼叫行不应改动原动态正文:\n got: %q\nwant: %q", withCall, plain)
+	}
+	if got := buildDynamicTextWithCall(title, urls, brief, nil); got != plain {
+		t.Fatalf("没有呼叫目标时应与普通动态一致，实际 %q", got)
+	}
+}
+
 // TestDiaryReceiptText 钉住固定回执文案（行号按本段实际行数填写）。
 func TestDiaryReceiptText(t *testing.T) {
 	got := diaryReceiptText("@D.001", 4)

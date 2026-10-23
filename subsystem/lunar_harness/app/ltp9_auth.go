@@ -8,7 +8,7 @@ package app
 
 import (
 	"LunarSubsystem/LunarHarness/engine/console"
-	StarLTP "LunarSubsystem/LunarHarness/engine/ltp9"
+	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
 )
 
 // WireTUILTP9AuthHooks 注入 LTP9 授权能力（须在 console.Run() 之前调用）：

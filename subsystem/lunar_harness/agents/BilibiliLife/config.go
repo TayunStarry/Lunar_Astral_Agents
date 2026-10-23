@@ -61,6 +61,11 @@ type Config struct {
 	VideosPerRound  int     `json:"videos_per_round"`  // 一轮最多刷几个视频（1-5）
 	SlicesPerVideo  int     `json:"slices_per_video"`  // 每个视频理解几个 60 秒切片
 	RepliesPerRound int     `json:"replies_per_round"` // 一轮可回应几次消息（评论/动态/私信共享）
+
+	// OnlyCallUserInDynamic 仅在动态中呼叫用户（默认开启）：
+	// 开启时不再从本轮多个视频里挑一条发「@ 用户」的分享评论，而是只在日记动态末尾
+	// 另起一行 @ 目标用户；关闭时恢复原有「挑视频 + 发 @分享评论」逻辑。
+	OnlyCallUserInDynamic *bool `json:"only_call_user_in_dynamic"`
 }
 
 func defaultConfig() Config {
@@ -68,10 +73,11 @@ func defaultConfig() Config {
 		AutoEnabled:        boolPtr(true),
 		IntervalHours:      6,
 		DailyLimit:         2,
-		VideosPerRound:     defaultVideosPerRound,
-		RepliesPerRound:    defaultRepliesPerRound,
-		SlicesPerVideo:     defaultSlicesPerVideo,
-		PreferenceKeywords: []string{"AI", "人工智能", "Qwen", "DeepSeek", "小肥鱼", "大肥鱼", "AI娘"},
+		VideosPerRound:        defaultVideosPerRound,
+		RepliesPerRound:       defaultRepliesPerRound,
+		SlicesPerVideo:        defaultSlicesPerVideo,
+		OnlyCallUserInDynamic: boolPtr(true),
+		PreferenceKeywords:    []string{"AI", "人工智能", "Qwen", "DeepSeek", "小肥鱼", "大肥鱼", "AI娘"},
 		BlockedKeywords: []string{
 			// 旧版基础过滤
 			"直播回放", "录播", "付费", "充电专属",
@@ -130,6 +136,11 @@ func (c Config) autoEnabled() bool {
 	return c.AutoEnabled == nil || *c.AutoEnabled
 }
 
+// onlyCallUserInDynamic 未显式配置时按开启处理（默认行为）。
+func (c Config) onlyCallUserInDynamic() bool {
+	return c.OnlyCallUserInDynamic == nil || *c.OnlyCallUserInDynamic
+}
+
 func configPath() string {
 	dir := strings.TrimSpace(*config.LocalDir)
 	if dir == "" {
@@ -168,6 +179,9 @@ func LoadConfig() Config {
 	}
 	if saved.AutoEnabled != nil {
 		cfg.AutoEnabled = saved.AutoEnabled
+	}
+	if saved.OnlyCallUserInDynamic != nil {
+		cfg.OnlyCallUserInDynamic = saved.OnlyCallUserInDynamic
 	}
 	if saved.IntervalHours > 0 {
 		cfg.IntervalHours = saved.IntervalHours

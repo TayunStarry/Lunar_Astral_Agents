@@ -1,7 +1,7 @@
 package crystal
 
 import (
-	StarLTP "LunarSubsystem/LunarHarness/engine/ltp9"
+	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
 )
 
 // HandleInbound 消费 /ws 入站消息：ltp9/* 调试信封交由 LTP9 引擎处理，其余旁路。

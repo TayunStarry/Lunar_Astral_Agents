@@ -29,7 +29,14 @@ func (class *Runtime) pushContext(call goja.FunctionCall) goja.Value {
 		Audio:   audio,
 		Auto:    auto,
 	}
-	PushMessageFunc("context", data)
+	// 消息发送前事件：插件可改写/追加消息内容，或直接取消本次发送
+	messages, allow := dispatchBeforeSendingMessage([]PushContextData{data})
+	if !allow {
+		return class.runtime.ToValue(false)
+	}
+	for _, msg := range messages {
+		PushMessageFunc("context", msg)
+	}
 
 	return class.runtime.ToValue(true)
 }
@@ -169,6 +176,12 @@ func (class *Runtime) pullContext() goja.Value {
 	// 如果未处理的上下文消息为空，返回空数组
 	if len(messages) == 0 {
 		// 通知桥接器：智能体本轮无待处理消息（用于判断上一轮QQ对话是否已回应完）
+		napcat.NotifyAgentIdle()
+		return class.runtime.ToValue([]PostMessage{})
+	}
+	// 读取消息前事件：插件可清空 / 追加 / 移除 / 重排序本轮消息
+	messages = dispatchBeforeReadingMessage(messages)
+	if len(messages) == 0 {
 		napcat.NotifyAgentIdle()
 		return class.runtime.ToValue([]PostMessage{})
 	}

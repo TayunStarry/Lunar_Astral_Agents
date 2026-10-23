@@ -437,6 +437,20 @@ Broadcast(payload any) / BroadcastTo(pluginID string, payload any) // 等价 sig
 Command(pluginID, text string, context) / CommandAll(text, context) // 触发指令
 ```
 
+### 7.3 月华事件的触发来源（全部在 Go 侧）
+
+月华不再从 goja 对话链发起事件；下列四个事件都由 Go 边界同步派发，无插件订阅、未回传业务结果
+或回传结构非法时沿用原始数据（契约见 `docs/LTP 9.1 Flash.d.ts`）：
+
+| 事件 | 触发点 | payload | return |
+|------|--------|---------|--------|
+| `before_reading_message` | `engine/lunar_loop` 的 `pullContext`（交付未读队列前） | `{ messages }` | `{ messages? }`（空数组=清空本轮） |
+| `before_sending_amessage` | `engine/lunar_loop` 的 `pushContext`（推送消息前） | `{ messages }` | `{ messages?, cancel? }` |
+| `before_query_starts` | `crystal` 的 `web_search` 执行前 | `{ instruction }` | `{ instruction?, cancel? }` |
+| `before_query_ends` | `crystal` 的 `web_search` 报告回传前 | `{ instruction, report }` | `{ report?, cancel? }` |
+
+`cancel` 语义：查询类取消会让月华的工具调用立即收到「网络搜索请求/报告已被 LTP9 插件取消」。
+
 ---
 
 ## 8. 引擎层职责清单与文件布局
@@ -488,7 +502,7 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 ## 11. 目录与文件设计
 
 ```
-crystal_astral/engine/9.1-Flash/
+subsystem/lunar_harness/engine/plugin/
 ├── host.go            # 包级入口 + 公开 Go 接口 + 宿主通道注入
 ├── engine.go          # Engine：插件映射/对账/调度
 ├── plugin.go          # 单插件 goja 沙箱（生命周期、同步回调执行、事件派发）

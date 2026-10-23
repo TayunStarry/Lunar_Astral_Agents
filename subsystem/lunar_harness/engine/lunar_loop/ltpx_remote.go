@@ -19,7 +19,7 @@ import (
 //   1. 不再有联络 URL、心跳探测与「离线判死」：每次思考链起点直接读取进程内工具链
 //   2. 不再有 HTTP 通道与结果轮询：等待经进程内结果通道完成（保留 request_id 语义，
 //      因为前端扩展包运行在独立 WebView 进程中，其回执仍经 /ws → /ltpx/result 回到本进程）
-//   3. 「xx事件发生前」推送改为进程内同步调用；无插件订阅/未改写/未回传时回退原始数据
+//   3. LTP9 事件全部改由 Go 边界触发（见 ltp_events.go），goja 不再发起或处理事件
 
 // ltpCallMaxWait 单次工具调用的兜底等待上限（覆盖长时间运行的联网搜索等任务）
 const ltpCallMaxWait = 30 * time.Minute
@@ -158,43 +158,4 @@ func (class *Runtime) callLTPXRemoteToolForJS(toolName string, argumentsJSON str
 	}()
 	// *goja.Promise 需经 ToValue 转换后才能作为 goja.Value 返回给 JS
 	return class.runtime.ToValue(promise)
-}
-
-// syncLTPXRemoteEvent 进程内同步推送事件负载并接收插件处理结果（同步阻塞）。
-// 事件点触发时调用：月华 JS 把「xx事件发生前」的原始 payload 推送到 LTP9 引擎派发面，
-// 订阅该 topic 的插件可经 return 回传业务结果；无插件订阅/未回传时 returned=false，
-// 调用方回退本地默认处理。
-func syncLTPXRemoteEvent(topic, payloadJSON string) LTPXRemoteEventResult {
-	broker := ltpx.GetBroker()
-	if broker == nil {
-		return LTPXRemoteEventResult{}
-	}
-
-	// 构造负载：优先解析为 JSON 对象，其次保留原始字符串
-	var payload any = map[string]any{}
-	if pj := strings.TrimSpace(payloadJSON); pj != "" && pj != "{}" {
-		var obj map[string]any
-		if err := json.Unmarshal([]byte(pj), &obj); err == nil {
-			payload = obj
-		} else {
-			payload = pj
-		}
-	}
-
-	res := broker.Event(topic, payload)
-	return LTPXRemoteEventResult{
-		Modified: res.Modified,
-		Data:     res.Data,
-		Returned: res.Returned,
-		Return:   res.Return,
-	}
-}
-
-// interactLTPXEventForJS 供 JS 端在每个事件触发点同步推送事件并接收插件处理结果。
-// 参数：topic, payload；返回 JSON 字符串 {modified, data, returned, return}。
-// 同步阻塞：LTP9 事件引擎为同步模型，等待插件处理完成。
-func (class *Runtime) interactLTPXEventForJS(topic string, payload string) goja.Value {
-	result := syncLTPXRemoteEvent(topic, payload)
-	data, _ := json.Marshal(result)
-	return class.runtime.ToValue(string(data))
 }
