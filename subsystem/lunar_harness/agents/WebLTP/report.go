@@ -1,6 +1,6 @@
 package WebLTP
 
-// Web-LTP 报告汇编：搜索页总结 + 逐页文本情报 + 「网络搜索」口吻的报告
+// report.go 报告汇编：搜索页正文 + 逐页文本情报 + 「网络搜索」口吻的结构化报告
 
 import (
 	"encoding/json"
@@ -9,8 +9,8 @@ import (
 )
 
 // composeReport 汇编搜索报告：优先模型撰写（网络搜索操作旅程口吻），失败时确定性文本兜底
-func composeReport(in reportInput) string {
-	report, err := composeReportByModel(in)
+func composeReport(in reportInput, profile summaryProfile) string {
+	report, err := composeReportByModel(in, profile)
 	if err != nil {
 		loggerWarn("模型报告撰写失败，使用确定性报告: %v", err)
 		return composeReportFallback(in)
@@ -18,8 +18,8 @@ func composeReport(in reportInput) string {
 	return report
 }
 
-// composeReportByModel 模型撰写报告（纯文本，不带截图）
-func composeReportByModel(in reportInput) (string, error) {
+// composeReportByModel 模型撰写报告（纯文本）；模型由摘要档位决定
+func composeReportByModel(in reportInput, profile summaryProfile) (string, error) {
 	engineHits := make([]map[string]any, 0, len(in.Engine.Results))
 	for i, hit := range in.Engine.Results {
 		if i >= 15 {
@@ -33,7 +33,7 @@ func composeReportByModel(in reportInput) (string, error) {
 	}
 	pages := make([]map[string]any, 0, len(in.Pages))
 	for i, p := range in.Pages {
-		item := map[string]any{
+		pages = append(pages, map[string]any{
 			"order":      i + 1,
 			"title":      p.Title,
 			"url":        p.URL,
@@ -41,30 +41,17 @@ func composeReportByModel(in reportInput) (string, error) {
 			"summary":    p.Summary,
 			"text_chars": p.TextChars,
 			"chunks":     p.Chunks,
-			"vision":     p.Vision,
-		}
-		if p.Failed != "" {
-			item["failed"] = p.Failed
-		}
-		if p.Cached {
-			item["cached"] = true
-		}
-		pages = append(pages, item)
-	}
-	shotNote := fmt.Sprintf("共 %d 张按需截图（未启用本地保存）", in.Screenshots)
-	if in.SaveDir != "" {
-		shotNote = fmt.Sprintf("共 %d 张按需截图（已保存到本地目录 %s）", in.Screenshots, in.SaveDir)
+		})
 	}
 
 	payload, err := json.Marshal(map[string]any{
-		"instruction":    in.Instruction,
-		"query":          in.Query,
-		"engine":         map[string]any{"count": len(in.Engine.Results), "results": engineHits},
-		"search_summary": in.SearchSummary,
-		"pages":          pages,
-		"screenshots":    shotNote,
-		"elapsed":        in.Elapsed,
-		"interrupted":    in.Interrupted,
+		"instruction":      in.Instruction,
+		"query":            in.Query,
+		"engine":           map[string]any{"count": len(in.Engine.Results), "results": engineHits},
+		"search_page_text": truncateRunes(in.SearchPageText, 4000),
+		"pages":            pages,
+		"elapsed":          in.Elapsed,
+		"interrupted":      in.Interrupted,
 	})
 	if err != nil {
 		return "", err
@@ -73,10 +60,10 @@ func composeReportByModel(in reportInput) (string, error) {
 	engineName := firstNonEmpty(in.EngineName, "必应")
 	system := renderPrompt(loadPrompt("webSearchReport.md"), "{engine}", engineName)
 
-	return chatText([]chatMessage{
+	return chatWithOptions([]chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: string(payload)},
-	})
+	}, profileChatOptions(profile))
 }
 
 // composeReportFallback 确定性报告兜底（模型不可用时）
@@ -97,9 +84,9 @@ func composeReportFallback(in reportInput) string {
 	b.WriteString(in.Elapsed)
 	b.WriteString("。\n")
 
-	if in.SearchSummary != "" {
-		b.WriteString("\n◆ 搜索页总结：\n")
-		b.WriteString(in.SearchSummary)
+	if strings.TrimSpace(in.SearchPageText) != "" {
+		b.WriteString("\n◆ 搜索页概览：\n")
+		b.WriteString(truncateRunes(in.SearchPageText, 1500))
 		b.WriteString("\n")
 	}
 
@@ -116,30 +103,10 @@ func composeReportFallback(in reportInput) string {
 	if len(in.Pages) > 0 {
 		b.WriteString("\n◆ 逐页情报：\n")
 		for i, p := range in.Pages {
-			if p.Failed != "" {
-				fmt.Fprintf(&b, "%d. 打开了「%s」（%s）——页面打开失败：%s\n", i+1, p.Title, p.Domain, p.Failed)
-				continue
-			}
-			if p.Cached {
-				fmt.Fprintf(&b, "%d. 月华此前已查看过「%s」（%s），本次直接调取缓存摘要：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.Summary)
-				continue
-			}
-			fmt.Fprintf(&b, "%d. 月华打开了「%s」（%s，正文 %d 字）：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.TextChars, p.Summary)
+			fmt.Fprintf(&b, "%d. 打开了「%s」（%s，正文 %d 字）：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.TextChars, p.Summary)
 		}
-	}
-
-	if in.Screenshots > 0 {
-		if in.SaveDir != "" {
-			b.WriteString("\n◆ 过程截图：")
-			fmt.Fprint(&b, in.Screenshots)
-			b.WriteString(" 张，已保存到 ")
-			b.WriteString(in.SaveDir)
-			b.WriteString("\n")
-		} else {
-			b.WriteString("\n◆ 过程截图：")
-			fmt.Fprint(&b, in.Screenshots)
-			b.WriteString(" 张（按需截图，未启用本地保存）\n")
-		}
+	} else {
+		b.WriteString("\n◆ 逐页情报：本次未获取到可用的详情页内容。\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

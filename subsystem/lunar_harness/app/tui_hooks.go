@@ -14,8 +14,8 @@ import (
 	"LunarSubsystem/LunarHarness/agents/WebLTP"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
-	"LunarSubsystem/LunarHarness/lunar"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/lunar"
 	"LunarSubsystem/LunarHarness/server"
 	"LunarSubsystem/LunarHarness/transport/ws"
 )
@@ -78,7 +78,7 @@ func WireTUIDataDumpHooks() {
 // Go 对话链不再依赖整块可替换的脚本运行时；重建入口用于逻辑坏死或上下文损坏时
 // 以最小代价恢复，避免重启整个程序与全部子系统。
 func WireTUIEngineHooks() {
-	// 生活链模型调用也进「核心智能 实况」，用户不用只盯着日志干等。
+	// 观影者的模型调用也进「核心智能 实况」，用户不用只盯着日志干等。
 	// 计量回调让这些 Go 侧调用一并计入「运行状态」的模型计量。
 	meter := func(prompt, completion int64, generation time.Duration, estimated bool) {
 		console.RecordModelCall(prompt, completion, generation, estimated)
@@ -131,10 +131,6 @@ func WireTUIEngineHooks() {
 			return lunar.ReloadMoonEngine(reason)
 		},
 	)
-
-	// 生活链已独立为 Go 模块：TUI 的“开始刷视频”直接启动真实浏览器模块。
-	// 模块在后台 goroutine 里跑完整流程，TUI 只收受理回执，不阻塞。
-	console.SetBilibiliLifeHook(BilibiliLife.Start)
 }
 
 // callDumpHandler 进程内直调导出端点处理器并解析回执

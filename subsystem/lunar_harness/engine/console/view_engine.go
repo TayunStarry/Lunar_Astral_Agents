@@ -2,8 +2,7 @@ package console
 
 // ==== 月华对话链管理屏 ====
 //
-// 展示 Go 对话链状态并支持手动重建；生活链已独立为 Go 模块，
-// 这里只提供一个“开始刷视频”的入口，实际浏览器操作由宿主 Go 模块完成。
+// 展示 Go 对话链状态并支持手动重建。
 
 import (
 	"fmt"
@@ -16,12 +15,6 @@ import (
 // engineDoneMsg 手动重建完成
 type engineDoneMsg struct{ err error }
 
-// biliLifeStartedMsg “开始刷视频”请求的受理结果
-type biliLifeStartedMsg struct {
-	detail string
-	err    error
-}
-
 // engineState 引擎屏的本地状态
 type engineState struct {
 	// busy 手动重建进行中
@@ -30,10 +23,6 @@ type engineState struct {
 	msg string
 	// err msg 是否代表失败
 	err bool
-	// biliMsg 最近一次“开始刷视频”的受理结果
-	biliMsg string
-	// biliErr biliMsg 是否代表失败
-	biliErr bool
 }
 
 // engineKeys 引擎屏键位
@@ -41,7 +30,7 @@ func engineKeys(s engineState) []keyHint {
 	if s.busy {
 		return []keyHint{kh("r", "重建进行中…"), kh("Esc", "返回")}
 	}
-	return []keyHint{kh("r", "重建对话链"), kh("b", "开始刷视频"), kh("Esc", "返回")}
+	return []keyHint{kh("r", "重建对话链"), kh("Esc", "返回")}
 }
 
 // updateEngine 引擎屏事件
@@ -62,11 +51,6 @@ func (m appModel) updateEngine(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.engine.msg = ""
 			m.setBusy("重建月华对话链")
 			return m, reloadEngineCmd("手动重建（控制台）")
-		case "B", "b":
-			m.engine.biliMsg = "正在启动浏览器…"
-			m.engine.biliErr = false
-			m.setNotice("B站生活：正在启动", false)
-			return m, startBilibiliLifeCmd()
 		}
 	case engineDoneMsg:
 		m.engine.busy = false
@@ -80,17 +64,6 @@ func (m appModel) updateEngine(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setNotice("月华对话链已重建", false)
 		}
 		return m, nil
-	case biliLifeStartedMsg:
-		if msg.err != nil {
-			m.engine.biliMsg = "启动失败: " + msg.err.Error()
-			m.engine.biliErr = true
-			m.setNotice("B站生活启动失败", true)
-		} else {
-			m.engine.biliMsg = msg.detail
-			m.engine.biliErr = false
-			m.setNotice("B站生活已启动", false)
-		}
-		return m, nil
 	}
 	return m, nil
 }
@@ -102,16 +75,7 @@ func reloadEngineCmd(reason string) tea.Cmd {
 	}
 }
 
-// startBilibiliLifeCmd 生成“开始刷视频”命令。
-// 宿主钩子只负责启动后台 goroutine 并立刻返回，不会阻塞 TUI。
-func startBilibiliLifeCmd() tea.Cmd {
-	return func() tea.Msg {
-		detail, err := startBilibiliLife()
-		return biliLifeStartedMsg{detail: detail, err: err}
-	}
-}
-
-// viewEngine 对话链屏渲染：状态 + 手动重建 + 开始刷视频
+// viewEngine 对话链屏渲染：状态 + 手动重建
 func (m appModel) viewEngine() string {
 	f := m.frameFor("月华对话链 管理", "Go native", engineKeys(m.engine))
 	w, h := f.bodySize()
@@ -200,31 +164,6 @@ func (m appModel) viewEngine() string {
 		}
 	}
 
-	lines = append(lines, "", sectionRule("B 站生活（真实浏览器）", w), "")
-	lifeHints := []string{
-		"按 " + keyStyle.Render("b") + " 开始一次刷视频：打开真实 B 站网页，未登录会停在登录页等你扫码。",
-		"登录检测每 10 秒一次；60 秒没登录成功就关闭浏览器、放弃本次。",
-		"登录后：选视频 → 停留详情页 → 下载并做 60 秒切片 → 逐片理解 → 读评论 → 写评论 → 单独发一条 @分享评论（@谁由 mention_targets 配置）→ 动态写日记 → 回复动态消息。",
-		"全程只开一个 B 站窗口；一轮多个视频时按顺序逐个切换，不会同时开多个视频窗口。",
-		"选片优先命中 bilibili_life.json 的 preference_keywords；涉政、男女对立、引战、录播/付费等词直接过滤。",
-		"自动生活默认开启：每 interval_hours 判定一次，每天最多 daily_limit 次；这里按 b 强制触发不占次数。",
-		"生活与对话互斥：新消息到达时，生活做完当前模型调用就暂停；对话完成且 10 秒无新消息后从断点续跑。",
-		"生活链的模型输出会进「核心智能 实况」（主菜单 1），不用只盯日志干等。",
-	}
-	for _, one := range lifeHints {
-		for _, seg := range wrapPlain(one, maxInt(20, w-4)) {
-			lines = append(lines, "  "+dimStyle.Render(seg))
-		}
-	}
-	if m.engine.biliMsg != "" {
-		lines = append(lines, "")
-		if m.engine.biliErr {
-			lines = append(lines, "  "+errStyle.Render("✗ "+m.engine.biliMsg))
-		} else {
-			lines = append(lines, "  "+okStyle.Render("✓ "+m.engine.biliMsg))
-		}
-	}
-
 	if m.engine.busy {
 		lines = append(lines, "", "  "+selectStyle.Render(m.spinner.View()+" 正在重建…"))
 	} else if m.engine.msg != "" {
@@ -236,14 +175,6 @@ func (m appModel) viewEngine() string {
 		}
 	}
 
-	if m.engine.biliMsg != "" {
-		if m.engine.biliErr {
-			f.status = errStyle.Render("B站生活 ✗ " + m.engine.biliMsg)
-		} else {
-			f.status = okStyle.Render("B站生活 ✓ " + m.engine.biliMsg)
-		}
-	} else {
-		f.status = dimStyle.Render("Go 对话链")
-	}
+	f.status = dimStyle.Render("Go 对话链")
 	return f.render(lines)
 }

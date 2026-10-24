@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/BilibiliLife"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
 	"LunarSubsystem/LunarHarness/transport/napcat"
@@ -31,7 +30,6 @@ func Start() error {
 	dialogueRole = newDialogueRole(painterRole.lunarAppearance(), painterRole.crystalAppearance())
 	memorizerRole = &MemorizerRole{}
 	initRoleEntries()
-	SetupLifeBridge()
 
 	initConversationCache(func(messages []PostMessage) {
 		dialogueRole.coverContext(messages)
@@ -91,7 +89,6 @@ func dialogueTick() {
 	stateMu.Unlock()
 
 	incoming := make([]PostMessage, 0)
-	ranDialogue := false
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			logger.Error(lunarCoreModule, "[对话链] tick 异常: %v", recovered)
@@ -99,10 +96,6 @@ func dialogueTick() {
 		stateMu.Lock()
 		reasoningInProgress = false
 		stateMu.Unlock()
-		lifeSetBusy(false)
-		if ranDialogue {
-			lifeDialogueIdle()
-		}
 	}()
 
 	flushDueScheduleItems()
@@ -111,22 +104,16 @@ func dialogueTick() {
 	unreadEmpty := len(unreadContext) == 0
 	unreadMu.Unlock()
 	if len(incoming) == 0 && unreadEmpty {
-		lifeAutoTick()
 		return
 	}
 	stateMu.Lock()
 	reasoningInProgress = true
 	stateMu.Unlock()
-	lifeSetBusy(true)
-	ranDialogue = true
 	runDialogueTurn(incoming)
 }
 
 // pullContext 拉取统一未读队列
 func pullContext() []PostMessage {
-	if BilibiliLife.HoldMessages() {
-		return nil
-	}
 	messages := TakeUnreadContext()
 	if len(messages) == 0 {
 		napcat.NotifyAgentIdle()
@@ -259,7 +246,6 @@ func randomDefaultMessage() string {
 
 // EnqueueMessage 将消息按到达顺序追加到统一未读队列
 func EnqueueMessage(messages ...PostMessage) {
-	BilibiliLife.NotifyUnread()
 	unreadMu.Lock()
 	unreadContext = append(unreadContext, messages...)
 	unreadMu.Unlock()
@@ -293,12 +279,4 @@ func UnreadCount() int {
 	unreadMu.Lock()
 	defer unreadMu.Unlock()
 	return len(unreadContext)
-}
-
-// SetupLifeBridge 把生活链与 Go 原生对话链接通
-func SetupLifeBridge() {
-	BilibiliLife.SetUnreadCounter(UnreadCount)
-	BilibiliLife.SetDiaryNotifier(func(message string) {
-		EnqueueMessage(PostMessage{Role: RoleUser, Content: "[月华的生活] " + message, Source: "bilibili_life"})
-	})
 }

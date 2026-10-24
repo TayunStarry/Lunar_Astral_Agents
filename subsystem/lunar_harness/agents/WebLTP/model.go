@@ -1,111 +1,24 @@
 package WebLTP
 
-// Web-LTP 模型调用（OpenAI v1 协议，复用月华多模态模型配置）
+// model.go 模型调用（OpenAI v1 协议，复用月华多模态模型配置）
 
 import (
-	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
-	"unicode/utf8"
+
+	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
-// loggerWarn 统一日志入口
-func loggerWarn(format string, args ...any) {
-	logger.Warn("CrystalAstral", format, args...)
-}
-
-var (
-	modelOnce  sync.Once
-	modelName  string
-	modelURL   string
-	modelKey   string
-	httpClient = &http.Client{Timeout: 120 * time.Second}
-
-	// 模型实况观察者：由 app 注入控制台的 StreamBegin/Delta/End，
-	// 让 TUI「核心智能 实况」能看到网络搜索的模型思考与输出。
-	observerMu    sync.Mutex
-	observerBegin func(role string)
-	observerDelta func(role, kind, text string)
-	observerEnd   func(role string)
-	// observerMeter 模型调用计量回调：网络搜索的调用同样计入「运行状态」的模型计量
-	observerMeter func(prompt, completion int64, generation time.Duration, estimated bool)
-)
-
-// modelUsage OpenAI 兼容响应中的 token 用量
-type modelUsage struct {
-	Prompt     int64 `json:"prompt_tokens"`
-	Completion int64 `json:"completion_tokens"`
-}
-
-// webSearchModelRole 网络搜索的实况角色标签（TUI 显示）
-const webSearchModelRole = "网络搜索"
-
-// SetModelObserver 注入实况观察者与计量回调（app 层启动时调用）
-func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion int64, generation time.Duration, estimated bool)) {
-	observerMu.Lock()
-	defer observerMu.Unlock()
-	observerBegin, observerDelta, observerEnd, observerMeter = begin, delta, end, meter
-}
-
-// observeBegin 通知实况开始
-func observeBegin() {
-	observerMu.Lock()
-	fn := observerBegin
-	observerMu.Unlock()
-	if fn != nil {
-		fn(webSearchModelRole)
-	}
-}
-
-// observeDelta 通知实况增量（kind: think/content）
-func observeDelta(kind, text string) {
-	if strings.TrimSpace(text) == "" {
-		return
-	}
-	observerMu.Lock()
-	fn := observerDelta
-	observerMu.Unlock()
-	if fn != nil {
-		fn(webSearchModelRole, kind, text)
-	}
-}
-
-// observeEnd 通知实况结束
-func observeEnd() {
-	observerMu.Lock()
-	fn := observerEnd
-	observerMu.Unlock()
-	if fn != nil {
-		fn(webSearchModelRole)
-	}
-}
-
-// reportModelCall 把一次调用计入「运行状态」的模型计量：
-// 优先用服务端回传的真实 usage，缺失时按请求体与输出文本长度估算（标记 estimated）。
-func reportModelCall(requestBody []byte, completionText string, usage *modelUsage, elapsed time.Duration) {
-	observerMu.Lock()
-	fn := observerMeter
-	observerMu.Unlock()
-	if fn == nil {
-		return
-	}
-	if usage != nil && (usage.Prompt > 0 || usage.Completion > 0) {
-		fn(usage.Prompt, usage.Completion, elapsed, false)
-		return
-	}
-	prompt := int64(utf8.RuneCountInString(string(requestBody))) / 3
-	completion := int64(utf8.RuneCountInString(completionText))
-	fn(prompt, completion, elapsed, true)
-}
-
+// resolveModel 解析主模型端点（只解析一次）
 func resolveModel() {
 	modelOnce.Do(func() {
 		modelName = strings.TrimSpace(config.AgentMultimodalModel)
@@ -123,34 +36,58 @@ func resolveModel() {
 	})
 }
 
-// textWithImages 构建图文混排的用户消息内容（无图片时退化为纯文本）
-func textWithImages(text string, dataURLs []string) []contentPart {
-	parts := []contentPart{{Type: "text", Text: text}}
-	for _, dataURL := range dataURLs {
-		if dataURL == "" {
-			continue
+// chatWithOptions 带思考监管的对话调用：命中重复时中断并重试一次。
+// 重试后仍失败就返回错误，由各调用点的既有降级逻辑兜底
+// （检索词提炼回退原指令、分片摘要跳过、最终报告走纯文本兜底）。
+func chatWithOptions(messages []chatMessage, opts chatOptions) (string, error) {
+	for attempt := 0; ; attempt++ {
+		text, err := chatOnce(messages, opts)
+		if err == nil || !errors.Is(err, loopguard.ErrLoop) || attempt >= webSearchLoopRetries {
+			return text, err
 		}
-		parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: dataURL}})
+		loggerWarn("模型输出陷入重复，已中断并重试（%d/%d）", attempt+1, webSearchLoopRetries)
 	}
-	return parts
 }
 
-// chatText 发起一次对话并返回助手文本（流式，思考与输出同步进实况屏）
-func chatText(messages []chatMessage) (string, error) {
-	observeBegin()
-	defer observeEnd()
+// chatOnce 单次对话调用（流式，思考与输出同步进实况屏）。
+// opts.Model 非空时覆盖模型名；采样参数与输出上限按需附加。
+func chatOnce(messages []chatMessage, opts chatOptions) (string, error) {
+	if !opts.Silent {
+		observeBegin()
+		defer observeEnd()
+	}
 	resolveModel()
-	body, err := json.Marshal(map[string]any{
-		"model":    modelName,
+	name := modelName
+	if strings.TrimSpace(opts.Model) != "" {
+		name = strings.TrimSpace(opts.Model)
+	}
+	payload := map[string]any{
+		"model":    name,
 		"messages": messages,
 		"stream":   true,
 		// 让服务端在流末回传 usage，模型计量才拿得到真实 token
 		"stream_options": map[string]any{"include_usage": true},
-	})
+	}
+	if opts.Temperature != nil {
+		payload["temperature"] = *opts.Temperature
+	}
+	if opts.TopP != nil {
+		payload["top_p"] = *opts.TopP
+	}
+	if opts.RepeatPenalty != nil {
+		payload["repeat_penalty"] = *opts.RepeatPenalty
+	}
+	if opts.MaxTokens > 0 {
+		payload["max_tokens"] = opts.MaxTokens
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("序列化请求失败: %w", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, modelURL+"/chat/completions", bytes.NewReader(body))
+	// 命中重复输出时由思考监管取消本次请求，服务端随连接断开停止生成
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, modelURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -170,9 +107,15 @@ func chatText(messages []chatMessage) (string, error) {
 	}
 	// 服务端可能忽略 stream 参数直接返回 JSON：两种形态都要兼容
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
-		text, reasoning, usage, err := readModelStream(resp.Body)
-		if err != nil {
-			return "", err
+		guard := loopguard.New(cancel, loopguard.DefaultOptions())
+		guard.Start()
+		text, reasoning, usage, readErr := readModelStream(resp.Body, opts.Silent, guard)
+		guard.Stop()
+		if guard.Hit() {
+			return "", loopguard.ErrLoop
+		}
+		if readErr != nil {
+			return "", readErr
 		}
 		reportModelCall(body, text+reasoning, usage, time.Since(start))
 		return text, nil
@@ -203,13 +146,19 @@ func chatText(messages []chatMessage) (string, error) {
 		return "", fmt.Errorf("模型 API 返回空响应")
 	}
 	text := strings.TrimSpace(chatResp.Choices[0].Message.Content)
-	observeDelta("content", text)
+	if !opts.Silent {
+		observeDelta("content", text)
+	}
+	// 非流式响应同样做一次静态重复检查
+	if loopguard.Detected(chatResp.Choices[0].Message.ReasoningContent+text, loopguard.DefaultOptions()) {
+		return "", loopguard.ErrLoop
+	}
 	reportModelCall(body, text+chatResp.Choices[0].Message.ReasoningContent, chatResp.Usage, time.Since(start))
 	return text, nil
 }
 
 // readModelStream 解析 OpenAI 兼容 SSE，边收边送实况；同时取回思考文本与用量
-func readModelStream(body io.Reader) (string, string, *modelUsage, error) {
+func readModelStream(body io.Reader, silent bool, guard *loopguard.Guard) (string, string, *modelUsage, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	var content strings.Builder
@@ -248,11 +197,17 @@ func readModelStream(body io.Reader) (string, string, *modelUsage, error) {
 		for _, choice := range chunk.Choices {
 			if choice.Delta.ReasoningContent != "" {
 				reasoning.WriteString(choice.Delta.ReasoningContent)
-				observeDelta("think", choice.Delta.ReasoningContent)
+				guard.Feed(loopguard.KindThink, choice.Delta.ReasoningContent)
+				if !silent {
+					observeDelta("think", choice.Delta.ReasoningContent)
+				}
 			}
 			if choice.Delta.Content != "" {
 				content.WriteString(choice.Delta.Content)
-				observeDelta("content", choice.Delta.Content)
+				guard.Feed(loopguard.KindContent, choice.Delta.Content)
+				if !silent {
+					observeDelta("content", choice.Delta.Content)
+				}
 			}
 		}
 	}
@@ -266,12 +221,44 @@ func readModelStream(body io.Reader) (string, string, *modelUsage, error) {
 	return text, reasoning.String(), usage, nil
 }
 
-// ExtractQuery 把月华的自然语言指令提炼为必应检索词；失败时返回原指令。
-func ExtractQuery(instruction string) string {
-	q, err := chatText([]chatMessage{
+// searchChatOptions 搜索摘要模型的采样参数：低温、窄核采样，减少要点漂移
+func searchChatOptions(model string) chatOptions {
+	temperature := 0.2
+	topP := 0.9
+	repeatPenalty := 1.05
+	return chatOptions{
+		Model:         model,
+		Temperature:   &temperature,
+		TopP:          &topP,
+		RepeatPenalty: &repeatPenalty,
+	}
+}
+
+// profileChatOptions 按摘要档位生成调用选项（主模型沿用服务端默认采样）
+func profileChatOptions(profile summaryProfile) chatOptions {
+	if strings.TrimSpace(profile.Model) == "" {
+		return chatOptions{}
+	}
+	return searchChatOptions(profile.Model)
+}
+
+// warmUpSearchModel 预热搜索模型：router 按需加载子进程，首字请求返回即可视为可用。
+func warmUpSearchModel(model string) error {
+	opts := searchChatOptions(model)
+	opts.MaxTokens = 8
+	opts.Silent = true
+	_, err := chatWithOptions([]chatMessage{
+		{Role: "user", Content: "回复一个字：好"},
+	}, opts)
+	return err
+}
+
+// ExtractQuery 把月华的自然语言指令提炼为检索词；失败时返回原指令。
+func ExtractQuery(instruction string, profile summaryProfile) string {
+	q, err := chatWithOptions([]chatMessage{
 		{Role: "system", Content: loadPrompt("webSearchExtractQuery.md")},
 		{Role: "user", Content: instruction},
-	})
+	}, profileChatOptions(profile))
 	if err != nil {
 		return instruction
 	}

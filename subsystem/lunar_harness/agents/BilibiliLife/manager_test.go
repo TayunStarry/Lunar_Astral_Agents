@@ -36,71 +36,84 @@ func TestConfigHotReload(t *testing.T) {
 		t.Fatalf("首次加载不正确: %+v", m.cfg.MentionTargets)
 	}
 
-	// 文件更新后刷新配置，新的 @ 目标应立刻进入候选池
+	// 每次调用都会重读配置，新的 @ 目标应立刻进入候选池
 	write(`{"mention_targets":[{"name":"甲"},{"name":"乙"}]}`, time.Now().Add(-time.Hour))
-	m.refreshConfigLocked()
+	m.reloadConfigLocked()
 	names := m.cfg.mentionNames()
 	if len(names) != 2 || names[0] != "甲" || names[1] != "乙" {
 		t.Fatalf("配置未热重载，实际 %v", names)
 	}
 }
 
-// TestAutoLifeStartupGrace 钉住启动静默期：进程启动 10 分钟内自动生活不进入，
-// 只有 TUI 强制触发（Start）可以开始；超过 10 分钟后自动调度才恢复。
-func TestAutoLifeStartupGrace(t *testing.T) {
-	orig := processStartedAt
-	t.Cleanup(func() { processStartedAt = orig })
-
-	processStartedAt = time.Now()
-	if !autoLifeGraceActive() {
-		t.Fatal("刚启动应处于生活静默期")
+// TestParseFlow 钉住工具枚举到流程的映射。
+func TestParseFlow(t *testing.T) {
+	cases := map[string]Flow{
+		"":              FlowStandard,
+		"standard":      FlowStandard,
+		"watch_comment": FlowWatchComment,
+		"reply_only":    FlowReplyOnly,
 	}
-	if startupLifeGrace != 10*time.Minute {
-		t.Fatalf("静默期应为 10 分钟，实际 %v", startupLifeGrace)
+	for raw, want := range cases {
+		got, ok := ParseFlow(raw)
+		if !ok || got != want {
+			t.Fatalf("ParseFlow(%q) = %q, %v; want %q", raw, got, ok, want)
+		}
 	}
-
-	processStartedAt = time.Now().Add(-startupLifeGrace - time.Second)
-	if autoLifeGraceActive() {
-		t.Fatal("超过静默期后不应再拦截自动生活")
+	if _, ok := ParseFlow("share"); ok {
+		t.Fatal("share 已并入 share 参数，不应再作为 flow")
+	}
+	if _, ok := ParseFlow("unknown"); ok {
+		t.Fatal("未知流程应解析失败")
 	}
 }
 
-func TestManagerHoldAndProgress(t *testing.T) {
-	manager.mu.Lock()
-	oldRunning, oldPaused, oldInterrupted := manager.running, manager.paused, manager.interrupted
-	oldProgress, oldRunner := manager.progress, manager.runner
-	manager.running = true
-	manager.paused = false
-	manager.interrupted = true
-	manager.progress = "月华正在看《测试》，看到了 2/3"
-	manager.runner = &runner{state: &lifeState{Phase: phaseUnderstand}}
-	manager.mu.Unlock()
-
-	if !HoldMessages() {
-		t.Fatal("生活未停到断点时应 hold 消息")
-	}
-	if got := Progress(); got != "月华正在看《测试》，看到了 2/3" {
-		t.Fatalf("进度透传错误: %q", got)
+// TestResultText 钉住工具回复：刷过视频给日记句柄，只回复评论时给条数。
+func TestResultText(t *testing.T) {
+	onlyReply := newRunner(Config{}, FlowReplyOnly, false, "")
+	onlyReply.state.Replied = 3
+	if got := onlyReply.resultText(); got != "已回复 3 条 B 站评论" {
+		t.Fatalf("仅回复评论应返回条数，实际 %q", got)
 	}
 
-	manager.mu.Lock()
-	manager.running = false
-	manager.paused = true
-	manager.interrupted = false
-	manager.mu.Unlock()
-	if HoldMessages() {
-		t.Fatal("生活已暂停后不应继续 hold 消息")
+	noReply := newRunner(Config{}, FlowReplyOnly, false, "")
+	if got := noReply.resultText(); got != "已回复 0 条 B 站评论" {
+		t.Fatalf("没有未读时应返回 0 条，实际 %q", got)
 	}
 
-	manager.mu.Lock()
-	manager.runner.state.Phase = phaseDone
-	manager.mu.Unlock()
-	if got := Progress(); got != "" {
-		t.Fatalf("整轮结束后进度应为空，实际 %q", got)
+	// 防御：即使句柄字段残留，只要没刷视频就不应该展示日记句柄
+	staleHandle := newRunner(Config{}, FlowReplyOnly, false, "")
+	staleHandle.state.Replied = 2
+	staleHandle.state.DiaryHandle = "@D.stale"
+	staleHandle.state.DiaryLines = 4
+	if got := staleHandle.resultText(); got != "已回复 2 条 B 站评论" {
+		t.Fatalf("没刷视频时不应展示日记句柄，实际 %q", got)
 	}
 
-	manager.mu.Lock()
-	manager.running, manager.paused, manager.interrupted = oldRunning, oldPaused, oldInterrupted
-	manager.progress, manager.runner = oldProgress, oldRunner
-	manager.mu.Unlock()
+	watched := newRunner(Config{}, FlowWatchComment, false, "")
+	watched.state.VideoIndex = 2
+	watched.state.DiaryHandle = "@D.diary"
+	watched.state.DiaryLines = 6
+	want := "已经刷完一轮视频了，可查询@D.diary|L1-6 获取看到的内容"
+	if got := watched.resultText(); got != want {
+		t.Fatalf("刷过视频应返回日记句柄，实际 %q", got)
+	}
+}
+
+// TestWatchQuota 钉住每日刷视频额度：按自然日计数，用完后拒绝。
+func TestWatchQuota(t *testing.T) {
+	tmp := t.TempDir()
+	orig := config.LocalDir
+	config.LocalDir = tmp
+	t.Cleanup(func() { config.LocalDir = orig })
+
+	cfg := defaultConfig()
+	cfg.DailyLimit = 2
+	if watchQuotaExhausted(cfg) {
+		t.Fatal("初始不应判定为额度用尽")
+	}
+	consumeWatchQuota(cfg)
+	consumeWatchQuota(cfg)
+	if !watchQuotaExhausted(cfg) {
+		t.Fatal("用满 2 次后应判定为额度用尽")
+	}
 }

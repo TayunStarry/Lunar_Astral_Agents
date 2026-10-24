@@ -92,6 +92,24 @@ type ModelConfig struct {
 		// 未配置或空数组时不追加任何内容）
 		AppendSettings []string `json:"append_settings"`
 	} `json:"agent"`
+	// 网络搜索智能体（web_search）：检索词提炼、逐页摘要与浏览器滚动策略。
+	// 仅由琉璃的内置 Web-LTP（agents/WebLTP）消费，与其余配置节统一在此解析，
+	// 智能体侧只读取解析后的全局值，不再自行读取 lunar_config.json。
+	WebSearch struct {
+		SearchModel     string `json:"search_model"`            // 检索词提炼与逐页摘要使用的模型名
+		SwapModel       *bool  `json:"swap_model,omitempty"`    // 搜索前卸载主模型、加载搜索模型（未配置默认开启）
+		MaxPages        int    `json:"max_pages"`               // 进入详情页的页数上限（智能体侧再施加硬上限）
+		MaxResults      int    `json:"max_results"`             // 结果页解析的检索结果条数
+		SummaryMaxChars int    `json:"summary_max_chars"`       // 单页摘要硬切断字符数
+		MaxRunSeconds   int    `json:"max_run_seconds"`         // 单次检索总时长软上限（秒）
+		CacheEnabled    *bool  `json:"cache_enabled,omitempty"` // 近期访问标记开关（未配置默认开启）
+		CacheTTLDays    int    `json:"cache_ttl_days"`          // 近期访问标记的有效期（天）
+		TextChunkChars  int    `json:"text_chunk_chars"`        // 文本摘要的单段字符数
+		TextMaxChars    int    `json:"text_max_chars"`          // 单页正文提取硬上限
+		TextMaxChunks   int    `json:"text_max_chunks"`         // 单页最多参与摘要的文本段数
+		ScrollSettleMS  int    `json:"scroll_settle_ms"`        // 每次滚动后的等待毫秒数
+		ScrollMaxSteps  int    `json:"scroll_max_steps"`        // 单页滚动步数上限
+	} `json:"web_search"`
 	// 记忆库不再有独立的模型路由：嵌入与多模态模型统一复用 agent 分组
 	// 图像生成（sd.cpp）行为与资源策略
 	Diffusion struct {
@@ -497,6 +515,49 @@ func applyConfig(parameter *ModelConfig) []string {
 			}
 			ReleasePackageDir = l.PackageDir
 		}
+	}
+	// ==== 网络搜索智能体（web_search） ====
+	// 未配置或非法（<=0）的数值字段沿用默认值；布尔字段仅在显式给出时覆盖。
+	if parameter.WebSearch.SearchModel != "" {
+		WebSearchModel = parameter.WebSearch.SearchModel
+	}
+	if v := parameter.WebSearch.SwapModel; v != nil {
+		b := *v
+		WebSearchSwapModel = &b
+	}
+	if v := parameter.WebSearch.CacheEnabled; v != nil {
+		b := *v
+		WebSearchCacheEnabled = &b
+	}
+	if parameter.WebSearch.MaxPages > 0 {
+		WebSearchMaxPages = parameter.WebSearch.MaxPages
+	}
+	if parameter.WebSearch.MaxResults > 0 {
+		WebSearchMaxResults = parameter.WebSearch.MaxResults
+	}
+	if parameter.WebSearch.SummaryMaxChars > 0 {
+		WebSearchSummaryMaxChars = parameter.WebSearch.SummaryMaxChars
+	}
+	if parameter.WebSearch.MaxRunSeconds > 0 {
+		WebSearchMaxRunSeconds = parameter.WebSearch.MaxRunSeconds
+	}
+	if parameter.WebSearch.CacheTTLDays > 0 {
+		WebSearchCacheTTLDays = parameter.WebSearch.CacheTTLDays
+	}
+	if parameter.WebSearch.TextChunkChars > 0 {
+		WebSearchTextChunkChars = parameter.WebSearch.TextChunkChars
+	}
+	if parameter.WebSearch.TextMaxChars > 0 {
+		WebSearchTextMaxChars = parameter.WebSearch.TextMaxChars
+	}
+	if parameter.WebSearch.TextMaxChunks > 0 {
+		WebSearchTextMaxChunks = parameter.WebSearch.TextMaxChunks
+	}
+	if parameter.WebSearch.ScrollSettleMS > 0 {
+		WebSearchScrollSettleMS = parameter.WebSearch.ScrollSettleMS
+	}
+	if parameter.WebSearch.ScrollMaxSteps > 0 {
+		WebSearchScrollMaxSteps = parameter.WebSearch.ScrollMaxSteps
 	}
 	// ==== 图像生成行为与资源策略（diffusion） ====
 	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置

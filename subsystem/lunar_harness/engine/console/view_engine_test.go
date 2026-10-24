@@ -80,13 +80,6 @@ func TestEngineScreenAcceptsLowercaseKeys(t *testing.T) {
 	})
 	defer SetEngineHooks(nil, nil)
 
-	var triggered int
-	SetBilibiliLifeHook(func() (string, error) {
-		triggered++
-		return "已启动 B 站生活（测试）", nil
-	})
-	defer SetBilibiliLifeHook(nil)
-
 	m := newAppModel()
 	m.width, m.height = 120, 34
 	m.screen = screenEngine
@@ -102,26 +95,6 @@ func TestEngineScreenAcceptsLowercaseKeys(t *testing.T) {
 	}
 	if len(reloaded) != 1 {
 		t.Fatalf("宿主重载钩子应被调用一次，实得 %d", len(reloaded))
-	}
-
-	// 小写 b：启动 B 站生活，并立刻给出可见反馈
-	model, cmd = m.updateEngine(keyMsg("b"))
-	m = model.(appModel)
-	if cmd == nil {
-		t.Fatal("小写 b 应返回启动命令")
-	}
-	if !strings.Contains(m.engine.biliMsg, "正在启动") {
-		t.Fatalf("按下后应立即给出反馈，实得 %q", m.engine.biliMsg)
-	}
-	msg, ok := cmd().(biliLifeStartedMsg)
-	if !ok {
-		t.Fatal("启动命令应产出 biliLifeStartedMsg")
-	}
-	if msg.err != nil || !strings.Contains(msg.detail, "已启动") {
-		t.Fatalf("回执异常: err=%v detail=%q", msg.err, msg.detail)
-	}
-	if triggered != 1 {
-		t.Fatalf("宿主启动钩子应被调用一次，实得 %d", triggered)
 	}
 }
 

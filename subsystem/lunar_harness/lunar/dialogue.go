@@ -30,6 +30,7 @@ func (role *DialogueRole) generateDialogue(cache *ChatCache) {
 	role.applyAppendSettings()
 	role.ToolRounds = 0
 	role.ActionClaimGuarded = false
+	role.PendingSpeeches = nil
 	stateMu.Lock()
 	lastFailure = ""
 	stateMu.Unlock()
@@ -57,9 +58,6 @@ func (role *DialogueRole) continueDialogue(cache *ChatCache, guardNote *PostMess
 	}
 	role.formatHistoricalMessages()
 	role.RuntimeMessages = []PostMessage{{Role: RoleUser, Content: "当前时间: " + time.Now().Format("2006-01-02 15:04:05")}}
-	if progress := lifeProgress(); progress != "" {
-		role.RuntimeMessages = append(role.RuntimeMessages, PostMessage{Role: RoleUser, Content: "[月华的生活] " + progress})
-	}
 
 	contextMessages := role.RagMessages
 	if guardNote != nil {
@@ -69,6 +67,7 @@ func (role *DialogueRole) continueDialogue(cache *ChatCache, guardNote *PostMess
 	tools = append(tools, memoryTools...)
 	tools = append(tools, resourceTools...)
 	tools = append(tools, scheduleTools...)
+	tools = append(tools, viewerTools...)
 	tools = append(tools, getCrystalRemoteTools()...)
 
 	response, err := role.run(contextMessages, tools)
@@ -85,16 +84,23 @@ func (role *DialogueRole) continueDialogue(cache *ChatCache, guardNote *PostMess
 		return
 	}
 	analyzeModelResponse(response.Body, cache)
+	message := response.Body.Choices[0].Message
+	content := strings.TrimSpace(message.Content)
 
 	if len(cache.ToolCalls) > 0 {
-		role.writeContext(messageFromAssistant(response.Body.Choices[0].Message))
+		role.writeContext(messageFromAssistant(message))
 		if role.ToolRounds >= maxToolRounds {
 			logger.Warn(lunarCoreModule, "[对话者] 工具调用轮次达到上限（%d），停止继续调用", maxToolRounds)
+			// 本轮随工具调用说出的正文同样暂存，交给终稿一起输出
+			role.rememberPendingSpeech(content)
 			role.rejectPendingToolCalls(cache)
 			role.finalizeWithoutTools()
 			return
 		}
 		if role.batchExecutionToolCall(cache) {
+			// 模型一边说话一边调用工具：这段正文先按时间顺序暂存，
+			// 等工具回调后的正式回答出现时再拼到前面，避免被下一轮响应覆盖而丢失。
+			role.rememberPendingSpeech(content)
 			role.ToolRounds++
 			role.continueDialogue(cache, nil)
 			return
@@ -110,11 +116,32 @@ func (role *DialogueRole) continueDialogue(cache *ChatCache, guardNote *PostMess
 		return
 	}
 
-	role.writeContext(messageFromAssistant(response.Body.Choices[0].Message))
+	role.writeContext(messageFromAssistant(message))
 	notifyAgentSuccess()
+	final := role.composeFinalSpeech(content)
 	stateMu.Lock()
-	finalResponse = cache.DescriptionContent
+	finalResponse = final
 	stateMu.Unlock()
+}
+
+// rememberPendingSpeech 暂存「边说边调工具」时随工具调用输出的正文
+func (role *DialogueRole) rememberPendingSpeech(content string) {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return
+	}
+	role.PendingSpeeches = append(role.PendingSpeeches, content)
+}
+
+// composeFinalSpeech 把暂存的途中正文按时间顺序拼到正式回答前面，并清空暂存
+func (role *DialogueRole) composeFinalSpeech(final string) string {
+	parts := make([]string, 0, len(role.PendingSpeeches)+1)
+	parts = append(parts, role.PendingSpeeches...)
+	if final = strings.TrimSpace(final); final != "" {
+		parts = append(parts, final)
+	}
+	role.PendingSpeeches = nil
+	return strings.Join(parts, "\n\n")
 }
 
 func (role *DialogueRole) fail(err error) {
@@ -142,14 +169,14 @@ func (role *DialogueRole) finalizeWithoutTools() {
 		content := strings.TrimSpace(response.Body.Choices[0].Message.Content)
 		if content != "" {
 			stateMu.Lock()
-			finalResponse = content
+			finalResponse = role.composeFinalSpeech(content)
 			stateMu.Unlock()
 			role.writeContext(PostMessage{Role: RoleAssistant, Content: content})
 			return
 		}
 	}
 	stateMu.Lock()
-	finalResponse = "这轮步骤有点多了，我先停在这里，你可以接着往下说。"
+	finalResponse = role.composeFinalSpeech("这轮步骤有点多了，我先停在这里，你可以接着往下说。")
 	stateMu.Unlock()
 }
 

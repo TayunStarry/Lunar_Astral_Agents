@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
 // newModelBuilder 创建模型构建器
@@ -113,8 +115,20 @@ func stripRuntimeFields(message PostMessage) PostMessage {
 	return message
 }
 
-// chatCompletion 流式模型调用：解析 SSE 并推送 TUI 实况，同步返回完整响应
+// chatCompletion 带思考监管的流式模型调用：命中重复时中断并重试，
+// 仍失败则返回错误，交给对话链既有的失败处理与自愈逻辑。
 func chatCompletion(roleTag, bodyText string) (*ModelResponse, error) {
+	for attempt := 0; ; attempt++ {
+		response, err := chatCompletionOnce(roleTag, bodyText)
+		if err == nil || !errors.Is(err, loopguard.ErrLoop) || attempt >= lunarLoopRetries {
+			return response, err
+		}
+		logger.Warn(lunarCoreModule, "[模型] %s 输出陷入重复，已中断并重试（%d/%d）", roleTag, attempt+1, lunarLoopRetries)
+	}
+}
+
+// chatCompletionOnce 单次流式模型调用：解析 SSE 并推送 TUI 实况，同步返回完整响应
+func chatCompletionOnce(roleTag, bodyText string) (*ModelResponse, error) {
 	url := config.AgentMultimodalURL + "/chat/completions"
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBufferString(bodyText))
 	if err != nil {
@@ -169,6 +183,8 @@ func chatCompletion(roleTag, bodyText string) (*ModelResponse, error) {
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	guard := loopguard.New(cancel, loopguard.DefaultOptions())
+	guard.Start()
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
@@ -191,10 +207,12 @@ func chatCompletion(roleTag, bodyText string) (*ModelResponse, error) {
 			delta := choice.Delta
 			if think := delta.ReasoningContent + delta.Reasoning; think != "" {
 				reasoning.WriteString(think)
+				guard.Feed(loopguard.KindThink, think)
 				console.StreamDelta(roleTag, console.KindThink, think)
 			}
 			if delta.Content != "" {
 				content.WriteString(delta.Content)
+				guard.Feed(loopguard.KindContent, delta.Content)
 				console.StreamDelta(roleTag, console.KindContent, delta.Content)
 			}
 			tools.ingest(delta.ToolCalls)
@@ -206,6 +224,11 @@ func chatCompletion(roleTag, bodyText string) (*ModelResponse, error) {
 			usage = chunk.Usage
 		}
 	}
+	guard.Stop()
+	if guard.Hit() {
+		console.StreamEnd(roleTag)
+		return nil, loopguard.ErrLoop
+	}
 	if err := scanner.Err(); err != nil {
 		logger.Warn(lunarCoreModule, "流式响应中断: %v", err)
 	}
@@ -216,6 +239,13 @@ func chatCompletion(roleTag, bodyText string) (*ModelResponse, error) {
 	// 不能当成「模型没说话」静默吞掉。
 	if dataLines == 0 {
 		if full, ok := parseNonStreamingResponse(headBuf.String()); ok {
+			if len(full.Body.Choices) > 0 {
+				message := full.Body.Choices[0].Message
+				if loopguard.Detected(message.ReasoningContent+message.Content, loopguard.DefaultOptions()) {
+					console.StreamEnd(roleTag)
+					return nil, loopguard.ErrLoop
+				}
+			}
 			console.StreamEnd(roleTag)
 			console.RecordModelCall(0, 0, time.Since(start), true)
 			return full, nil

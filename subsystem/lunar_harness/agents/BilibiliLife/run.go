@@ -1,10 +1,10 @@
 package BilibiliLife
 
-// 生活链 · B 站真实浏览器版：一次完整生活。
+// 观影者 · B 站真实浏览器版：一次完整观影流程。
 //
-// 流程：
+// 流程由 flow 决定（standard / watch_comment / share / reply_only）：
 //   打开 B 站首页 → 未登录则点登录并等扫码（10s 一次，60s 放弃）
-//   → 处理未读消息（视频评论追评 / 动态回复 / @月华），回应完再继续
+//   → 按流程处理未读消息（视频评论追评 / 动态回复 / @月华）
 //   → 首页选一个视频，停留详情页
 //   → 下载 → 60 秒切片 → 逐片抽帧理解（合成“一个视频”的整体感受）
 //   → 滚到评论区读 15 条热门评论 → 每个视频发 1 条评论
@@ -12,7 +12,7 @@ package BilibiliLife
 //     关闭时挑选一个视频发 @分享评论）
 //   → 回复这条动态下的评论（≤5 条）
 //
-// 本模块不经过 goja；TUI 只负责启动，进度全部写引擎日志。
+// 本模块不经过 goja；由 viewer 工具同步调用，结果作为工具回复返回。
 
 import (
 	"encoding/json"
@@ -90,7 +90,7 @@ func generateShareComment(info videoInfo, summary string, comments []commentItem
 // generateDiaryForVideos 生成这一轮的日记简述（也是动态正文，两者共用同一份文案）。
 //
 // 简述 2-4 行、10 行为硬上限：既进句柄文档，也直接发成 B 站动态，所以必须短。
-// 主角视频链接由调用方单独加一行，正文里不要再重复写链接。
+// 视频标题与 URL 由调用方逐行配对，正文里不要再重复写链接。
 func generateDiaryForVideos(videos []*videoRecord) (string, string, error) {
 	if len(videos) == 0 {
 		return "", "", fmt.Errorf("没有可写进日记的视频")
@@ -133,15 +133,18 @@ func generateDiaryForVideos(videos []*videoRecord) (string, string, error) {
 // 只有看完至少 1 个视频时才会调用（min=1 由调用方保证）；本轮目标是 target 个。
 // 模型只回答「继续」或「停止」，解析失败一律按继续处理——不能因为一次抖动就提前收工。
 func wantMoreVideos(watched []*videoRecord, target int) bool {
-	if len(watched) == 0 {
+	safe := make([]*videoRecord, 0, len(watched))
+	for _, video := range watched {
+		if video != nil && !video.Risky {
+			safe = append(safe, video)
+		}
+	}
+	if len(safe) == 0 {
 		return true
 	}
 	var material strings.Builder
-	fmt.Fprintf(&material, "这轮最多刷 %d 个视频，已经看了 %d 个：\n", target, len(watched))
-	for i, video := range watched {
-		if video == nil {
-			continue
-		}
+	fmt.Fprintf(&material, "这轮最多刷 %d 个视频，已经看了 %d 个：\n", target, len(safe))
+	for i, video := range safe {
 		fmt.Fprintf(&material, "第 %d 个：《%s》｜UP主：%s\n观看感受：%s\n",
 			i+1, video.Info.Title, video.Info.Owner, truncate(video.Summary, 300))
 	}
@@ -198,6 +201,12 @@ func (w *webSession) readCommentsAPI(aid int64, max int) ([]commentItem, error) 
 
 // postComment 在页面上下文发视频评论（type=1）。
 func (w *webSession) postComment(aid int64, message string) error {
+	return w.postCommentWithMentions(aid, message, nil)
+}
+
+// postCommentWithMentions 发视频评论，并在带目标时写入 at_name/at_mid，
+// 让“分享消息 + @ 用户”通过评论构建出真实的 @ 通知。
+func (w *webSession) postCommentWithMentions(aid int64, message string, targets []MentionTarget) error {
 	csrf := w.csrf()
 	if csrf == "" {
 		return fmt.Errorf("页面里读不到 bili_jct，无法发评论")
@@ -208,6 +217,10 @@ func (w *webSession) postComment(aid int64, message string) error {
 	form.Set("message", message)
 	form.Set("plat", "1")
 	form.Set("csrf", csrf)
+	if names, mids := mentionAtFields(targets); names != "" {
+		form.Set("at_name", names)
+		form.Set("at_mid", mids)
+	}
 	text, err := w.pageFetchText("POST", "https://api.bilibili.com/x/v2/reply/add",
 		"application/x-www-form-urlencoded", form.Encode(), 25*time.Second)
 	if err != nil {
@@ -275,17 +288,6 @@ func (w *webSession) publishDiary(text string) (string, error) {
 	return id, nil
 }
 
-// callCommentText 拼呼叫评论的可见正文：把目标用户名写成一行 @ 文本。
-func callCommentText(targets []MentionTarget) string {
-	ats := make([]string, 0, len(targets))
-	for _, target := range targets {
-		if target.Name != "" {
-			ats = append(ats, "@"+target.Name)
-		}
-	}
-	return strings.Join(ats, " ")
-}
-
 // mentionAtFields 拆分呼叫目标为评论接口需要的 at_name / at_mid（逗号分隔）。
 //
 // 只有配置了 UID 的目标才会产生真实的 @ 通知；缺 UID 的只在正文里保留 @名字。
@@ -300,54 +302,6 @@ func mentionAtFields(targets []MentionTarget) (names, mids string) {
 		midList = append(midList, fmt.Sprintf("%d", target.UID))
 	}
 	return strings.Join(nameList, ","), strings.Join(midList, ",")
-}
-
-// postDynamicComment 在刚发布的日记动态下写一条评论（type=17）。
-//
-// 呼叫放在评论区而不是动态正文：正文里的「@名字」只是纯文本，构建不出真实的 @ 关系；
-// 评论接口带上 at_name/at_mid 才会给对方发 @ 通知。返回新评论的 rpid，
-// 供本轮回复阶段跳过自己这条呼叫评论。
-func (w *webSession) postDynamicComment(dynID, message string, targets []MentionTarget) (string, error) {
-	csrf := w.csrf()
-	if csrf == "" {
-		return "", fmt.Errorf("页面里读不到 bili_jct，无法评论动态")
-	}
-	form := url.Values{}
-	form.Set("type", "17")
-	form.Set("oid", dynID)
-	form.Set("message", message)
-	form.Set("plat", "1")
-	form.Set("csrf", csrf)
-	if names, mids := mentionAtFields(targets); names != "" {
-		form.Set("at_name", names)
-		form.Set("at_mid", mids)
-	}
-	text, err := w.pageFetchText("POST", "https://api.bilibili.com/x/v2/reply/add",
-		"application/x-www-form-urlencoded", form.Encode(), 25*time.Second)
-	if err != nil {
-		return "", err
-	}
-	var resp struct {
-		Code int    `json:"code"`
-		Msg  string `json:"message"`
-		Data struct {
-			Rpid    int64  `json:"rpid"`
-			RpidStr string `json:"rpid_str"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(text), &resp); err != nil {
-		return "", err
-	}
-	if resp.Code != 0 {
-		return "", fmt.Errorf("B站拒绝评论动态: code=%d %s", resp.Code, resp.Msg)
-	}
-	if resp.Data.RpidStr != "" {
-		return resp.Data.RpidStr, nil
-	}
-	if resp.Data.Rpid != 0 {
-		return fmt.Sprintf("%d", resp.Data.Rpid), nil
-	}
-	return "", nil
 }
 
 // replyDynamic 读取动态评论并逐条回复，最多 max 条。

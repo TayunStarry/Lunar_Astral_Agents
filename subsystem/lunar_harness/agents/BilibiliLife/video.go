@@ -38,6 +38,9 @@ type videoInfo struct {
 	Owner    string
 	Duration int
 	URL      string
+	// Desc / Pic 视频简介与封面地址：画面理解失败时用于构建侧面理解
+	Desc string
+	Pic  string
 }
 
 func biliHTTPGetJSON(target string, out any) error {
@@ -71,6 +74,8 @@ func fetchVideoInfo(bvid string) (videoInfo, error) {
 			Aid      int64  `json:"aid"`
 			Cid      int64  `json:"cid"`
 			Title    string `json:"title"`
+			Desc     string `json:"desc"`
+			Pic      string `json:"pic"`
 			Duration int    `json:"duration"`
 			Owner    struct {
 				Name string `json:"name"`
@@ -92,6 +97,8 @@ func fetchVideoInfo(bvid string) (videoInfo, error) {
 		Owner:    resp.Data.Owner.Name,
 		Duration: resp.Data.Duration,
 		URL:      "https://www.bilibili.com/video/" + bvid,
+		Desc:     resp.Data.Desc,
+		Pic:      resp.Data.Pic,
 	}, nil
 }
 
@@ -320,7 +327,8 @@ func understandOneSlice(info videoInfo, seg module.MediaSegment, index, total in
 	}
 	prompt := fmt.Sprintf("这是同一个视频《%s》的第 %d/%d 个 60 秒切片（UP主：%s）。请按描述者格式客观描述这一段画面内容，不要当成另一个视频。",
 		info.Title, index, total, info.Owner)
-	text, err := chatWithImages(string(system), prompt, images)
+	// 单次调用、不重试：任一画面的思考监管命中重复，调用方直接放弃整条视频的画面理解
+	text, err := chatWithImagesOnce(string(system), prompt, images)
 	if err != nil {
 		return "", err
 	}
@@ -361,6 +369,11 @@ func storeVideoSummary(info videoInfo, summaries []string) {
 	if !result.Success || len(result.Results) == 0 || !result.Results[0].Success {
 		logger.Warn("BilibiliLife", "视频理解写入摘要库失败(%s): %s", info.URL, result.Error)
 		return
+	}
+	// 同时按 BV 号存一份：月华用 BV 号或带 BV 号的 URL 查询都能命中
+	if bvid := strings.TrimSpace(info.Bvid); bvid != "" && !strings.EqualFold(bvid, info.URL) {
+		_ = persistence.ExecuteSQLOn("media",
+			"INSERT OR REPLACE INTO video_summary (key, value) VALUES (?, ?)", []any{bvid, summary})
 	}
 	logger.Info("BilibiliLife", "视频理解已写入摘要库: %s", info.URL)
 }

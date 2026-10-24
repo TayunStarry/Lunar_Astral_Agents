@@ -28,7 +28,7 @@ var agentControlTools = []ToolCall{
 var memoryTools = []ToolCall{
 	functionTool("search_memory", "从长期记忆库检索历史对话与知识片段。这是聊天记忆检索，不是文档资源检索——查文件/资料请用 browse_resources。",
 		map[string]any{
-			"keywords": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "用自然语言描述或句柄视频链接或BV号，提供 1-4 种不同表述能显著提高命中率"},
+			"keywords": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "用自然语言描述，或直接给视频 URL / BV 号；提供 1-4 种不同表述能显著提高命中率"},
 			"exclude":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "结果正文命中任意一个词就丢弃"},
 			"topK":     map[string]any{"type": "number", "description": "希望返回的条目数，默认 8，最大 30"},
 		}, []string{"keywords"}),
@@ -228,7 +228,16 @@ func extractVideoKeys(keywords []string) []string {
 	found := make([]string, 0)
 	seen := map[string]bool{}
 	for _, keyword := range keywords {
-		matches := regexpVideoKey.FindAllString(keyword, -1)
+		trimmed := strings.TrimSpace(keyword)
+		lower := strings.ToLower(trimmed)
+		// 用户直接贴视频 URL 时，把 URL 本身也作为查询键（短链/带参数的 URL 也能按原文匹配）
+		if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.Contains(lower, "b23.tv/") {
+			if trimmed != "" && !seen[trimmed] {
+				seen[trimmed] = true
+				found = append(found, trimmed)
+			}
+		}
+		matches := regexpVideoKey.FindAllString(trimmed, -1)
 		for _, match := range matches {
 			upper := strings.ToUpper(match)
 			if !seen[upper] {
@@ -246,6 +255,8 @@ func findVideoSummaries(keys []string) []string {
 	}
 	values := loadKnowledge("video_summary")
 	found := make([]string, 0)
+	// 同一视频可能同时按 URL 与 BV 号入库，按内容去重，避免记忆检索返回重复摘要
+	seenText := map[string]bool{}
 	for key, text := range values {
 		upperKey := strings.ToUpper(key)
 		matched := false
@@ -255,9 +266,15 @@ func findVideoSummaries(keys []string) []string {
 				break
 			}
 		}
-		if matched && strings.TrimSpace(text) != "" {
-			found = append(found, "[已看视频摘要] "+key+"\n"+previewText(text, 400))
+		if !matched {
+			continue
 		}
+		trimmed := strings.TrimSpace(text)
+		if trimmed == "" || seenText[trimmed] {
+			continue
+		}
+		seenText[trimmed] = true
+		found = append(found, "[已看视频摘要] "+key+"\n"+previewText(text, 400))
 	}
 	return found
 }
@@ -695,6 +712,7 @@ func registerDialogueTools() {
 		return handleUseResource(args)
 	})
 	registerTool("schedule", handleScheduleTool)
+	registerTool("viewer", handleViewer)
 	registerTool(crystalToolName, handleUseTheProgram)
 	logger.Info(lunarCoreModule, "[工具] 对话者工具已注册")
 }

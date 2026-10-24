@@ -575,6 +575,9 @@ type DialogueRole struct {
 	ToolRounds         int
 	ActionClaimGuarded bool
 	ImageWindow        int
+	// PendingSpeeches 「边说边调工具」时随工具调用一起输出的正文，按时间顺序暂存；
+	// 拿到工具回调后的正式回答时统一拼到前面，避免中途文本被下一轮响应覆盖而丢失。
+	PendingSpeeches []string
 }
 
 // MemorizerRole 记忆者角色

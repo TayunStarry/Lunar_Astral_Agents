@@ -55,21 +55,21 @@ func TestDiaryAndDynamicShareSameCopy(t *testing.T) {
 	setupDiaryTest(t)
 
 	title := "2000-01-02 00:00 刷B站日记"
-	urls := []string{
-		"https://www.bilibili.com/video/BV1xx411c7mD",
-		"https://www.bilibili.com/video/BV1yy411c7mE",
+	videos := []diaryVideo{
+		{Title: "标题甲", URL: "https://www.bilibili.com/video/BV1xx411c7mD"},
+		{Title: "标题乙", URL: "https://www.bilibili.com/video/BV1yy411c7mE"},
 	}
 	brief := "第一个视频的画面很有冲击力。\n评论区吵得挺热闹。"
 
-	handle, lines, err := appendDiaryDocument(title, urls, brief)
+	handle, lines, err := appendDiaryDocument(title, videos, brief)
 	if err != nil {
 		t.Fatalf("写入日记失败: %v", err)
 	}
 	if !strings.HasPrefix(handle, "@D.") {
 		t.Fatalf("句柄格式不对: %q", handle)
 	}
-	if lines != 1+len(urls)+2 {
-		t.Fatalf("本段应为 1 标题+%d 条链接+2 行简述，实际 %d 行", len(urls), lines)
+	if lines != 1+len(videos)+2 {
+		t.Fatalf("本段应为 1 标题+%d 条视频+2 行简述，实际 %d 行", len(videos), lines)
 	}
 
 	raw, err := os.ReadFile(filepath.Join(config.LocalDir, filepath.FromSlash(diaryDocRel)))
@@ -78,14 +78,15 @@ func TestDiaryAndDynamicShareSameCopy(t *testing.T) {
 	}
 	docText := strings.TrimSuffix(string(raw), "\n")
 	// 文档 = "## " + 动态正文（同一份行列表，只在标题前多一个标题标记）
-	wantDoc := "## " + buildDynamicText(title, urls, brief)
+	wantDoc := "## " + buildDynamicText(title, videos, brief)
 	if docText != wantDoc {
 		t.Fatalf("文档与动态不是同一份文案:\n文档: %q\n期望: %q", docText, wantDoc)
 	}
-	// 本轮看过的每个视频都要有链接，不只是推荐的那一条
-	for _, url := range urls {
-		if !strings.Contains(docText, url) {
-			t.Fatalf("日记缺少视频链接 %s", url)
+	// 每个视频的标题与 URL 必须写在同一行，且本轮看过的视频都要出现
+	for _, video := range videos {
+		want := "《" + video.Title + "》 " + video.URL
+		if !strings.Contains(docText, want) {
+			t.Fatalf("日记缺少标题与 URL 同行的一行 %q", want)
 		}
 	}
 }
@@ -96,13 +97,13 @@ func TestAppendDiaryDocumentNewestOnTop(t *testing.T) {
 
 	oldTitle := "2000-01-01 00:00 刷B站日记"
 	newTitle := "2000-01-02 00:00 刷B站日记"
-	urls := []string{"https://www.bilibili.com/video/BV1xx411c7mD"}
+	videos := []diaryVideo{{Title: "标题甲", URL: "https://www.bilibili.com/video/BV1xx411c7mD"}}
 
-	oldHandle, _, err := appendDiaryDocument(oldTitle, urls, "旧日记一行\n第二行")
+	oldHandle, _, err := appendDiaryDocument(oldTitle, videos, "旧日记一行\n第二行")
 	if err != nil {
 		t.Fatalf("写入旧日记失败: %v", err)
 	}
-	newHandle, newLines, err := appendDiaryDocument(newTitle, urls, "新日记一行")
+	newHandle, newLines, err := appendDiaryDocument(newTitle, videos, "新日记一行")
 	if err != nil {
 		t.Fatalf("写入新日记失败: %v", err)
 	}
@@ -133,31 +134,37 @@ func TestAppendDiaryDocumentNewestOnTop(t *testing.T) {
 	}
 }
 
-// TestBuildDynamicText 钉住动态正文格式：标题 + 全部视频链接 + 简述（不补齐、10 行硬上限）。
+// TestBuildDynamicText 钉住动态正文格式：标题 + 每条视频《标题》 URL 同行 + 简述（不补齐、10 行硬上限）。
 func TestBuildDynamicText(t *testing.T) {
 	title := "2026-10-22 12:00 刷B站日记"
-	urls := []string{
-		"https://www.bilibili.com/video/BV1xx411c7mD",
-		"https://www.bilibili.com/video/BV1yy411c7mE",
+	videos := []diaryVideo{
+		{Title: "标题甲", URL: "https://www.bilibili.com/video/BV1xx411c7mD"},
+		{Title: "标题乙", URL: "https://www.bilibili.com/video/BV1yy411c7mE"},
 	}
 
 	// 常规简述（3 行）就输出几行，绝不用满 10 行
-	short := buildDynamicText(title, urls, "第一个视频的画面很有冲击力。\n评论区吵得挺热闹。\n总之看得很开心。")
+	short := buildDynamicText(title, videos, "第一个视频的画面很有冲击力。\n评论区吵得挺热闹。\n总之看得很开心。")
 	shortLines := strings.Split(short, "\n")
-	if len(shortLines) != 1+len(urls)+3 {
-		t.Fatalf("应为 1 标题+%d 链接+3 行简述，实际 %d 行：%q", len(urls), len(shortLines), short)
+	if len(shortLines) != 1+len(videos)+3 {
+		t.Fatalf("应为 1 标题+%d 条视频+3 行简述，实际 %d 行：%q", len(videos), len(shortLines), short)
 	}
-	if shortLines[0] != title || shortLines[1] != urls[0] || shortLines[2] != urls[1] {
-		t.Fatalf("标题/链接行不符: %q", shortLines[:3])
+	wantFirst := "《" + videos[0].Title + "》 " + videos[0].URL
+	wantSecond := "《" + videos[1].Title + "》 " + videos[1].URL
+	if shortLines[0] != title || shortLines[1] != wantFirst || shortLines[2] != wantSecond {
+		t.Fatalf("标题/视频行不符: %q", shortLines[:3])
 	}
 	if strings.Contains(short, "\n\n") {
 		t.Fatalf("动态不应出现空行: %q", short)
 	}
 
-	// 重复链接只列一次，空串跳过
-	dup := buildDynamicText(title, []string{urls[0], "", urls[0]}, "一句")
+	// 重复 URL 只列一次，空标题也保留 URL
+	dup := buildDynamicText(title, []diaryVideo{
+		{Title: "标题甲", URL: videos[0].URL},
+		{},
+		{Title: "标题甲", URL: videos[0].URL},
+	}, "一句")
 	if got := len(strings.Split(dup, "\n")); got != 3 {
-		t.Fatalf("重复/空链接应被去掉，实际 %d 行：%q", got, dup)
+		t.Fatalf("重复/空视频应被去掉，实际 %d 行：%q", got, dup)
 	}
 
 	// 简述异常过长时才按 10 行硬截断（上限不是目标）
@@ -167,44 +174,29 @@ func TestBuildDynamicText(t *testing.T) {
 		long.WriteString(strings.Repeat("一", i))
 		long.WriteString("句\n")
 	}
-	if got := len(strings.Split(buildDynamicText(title, urls, long.String()), "\n")); got != 1+len(urls)+dynamicSummaryMaxLines {
-		t.Fatalf("超长简述应截断为 %d 行，实际 %d 行", 1+len(urls)+dynamicSummaryMaxLines, got)
+	if got := len(strings.Split(buildDynamicText(title, videos, long.String()), "\n")); got != 1+len(videos)+dynamicSummaryMaxLines {
+		t.Fatalf("超长简述应截断为 %d 行，实际 %d 行", 1+len(videos)+dynamicSummaryMaxLines, got)
 	}
 
-	// 没有视频链接时只剩标题 + 简述
+	// 没有视频时只剩标题 + 简述
 	bare := buildDynamicText(title, nil, "只有一句感受")
 	if strings.Split(bare, "\n")[1] != "只有一句感受" {
-		t.Fatalf("无链接时第二行应是简述，实际 %q", bare)
+		t.Fatalf("无视频时第二行应是简述，实际 %q", bare)
 	}
 }
 
-// TestCallComment 钉住「呼叫写在动态评论区」的规则：
-// 可见正文是 @ 全部目标；at_name/at_mid 只收录配置了 UID 的目标（真实 @ 关系）。
-func TestCallComment(t *testing.T) {
+// TestMentionAtFields 钉住评论 @ 字段的规则：
+// at_name/at_mid 只收录配置了 UID 的目标（真实 @ 关系）。
+func TestMentionAtFields(t *testing.T) {
 	targets := []MentionTarget{
 		{Name: "甲", UID: 1001},
 		{Name: "乙", UID: 0},
-	}
-	if got := callCommentText(targets); got != "@甲 @乙" {
-		t.Fatalf("呼叫正文不符: %q", got)
 	}
 	names, mids := mentionAtFields(targets)
 	if names != "甲" || mids != "1001" {
 		t.Fatalf("只有带 UID 的目标才进 at 字段，实际 %q / %q", names, mids)
 	}
-	if got := callCommentText(nil); got != "" {
-		t.Fatalf("没有目标时不应产生呼叫正文，实际 %q", got)
-	}
 	if names, mids := mentionAtFields(nil); names != "" || mids != "" {
 		t.Fatalf("没有目标时不应产生 at 字段，实际 %q / %q", names, mids)
-	}
-}
-
-// TestDiaryReceiptText 钉住固定回执文案（行号按本段实际行数填写）。
-func TestDiaryReceiptText(t *testing.T) {
-	got := diaryReceiptText("@D.001", 4)
-	want := "刚刚刷了一会B站，日记写在 @D.001|L1-4 了，可用于回溯刷了什么视频；想聊就说说刚看了什么"
-	if got != want {
-		t.Fatalf("回执文案不符:\n got: %s\nwant: %s", got, want)
 	}
 }

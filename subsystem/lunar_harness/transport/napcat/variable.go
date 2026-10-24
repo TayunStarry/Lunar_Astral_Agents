@@ -47,6 +47,20 @@ var flowMutex sync.Mutex
 // groupPools 各群聊的消息缓存池
 var groupPools = make(map[int64]*GroupPool)
 
+// ==== 私聊缓存池 ====
+
+// privatePools 各私聊用户的消息缓存池（私聊也先攒批再判定，避免图片与要求被拆成两轮）
+var privatePools = make(map[int64][]GroupPoolEntry)
+
+// privateTimers 各私聊用户的合并窗口定时器（新消息到达时重置）
+var privateTimers = make(map[int64]*time.Timer)
+
+// privateBatchWindow 私聊连续消息的合并窗口（默认值，可经配置覆盖）
+const privateBatchWindow = 1500 * time.Millisecond
+
+// privatePoolMaxSize 私聊缓存池上限
+const privatePoolMaxSize = 20
+
 // groupNameCache 群名称缓存
 var groupNameCache = make(map[int64]string)
 

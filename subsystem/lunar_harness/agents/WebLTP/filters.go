@@ -85,16 +85,6 @@ func normalizeURL(raw string) string {
 	return parsed.String()
 }
 
-// isRedirectWrapper 疑似搜索引擎跳转链接（baidu/link?url=、sogou/link?url= 等）。
-// 这类链接的地址参数随结果页刷新变化，不适合作为缓存键。
-func isRedirectWrapper(raw string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return false
-	}
-	return strings.Contains(strings.ToLower(parsed.Path), "/link")
-}
-
 // dedupeResults 按规范化 URL 去重，保持原顺序
 func dedupeResults(results []SearchHit) []SearchHit {
 	seen := make(map[string]bool, len(results))

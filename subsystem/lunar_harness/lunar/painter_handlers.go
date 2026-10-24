@@ -314,6 +314,9 @@ func (role *PainterRole) handleUpscaleImage(args map[string]any) string {
 	if url := localPathToReadURL(path); url != "" {
 		if urls := pushAssistantImage([]string{url}, false); len(urls) > 0 {
 			role.ResultPath = urls[0]
+			role.rememberRuntimeArtwork(urls[0], "最新超分作品")
+		} else {
+			role.rememberRuntimeArtwork(url, "最新超分作品")
 		}
 	}
 	return fmt.Sprintf("超分成功。图片尺寸: %dx%d（%s），已推送给用户", width, height, label)

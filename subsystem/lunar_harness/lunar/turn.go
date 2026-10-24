@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/BilibiliLife"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
@@ -255,6 +254,9 @@ func slowTaskAckText(functionName string, args map[string]any) string {
 	if functionName == "dispatch_painter" {
 		return compose([]string{"这就动笔", "这就开画", "马上开工", "先起个稿"})
 	}
+	if functionName == "viewer" {
+		return compose([]string{"这就去看会儿", "那我去逛逛B站", "好，我去刷一会儿", "这就去挑个视频"})
+	}
 	if functionName == crystalToolName {
 		if strings.ToLower(strings.TrimSpace(stringArg(args, "tool"))) == "web_search" {
 			return compose([]string{"这就去翻资料", "这就去查", "马上去找", "先去翻一翻"})
@@ -274,21 +276,4 @@ func synthesizeSpeech(text string) string {
 		return ""
 	}
 	return audio
-}
-
-// lifeProgress 生活链当前进度
-func lifeProgress() string {
-	return BilibiliLife.Progress()
-}
-
-func lifeAutoTick() {
-	BilibiliLife.AutoTick()
-}
-
-func lifeSetBusy(busy bool) {
-	BilibiliLife.SetDialogueBusy(busy)
-}
-
-func lifeDialogueIdle() {
-	BilibiliLife.NotifyDialogueIdle()
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -52,46 +53,6 @@ func HandleNapcatMessage(rawMessage []byte) {
 	}
 }
 
-// handlePrivateMessage 处理私聊消息：即时构建请求并入队
-func handlePrivateMessage(msg NapcatMessage) {
-	if !isAllowedTarget(msg.UserID) {
-		logger.SubInfo("LunarCore", "Napcat", "忽略未授权用户 %d 的私聊消息", msg.UserID)
-		return
-	}
-
-	nickname := resolveNickname(msg.UserID, msg.Sender)
-	content, hasImages, videoURLs, audioURLs := parseMessageSegments(0, msg.Message)
-
-	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
-	rp := parseRawRedPacket(msg.Raw)
-	if rp != nil {
-		content = buildRedPacketText(rp)
-		hasImages = false
-		videoURLs = nil
-		audioURLs = nil
-	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(videoURLs) == 0 && len(audioURLs) == 0 {
-		// 无可理解内容的空消息（系统提示、空卡片等）直接忽略
-		return
-	}
-
-	req := BridgeRequest{
-		Target:    BridgeTarget{ID: msg.UserID, IsGroup: false},
-		Messages:  []map[string]any{buildUserMessage("[用户: "+nickname+"]: ", content, hasImages)},
-		VideoURLs: videoURLs,
-		AudioURLs: audioURLs,
-	}
-
-	if rp != nil && rp.IsPhrase {
-		// 口令红包：等待随机 0.5~3 秒再推送，让月华复读口令领取红包
-		go func() {
-			time.Sleep(randomRedPacketDelay())
-			enqueueRequest(req)
-		}()
-		return
-	}
-	enqueueRequest(req)
-}
-
 // handleGroupMessage 处理群聊消息：内置缓存池与触发机制
 func handleGroupMessage(msg NapcatMessage) {
 	if !isAllowedTarget(msg.GroupID) {
@@ -118,7 +79,7 @@ func handleGroupMessage(msg NapcatMessage) {
 		return
 	}
 
-	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, VideoURLs: videoURLs, AudioURLs: audioURLs}
+	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, VideoURLs: videoURLs, AudioURLs: audioURLs, MessageID: msg.MessageID}
 
 	selfID := msg.SelfID
 	if selfID == 0 {
@@ -148,15 +109,32 @@ func handleGroupMessage(msg NapcatMessage) {
 		}
 		clearGroupPool(msg.GroupID)
 
+		trigger := TriggerAt
+		switch {
+		case redPacket != nil:
+			trigger = TriggerRedPacket
+		case atSelf:
+			trigger = TriggerAt
+		case mentioned:
+			trigger = TriggerKeyword
+		default:
+			trigger = TriggerRandom
+		}
+
 		req := BridgeRequest{
 			Target:    BridgeTarget{ID: msg.GroupID, IsGroup: true, GroupName: groupName},
 			Messages:  buildGroupMessages(groupName, entries),
 			VideoURLs: collectGroupVideoURLs(entries),
 			AudioURLs: collectGroupAudioURLs(entries),
+			Trigger:   trigger,
 		}
 		// 被 @ 触发的回应，首次发言自动 @ 回发起者
 		if atSelf {
 			req.Target.ReplyToUserID = msg.UserID
+		}
+		// 随机触发：群里看不出月华在接谁的话，回应时自动引用相关性最高的一条消息
+		if trigger == TriggerRandom {
+			req.Target.QuoteCandidates = buildQuoteCandidates(entries)
 		}
 
 		if redPacket != nil && redPacket.IsPhrase {
@@ -525,6 +503,22 @@ func parseMessageSegments(groupID int64, segments []MessageSegment) (any, bool, 
 					})
 				}
 			}
+		case "mface":
+			// 商城表情：新版 NapCat 会转成 image 段，旧版仍以 mface 下发。
+			// 有直链/本地路径时按图片处理；否则退回摘要文案，避免整条消息被当成空消息丢弃。
+			var mfaceData MFaceData
+			if json.Unmarshal(segment.Data, &mfaceData) == nil {
+				if imgURL := resolveMFaceImage(mfaceData); imgURL != "" {
+					hasImages = true
+					markMultimedia(&contentArray, &contentStr)
+					contentArray = append(contentArray, map[string]any{
+						"type":      "image_url",
+						"image_url": map[string]string{"url": imgURL},
+					})
+				} else {
+					appendContent(&contentArray, &contentStr, "[表情: "+mfaceDisplayText(mfaceData)+"] ")
+				}
+			}
 		case "video":
 			var videoData VideoData
 			if json.Unmarshal(segment.Data, &videoData) == nil {
@@ -630,26 +624,82 @@ func renderReplyQuote(groupID int64, messageID string) string {
 	return "[回复 " + sender + ": " + summary + "] "
 }
 
-// resolveImageURL 获取图片的可访问地址：优先使用 url，其次直接使用 http 引用，最后通过接口下载为 base64 data URI
+// resolveImageURL 获取图片的可访问地址（data URI 或 http 直链）。
+//
+// 图片通道的字段组合因 NapCat 版本而异，取值顺序按可靠性排列：
+//  1. path：NapCat 本地缓存路径，直接读盘，不受 CDN 时效影响；
+//  2. url：CDN 直链（会过期），或本身已是 base64 data URI；
+//  3. file_id / file：走 get_image 重新拉取，失败再退化 get_file；
+//  4. file 恰好是本地路径时直接读盘。
 func resolveImageURL(imageData ImageData) string {
-	if imageData.URL != "" {
-		return imageData.URL
+	if dataURI := localImageDataURI(imageData.Path); dataURI != "" {
+		return dataURI
 	}
-	if imageData.File != "" {
-		if strings.HasPrefix(imageData.File, "http://") || strings.HasPrefix(imageData.File, "https://") {
-			return imageData.File
+	if raw := strings.TrimSpace(imageData.URL); raw != "" {
+		lower := strings.ToLower(raw)
+		if strings.HasPrefix(lower, "data:") {
+			return raw
 		}
-		if bytes, err := getImageContent(imageData.File); err == nil && len(bytes) > 0 {
-			// MIME 按文件头嗅探：QQ 常把 GIF 动图当作 png/jpg 下发，
-			// 硬编码 image/png 会让后续入库把动图存成 .png，按扩展名判定时退化为静态图。
-			mimeType := sniffImageMIME(bytes)
-			if mimeType == "" {
-				mimeType = "image/png"
-			}
-			return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(bytes)
+		if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+			return raw
 		}
+		if dataURI := localImageDataURI(raw); dataURI != "" {
+			return dataURI
+		}
+	}
+	if bytes, err := getImageContent(imageData.FileID, imageData.File); err == nil && len(bytes) > 0 {
+		return imageDataURI(bytes)
+	}
+	return localImageDataURI(imageData.File)
+}
+
+// resolveMFaceImage 取商城表情的图片地址（部分版本附带 url / path，多数只有 summary）
+func resolveMFaceImage(mface MFaceData) string {
+	if dataURI := localImageDataURI(mface.Path); dataURI != "" {
+		return dataURI
+	}
+	raw := strings.TrimSpace(mface.URL)
+	lower := strings.ToLower(raw)
+	if strings.HasPrefix(lower, "data:") {
+		return raw
+	}
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return raw
 	}
 	return ""
+}
+
+// mfaceDisplayText 商城表情的展示文案
+func mfaceDisplayText(mface MFaceData) string {
+	if summary := strings.TrimSpace(mface.Summary); summary != "" {
+		return summary
+	}
+	return "商城表情"
+}
+
+// imageDataURI 把图片字节包装为 data URI（MIME 按文件头嗅探，未知回退 PNG）
+func imageDataURI(data []byte) string {
+	mimeType := sniffImageMIME(data)
+	if mimeType == "" {
+		mimeType = "image/png"
+	}
+	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
+}
+
+// localImageDataURI 读取本地路径并包装为图片 data URI（非图片或读不到返回空串）
+func localImageDataURI(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(fileURLPath(path))
+	if err != nil || len(data) == 0 {
+		return ""
+	}
+	if sniffImageMIME(data) == "" {
+		return ""
+	}
+	return imageDataURI(data)
 }
 
 // admitForwardImage 把合并转发内的图片收进统一资源归档层并返回持久句柄。
@@ -668,12 +718,8 @@ func admitForwardImage(imageData ImageData) (string, bool) {
 	}
 	// 直链存在时 resolveImageURL 不会读取 file；补一份本地下载结果作为兜底
 	if imageData.URL != "" && imageData.File != "" && !strings.HasPrefix(imageData.File, "http://") && !strings.HasPrefix(imageData.File, "https://") {
-		if raw, err := getImageContent(imageData.File); err == nil && len(raw) > 0 {
-			mimeType := sniffImageMIME(raw)
-			if mimeType == "" {
-				mimeType = "image/png"
-			}
-			candidates = append(candidates, "data:"+mimeType+";base64,"+base64.StdEncoding.EncodeToString(raw))
+		if raw, err := getImageContent(imageData.FileID, imageData.File); err == nil && len(raw) > 0 {
+			candidates = append(candidates, imageDataURI(raw))
 		}
 	}
 
@@ -759,6 +805,10 @@ func resolveAudioSource(recordData RecordData) string {
 }
 
 // processFileSegment 处理文件消息段，返回 (文本描述, 是否图片, 图片dataURI)
+//
+// QQ 的文件通道可以承载图片：用户以「文件」方式发送 .png/.jpg，或把动图当文件发送。
+// NapCat 的文件段字段组合不固定（file / path / url / file_id 任意组合），
+// 因此读取字节按 path → file_id/file → url 依次兜底。
 func processFileSegment(fileData FileData) (string, bool, string) {
 	fileName := fileData.FileName
 	if fileName == "" {
@@ -767,19 +817,16 @@ func processFileSegment(fileData FileData) (string, bool, string) {
 	if fileName == "" {
 		fileName = fileData.File
 	}
+	if fileName == "" && fileData.Path != "" {
+		fileName = filepath.Base(fileURLPath(fileData.Path))
+	}
 
-	// 未提供文件标识时，仅回传名称与大小信息
-	if fileData.FileID == "" && fileData.File == "" && fileData.URL == "" {
+	// 未提供任何可读取标识时，仅回传名称与大小信息
+	if fileData.FileID == "" && fileData.File == "" && fileData.URL == "" && fileData.Path == "" {
 		return describeFile(fileName, fileData.FileSize), false, ""
 	}
 
-	var data []byte
-	var err error
-	if fileData.FileID != "" || fileData.File != "" {
-		data, err = getFileContent(fileData.FileID, fileData.File)
-	} else {
-		data, err = fetchFileBytes(fileData.URL)
-	}
+	data, err := readFileSegmentBytes(fileData)
 	if err != nil || len(data) == 0 {
 		logger.SubError("LunarCore", "Napcat", "下载文件失败: %v", err)
 		return describeFile(fileName, fileData.FileSize), false, ""
@@ -814,6 +861,24 @@ func processFileSegment(fileData FileData) (string, bool, string) {
 		name = fileName
 	}
 	return "[已收录] " + res.Handle + " " + name + " ", false, ""
+}
+
+// readFileSegmentBytes 按可用性依次尝试文件段的三种读取来源
+func readFileSegmentBytes(fileData FileData) ([]byte, error) {
+	if path := strings.TrimSpace(fileData.Path); path != "" {
+		if data, err := fetchFileBytes(path); err == nil && len(data) > 0 {
+			return data, nil
+		}
+	}
+	if fileData.FileID != "" || fileData.File != "" {
+		if data, err := getFileContent(fileData.FileID, fileData.File); err == nil && len(data) > 0 {
+			return data, nil
+		}
+	}
+	if url := strings.TrimSpace(fileData.URL); url != "" {
+		return fetchFileBytes(url)
+	}
+	return nil, fmt.Errorf("文件没有可用的读取来源")
 }
 
 // describeFile 构建文件的名称与大小信息描述
@@ -1087,6 +1152,26 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment, res
 				sb.WriteString("[表情: ")
 				sb.WriteString(text)
 				sb.WriteString("]")
+			} else {
+				sb.WriteString("[表情]")
+			}
+		case "mface":
+			var mfaceData MFaceData
+			if json.Unmarshal(segment.Data, &mfaceData) == nil {
+				registered := false
+				if resolveImages {
+					if handle, ok := admitForwardImage(ImageData{URL: mfaceData.URL, Path: mfaceData.Path}); ok {
+						sb.WriteString("[")
+						sb.WriteString(handle)
+						sb.WriteString("]")
+						registered = true
+					}
+				}
+				if !registered {
+					sb.WriteString("[表情: ")
+					sb.WriteString(mfaceDisplayText(mfaceData))
+					sb.WriteString("]")
+				}
 			} else {
 				sb.WriteString("[表情]")
 			}

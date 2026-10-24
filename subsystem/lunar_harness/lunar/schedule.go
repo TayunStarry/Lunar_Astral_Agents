@@ -28,6 +28,9 @@ var (
 var presetDailyTasks = []ScheduleItem{
 	{ID: "daily_greeting_morning", Type: "daily", Time: "07:30", Content: "向用户发送早安问候，并提示可以查一下今天的天气"},
 	{ID: "daily_greeting_evening", Type: "daily", Time: "22:00", Content: "向用户发送晚安问候，祝其好眠，并提示可以查看一下今天的新闻"},
+	{ID: "daily_viewer_1100", Type: "daily", Time: "11:00", Content: "现在是上午 11 点。可以选择调用 viewer（观影者）刷一会儿视频（flow=watch_comment）；刷视频有每日次数限制，如果今天已经刷得够多，就继续做别的事。"},
+	{ID: "daily_viewer_1700", Type: "daily", Time: "17:00", Content: "现在是下午 5 点。可以选择调用 viewer（观影者）刷一会儿视频（flow=watch_comment）；刷视频有每日次数限制，如果今天已经刷得够多，就继续做别的事。"},
+	{ID: "daily_viewer_2000", Type: "daily", Time: "20:00", Content: "现在是晚上 8 点。可以选择调用 viewer（观影者）刷一会儿视频（flow=watch_comment）；刷视频有每日次数限制，如果今天已经刷得够多，就继续做别的事。"},
 }
 
 // initSchedules 初始化计划表

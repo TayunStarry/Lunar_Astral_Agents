@@ -1,30 +1,29 @@
 package BilibiliLife
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
-
-	"LunarSubsystem/LunarHarness/engine/config"
 )
 
-func TestFilterAndScoreBlocksPoliticsAndConfrontation(t *testing.T) {
+// TestFilterAndScorePreferences 钉住选片打分的两层权重：
+// 标题不再做关键词过滤（风险筛查在视频详情层完成），默认偏好 +3、本轮关键词 +6。
+func TestFilterAndScorePreferences(t *testing.T) {
 	cfg := defaultConfig()
+	cfg.DesireKeywords = []string{"猫咪"}
 	links := []videoLink{
-		{Href: "https://www.bilibili.com/video/BV1", Title: "中美关系最新进展"},
-		{Href: "https://www.bilibili.com/video/BV2", Title: "男女对立又上热搜了"},
-		{Href: "https://www.bilibili.com/video/BV3", Title: "AI 绘画入门：大肥鱼模型实测"},
-		{Href: "https://www.bilibili.com/video/BV4", Title: "直播回放：昨天"},
+		{Href: "https://www.bilibili.com/video/BV1", Title: "AI 绘画入门：大肥鱼模型实测"},
+		{Href: "https://www.bilibili.com/video/BV2", Title: "猫咪和 AI 的一天"},
+		{Href: "https://www.bilibili.com/video/BV3", Title: "直播回放：昨天"},
 	}
-	out, blockedCount := filterAndScore(links, cfg)
-	if blockedCount != 3 {
-		t.Fatalf("应过滤 3 条涉政/对立/录播，实际 %d：%#v", blockedCount, out)
-	}
-	if len(out) != 1 || out[0].Href != "https://www.bilibili.com/video/BV3" {
-		t.Fatalf("应只留下 AI 视频，实际 %#v", out)
+	out := filterAndScore(links, cfg)
+	if len(out) != len(links) {
+		t.Fatalf("选片打分不应在标题层过滤，实际留下 %d 条", len(out))
 	}
 	if out[0].Score <= 0 {
-		t.Fatalf("AI 参考词应加分，实际 score=%d", out[0].Score)
+		t.Fatalf("默认偏好命中应加分，实际 score=%d", out[0].Score)
+	}
+	// 关键词权重是默认偏好的两倍：同时命中「猫咪」与「AI」的应高于只命中「AI」的
+	if out[1].Score <= out[0].Score {
+		t.Fatalf("本轮关键词应优先于默认偏好，实际 %d vs %d", out[1].Score, out[0].Score)
 	}
 }
 
@@ -48,55 +47,6 @@ func TestMentionNamesAllTargets(t *testing.T) {
 	// 未配置时返回空：调用方据此跳过 @ 分享，绝不内置默认 @ 对象
 	if got := (Config{}).mentionNames(); len(got) != 0 {
 		t.Fatalf("未配置 mention_targets 时不应产生任何 @ 目标，实际 %v", got)
-	}
-}
-
-// TestOnlyCallUserInDynamicDefault 钉住新配置项默认开启：
-// 未配置时不再挑视频发 @分享评论，改为在日记动态的评论区呼叫用户。
-func TestOnlyCallUserInDynamicDefault(t *testing.T) {
-	if !defaultConfig().onlyCallUserInDynamic() {
-		t.Fatal("「仅在动态中呼叫用户」默认应为开启")
-	}
-	if !(Config{}).onlyCallUserInDynamic() {
-		t.Fatal("零值配置也应按开启处理")
-	}
-	off := false
-	if (Config{OnlyCallUserInDynamic: &off}).onlyCallUserInDynamic() {
-		t.Fatal("显式关闭时应返回 false")
-	}
-}
-
-// TestLoadConfigOnlyCallUserInDynamic 钉住配置项能正常读写切换（含热重载读取）。
-func TestLoadConfigOnlyCallUserInDynamic(t *testing.T) {
-	tmp := t.TempDir()
-	orig := config.LocalDir
-	config.LocalDir = tmp
-	t.Cleanup(func() { config.LocalDir = orig })
-
-	path := filepath.Join(tmp, "bilibili_life.json")
-	if cfg := LoadConfig(); !cfg.onlyCallUserInDynamic() {
-		t.Fatal("配置文件缺失时应默认开启")
-	}
-	if err := os.WriteFile(path, []byte(`{"only_call_user_in_dynamic": false}`), 0o644); err != nil {
-		t.Fatalf("写入配置失败: %v", err)
-	}
-	if cfg := LoadConfig(); cfg.onlyCallUserInDynamic() {
-		t.Fatal("配置为 false 时应关闭")
-	}
-	if err := os.WriteFile(path, []byte(`{"only_call_user_in_dynamic": true}`), 0o644); err != nil {
-		t.Fatalf("写入配置失败: %v", err)
-	}
-	if cfg := LoadConfig(); !cfg.onlyCallUserInDynamic() {
-		t.Fatal("配置为 true 时应开启")
-	}
-}
-
-func TestBlockedKeywordsAreNonEmpty(t *testing.T) {
-	cfg := defaultConfig()
-	for _, word := range []string{"政治", "男女对立", "引战"} {
-		if _, ok := blockedBy("测试"+word+"内容", cfg.BlockedKeywords); !ok {
-			t.Fatalf("内置安全过滤缺少 %q", word)
-		}
 	}
 }
 
@@ -132,7 +82,7 @@ func TestClampVideosPerRound(t *testing.T) {
 
 // TestNewRunnerClampsConfig 钉住 runner 侧的兜底夹紧（配置文件写越界也不会真的刷 10 个）。
 func TestNewRunnerClampsConfig(t *testing.T) {
-	r := newRunner(Config{VideosPerRound: 10, SlicesPerVideo: 0, RepliesPerRound: 0}, true)
+	r := newRunner(Config{VideosPerRound: 10, SlicesPerVideo: 0, RepliesPerRound: 0}, FlowStandard, false, "")
 	if r.cfg.VideosPerRound != videoMaxCount {
 		t.Fatalf("越界视频数应夹到 %d，实际 %d", videoMaxCount, r.cfg.VideosPerRound)
 	}

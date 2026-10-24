@@ -11,6 +11,10 @@ import (
 
 const lunarCoreModule = "LunarCore"
 
+// lunarLoopRetries 模型输出陷入重复时，单次调用的额外重试次数。
+// 对话者的正式回答对完整性要求高，命中后先重试一次；仍失败交给对话链的失败处理。
+const lunarLoopRetries = 1
+
 // ==== 队列与思考状态 ====
 
 var (

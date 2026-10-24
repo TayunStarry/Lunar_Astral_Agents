@@ -76,12 +76,8 @@
 	"disable_postproc": "关闭输出后处理",
 	"idle_unload_minutes": "引擎闲置卸载阈值(分钟)",
 
-	"save_screenshots": "保存搜索截图",
-	"screenshot_dir": "截图目录",
 	"max_pages": "结果页数上限",
 	"max_results": "搜索结果数",
-	"results_scroll_captures": "结果页滚动截图张数",
-	"page_scroll_captures": "单页滚动截图张数",
 	"summary_max_chars": "单页摘要字符上限",
 	"max_run_seconds": "单次运行时长上限(秒)",
 

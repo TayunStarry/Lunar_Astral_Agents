@@ -1,11 +1,15 @@
 package BilibiliLife
 
-// 生活链管理器：可中断、可续跑、自动调度、消息闸门与进度通道。
+// 观影者管理器：由对话者通过 viewer 工具按流程同步调用。
 //
-// 与 goja 对话链的约定：
-//   - 生活运行时，Go 侧未读消息到达 → 请求中断；中断完成前 pullContext 拿不到消息；
-//   - 对话链完成且 10 秒内没有新未读 → 自动从断点继续；
-//   - 进度标题通过 bilibiliLifeProgress() 暴露给对话者运行时。
+// 三种流程（Flow）：
+//   standard      回复未读评论 + 看视频与评论 + 写日记动态 + 回复动态评论
+//   watch_comment 看视频与评论 + 写日记动态（不处理未读、不回复动态评论）
+//   reply_only    仅回复消息
+//
+// 动态只承载日记；分享消息与 @ 用户由 phaseShare 的视频评论完成，
+// 是否构建分享评论由工具参数 share 控制（不传默认 true）。
+// 每次调用同步跑完并返回日记/结果文本；不再有自动调度、TUI 强制触发或对话-生活交替。
 
 import (
 	"encoding/json"
@@ -15,15 +19,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 )
-
-var errPaused = errors.New("life paused for dialogue")
 
 type phase string
 
@@ -34,6 +36,7 @@ const (
 	phaseSelect        phase = "select"
 	phaseDownload      phase = "download"
 	phaseUnderstand    phase = "understand"
+	phaseFallback      phase = "fallback"
 	phaseCommentsRead  phase = "comments_read"
 	phaseCommentsWrite phase = "comments_write"
 	phaseDecide        phase = "decide"
@@ -54,19 +57,26 @@ type videoRecord struct {
 	Summary       string                `json:"summary,omitempty"`
 	Comments      []commentItem         `json:"comments,omitempty"`
 	NormalWritten int                   `json:"normal_written"`
+	// Fallback 画面理解因思考监管重复而放弃：改用标题/封面/简介/评论/弹幕构建侧面理解
+	Fallback bool     `json:"fallback,omitempty"`
+	Danmaku  []string `json:"danmaku,omitempty"`
+	// Risky 风险筛查命中：不评论、不分享、不写进日记动态
+	Risky bool `json:"risky,omitempty"`
 }
 
 type lifeState struct {
 	Version      int            `json:"version"`
+	Flow         Flow           `json:"flow"`
 	Phase        phase          `json:"phase"`
 	VideoIndex   int            `json:"video_index"`
 	Videos       []*videoRecord `json:"videos,omitempty"`
 	Current      *videoRecord   `json:"current,omitempty"`
-	ShareDone    bool           `json:"share_done,omitempty"` // 全轮唯一的 @分享评论是否已发
+	ShareDone    bool           `json:"share_done,omitempty"` // 全轮唯一的分享评论是否已发
+	Share        bool           `json:"share,omitempty"`      // 本轮是否构建分享评论（工具参数）
 	DynID        string         `json:"dyn_id,omitempty"`
-	CallRpid     string         `json:"call_rpid,omitempty"` // 动态评论区里那条 @ 呼叫评论的 rpid（回复阶段跳过它）
 	DiaryHandle  string         `json:"diary_handle,omitempty"` // 本轮日记落地的句柄（@D.xxx）
 	DiaryLines   int            `json:"diary_lines,omitempty"`  // 本轮日记段的总行数（标题+正文）
+	Replied      int            `json:"replied,omitempty"`      // 本轮成功回复的消息条数
 	ReplyTargets []replyTarget  `json:"reply_targets,omitempty"`
 	ReplyIndex   int            `json:"reply_index"`
 	RepliesUsed  int            `json:"replies_used,omitempty"` // 已用掉的回应额度（评论/动态/私信共享）
@@ -75,76 +85,36 @@ type lifeState struct {
 	InboxChecked bool        `json:"inbox_checked,omitempty"`
 	InboxTargets []inboxItem `json:"inbox_targets,omitempty"`
 	InboxIndex   int         `json:"inbox_index"`
-	AuditRejects int         `json:"audit_rejects,omitempty"` // 本轮被静态画面审核拒绝的视频数
+	RiskRejects  int         `json:"risk_rejects,omitempty"` // 本轮被风险筛查拒绝的视频数
 	Progress     string      `json:"progress"`
 	StartedAt    string      `json:"started_at"`
-	Forced       bool        `json:"forced"`
 }
 
 type runner struct {
-	cfg     Config
-	browser *webSession
-	state   *lifeState
-}
-
-type autoStats struct {
-	Date       string `json:"date"`
-	Count      int    `json:"count"`
-	LastAutoAt string `json:"last_auto_at"`
+	cfg         Config
+	browser     *webSession
+	state       *lifeState
+	instruction string // 对话者本轮想法（viewer 工具的 instruction）
 }
 
 type lifeManager struct {
-	mu            sync.Mutex
-	cfg           Config
-	cfgStamp      time.Time // 上次读取 bilibili_life.json 的修改时间（用于热重载）
-	runner        *runner
-	running       bool
-	paused        bool
-	interrupted   bool
-	interruptedAt time.Time
-	progress      string
-	resumeTimer   *time.Timer
+	mu      sync.Mutex
+	cfg     Config
+	runner  *runner
+	running bool
 }
 
 var (
-	manager       = &lifeManager{}
-	dialogueBusy  atomic.Bool
-	unreadCounter func() int
-	stateFile     = func() string { return filepath.Join(localRoot(), "database", "bilibili_life", "state.json") }
-	autoStatsFile = func() string { return filepath.Join(localRoot(), "database", "bilibili_life", "auto.json") }
-	// processStartedAt 进程启动时刻（包初始化即赋值）
-	processStartedAt = time.Now()
+	manager   = &lifeManager{}
+	stateFile = func() string {
+		return filepath.Join(localRoot(), "database", "bilibili_life", "state.json")
+	}
 )
 
-// startupLifeGrace 启动后的自动生活静默期。
-//
-// 这段时间内自动调度不进入生活，只有 TUI 强制触发能开始：服务刚起来时模型、前端、
-// 浏览器都还没就绪，而且断点文件里的上次自动时间可能早已过期，不该一启动就弹 B 站窗口。
-const startupLifeGrace = 10 * time.Minute
-
-// autoLifeGraceActive 是否仍处在启动静默期内。
-func autoLifeGraceActive() bool { return time.Since(processStartedAt) < startupLifeGrace }
-
-// reloadConfigLocked 重新读取 bilibili_life.json 并记录文件修改时间（调用方需持有 m.mu）。
+// reloadConfigLocked 重新读取 bilibili_life.json（调用方需持有 m.mu）。
+// 每次工具调用都会重读，改完配置无需重启。
 func (m *lifeManager) reloadConfigLocked() {
 	m.cfg = LoadConfig()
-	if info, err := os.Stat(configPath()); err == nil {
-		m.cfgStamp = info.ModTime()
-	}
-}
-
-// refreshConfigLocked 配置文件的修改时间变了就热重载（调用方需持有 m.mu）。
-//
-// 为什么需要：自动生活以前只在内存配置为空时读一次文件，用户改完 mention_targets /
-// preference_keywords 后，自动轮次会一直用旧值（表现为「永远只 @ 同一个人」），
-// 必须重启或 TUI 强制触发才生效。按 mtime 判断，改完下一轮就生效。
-func (m *lifeManager) refreshConfigLocked() {
-	info, err := os.Stat(configPath())
-	if err != nil || !info.ModTime().After(m.cfgStamp) {
-		return
-	}
-	m.reloadConfigLocked()
-	logger.Info("BilibiliLife", "检测到 bilibili_life.json 变更，已重新加载配置")
 }
 
 func localRoot() string {
@@ -155,71 +125,66 @@ func localRoot() string {
 	return dir
 }
 
-// SetUnreadCounter 注册宿主未读数（由 lunar_loop 在初始化时注入）。
-func SetUnreadCounter(fn func() int) { unreadCounter = fn }
+// RunFlow 同步执行一次观影者流程，返回可直接作为工具回复的文本。
+// flow 由对话者通过 viewer 工具的枚举选择；share 决定是否为本轮选中的视频构建分享评论；
+// instruction 只作为任务提示（可空）。
+func RunFlow(flow Flow, share bool, instruction string) (string, error) {
+	if flow == "" {
+		flow = FlowStandard
+	}
 
-// SetDialogueBusy 由 goja 对话链同步“是否正在推理”，TUI 强制生活据此延迟。
-func SetDialogueBusy(busy bool) { dialogueBusy.Store(busy) }
-
-// Start 由 TUI 调用（forced=true）：跳过自动间隔/每日上限，不占自动次数。
-func Start() (string, error) { return manager.start(true) }
-
-// Run 同步执行一次，供测试/脚本使用。
-func Run() error {
 	manager.mu.Lock()
 	if manager.running {
 		manager.mu.Unlock()
-		return fmt.Errorf("已有一次生活正在运行")
+		return "观影者正在忙，等这次结束再试", nil
 	}
 	manager.reloadConfigLocked()
-	// 生活开始前事件：插件可取消本次生活（取消仍消耗一次本日额度并计为完成）
-	if allow, reason := dispatchBeforeLifeStarts(manager.cfg, true); !allow {
-		consumeLifeQuota(reason)
-		return nil
+	cfg := manager.cfg
+	if flow.Watches() && watchQuotaExhausted(cfg) {
+		manager.mu.Unlock()
+		return "今天已经刷了很多视频了，不适合再看了", nil
 	}
-	manager.runner = newRunner(manager.cfg, true)
+	if allow, reason := dispatchBeforeLifeStarts(cfg, flow); !allow {
+		if flow.Watches() {
+			consumeWatchQuota(cfg)
+		}
+		manager.mu.Unlock()
+		if strings.TrimSpace(reason) == "" {
+			reason = "插件未给出原因"
+		}
+		return "本次观影被 LTP9 插件取消（" + reason + "）", nil
+	}
+	if flow.Watches() {
+		consumeWatchQuota(cfg)
+	}
+	r := newRunner(cfg, flow, share, instruction)
+	manager.runner = r
 	manager.running = true
-	manager.paused = false
-	manager.interrupted = false
-	manager.progress = "正在准备生活…"
-	done := make(chan error, 1)
-	go manager.loop(manager.runner, done)
 	manager.mu.Unlock()
-	return <-done
+
+	// 关键词提炼会调用模型，必须在释放 manager.mu 之后执行，避免阻塞其它管理查询
+	if flow.Watches() {
+		r.prepareDesireKeywords()
+	}
+	if strings.TrimSpace(instruction) != "" {
+		logger.Info("BilibiliLife", "观影者收到任务提示[%s]: %s", flow, truncate(instruction, 120))
+	}
+	text, err := runSync(r)
+
+	manager.mu.Lock()
+	manager.running = false
+	manager.runner = nil
+	manager.mu.Unlock()
+	return text, err
 }
 
-func (m *lifeManager) start(forced bool) (string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.running {
-		return "已有一次生活正在运行，等它结束或被打断", nil
-	}
-	if dialogueBusy.Load() {
-		return "对话正在推理，等这一轮回答完再开始生活", nil
-	}
-	if unreadCounter != nil && unreadCounter() > 0 {
-		return "还有未读消息，先处理对话再开始生活", nil
-	}
-	if m.paused && m.runner != nil {
-		m.resumeLocked()
-		return "已继续上次没走完的生活", nil
-	}
-	m.reloadConfigLocked()
-	// 生活开始前事件：插件可取消本次生活（取消仍消耗一次本日额度并计为完成）
-	if allow, reason := dispatchBeforeLifeStarts(m.cfg, forced); !allow {
-		consumeLifeQuota(reason)
-		return "生活开始前被 LTP9 插件取消（已计为完成一次生活）", nil
-	}
-	m.runner = newRunner(m.cfg, forced)
-	m.running = true
-	m.paused = false
-	m.interrupted = false
-	m.progress = "正在准备生活…"
-	go m.loop(m.runner, nil)
-	return "已启动：正在打开 B 站浏览器", nil
+// Run 同步执行一次标准流程，供测试/脚本使用。
+func Run() error {
+	_, err := RunFlow(FlowStandard, false, "")
+	return err
 }
 
-func newRunner(cfg Config, forced bool) *runner {
+func newRunner(cfg Config, flow Flow, share bool, instruction string) *runner {
 	// 刷视频数量：默认 3 个，硬边界 1~5；切片与回复次数只保证为正数
 	if cfg.VideosPerRound <= 0 {
 		cfg.VideosPerRound = defaultVideosPerRound
@@ -231,289 +196,91 @@ func newRunner(cfg Config, forced bool) *runner {
 	if cfg.RepliesPerRound <= 0 {
 		cfg.RepliesPerRound = defaultRepliesPerRound
 	}
-	logger.Info("BilibiliLife", "本轮选片偏好：参考词 %d 个；过滤词 %d 个；@目标 %d 个；目标视频 %d 个；每视频 %d 个切片；仅在动态呼叫用户=%v",
-		len(cfg.PreferenceKeywords), len(cfg.BlockedKeywords), len(cfg.MentionTargets),
-		cfg.VideosPerRound, cfg.SlicesPerVideo, cfg.onlyCallUserInDynamic())
+	// 对话者的本轮想法优先于配置文件偏好：只在本次运行内生效，不落盘。
+	// 具体提炼在 RunFlow 释放 manager 锁之后执行（会调用模型，不能占着锁）。
+	logger.Info("BilibiliLife", "观影者流程[%s]：参考词 %d 个；@目标 %d 个；目标视频 %d 个；每视频 %d 个切片；构建分享=%v",
+		flow, len(cfg.PreferenceKeywords), len(cfg.MentionTargets), cfg.VideosPerRound, cfg.SlicesPerVideo, share)
 	return &runner{
-		cfg: cfg,
+		cfg:         cfg,
+		instruction: strings.TrimSpace(instruction),
 		state: &lifeState{
 			Version:   1,
+			Flow:      flow,
+			Share:     share,
 			Phase:     phaseLogin,
 			Progress:  "正在打开 B 站浏览器…",
 			StartedAt: time.Now().Format(time.RFC3339),
-			Forced:    forced,
 		},
 	}
 }
 
-func (m *lifeManager) loop(r *runner, done chan error) {
-	for {
-		if m.shouldPause() {
-			m.pause(r)
-			if done != nil {
-				done <- nil
-			}
-			return
-		}
-		finished, err := r.step(m)
-		if errors.Is(err, errPaused) {
-			m.pause(r)
-			if done != nil {
-				done <- nil
-			}
-			return
-		}
-		if err != nil {
-			m.fail(r, err)
-			if done != nil {
-				done <- err
-			}
-			return
-		}
-		if finished {
-			m.finish(r)
-			if done != nil {
-				done <- nil
-			}
-			return
-		}
+// flow 当前流程（旧断点没有 Flow 字段时按标准流程处理）。
+func (r *runner) flow() Flow {
+	if r == nil || r.state == nil || r.state.Flow == "" {
+		return FlowStandard
 	}
+	return r.state.Flow
 }
 
-func (m *lifeManager) shouldPause() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.interrupted
+// resultText 把本轮结果整理成工具回复：
+// 真正刷过视频才返回日记句柄；只回复了评论时返回成功回复的条数。
+func (r *runner) resultText() string {
+	if r == nil || r.state == nil {
+		return "观影者已完成本次流程"
+	}
+	s := r.state
+	if s.VideoIndex > 0 && s.DiaryHandle != "" {
+		return fmt.Sprintf("已经刷完一轮视频了，可查询%s|L1-%d 获取看到的内容", s.DiaryHandle, s.DiaryLines)
+	}
+	if s.Replied > 0 {
+		return fmt.Sprintf("已回复 %d 条 B 站评论", s.Replied)
+	}
+	if r.flow() == FlowReplyOnly {
+		return "已回复 0 条 B 站评论"
+	}
+	if s.VideoIndex > 0 {
+		return fmt.Sprintf("看了 %d 个视频，本轮结束", s.VideoIndex)
+	}
+	return "观影者已完成本次流程"
+}
+
+// runSync 同步推进流程，直到完成或失败；返回结果文本。
+func runSync(r *runner) (string, error) {
+	for step := 0; step < 1000; step++ {
+		finished, err := r.step(manager)
+		if err != nil {
+			abortRun(r, err)
+			return r.resultText(), err
+		}
+		if finished {
+			text := r.resultText()
+			finishRun(r)
+			return text, nil
+		}
+	}
+	err := fmt.Errorf("观影者流程步数超限")
+	abortRun(r, err)
+	return r.resultText(), err
 }
 
 func (m *lifeManager) setProgress(text string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.progress = text
 	if m.runner != nil && m.runner.state != nil {
 		m.runner.state.Progress = text
 	}
 }
 
-func (m *lifeManager) pause(r *runner) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.running = false
-	m.paused = true
-	m.interrupted = false
-	// 保留最后一步的进度（如“看到了 2/3”），对话者运行时仍能看到停在哪里
-	r.saveState()
-	logger.Info("BilibiliLife", "生活已暂停（当前阶段 %s，进度：%s），等对话结束后续跑", r.state.Phase, m.progress)
-}
-
-func (m *lifeManager) fail(r *runner, err error) {
-	logger.Error("BilibiliLife", "本次刷视频失败: %v", err)
-	// 生活结束前事件（纯触发器）：失败也是一种结束，插件可据此做收尾
-	dispatchBeforeLifeEnds(r, "failed", err.Error())
-	m.mu.Lock()
-	m.running = false
-	m.paused = false
-	m.interrupted = false
-	m.progress = ""
-	m.runner = nil
-	m.mu.Unlock()
-	// 日记已落文档但本轮中途失败：回执照发，月华仍能按句柄回看这段日记
-	notifyDiaryReceipt(r)
-	r.cleanup()
-}
-
-func (m *lifeManager) finish(r *runner) {
-	// 生活结束前事件（纯触发器）：正常完成，插件可据此做收尾
+func finishRun(r *runner) {
 	dispatchBeforeLifeEnds(r, "finished", "")
-	m.mu.Lock()
-	m.running = false
-	m.paused = false
-	m.interrupted = false
-	m.progress = ""
-	m.runner = nil
-	m.mu.Unlock()
-	notifyDiaryReceipt(r)
+	logger.Info("BilibiliLife", "观影者流程完成[%s]", r.flow())
 	r.cleanup()
-	logger.Info("BilibiliLife", "本次生活完成")
 }
 
-// notifyDiaryReceipt 本轮写过日记文档时，经注册回调把固定回执送进月华未读队列。
-// 回调在 finish/fail（running 已复位）之后触发：EnqueueMessage 内部的未读中断
-// 请求不会再次打断已结束的生活。
-func notifyDiaryReceipt(r *runner) {
-	if r == nil || r.state == nil || r.state.DiaryHandle == "" || diaryNotifier == nil {
-		return
-	}
-	diaryNotifier(diaryReceiptText(r.state.DiaryHandle, r.state.DiaryLines))
-}
-
-func (m *lifeManager) resumeLocked() {
-	if m.runner == nil {
-		return
-	}
-	m.running = true
-	m.paused = false
-	m.interrupted = false
-	m.progress = "继续上次没走完的生活…"
-	go m.loop(m.runner, nil)
-}
-
-// NotifyUnread 宿主收到未读消息时调用：生活在跑就请求中断，并取消续跑计时。
-func NotifyUnread() {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-	if manager.resumeTimer != nil {
-		manager.resumeTimer.Stop()
-		manager.resumeTimer = nil
-	}
-	if manager.running && !manager.paused {
-		manager.interrupted = true
-		manager.interruptedAt = time.Now()
-		logger.Info("BilibiliLife", "检测到未读消息，生活将在当前步骤后暂停")
-	}
-}
-
-// HoldMessages true 时 pullContext 暂不交付消息（生活还没停到断点）。
-func HoldMessages() bool {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-	if !manager.running || manager.paused {
-		return false
-	}
-	// 兜底竞态：生活刚启动时队列里已经有未读，但 Enqueue 的 NotifyUnread
-	// 发生在 Start 之前。这里看到未读就立刻补上中断请求，避免对话把消息抢走。
-	if !manager.interrupted && unreadCounter != nil && unreadCounter() > 0 {
-		manager.interrupted = true
-		manager.interruptedAt = time.Now()
-		logger.Info("BilibiliLife", "发现未读消息，补发生活中断请求")
-	}
-	if !manager.interrupted {
-		return false
-	}
-	// 兜底：如果生活卡在一个不可中断的长调用里超过 5 分钟，不能再让对话饿死。
-	if !manager.interruptedAt.IsZero() && time.Since(manager.interruptedAt) > 5*time.Minute {
-		logger.Warn("BilibiliLife", "生活中断等待超过 5 分钟，临时放开消息拉取避免对话饿死")
-		return false
-	}
-	return true
-}
-
-// Progress 对话者运行时拉取的生活进度；结束/空闲返回空串。
-func Progress() string {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-	if manager.runner == nil {
-		return ""
-	}
-	if manager.runner.state.Phase == phaseDone {
-		return ""
-	}
-	return manager.progress
-}
-
-// NotifyDialogueIdle 对话链完成一次推理后调用；10 秒静默后续跑暂停中的生活。
-func NotifyDialogueIdle() {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-	if !manager.paused || manager.running || manager.runner == nil {
-		return
-	}
-	if unreadCounter != nil && unreadCounter() > 0 {
-		return
-	}
-	if manager.resumeTimer != nil {
-		manager.resumeTimer.Stop()
-	}
-	manager.resumeTimer = time.AfterFunc(10*time.Second, func() {
-		manager.mu.Lock()
-		defer manager.mu.Unlock()
-		if !manager.paused || manager.running || manager.runner == nil {
-			return
-		}
-		if unreadCounter != nil && unreadCounter() > 0 {
-			return
-		}
-		logger.Info("BilibiliLife", "对话已空闲 10 秒，继续未完成的生活")
-		manager.resumeLocked()
-	})
-}
-
-// AutoTick 由 goja 在空闲 tick 调用；到点则启动自动生活。
-func AutoTick() bool {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-	if manager.running || manager.paused || dialogueBusy.Load() {
-		return false
-	}
-	if unreadCounter != nil && unreadCounter() > 0 {
-		return false
-	}
-	// 启动静默期：自动调度不进入生活，只有 TUI 强制触发（Start）能开始
-	if autoLifeGraceActive() {
-		return false
-	}
-	// 配置文件改动后立即热重载：否则改 mention_targets / preference_keywords
-	// 要等重启才生效，自动轮次会一直按旧配置跑
-	manager.refreshConfigLocked()
-	cfg := manager.cfg
-	if !cfg.autoEnabled() {
-		return false
-	}
-	stats := loadAutoStats()
-	today := time.Now().Format("2006-01-02")
-	if stats.Date != today {
-		stats.Date = today
-		stats.Count = 0
-	}
-	if stats.Count >= cfg.DailyLimit {
-		return false
-	}
-	if stats.LastAutoAt == "" {
-		// 首次启动不立刻开浏览器；从启动时刻起算一个完整间隔，
-		// 避免每次重启应用都突然弹 B 站窗口。想立刻看用 TUI 强制触发。
-		stats.LastAutoAt = time.Now().Format(time.RFC3339)
-		saveAutoStats(stats)
-		return false
-	}
-	if last, err := time.Parse(time.RFC3339, stats.LastAutoAt); err == nil {
-		if time.Since(last) < time.Duration(cfg.IntervalHours*float64(time.Hour)) {
-			return false
-		}
-	}
-	manager.cfg = cfg
-	// 生活开始前事件：插件可取消本次自动生活（取消仍消耗一次本日额度并计为完成）
-	if allow, reason := dispatchBeforeLifeStarts(cfg, false); !allow {
-		consumeLifeQuota(reason)
-		return false
-	}
-	manager.runner = newRunner(cfg, false)
-	manager.running = true
-	manager.paused = false
-	manager.interrupted = false
-	manager.progress = "自动生活开始…"
-	stats.Count++
-	stats.LastAutoAt = time.Now().Format(time.RFC3339)
-	saveAutoStats(stats)
-	logger.Info("BilibiliLife", "自动生活触发（今天第 %d/%d 次）", stats.Count, cfg.DailyLimit)
-	go manager.loop(manager.runner, nil)
-	return true
-}
-
-func loadAutoStats() autoStats {
-	var stats autoStats
-	raw, err := os.ReadFile(autoStatsFile())
-	if err == nil {
-		_ = json.Unmarshal(raw, &stats)
-	}
-	return stats
-}
-
-func saveAutoStats(stats autoStats) {
-	if err := os.MkdirAll(filepath.Dir(autoStatsFile()), 0o755); err != nil {
-		return
-	}
-	raw, _ := json.MarshalIndent(stats, "", "  ")
-	_ = os.WriteFile(autoStatsFile(), raw, 0o644)
+func abortRun(r *runner, err error) {
+	logger.Error("BilibiliLife", "观影者流程失败[%s]: %v", r.flow(), err)
+	dispatchBeforeLifeEnds(r, "failed", err.Error())
+	r.cleanup()
 }
 
 func (r *runner) saveState() {
@@ -551,11 +318,8 @@ func (r *runner) cleanup() {
 	_ = os.Remove(stateFile())
 }
 
-// step 执行一个可中断的小步骤；返回 finished=true 表示整轮结束。
+// step 执行流程中的一个小步骤；返回 finished=true 表示整轮结束。
 func (r *runner) step(m *lifeManager) (bool, error) {
-	if m.shouldPause() {
-		return false, errPaused
-	}
 	s := r.state
 	switch s.Phase {
 	case phaseLogin:
@@ -567,16 +331,16 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			}
 			r.browser = browser
 		}
-		if err := r.browser.ensureLoginInterruptible(m.shouldPause); err != nil {
-			if errors.Is(err, errPaused) {
-				r.saveState()
-				return false, errPaused
-			}
+		if err := r.browser.ensureLogin(); err != nil {
 			return false, err
 		}
-		s.Phase = phaseInbox
+		if r.flow().includesInbox() {
+			s.Phase = phaseInbox
+		} else {
+			s.Phase = phaseSelect
+		}
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseInbox:
 		// 必须在选片之前完成：先把评论区追评、动态回复与 @月华 处理掉
@@ -594,14 +358,18 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		s.InboxIndex = 0
 		s.InboxChecked = true
 		if len(s.InboxTargets) == 0 {
-			logger.Info("BilibiliLife", "没有需要回应的未读消息，开始刷视频")
-			s.Phase = phaseSelect
+			logger.Info("BilibiliLife", "没有需要回应的未读消息")
+			if r.flow() == FlowReplyOnly {
+				s.Phase = phaseDone
+			} else {
+				s.Phase = phaseSelect
+			}
 		} else {
-			logger.Info("BilibiliLife", "发现 %d 条未读消息，先回应再刷视频", len(s.InboxTargets))
+			logger.Info("BilibiliLife", "发现 %d 条未读消息，先回应", len(s.InboxTargets))
 			s.Phase = phaseInboxReply
 		}
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseInboxReply:
 		// 逐条回应，每条一个可中断小步骤；额度与动态回复共享
@@ -609,9 +377,13 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			if remaining := len(s.InboxTargets) - s.InboxIndex; remaining > 0 {
 				logger.Info("BilibiliLife", "本轮回应额度已用完，剩余 %d 条未读留到下一轮", remaining)
 			}
-			s.Phase = phaseSelect
+			if r.flow() == FlowReplyOnly {
+				s.Phase = phaseDone
+			} else {
+				s.Phase = phaseSelect
+			}
 			r.saveState()
-			return false, m.pauseIfNeeded()
+			return false, nil
 		}
 		item := s.InboxTargets[s.InboxIndex]
 		m.setProgress(fmt.Sprintf("正在回应 B 站未读消息 %d/%d…", s.RepliesUsed+1, r.cfg.RepliesPerRound))
@@ -624,11 +396,12 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		} else {
 			logger.Info("BilibiliLife", "已回应 B 站未读消息 → %s：%s", item.User, text)
 			markInboxSeen(item)
+			s.Replied++
 		}
 		s.InboxIndex++
 		s.RepliesUsed++
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseSelect:
 		m.setProgress(fmt.Sprintf("正在挑第 %d/%d 组视频…", s.VideoIndex+1, r.cfg.VideosPerRound))
@@ -664,12 +437,25 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		if info.Title == "" {
 			info.Title = link.Title
 		}
-		// 选中即记为已看：下一轮不再推同一条（下载/理解失败也不重试同一条）
+		// 选中即记为已看：下一轮不再推同一条（风险拒选/下载/理解失败也不重试同一条）
 		markSeen(bvid)
+		// 风险筛查：标题 + 简介 + 封面，命中即换一条（不占观看额度）
+		if verdict := screenVideoRisk(info, nil); verdict.Risky {
+			s.RiskRejects++
+			limit := riskRejectLimit(r.cfg.VideosPerRound)
+			logger.Info("BilibiliLife", "《%s》(%s) 未通过风险筛查（第 %d/%d 次），重新选片：%s",
+				info.Title, info.Bvid, s.RiskRejects, limit, verdict.Reason)
+			if s.RiskRejects >= limit {
+				return false, fmt.Errorf("连续 %d 个视频未通过风险筛查（阈值 %d），放弃本轮", s.RiskRejects, limit)
+			}
+			s.Phase = phaseSelect
+			r.saveState()
+			return false, nil
+		}
 		s.Current = &videoRecord{Link: link, Info: info}
 		s.Phase = phaseDownload
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseDownload:
 		cur := s.Current
@@ -690,28 +476,6 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("下载视频失败: %w", err)
 		}
-		// 内容审核：静态/高度雷同画面极易触发模型无限思考循环，命中即舍弃重选。
-		// 该视频已在 phaseSelect 计入已看记录；这里不增加 VideoIndex，不占观看额度。
-		rejected, auditErr := auditVideoStasis(local)
-		if auditErr != nil {
-			// 审核器故障不阻断生活链：记录告警后放行
-			logger.Warn("BilibiliLife", "视频内容审核失败（放行）: %v", auditErr)
-		} else if rejected {
-			s.AuditRejects++
-			limit := auditRejectLimit(r.cfg.VideosPerRound)
-			logger.Info("BilibiliLife", "《%s》(%s) 未通过内容审核（第 %d/%d 次），重新选片（不占观看额度）",
-				cur.Info.Title, cur.Info.Bvid, s.AuditRejects, limit)
-			_ = os.Remove(local)
-			cur.LocalPath = ""
-			cur.Segments = nil
-			s.Current = nil
-			if s.AuditRejects >= limit {
-				return false, fmt.Errorf("连续 %d 个视频未通过静态画面审核（阈值 %d），放弃本轮", s.AuditRejects, limit)
-			}
-			s.Phase = phaseSelect
-			r.saveState()
-			return false, m.pauseIfNeeded()
-		}
 		segments, err := prepareVideoSegments(local, r.cfg.SlicesPerVideo)
 		if err != nil {
 			_ = os.Remove(local)
@@ -721,7 +485,7 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		cur.Segments = segments
 		s.Phase = phaseUnderstand
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseUnderstand:
 		cur := s.Current
@@ -741,19 +505,77 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			cur.Segments = nil
 			s.Phase = phaseCommentsRead
 			r.saveState()
-			return false, m.pauseIfNeeded()
+			return false, nil
 		}
 		total := len(cur.Segments)
-		m.setProgress(fmt.Sprintf("月华正在看第 %d/%d 组《%s》，看到了 %d/%d", s.VideoIndex+1, r.cfg.VideosPerRound, cur.Info.Title, cur.SliceIndex+1, total))
+		m.setProgress(fmt.Sprintf("观影者正在看第 %d/%d 组《%s》，看到了 %d/%d", s.VideoIndex+1, r.cfg.VideosPerRound, cur.Info.Title, cur.SliceIndex+1, total))
 		text, err := understandOneSlice(cur.Info, cur.Segments[cur.SliceIndex], cur.SliceIndex+1, total)
 		if err != nil {
+			if errors.Is(err, loopguard.ErrLoop) {
+				// 任一画面触发思考监管重复：放弃整条视频的全部切片理解，改走侧面理解。
+				// 同一视频的其他切片画面高度同源，继续逐片重试只会重复卡住。
+				logger.Warn("BilibiliLife", "第 %d/%d 片触发思考监管重复输出，放弃《%s》全部画面理解，改用侧面理解",
+					cur.SliceIndex+1, total, cur.Info.Title)
+				cur.Summaries = nil
+				cur.Fallback = true
+				removeSegments(cur.Segments)
+				cur.Segments = nil
+				if cur.LocalPath != "" {
+					_ = os.Remove(cur.LocalPath)
+					cur.LocalPath = ""
+				}
+				s.Phase = phaseFallback
+				r.saveState()
+				return false, nil
+			}
 			logger.Warn("BilibiliLife", "第 %d/%d 片理解失败: %v", cur.SliceIndex+1, total, err)
 			text = ""
 		}
 		cur.Summaries = append(cur.Summaries, text)
 		cur.SliceIndex++
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
+
+	case phaseFallback:
+		// 画面理解已放弃：用标题 + 封面 + 简介 + 热门评论 + 弹幕构建侧面理解，
+		// 供后续评论、日记动态与分享评论使用（评论在这里一次读齐，跳过 phaseCommentsRead）。
+		cur := s.Current
+		if cur == nil {
+			s.Phase = phaseSelect
+			return false, nil
+		}
+		if strings.TrimSpace(cur.Summary) != "" {
+			s.Phase = phaseCommentsWrite
+			r.saveState()
+			return false, nil
+		}
+		m.setProgress(fmt.Sprintf("正在为《%s》整理侧面理解…", cur.Info.Title))
+		if len(cur.Comments) == 0 {
+			r.browser.scrollToComments()
+			comments, err := r.browser.readCommentsAPI(cur.Info.Aid, commentsReadLimit)
+			if err != nil || len(comments) == 0 {
+				if dom, domErr := r.browser.readComments(commentsReadLimit); domErr == nil {
+					comments = dom
+				}
+			}
+			if len(comments) > commentsReadLimit {
+				comments = comments[:commentsReadLimit]
+			}
+			cur.Comments = comments
+		}
+		cur.Danmaku = fetchDanmaku(cur.Info.Cid, fallbackDanmakuLimit)
+		cover := fetchCoverDataURL(cur.Info.Pic)
+		cur.Summary = composeSideUnderstanding(cur.Info, cur.Comments, cur.Danmaku, cover)
+		// 侧面理解顺手读到了评论：同样做一次风险复查，命中就不留言
+		if verdict := screenCommentsRisk(cur.Comments); verdict.Risky {
+			cur.Risky = true
+			logger.Warn("BilibiliLife", "《%s》评论区未通过风险筛查，跳过评论/分享/日记：%s", cur.Info.Title, verdict.Reason)
+		}
+		logger.Info("BilibiliLife", "《%s》侧面理解完成：简介 %d 字，评论 %d 条，弹幕 %d 条，封面=%v",
+			cur.Info.Title, len([]rune(cur.Info.Desc)), len(cur.Comments), len(cur.Danmaku), cover != "")
+		s.Phase = phaseCommentsWrite
+		r.saveState()
+		return false, nil
 
 	case phaseCommentsRead:
 		cur := s.Current
@@ -773,9 +595,14 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			comments = comments[:commentsReadLimit]
 		}
 		cur.Comments = comments
+		// 评论区复查：命中风险就不再留言（视频仍计入已看，但不进分享与日记）
+		if verdict := screenCommentsRisk(comments); verdict.Risky {
+			cur.Risky = true
+			logger.Warn("BilibiliLife", "《%s》评论区未通过风险筛查，跳过评论/分享/日记：%s", cur.Info.Title, verdict.Reason)
+		}
 		s.Phase = phaseCommentsWrite
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseCommentsWrite:
 		cur := s.Current
@@ -784,6 +611,13 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			return false, nil
 		}
 		// 每个视频固定配 1 条评论：正文基于视频理解 + 已读到的热门评论
+		if cur.Risky {
+			logger.Info("BilibiliLife", "《%s》存在风险，跳过留言", cur.Info.Title)
+			cur.NormalWritten++
+			s.Phase = phaseNextVideo
+			r.saveState()
+			return false, nil
+		}
 		if cur.NormalWritten < commentsPerVideo {
 			m.setProgress(fmt.Sprintf("正在写《%s》的评论…", cur.Info.Title))
 			text, err := generateComment(cur.Info, cur.Summary, cur.Comments)
@@ -797,7 +631,7 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			}
 			cur.NormalWritten++
 			r.saveState()
-			return false, m.pauseIfNeeded()
+			return false, nil
 		}
 		s.Phase = phaseNextVideo
 		return false, nil
@@ -811,24 +645,30 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		// 还有目标额度时才让月华在视频之间决定要不要继续；到量就直接收尾
 		if s.VideoIndex < r.cfg.VideosPerRound {
 			s.Phase = phaseDecide
-		} else {
+		} else if s.Share {
 			s.Phase = phaseShare
+		} else {
+			s.Phase = phaseDiary
 		}
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseDecide:
 		// 至少看完 1 个才允许停下（min=1）；月华自己决定「就到此为止」时提前收工
 		if s.VideoIndex < videoMinCount || wantMoreVideos(s.Videos, r.cfg.VideosPerRound) {
 			s.Phase = phaseSelect
 			r.saveState()
-			return false, m.pauseIfNeeded()
+			return false, nil
 		}
-		s.Phase = phaseShare
+		if s.Share {
+			s.Phase = phaseShare
+		} else {
+			s.Phase = phaseDiary
+		}
 		m.setProgress(fmt.Sprintf("看完 %d 个视频，这轮就到这里…", s.VideoIndex))
 		logger.Info("BilibiliLife", "看完 %d/%d 个视频，月华决定这轮不再继续刷", s.VideoIndex, r.cfg.VideosPerRound)
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseShare:
 		// 一轮只允许挑选其中一个视频发 @分享评论：本阶段在整轮只走一次
@@ -836,15 +676,7 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			s.Phase = phaseDiary
 			return false, nil
 		}
-		// 「仅在动态中呼叫用户」开启时：完全跳过「从多个视频里挑一条 + 生成 @评论」，
-		// 改为在 phaseDiary 的动态末尾另起一行 @ 目标用户。
-		if r.cfg.onlyCallUserInDynamic() {
-			logger.Info("BilibiliLife", "已开启「仅在动态中呼叫用户」，跳过视频 @分享评论")
-			s.ShareDone = true
-			s.Phase = phaseDiary
-			r.saveState()
-			return false, m.pauseIfNeeded()
-		}
+		// 分享消息与 @ 用户统一由视频评论完成；动态只承载日记。
 		// 没配置 mention_targets 就不发 @ 分享：开源项目不内置任何 @ 对象，
 		// 避免别人部署后 @ 到作者或无关账号。
 		names := r.cfg.mentionNames()
@@ -853,7 +685,7 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			s.ShareDone = true
 			s.Phase = phaseDiary
 			r.saveState()
-			return false, m.pauseIfNeeded()
+			return false, nil
 		}
 		featured := pickFeaturedVideo(s.Videos)
 		if featured == nil {
@@ -868,7 +700,7 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		atText := "@" + strings.Join(names, " @")
 		if err == nil {
 			text = fmt.Sprintf("%s %s", truncate(strings.TrimSpace(strings.ReplaceAll(text, "@", "")), 60), atText)
-			err = r.browser.postComment(featured.Info.Aid, text)
+			err = r.browser.postCommentWithMentions(featured.Info.Aid, text, r.cfg.mentionTargets())
 		}
 		if err != nil {
 			logger.Warn("BilibiliLife", "@分享评论（@%s）失败: %v", strings.Join(names, "、"), err)
@@ -878,52 +710,56 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		s.ShareDone = true
 		s.Phase = phaseDiary
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseDiary:
-		m.setProgress("正在写这一轮的生活日记…")
-		title, brief, err := generateDiaryForVideos(s.Videos)
+		// 风险视频不写进公开日记动态（标题与观看感受都可能扩大风险暴露）
+		safeVideos := make([]*videoRecord, 0, len(s.Videos))
+		for _, video := range s.Videos {
+			if video != nil && !video.Risky {
+				safeVideos = append(safeVideos, video)
+			}
+		}
+		if len(safeVideos) == 0 {
+			logger.Warn("BilibiliLife", "本轮没有通过风险筛查的视频，跳过日记动态")
+			s.Phase = phaseDone
+			r.saveState()
+			return false, nil
+		}
+		m.setProgress("正在写这一轮的观影日记…")
+		title, brief, err := generateDiaryForVideos(safeVideos)
 		if err != nil {
 			return false, err
 		}
-		// 日记列举本轮看过的每个视频，不只是发 @ 的那一条
-		urls := make([]string, 0, len(s.Videos))
-		for _, video := range s.Videos {
-			if video != nil {
-				urls = append(urls, video.Info.URL)
-			}
+		// 日记列举本轮看过的每个安全视频（标题与 URL 同行），不只是发 @ 的那一条
+		videos := make([]diaryVideo, 0, len(safeVideos))
+		for _, video := range safeVideos {
+			videos = append(videos, diaryVideo{Title: video.Info.Title, URL: video.Info.URL})
 		}
-		// 同一份文案两处落地：先写句柄文档（发动态失败也不丢），再原样发动态
-		handle, lines, err := appendDiaryDocument(title, urls, brief)
+		handle, lines, err := appendDiaryDocument(title, videos, brief)
 		if err != nil {
 			return false, err
 		}
 		s.DiaryHandle = handle
 		s.DiaryLines = lines
-		// 动态正文不含 @：文本里的「@名字」构建不出真实呼叫关系。
-		dynamic := buildDynamicText(title, urls, brief)
-		dynID, err := r.browser.publishDiary(dynamic)
-		if err != nil {
-			return false, err
-		}
-		s.DynID = dynID
-		// 「仅在动态中呼叫用户」开启时，动态发出后在评论区单独发一条 @ 评论；
-		// 关闭时沿用原有逻辑（呼叫内容已在 phaseShare 的 @分享评论里）。
-		// 呼叫失败不终止本轮：动态与日记已经落地，缺一条呼叫不该整轮作废。
-		if r.cfg.onlyCallUserInDynamic() {
-			if targets := r.cfg.mentionTargets(); len(targets) > 0 {
-				rpid, err := r.browser.postDynamicComment(dynID, callCommentText(targets), targets)
-				if err != nil {
-					logger.Warn("BilibiliLife", "动态评论区呼叫（@%s）失败: %v", strings.Join(r.cfg.mentionNames(), "、"), err)
-				} else {
-					s.CallRpid = rpid
-					logger.Info("BilibiliLife", "已在动态评论区呼叫（@%s）", strings.Join(r.cfg.mentionNames(), "、"))
-				}
+
+		// 动态只承载日记；分享消息与 @ 用户由 phaseShare 的视频评论完成。
+		if r.flow().publishesDynamic() {
+			dynamic := buildDynamicText(title, videos, brief)
+			dynID, err := r.browser.publishDiary(dynamic)
+			if err != nil {
+				return false, err
 			}
+			s.DynID = dynID
 		}
-		s.Phase = phaseReplies
+
+		if r.flow() == FlowStandard {
+			s.Phase = phaseReplies
+		} else {
+			s.Phase = phaseDone
+		}
 		r.saveState()
-		return false, m.pauseIfNeeded()
+		return false, nil
 
 	case phaseReplies:
 		if s.ReplyTargets == nil {
@@ -939,23 +775,13 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 				logger.Warn("BilibiliLife", "读取动态评论失败: %v", err)
 				targets = nil
 			}
-			// 跳过自己刚发的 @ 呼叫评论，不要自问自答
-			if s.CallRpid != "" {
-				kept := targets[:0]
-				for _, target := range targets {
-					if target.Rpid != s.CallRpid {
-						kept = append(kept, target)
-					}
-				}
-				targets = kept
-			}
 			s.ReplyTargets = targets
 			r.saveState()
 			if len(targets) == 0 {
 				s.Phase = phaseDone
 				return false, nil
 			}
-			return false, m.pauseIfNeeded()
+			return false, nil
 		}
 		// 回应额度在一轮内共享（评论回复/动态回复/私信回复都从这一份额度里扣）
 		if s.ReplyIndex < len(s.ReplyTargets) && s.RepliesUsed < r.cfg.RepliesPerRound {
@@ -976,11 +802,12 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 					fmt.Sprintf("reply:17:%s:%s", s.DynID, target.Rpid),
 					fmt.Sprintf("source:17:%s:%s", s.DynID, target.Rpid),
 				})
+				s.Replied++
 			}
 			s.RepliesUsed++
 			s.ReplyIndex++
 			r.saveState()
-			return false, m.pauseIfNeeded()
+			return false, nil
 		}
 		s.Phase = phaseDone
 		r.saveState()
@@ -989,24 +816,17 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 	case phaseDone:
 		return true, nil
 	}
-	return false, fmt.Errorf("未知生活阶段: %s", s.Phase)
-}
-
-func (m *lifeManager) pauseIfNeeded() error {
-	if m.shouldPause() {
-		return errPaused
-	}
-	return nil
+	return false, fmt.Errorf("未知观影流程阶段: %s", s.Phase)
 }
 
 // pickFeaturedVideo 从本轮看过的视频里挑出唯一的主角视频（用于 @分享评论与动态）。
 //
-// 选评论区收集得最多的那条：讨论最热闹的视频最值得分享，也让「只发一条 @消息」
+// 选评论区收集得最多且未命中风险的那条：讨论最热闹的视频最值得分享，也让「只发一条 @消息」
 // 有明确依据，而不是随机。条数相同时取先看的那条，保证断点续跑时选择稳定。
 func pickFeaturedVideo(videos []*videoRecord) *videoRecord {
 	var best *videoRecord
 	for _, video := range videos {
-		if video == nil {
+		if video == nil || video.Risky {
 			continue
 		}
 		if best == nil || len(video.Comments) > len(best.Comments) {

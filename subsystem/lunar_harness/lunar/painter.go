@@ -6,6 +6,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
+	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 )
 
 // newPainterRole 创建绘制者角色
@@ -131,6 +132,9 @@ func (role *PainterRole) paint(params GenerateImageParams, label string) string 
 		urls := pushAssistantImage([]string{url}, false)
 		if len(urls) > 0 {
 			role.ResultPath = urls[0]
+			role.rememberRuntimeArtwork(urls[0], "最新作品")
+		} else {
+			role.rememberRuntimeArtwork(url, "最新作品")
 		}
 	}
 	stepsNote := ""
@@ -161,6 +165,64 @@ func (role *PainterRole) bindReference(reference *ImageReference) {
 	role.Reference.Vision = vision
 	role.Reference.Width = width
 	role.Reference.Height = height
+	// 本次任务指定了参考图：运行时画作先刷新为该图，直到产出新作品。
+	role.setRuntimeImage(reference.Handle, vision, "本次参考图")
+}
+
+// rememberRuntimeArtwork 把最新产出登记为运行时画作（句柄缩影版）。
+//
+// 运行时消息会在每次模型请求前自动插入，不占上下文窗口配额；
+// 这样对话者反复转述局部修改时，画面基准不会随历史消息被裁掉。
+func (role *PainterRole) rememberRuntimeArtwork(source, note string) {
+	rel := localPathToRel(source)
+	if rel == "" {
+		return
+	}
+	// 先走视觉副本管线，确保缩影存在并按句柄叠印
+	if _, _, _, _, err := visionCopy(rel, "", 0); err != nil {
+		logger.Warn(lunarCoreModule, "[绘制者] 运行时画作缩影生成失败: %v", err)
+		return
+	}
+	handle := ""
+	if entry, ok := persistence.ArchiveDatabase.FindResourceByBlobPath(rel); ok {
+		handle = entry.Handle
+	}
+	role.setRuntimeImage(handle, visionReference(handle, rel), note)
+}
+
+// setRuntimeImage 刷新绘制者的运行时画作消息。
+func (role *PainterRole) setRuntimeImage(handle, vision, note string) {
+	if vision == "" {
+		return
+	}
+	label := "【运行时画作】" + note
+	if handle != "" {
+		label += "（" + handle + "）"
+	}
+	label += "。局部修改、延续风格或调整细节时，以这张图作为当前画面基准，不要凭记忆重画。"
+	role.RuntimeMessages = []PostMessage{{
+		Role: RoleUser,
+		Content: []ContentItem{
+			{Type: ContentText, Text: label},
+			{Type: ContentImageURL, ImageURL: &URLPayload{URL: vision}},
+		},
+	}}
+}
+
+// localPathToRel 把 /file/read/ 地址或本地路径归一化为 multimedia/ 相对路径。
+func localPathToRel(source string) string {
+	normalized := strings.ReplaceAll(source, "\\", "/")
+	if cut := strings.IndexAny(normalized, "?#"); cut >= 0 {
+		normalized = normalized[:cut]
+	}
+	lower := strings.ToLower(normalized)
+	if marker := strings.LastIndex(lower, "/multimedia/"); marker >= 0 {
+		return normalized[marker+1:]
+	}
+	if strings.HasPrefix(lower, "multimedia/") {
+		return normalized
+	}
+	return ""
 }
 
 func (role *PainterRole) buildTaskContent(taskDescription string) any {

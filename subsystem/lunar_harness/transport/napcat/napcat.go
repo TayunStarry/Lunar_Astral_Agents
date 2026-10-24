@@ -136,11 +136,13 @@ func SendPrivateTextMessage(userID int64, content string) error {
 // SendGroupTextMessage 发送群文本消息：
 //   - 内容中的 [对 xxx 说] 转换为真实 @ 段（按群成员名称缓存解析，可 @ 成员 / 全体成员）
 //   - replyToUserID 非零时在消息最前追加对该成员的 @（被 @ 触发的回应礼节性 @ 回对方）
-func SendGroupTextMessage(groupID int64, content string, replyToUserID int64) error {
+//   - quoteMessageID 非零时在最前追加 reply 段，引用被回应的那条原消息（随机触发的定位手段）
+func SendGroupTextMessage(groupID int64, content string, replyToUserID int64, quoteMessageID int64) error {
 	if strings.TrimSpace(content) == "" {
 		return nil
 	}
-	return postMessage("/send_group_msg", map[string]any{"group_id": groupID}, buildOutboundSegments(groupID, content, replyToUserID))
+	return postMessage("/send_group_msg", map[string]any{"group_id": groupID},
+		buildOutboundSegments(groupID, content, replyToUserID, quoteMessageID))
 }
 
 // SendPrivateImageMessage 发送私聊图片消息（base64 数据或 http 链接）
@@ -185,6 +187,14 @@ func atSegment(qq string) map[string]any {
 	return map[string]any{
 		"type": "at",
 		"data": map[string]string{"qq": qq},
+	}
+}
+
+// replySegment 引用消息段（引用某条原消息，id 为 QQ 消息 ID）
+func replySegment(messageID string) map[string]any {
+	return map[string]any{
+		"type": "reply",
+		"data": map[string]string{"id": messageID},
 	}
 }
 
@@ -253,9 +263,13 @@ func outboundImageSource(img string) string {
 
 // buildOutboundSegments 将回应文本组装为消息段：
 // 文本中的 [对 xxx 说] 转换为真实 @ 段，无法解析的提及保留原文；
-// replyToUserID 非零时在最前追加 @，与其重复的提及标记直接吞掉避免双重 @
-func buildOutboundSegments(groupID int64, text string, replyToUserID int64) []map[string]any {
-	segments := make([]map[string]any, 0, 4)
+// replyToUserID 非零时在最前追加 @，与其重复的提及标记直接吞掉避免双重 @；
+// quoteMessageID 非零时在整条消息最前追加 reply 段（QQ 要求引用段位于消息段首位）。
+func buildOutboundSegments(groupID int64, text string, replyToUserID int64, quoteMessageID int64) []map[string]any {
+	segments := make([]map[string]any, 0, 5)
+	if quoteMessageID != 0 {
+		segments = append(segments, replySegment(strconv.FormatInt(quoteMessageID, 10)))
+	}
 	replyToQQ := ""
 	if replyToUserID != 0 {
 		replyToQQ = strconv.FormatInt(replyToUserID, 10)
@@ -370,46 +384,68 @@ func getFileContent(fileID, file string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var data GetFileResponse
-	if err := json.Unmarshal(resp.Data, &data); err != nil {
-		return nil, err
-	}
-	if data.Base64 != "" {
-		return base64.StdEncoding.DecodeString(data.Base64)
-	}
-	if data.URL != "" {
-		return fetchFileBytes(data.URL)
-	}
-	if data.File != "" {
-		return fetchFileBytes(data.File)
-	}
-	return nil, fmt.Errorf("get_file 未返回可用的文件内容")
+	return decodeFileResponse(resp.Data)
 }
 
 // getImageContent 通过 get_image 接口下载图片，失败时退化为 get_file
-func getImageContent(file string) ([]byte, error) {
-	if file == "" {
-		return nil, fmt.Errorf("图片缺少 file 标识")
+//
+// file_id 与 file 都可能单独出现（NapCat 不同版本下发的字段不同），
+// 因此两个标识都要尝试；两个都为空时直接失败，避免拿空参数打接口。
+func getImageContent(fileID, file string) ([]byte, error) {
+	identifiers := make([]map[string]any, 0, 2)
+	if fileID != "" {
+		identifiers = append(identifiers, map[string]any{"file_id": fileID})
+	}
+	if file != "" {
+		identifiers = append(identifiers, map[string]any{"file": file})
+	}
+	if len(identifiers) == 0 {
+		return nil, fmt.Errorf("图片缺少 file_id / file 标识")
 	}
 
-	if resp, err := callNapcatAPI("/get_image", map[string]any{"file": file}); err == nil {
-		var data GetFileResponse
-		if json.Unmarshal(resp.Data, &data) == nil {
-			if data.Base64 != "" {
-				return base64.StdEncoding.DecodeString(data.Base64)
-			}
-			if data.URL != "" {
-				return fetchFileBytes(data.URL)
-			}
-			if data.File != "" {
-				return fetchFileBytes(data.File)
-			}
+	var lastErr error
+	for _, params := range identifiers {
+		resp, err := callNapcatAPI("/get_image", params)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		data, decodeErr := decodeFileResponse(resp.Data)
+		if decodeErr == nil && len(data) > 0 {
+			return data, nil
+		}
+		lastErr = decodeErr
+	}
+
+	// get_image 全部失败，退化到 get_file（file_id 优先）
+	if data, err := getFileContent(fileID, file); err == nil && len(data) > 0 {
+		return data, nil
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("get_image 未返回可用的图片内容")
+	}
+	return nil, lastErr
+}
+
+// decodeFileResponse 从 get_file / get_image 的 data 中取出文件字节
+// 依次尝试 base64 → url → path → file 字段（不同 NapCat 版本填充的字段不同）
+func decodeFileResponse(raw json.RawMessage) ([]byte, error) {
+	var data GetFileResponse
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return nil, err
+	}
+	if data.Base64 != "" {
+		return decodeBase64Payload(data.Base64)
+	}
+	for _, candidate := range []string{data.URL, data.Path, data.File} {
+		if candidate == "" {
+			continue
+		}
+		if bytes, err := fetchFileBytes(candidate); err == nil && len(bytes) > 0 {
+			return bytes, nil
 		}
 	}
-
-	// get_image 失败，退化到 get_file
-	return getFileContent("", file)
+	return nil, fmt.Errorf("接口未返回可用的文件内容")
 }
 
 // getForwardMessageContent 通过 get_forward_msg 接口展开合并转发消息
@@ -511,17 +547,52 @@ func getVideoSource(file string) (string, error) {
 	return "", fmt.Errorf("get_file 未返回可用的视频地址")
 }
 
-// fetchFileBytes 获取 napcat 返回的资源字节：http(s) 地址走网络下载，
-// 其余视为本地文件路径（napcat 对截图等本地缓存会在 URL/File 字段直接返回路径，
-// 支持裸路径与 file:// 前缀），读盘失败时返回错误
+// fetchFileBytes 获取 napcat 返回的资源字节：
+//   - data: base64 内联数据 → 直接解码；
+//   - http(s) 地址 → 网络下载；
+//   - 其余视为本地文件路径（napcat 对截图等本地缓存会在 URL/File 字段直接返回路径，
+//     支持裸路径与 file:// 前缀）。
+//
+// 不同 NapCat 版本会把同一份资源填进 url / path / file 中的任意一个，
+// 因此三种形态都必须能取到字节，否则图片/文件会静默丢失。
 func fetchFileBytes(raw string) ([]byte, error) {
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, fmt.Errorf("资源地址为空")
+	}
+	if strings.HasPrefix(strings.ToLower(raw), "data:") {
+		return decodeBase64Payload(raw)
 	}
 	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
 		return downloadBytes(raw)
 	}
-	return os.ReadFile(strings.TrimPrefix(raw, "file://"))
+	return os.ReadFile(fileURLPath(raw))
+}
+
+// fileURLPath 把 file:// 地址还原为本地路径（兼容 Windows 的 file:///C:/...）
+func fileURLPath(raw string) string {
+	path := raw
+	switch {
+	case strings.HasPrefix(path, "file:///"):
+		path = path[len("file:///"):]
+	case strings.HasPrefix(path, "file://"):
+		path = path[len("file://"):]
+	}
+	return path
+}
+
+// decodeBase64Payload 解码 base64 文本（兼容 data URI 前缀与换行）
+func decodeBase64Payload(raw string) ([]byte, error) {
+	text := strings.TrimSpace(raw)
+	if idx := strings.Index(text, "base64,"); idx >= 0 {
+		text = text[idx+len("base64,"):]
+	}
+	text = strings.ReplaceAll(text, "\n", "")
+	text = strings.ReplaceAll(text, "\r", "")
+	if data, err := base64.StdEncoding.DecodeString(text); err == nil {
+		return data, nil
+	}
+	return base64.RawStdEncoding.DecodeString(text)
 }
 
 // downloadBytes 下载 http(s) 资源并返回字节

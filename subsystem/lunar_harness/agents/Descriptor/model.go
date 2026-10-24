@@ -8,6 +8,7 @@ package Descriptor
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
 // SetModelObserver 注入实况观察者与计量回调（app 层启动时调用）
@@ -124,7 +126,10 @@ func chatStream(messages []chatMessage, tools []toolDef) (chatMessage, error) {
 	if err != nil {
 		return chatMessage{}, fmt.Errorf("序列化模型请求失败: %w", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, modelURL+"/chat/completions", bytes.NewReader(body))
+	// 思考监管命中重复时取消本次请求，由 chatWithRetry 决定是否重试
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, modelURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return chatMessage{}, fmt.Errorf("创建模型请求失败: %w", err)
 	}
@@ -145,9 +150,18 @@ func chatStream(messages []chatMessage, tools []toolDef) (chatMessage, error) {
 
 	var reply modelReply
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
-		reply, err = readStream(resp.Body)
+		guard := loopguard.New(cancel, loopguard.DefaultOptions())
+		guard.Start()
+		reply, err = readStream(resp.Body, guard)
+		guard.Stop()
+		if guard.Hit() {
+			return chatMessage{}, loopguard.ErrLoop
+		}
 	} else {
 		reply, err = readWhole(resp.Body)
+		if err == nil && loopguard.Detected(reply.Reasoning+stringOf(reply.Message.Content), loopguard.DefaultOptions()) {
+			return chatMessage{}, loopguard.ErrLoop
+		}
 	}
 	if err != nil {
 		return chatMessage{}, err
@@ -206,7 +220,7 @@ func readWhole(body io.Reader) (modelReply, error) {
 }
 
 // readStream 解析 OpenAI 兼容 SSE，边收边送实况；同时取回思考文本与用量
-func readStream(body io.Reader) (modelReply, error) {
+func readStream(body io.Reader, guard *loopguard.Guard) (modelReply, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
@@ -238,10 +252,12 @@ func readStream(body io.Reader) (modelReply, error) {
 		for _, choice := range chunk.Choices {
 			if delta := choice.Delta.ReasoningContent; delta != "" {
 				reasoning.WriteString(delta)
+				guard.Feed(loopguard.KindThink, delta)
 				observeDelta("think", delta)
 			}
 			if delta := choice.Delta.Content; delta != "" {
 				content.WriteString(delta)
+				guard.Feed(loopguard.KindContent, delta)
 				observeDelta("content", delta)
 			}
 			for _, item := range choice.Delta.ToolCalls {

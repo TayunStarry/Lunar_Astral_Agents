@@ -8,7 +8,9 @@ package BilibiliLife
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +20,8 @@ import (
 	"unicode/utf8"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
 type chatMessage struct {
@@ -66,7 +70,7 @@ func SetModelObserver(begin func(role string), delta func(role, kind, text strin
 	modelBegin, modelDelta, modelEnd, modelMeter = begin, delta, end, meter
 }
 
-const lifeModelRole = "哔哩生活"
+const lifeModelRole = "观影者"
 
 func observeBegin() {
 	modelObserverMu.Lock()
@@ -133,7 +137,27 @@ func resolveModel() {
 	})
 }
 
+// chatCompletion 带思考监管的模型调用：输出卡循环时中断并重新生成，
+// 最多重试 lifeLoopMaxRetries 次；仍失败则返回错误，由调用方跳过本次流程。
 func chatCompletion(messages []chatMessage) (string, error) {
+	for attempt := 0; ; attempt++ {
+		text, err := chatCompletionOnce(messages)
+		if err == nil {
+			return text, nil
+		}
+		if !errors.Is(err, loopguard.ErrLoop) {
+			return "", err
+		}
+		if attempt >= lifeLoopMaxRetries {
+			logger.Error("BilibiliLife", "模型连续 %d 次陷入重复输出，跳过本次调用", attempt+1)
+			return "", fmt.Errorf("模型连续 %d 次陷入重复输出，已跳过本次调用: %w", attempt+1, loopguard.ErrLoop)
+		}
+		logger.Warn("BilibiliLife", "检测到模型重复输出，已中断并重新生成（重试 %d/%d）", attempt+1, lifeLoopMaxRetries)
+	}
+}
+
+// chatCompletionOnce 单次模型调用（流式输出受思考监管约束）
+func chatCompletionOnce(messages []chatMessage) (string, error) {
 	observeBegin()
 	defer observeEnd()
 	resolveModel()
@@ -147,7 +171,10 @@ func chatCompletion(messages []chatMessage) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("序列化模型请求失败: %w", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, modelURL+"/chat/completions", bytes.NewReader(body))
+	// 命中重复输出时由思考监管取消本次请求，服务端随连接断开停止生成
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, modelURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("创建模型请求失败: %w", err)
 	}
@@ -168,9 +195,15 @@ func chatCompletion(messages []chatMessage) (string, error) {
 		return "", fmt.Errorf("模型 HTTP %d: %s", resp.StatusCode, truncate(string(raw), 240))
 	}
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
-		text, reasoning, usage, err := readModelStream(resp.Body)
-		if err != nil {
-			return "", err
+		guard := loopguard.New(cancel, loopguard.DefaultOptions())
+		guard.Start()
+		text, reasoning, usage, readErr := readModelStream(resp.Body, guard)
+		guard.Stop()
+		if guard.Hit() {
+			return "", loopguard.ErrLoop
+		}
+		if readErr != nil {
+			return "", readErr
 		}
 		reportModelCall(body, text+reasoning, usage, time.Since(start))
 		return text, nil
@@ -204,13 +237,18 @@ func chatCompletion(messages []chatMessage) (string, error) {
 	if text == "" {
 		return "", fmt.Errorf("模型返回空内容")
 	}
+	// 非流式响应（少数后端忽略 stream）同样做一次静态重复检查
+	if loopguard.Detected(text, loopguard.DefaultOptions()) {
+		return "", loopguard.ErrLoop
+	}
 	observeDelta("content", text)
 	reportModelCall(body, text+out.Choices[0].Message.ReasoningContent, out.Usage, time.Since(start))
 	return text, nil
 }
 
 // readModelStream 解析 OpenAI 兼容 SSE，边收边喂给「核心智能 实况」；同时取回思考文本与用量。
-func readModelStream(body io.Reader) (string, string, *modelUsage, error) {
+// 每段增量同步送入思考监管守卫，命中循环时请求会被取消，读取随之中断。
+func readModelStream(body io.Reader, guard *loopguard.Guard) (string, string, *modelUsage, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	var content strings.Builder
@@ -249,10 +287,12 @@ func readModelStream(body io.Reader) (string, string, *modelUsage, error) {
 		for _, choice := range chunk.Choices {
 			if choice.Delta.ReasoningContent != "" {
 				reasoning.WriteString(choice.Delta.ReasoningContent)
+				guard.Feed(loopguard.KindThink, choice.Delta.ReasoningContent)
 				observeDelta("think", choice.Delta.ReasoningContent)
 			}
 			if choice.Delta.Content != "" {
 				content.WriteString(choice.Delta.Content)
+				guard.Feed(loopguard.KindContent, choice.Delta.Content)
 				observeDelta("content", choice.Delta.Content)
 			}
 		}
@@ -275,6 +315,18 @@ func chatText(system, user string) (string, error) {
 }
 
 func chatWithImages(system, prompt string, images []string) (string, error) {
+	return chatCompletion(imageMessages(system, prompt, images))
+}
+
+// chatWithImagesOnce 单次图像理解（不重试）：思考监管命中重复时直接返回 loopguard.ErrLoop。
+// 切片理解用它——某个切片反复触发重复时，整条视频的画面理解都不再继续，
+// 由调用方改走标题/封面/简介/评论/弹幕的侧面理解。
+func chatWithImagesOnce(system, prompt string, images []string) (string, error) {
+	return chatCompletionOnce(imageMessages(system, prompt, images))
+}
+
+// imageMessages 组装图像理解请求消息
+func imageMessages(system, prompt string, images []string) []chatMessage {
 	parts := make([]contentPart, 0, len(images)+1)
 	parts = append(parts, contentPart{Type: "text", Text: prompt})
 	for _, image := range images {
@@ -283,10 +335,10 @@ func chatWithImages(system, prompt string, images []string) (string, error) {
 		}
 		parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: image}})
 	}
-	return chatCompletion([]chatMessage{
+	return []chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: parts},
-	})
+	}
 }
 
 func truncate(text string, limit int) string {

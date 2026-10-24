@@ -187,14 +187,19 @@ func dispatchText(target BridgeTarget, content string, auto bool) {
 	if target.IsGroup {
 		// 被 @ 触发的回应在首次发言时自动 @ 回发起者；取出后立即清零，整个回合只附加一次
 		replyTo := int64(0)
+		quoteID := int64(0)
 		if !auto {
 			flowMutex.Lock()
 			replyTo = currentTarget.ReplyToUserID
 			currentTarget.ReplyToUserID = 0
+			// 随机触发的引用候选同样只消费一次：先摘除再离线计算，避免阻塞收发锁
+			candidates := currentTarget.QuoteCandidates
+			currentTarget.QuoteCandidates = nil
 			flowMutex.Unlock()
+			quoteID = pickQuoteMessageID(content, candidates)
 		}
 
-		if err := SendGroupTextMessage(target.ID, content, replyTo); err != nil {
+		if err := SendGroupTextMessage(target.ID, content, replyTo, quoteID); err != nil {
 			logger.SubError("LunarCore", "Napcat", "转发消息到群 %d 失败: %v", target.ID, err)
 		}
 		return

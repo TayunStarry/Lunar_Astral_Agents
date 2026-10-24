@@ -6,18 +6,10 @@ package WebLTP
 // 系统段是稳定的行为约束，用户模板只保留带 {占位符} 的数据骨架。
 
 import (
-	"regexp"
-	"strings"
-
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/prompts"
+	"strings"
 )
-
-// promptUserMarker 任务型提示词的「系统段 / 用户模板」分隔符
-const promptUserMarker = "\n---user---\n"
-
-// placeholderPattern 提示词占位符形态（{key}）
-var placeholderPattern = regexp.MustCompile(`\{[A-Za-z0-9_\-]+\}`)
 
 // loadPrompt 读取提示词文本（读取失败返回空串）
 func loadPrompt(name string) string {

@@ -149,11 +149,6 @@ func (w *webSession) clickLogin() error {
 
 // ensureLogin：未登录时进入登录页，10 秒一次检测，60 秒未登录则放弃。
 func (w *webSession) ensureLogin() error {
-	return w.ensureLoginInterruptible(nil)
-}
-
-// ensureLoginInterruptible 可在登录等待期间被对话请求打断（每 10 秒检查一次）。
-func (w *webSession) ensureLoginInterruptible(stop func() bool) error {
 	state, err := w.loginState()
 	if err == nil && state.LoggedIn {
 		logger.Info("BilibiliLife", "B站已登录，跳过扫码")
@@ -174,9 +169,6 @@ func (w *webSession) ensureLoginInterruptible(stop func() bool) error {
 	deadline := time.Now().Add(testLoginWait)
 	for time.Now().Before(deadline) {
 		w.wait(loginPollInterval)
-		if stop != nil && stop() {
-			return errPaused
-		}
 		if !w.alive() {
 			return fmt.Errorf("登录等待期间浏览器被关闭")
 		}
@@ -249,20 +241,19 @@ func (w *webSession) collectVideoLinks(max int) ([]videoLink, error) {
 	return links, nil
 }
 
-// filterAndScore 过滤涉政/对立/录播等，并把参考词命中转成分数。
-func filterAndScore(links []videoLink, cfg Config) ([]videoLink, int) {
+// filterAndScore 给候选标题打分：本轮关键词权重高于配置文件里的默认偏好。
+func filterAndScore(links []videoLink, cfg Config) []videoLink {
 	out := make([]videoLink, 0, len(links))
-	blocked := 0
 	for _, link := range links {
-		if word, hit := blockedBy(link.Title, cfg.BlockedKeywords); hit {
-			blocked++
-			logger.Info("BilibiliLife", "过滤视频（命中「%s」）: %s", word, truncate(link.Title, 80))
-			continue
-		}
-		link.Score = scoreOf(link.Title, cfg.PreferenceKeywords)
+		link.Score = titleScore(link.Title, cfg)
 		out = append(out, link)
 	}
-	return out, blocked
+	return out
+}
+
+// titleScore 标题得分：默认偏好每命中一个 +3，本轮关键词每命中一个 +6
+func titleScore(title string, cfg Config) int {
+	return scoreOf(title, cfg.PreferenceKeywords) + scoreOf(title, cfg.DesireKeywords)*2
 }
 
 // ==== 选片打分参数 ====
@@ -287,7 +278,12 @@ func (w *webSession) selectVideo(cfg Config, seen map[string]bool) (videoLink, e
 	}
 	home = prepareCandidates(home, cfg, seen)
 	if bestScore(home) == 0 {
-		for _, keyword := range pickSearchKeywords(cfg.PreferenceKeywords, searchKeywordTries) {
+		// 先按本轮关键词搜索；关键词不足才补默认偏好，保证对话者的想法优先
+		keywords := pickSearchKeywords(cfg.DesireKeywords, searchKeywordTries)
+		if remain := searchKeywordTries - len(keywords); remain > 0 {
+			keywords = append(keywords, pickSearchKeywords(cfg.PreferenceKeywords, remain)...)
+		}
+		for _, keyword := range keywords {
 			searchURL := "https://search.bilibili.com/all?keyword=" + url.QueryEscape(keyword)
 			logger.Info("BilibiliLife", "首页没有参考词命中，搜索: %s", keyword)
 			if err := w.navigate(searchURL, 25*time.Second); err != nil {
@@ -339,7 +335,7 @@ func (w *webSession) selectVideo(cfg Config, seen map[string]bool) (videoLink, e
 
 // prepareCandidates 候选统一处理：过滤 → 标题打分 → 标签补分 → 剔除已看
 func prepareCandidates(links []videoLink, cfg Config, seen map[string]bool) []videoLink {
-	out, _ := filterAndScore(links, cfg)
+	out := filterAndScore(links, cfg)
 	out = scoreWithTags(out, cfg)
 	return dropSeen(out, seen)
 }
@@ -349,7 +345,10 @@ func prepareCandidates(links []videoLink, cfg Config, seen map[string]bool) []vi
 // 首页卡片的 DOM 只有标题，没有内容标签；标签要走视频标签接口。为了让「标签」真正
 // 参与打分又不打爆请求量，只取前若干条候选、并发拉取；失败项按 0 分处理。
 func scoreWithTags(links []videoLink, cfg Config) []videoLink {
-	if len(cfg.PreferenceKeywords) == 0 || len(links) == 0 {
+	if len(cfg.PreferenceKeywords) == 0 && len(cfg.DesireKeywords) == 0 {
+		return links
+	}
+	if len(links) == 0 {
 		return links
 	}
 	limit := len(links)
@@ -374,7 +373,7 @@ func scoreWithTags(links []videoLink, cfg Config) []videoLink {
 			if err != nil || len(tags) == 0 {
 				return
 			}
-			results <- scored{idx: idx, score: scoreOf(strings.Join(tags, " "), cfg.PreferenceKeywords)}
+			results <- scored{idx: idx, score: titleScore(strings.Join(tags, " "), cfg)}
 		}(i, bvid)
 	}
 	go func() {

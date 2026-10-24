@@ -1,11 +1,18 @@
 package napcat
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	file "LunarSubsystem/LunarHarness/engine/persistence"
@@ -280,5 +287,229 @@ func TestDirectAtOther(t *testing.T) {
 		if got := directAtOther(tc.segments, selfStr); got != tc.want {
 			t.Fatalf("%s: directAtOther = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// ==================== 图片双通道（image 段 / file 段）====================
+
+// testPNG 生成用于测试的最小 PNG 字节
+func testPNG(t *testing.T, width, height int) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	if err := png.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, width, height))); err != nil {
+		t.Fatalf("生成测试 PNG 失败: %v", err)
+	}
+	return buffer.Bytes()
+}
+
+// TestResolveImageURLReadsLocalPath 图片段只给 path（NapCat 本地缓存）时也要能取到图片
+func TestResolveImageURLReadsLocalPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cached.png")
+	if err := os.WriteFile(path, testPNG(t, 4, 4), 0o644); err != nil {
+		t.Fatalf("写测试图片失败: %v", err)
+	}
+	got := resolveImageURL(ImageData{Path: path})
+	if !strings.HasPrefix(got, "data:image/png;base64,") {
+		t.Fatalf("path 来源未转成 data URI: %q", got)
+	}
+}
+
+// TestResolveImageURLUsesFileID 图片段只给 file_id 时，必须带 file_id 调 get_image
+func TestResolveImageURLUsesFileID(t *testing.T) {
+	originalPath := bridgeConfig.BridgingPath
+	t.Cleanup(func() { bridgeConfig.BridgingPath = originalPath })
+
+	payload := testPNG(t, 4, 4)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/get_image" {
+			http.NotFound(w, r)
+			return
+		}
+		var params map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&params)
+		if params["file_id"] != "abc123" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "failed", "message": "缺少 file_id"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": "ok",
+			"data":   map[string]any{"base64": base64.StdEncoding.EncodeToString(payload)},
+		})
+	}))
+	defer server.Close()
+	bridgeConfig.BridgingPath = server.URL
+
+	got := resolveImageURL(ImageData{FileID: "abc123"})
+	if !strings.HasPrefix(got, "data:image/png;base64,") {
+		t.Fatalf("file_id 来源未取到图片: %q", got)
+	}
+}
+
+// TestParseMessageSegmentsMFaceText 旧版 NapCat 以 mface 下发商城表情：
+// 没有图片地址时必须退回摘要文案，不能把整条消息当空消息丢弃
+func TestParseMessageSegmentsMFaceText(t *testing.T) {
+	segments := []MessageSegment{{
+		Type: "mface",
+		Data: json.RawMessage(`{"emoji_package_id":1,"emoji_id":"2","key":"k","summary":"[比心]"}`),
+	}}
+	content, hasImages, _, _ := parseMessageSegments(0, segments)
+	if hasImages {
+		t.Fatal("无图片地址的商城表情不应被标记为图片")
+	}
+	text, _ := content.(string)
+	if !strings.Contains(text, "比心") {
+		t.Fatalf("商城表情未渲染摘要: %q", text)
+	}
+}
+
+// TestParseMessageSegmentsFileChannelImage 文件通道传来的图片（只给 path）要按图片处理
+func TestParseMessageSegmentsFileChannelImage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "photo.png")
+	if err := os.WriteFile(path, testPNG(t, 6, 4), 0o644); err != nil {
+		t.Fatalf("写测试图片失败: %v", err)
+	}
+	data, err := json.Marshal(map[string]any{"file": "photo.png", "name": "photo.png", "path": path})
+	if err != nil {
+		t.Fatalf("序列化文件段失败: %v", err)
+	}
+	content, hasImages, _, _ := parseMessageSegments(0, []MessageSegment{{Type: "file", Data: data}})
+	if !hasImages {
+		t.Fatalf("文件通道图片未被识别: %#v", content)
+	}
+	items, ok := content.([]map[string]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("文件通道图片内容结构异常: %#v", content)
+	}
+	imageItem := items[len(items)-1]
+	if imageItem["type"] != "image_url" {
+		t.Fatalf("文件通道图片未生成 image_url 项: %#v", imageItem)
+	}
+}
+
+// TestFetchFileBytesDataURI NapCat 可能直接把文件内容以 data URI 填在 url 字段
+func TestFetchFileBytesDataURI(t *testing.T) {
+	raw := []byte{0x89, 'P', 'N', 'G'}
+	got, err := fetchFileBytes("data:image/png;base64," + base64.StdEncoding.EncodeToString(raw))
+	if err != nil {
+		t.Fatalf("data URI 解码失败: %v", err)
+	}
+	if !bytes.Equal(got, raw) {
+		t.Fatalf("data URI 解码结果不一致: %v", got)
+	}
+}
+
+// ==================== 随机触发自动引用 / 私聊攒批 ====================
+
+// TestBuildOutboundSegmentsQuotesFirst 引用段必须位于消息段首位（QQ 的硬性要求）
+func TestBuildOutboundSegmentsQuotesFirst(t *testing.T) {
+	segments := buildOutboundSegments(0, "是挺热的呀", 0, 9001)
+	if len(segments) < 2 {
+		t.Fatalf("消息段数量异常: %#v", segments)
+	}
+	if segments[0]["type"] != "reply" {
+		t.Fatalf("引用段不在首位: %#v", segments)
+	}
+	data, _ := segments[0]["data"].(map[string]string)
+	if data["id"] != "9001" {
+		t.Fatalf("引用消息 ID 异常: %#v", data)
+	}
+}
+
+// TestPickQuoteMessageIDFallbacks 单条候选直接引用；回应为空时退回最新一条；
+// 无候选时不引用（避免调用嵌入服务）
+func TestPickQuoteMessageIDFallbacks(t *testing.T) {
+	if got := pickQuoteMessageID("回复", []QuoteCandidate{{MessageID: 7, Content: "在吗"}}); got != 7 {
+		t.Fatalf("单条候选应直接引用，实得 %d", got)
+	}
+	if got := pickQuoteMessageID("回复", nil); got != 0 {
+		t.Fatalf("无候选不应引用，实得 %d", got)
+	}
+	multi := []QuoteCandidate{{MessageID: 1, Content: "a"}, {MessageID: 2, Content: "b"}}
+	if got := pickQuoteMessageID("  ", multi); got != 2 {
+		t.Fatalf("空回应应引用最新一条，实得 %d", got)
+	}
+}
+
+// TestGroupRandomTriggerPreparesQuote 随机触发时要把本批次消息带进引用候选
+func TestGroupRandomTriggerPreparesQuote(t *testing.T) {
+	const groupID int64 = 10086
+	_, _ = startBridgeTest(t, groupID)
+	one := 1.0
+	bridgeConfig.BridgingGroupTriggerProbability = &one
+	bridgeConfig.BridgingGroupKeywords = []string{"月华"}
+
+	message := groupMsg(groupID, 222, textSeg("今天好热"))
+	message.MessageID = 9001
+	handleGroupMessage(message)
+
+	flowMutex.Lock()
+	candidates := append([]QuoteCandidate(nil), currentTarget.QuoteCandidates...)
+	flowMutex.Unlock()
+	if len(candidates) != 1 || candidates[0].MessageID != 9001 {
+		t.Fatalf("随机触发未准备引用候选: %#v", candidates)
+	}
+
+	HandleAgentResponse("text", "是挺热的呀", false)
+	NotifyAgentIdle()
+}
+
+// TestPrivateMessagesAreBatched 私聊连续消息要合并成一次推送，而不是一发即回
+func TestPrivateMessagesAreBatched(t *testing.T) {
+	const testUserID int64 = 30001
+	originalConfig := bridgeConfig
+	originalSender := SendMessageToAgent
+	originalVideo := SendVideoToAgent
+	originalAudio := SendAudioToAgent
+	t.Cleanup(func() {
+		bridgeConfig = originalConfig
+		SendMessageToAgent = originalSender
+		SendVideoToAgent = originalVideo
+		SendAudioToAgent = originalAudio
+		stopPrivateTimer(testUserID)
+		groupMutex.Lock()
+		delete(privatePools, testUserID)
+		groupMutex.Unlock()
+		flowMutex.Lock()
+		awaitingResponse = false
+		responseStarted = false
+		requestQueue = nil
+		flowMutex.Unlock()
+	})
+
+	one := 1.0
+	window := 80
+	bridgeConfig = BridgingConfig{
+		BridgingUsers:                     []int64{testUserID},
+		BridgingPrivateTriggerProbability: &one,
+		BridgingPrivateBatchWindowMS:      &window,
+	}
+
+	deliveries := make([][]map[string]any, 0)
+	SendMessageToAgent = func(messages []map[string]any) { deliveries = append(deliveries, messages) }
+	SendVideoToAgent = func(urls []string) {}
+	SendAudioToAgent = func(urls []string) {}
+
+	newPrivate := func(text string) NapcatMessage {
+		return NapcatMessage{
+			SelfID:      testSelfID,
+			UserID:      testUserID,
+			PostType:    "message",
+			MessageType: "private",
+			Sender:      Sender{Nickname: "测试用户"},
+			Message:     []MessageSegment{textSeg(text)},
+		}
+	}
+	handlePrivateMessage(newPrivate("先发一句"))
+	handlePrivateMessage(newPrivate("再说一句"))
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && len(deliveries) == 0 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(deliveries) != 1 {
+		t.Fatalf("期望合并为 1 次推送，实得 %d 次", len(deliveries))
+	}
+	if len(deliveries[0]) != 2 {
+		t.Fatalf("合并后的消息条数应为 2，实得 %d", len(deliveries[0]))
 	}
 }
