@@ -241,19 +241,27 @@ func (w *webSession) collectVideoLinks(max int) ([]videoLink, error) {
 	return links, nil
 }
 
-// filterAndScore 给候选标题打分：本轮关键词权重高于配置文件里的默认偏好。
+// filterAndScore 给候选标题打分：本轮有对话者欲求词时只按欲求词筛选，
+// 配置文件里的默认偏好不再参与，避免默认主题把本轮要求盖过去。
 func filterAndScore(links []videoLink, cfg Config) []videoLink {
 	out := make([]videoLink, 0, len(links))
+	override := len(cfg.DesireKeywords) > 0
 	for _, link := range links {
 		link.Score = titleScore(link.Title, cfg)
+		if override && link.Score == 0 {
+			continue // 覆写模式下只保留命中本轮欲求的候选
+		}
 		out = append(out, link)
 	}
 	return out
 }
 
-// titleScore 标题得分：默认偏好每命中一个 +3，本轮关键词每命中一个 +6
+// titleScore 标题得分：本轮欲求词覆写默认偏好；没有欲求词时才用配置默认词
 func titleScore(title string, cfg Config) int {
-	return scoreOf(title, cfg.PreferenceKeywords) + scoreOf(title, cfg.DesireKeywords)*2
+	if len(cfg.DesireKeywords) > 0 {
+		return scoreOf(title, cfg.DesireKeywords)
+	}
+	return scoreOf(title, cfg.PreferenceKeywords)
 }
 
 // ==== 选片打分参数 ====
@@ -278,12 +286,12 @@ func (w *webSession) selectVideo(cfg Config, seen map[string]bool) (videoLink, e
 	}
 	home = prepareCandidates(home, cfg, seen)
 	if bestScore(home) == 0 {
-		// 先按本轮关键词搜索；关键词不足才补默认偏好，保证对话者的想法优先
-		keywords := pickSearchKeywords(cfg.DesireKeywords, searchKeywordTries)
-		if remain := searchKeywordTries - len(keywords); remain > 0 {
-			keywords = append(keywords, pickSearchKeywords(cfg.PreferenceKeywords, remain)...)
+		// 覆写模式：只按本轮欲求词搜索；没有欲求词才使用配置默认偏好
+		keywords := cfg.PreferenceKeywords
+		if len(cfg.DesireKeywords) > 0 {
+			keywords = cfg.DesireKeywords
 		}
-		for _, keyword := range keywords {
+		for _, keyword := range pickSearchKeywords(keywords, searchKeywordTries) {
 			searchURL := "https://search.bilibili.com/all?keyword=" + url.QueryEscape(keyword)
 			logger.Info("BilibiliLife", "首页没有参考词命中，搜索: %s", keyword)
 			if err := w.navigate(searchURL, 25*time.Second); err != nil {
@@ -309,7 +317,11 @@ func (w *webSession) selectVideo(cfg Config, seen map[string]bool) (videoLink, e
 		}
 	}
 	if len(home) == 0 {
-		return videoLink{}, fmt.Errorf("没有可看的视频（涉政/对立/录播过滤与 30 天已看记录可能把候选全部排除了）")
+		if len(cfg.DesireKeywords) > 0 {
+			return videoLink{}, fmt.Errorf("没有找到符合本轮要求（%s）的视频",
+				strings.Join(cfg.DesireKeywords, "、"))
+		}
+		return videoLink{}, fmt.Errorf("没有可看的视频（30 天已看记录可能把候选全部排除了）")
 	}
 
 	sort.SliceStable(home, func(i, j int) bool { return home[i].Score > home[j].Score })

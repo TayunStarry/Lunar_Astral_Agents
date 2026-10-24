@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-// TestFilterAndScorePreferences 钉住选片打分的两层权重：
-// 标题不再做关键词过滤（风险筛查在视频详情层完成），默认偏好 +3、本轮关键词 +6。
+// TestFilterAndScorePreferences 钉住选片打分的覆写规则：
+// 本轮有对话者欲求词时只保留命中欲求的候选；没有欲求词才用配置默认偏好。
 func TestFilterAndScorePreferences(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.DesireKeywords = []string{"猫咪"}
@@ -15,15 +15,20 @@ func TestFilterAndScorePreferences(t *testing.T) {
 		{Href: "https://www.bilibili.com/video/BV3", Title: "直播回放：昨天"},
 	}
 	out := filterAndScore(links, cfg)
-	if len(out) != len(links) {
-		t.Fatalf("选片打分不应在标题层过滤，实际留下 %d 条", len(out))
+	if len(out) != 1 || out[0].Href != "https://www.bilibili.com/video/BV2" {
+		t.Fatalf("本轮欲求词应覆写默认偏好，只保留猫咪视频，实际 %#v", out)
 	}
 	if out[0].Score <= 0 {
-		t.Fatalf("默认偏好命中应加分，实际 score=%d", out[0].Score)
+		t.Fatalf("欲求词命中应加分，实际 score=%d", out[0].Score)
 	}
-	// 关键词权重是默认偏好的两倍：同时命中「猫咪」与「AI」的应高于只命中「AI」的
-	if out[1].Score <= out[0].Score {
-		t.Fatalf("本轮关键词应优先于默认偏好，实际 %d vs %d", out[1].Score, out[0].Score)
+	// 没有欲求词时回到配置默认偏好，且标题层不做任何过滤
+	cfg.DesireKeywords = nil
+	all := filterAndScore(links, cfg)
+	if len(all) != len(links) {
+		t.Fatalf("无欲求词时不应过滤候选，实际 %d 条", len(all))
+	}
+	if all[0].Score <= 0 {
+		t.Fatalf("默认偏好命中应加分，实际 score=%d", all[0].Score)
 	}
 }
 

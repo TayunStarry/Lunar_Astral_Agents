@@ -196,9 +196,9 @@ func newRunner(cfg Config, flow Flow, share bool, instruction string) *runner {
 	if cfg.RepliesPerRound <= 0 {
 		cfg.RepliesPerRound = defaultRepliesPerRound
 	}
-	// 对话者的本轮想法优先于配置文件偏好：只在本次运行内生效，不落盘。
+	// 对话者的本轮想法覆写配置文件偏好：只在本次运行内生效，不落盘。
 	// 具体提炼在 RunFlow 释放 manager 锁之后执行（会调用模型，不能占着锁）。
-	logger.Info("BilibiliLife", "观影者流程[%s]：参考词 %d 个；@目标 %d 个；目标视频 %d 个；每视频 %d 个切片；构建分享=%v",
+	logger.Info("BilibiliLife", "观影者流程[%s]：默认参考词 %d 个（可被对话者欲求覆写）；@目标 %d 个；目标视频 %d 个；每视频 %d 个切片；构建分享=%v",
 		flow, len(cfg.PreferenceKeywords), len(cfg.MentionTargets), cfg.VideosPerRound, cfg.SlicesPerVideo, share)
 	return &runner{
 		cfg:         cfg,

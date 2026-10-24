@@ -68,8 +68,8 @@ type Config struct {
 	SlicesPerVideo  int `json:"slices_per_video"`  // 每个视频理解几个 60 秒切片
 	RepliesPerRound int `json:"replies_per_round"` // 一轮可回应几次消息（评论/动态/私信共享）
 
-	// DesireKeywords 本轮由对话者指令提炼的选片偏好：只在本轮生效，
-	// 打分权重高于 PreferenceKeywords，不写入配置文件。
+	// DesireKeywords 本轮由对话者指令提炼的选片关键词：覆写 PreferenceKeywords，
+	// 只在本轮生效，不写入配置文件；无欲求时才回退到配置默认偏好。
 	DesireKeywords []string `json:"-"`
 }
 
