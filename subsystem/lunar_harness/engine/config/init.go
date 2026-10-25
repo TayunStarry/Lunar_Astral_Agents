@@ -43,6 +43,11 @@ type SystemSettings struct {
 	// 月华客户端显示：控制桌面端/移动端角色的渲染方式（bedrock 默认 / live2d）
 	CharacterRenderer string `json:"character_renderer"`
 	Live2DModel       string `json:"live2d_model,omitempty"` // Live2D 模型基址（空则用引擎层默认）
+	// 模型重复输出检测（loopguard）：节点字数 / 片段字数 / 平均相似度阈值。
+	// 未配置时沿用 loopguard 默认值（1024 / 128 / 0.65），便于按实际效果调参。
+	LoopNodeRunes    *int     `json:"loop_node_runes,omitempty"`
+	LoopSegmentRunes *int     `json:"loop_segment_runes,omitempty"`
+	LoopSimilarity   *float64 `json:"loop_similarity,omitempty"`
 }
 
 // ModelConfig 定义模型配置的结构
@@ -93,7 +98,7 @@ type ModelConfig struct {
 		AppendSettings []string `json:"append_settings"`
 	} `json:"agent"`
 	// 网络搜索智能体（web_search）：检索词提炼、逐页摘要与浏览器滚动策略。
-	// 仅由琉璃的内置 Web-LTP（agents/WebLTP）消费，与其余配置节统一在此解析，
+	// 仅由琉璃的内置 Web-LTP（agents/WebSearch）消费，与其余配置节统一在此解析，
 	// 智能体侧只读取解析后的全局值，不再自行读取 lunar_config.json。
 	WebSearch struct {
 		SearchModel     string `json:"search_model"`            // 检索词提炼与逐页摘要使用的模型名
@@ -638,6 +643,17 @@ func applyConfig(parameter *ModelConfig) []string {
 	// 控制台日志镜像：仅在配置中显式开启时落盘，未配置保持默认关闭
 	if parameter.System.ConsoleLog != nil {
 		ConsoleLogEnabled = *parameter.System.ConsoleLog
+	}
+	// ==== 模型重复输出检测（system.loop_*） ====
+	// 只接受合法取值，非法项保持默认（由 loopguard 包兜底），避免把检测关死。
+	if parameter.System.LoopNodeRunes != nil && *parameter.System.LoopNodeRunes > 0 {
+		LoopNodeRunes = *parameter.System.LoopNodeRunes
+	}
+	if parameter.System.LoopSegmentRunes != nil && *parameter.System.LoopSegmentRunes > 0 {
+		LoopSegmentRunes = *parameter.System.LoopSegmentRunes
+	}
+	if parameter.System.LoopSimilarity != nil && *parameter.System.LoopSimilarity > 0 && *parameter.System.LoopSimilarity < 1 {
+		LoopSimilarity = *parameter.System.LoopSimilarity
 	}
 	// ==== 旧 tui 节（已取消） ====
 	// 程序只剩控制台一种形态：前端窗口全部关闭不再退出进程，故该节已无对应功能，

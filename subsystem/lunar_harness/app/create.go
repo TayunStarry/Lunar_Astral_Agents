@@ -9,8 +9,8 @@ import (
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/lunar"
 	file "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/lunar"
 	"LunarSubsystem/LunarHarness/server"
 	"LunarSubsystem/LunarHarness/transport/enginebus"
 	"LunarSubsystem/LunarHarness/transport/napcat"
@@ -59,8 +59,7 @@ func Assemble() {
 	// 若此时监听尚未就绪，这些回调会因连接被拒而失败。
 	srv, err := server.Start(StaticRootsProvider())
 	if err != nil {
-		// Windows 桌面构建隐藏控制台，启动失败以失败音效提示（同时落日志）
-		PlayStartupFailSound()
+		// 启动失败与警告统一由日志层播放失败音效（logger.Fatal 会同步播完再退出）
 		logger.Fatal("LunarHarness", "服务启动失败: %v", err)
 	}
 	httpServer = srv

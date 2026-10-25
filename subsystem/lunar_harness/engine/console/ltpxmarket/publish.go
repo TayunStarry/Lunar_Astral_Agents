@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/channel"
+	"LunarSubsystem/LunarHarness/engine/sound"
 )
 
 // Publish 发布 LTPX 包：以磁盘上的 metadata.json 为准 → 合并标签（metadata tags +
@@ -81,6 +82,8 @@ func Publish(cfg Config, pkg LocalPackage, description string) error {
 
 	logf("✓ LTPX 包 %s 发布完成", meta.ID)
 	reportProgress(100)
+	// 市场包上传完成：与更新包共用完成提示音
+	sound.Notify()
 	return nil
 }
 
@@ -194,6 +197,8 @@ func PublishArchive(cfg Config, archivePath, description string) error {
 
 	logf("✓ LTPX 包 %s 发布完成", meta.ID)
 	reportProgress(100)
+	// 市场包上传完成：与更新包共用完成提示音
+	sound.Notify()
 	return nil
 }
 

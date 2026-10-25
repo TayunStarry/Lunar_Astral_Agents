@@ -150,10 +150,50 @@ func localContentPath(img string) (string, bool) {
 
 // ensureUnderLocalDir 确认路径位于 LocalDir 内（防止把任意本机文件读给 QQ）
 func ensureUnderLocalDir(abs string) (string, bool) {
-	base := filepath.Clean(config.LocalDir)
 	clean := filepath.Clean(abs)
-	if !strings.HasPrefix(clean, base+string(os.PathSeparator)) {
+	if !filepath.IsAbs(clean) {
+		if resolved, err := filepath.Abs(clean); err == nil {
+			clean = filepath.Clean(resolved)
+		}
+	}
+	if _, ok := localContentRel(clean); !ok {
 		return "", false
 	}
 	return clean, true
+}
+
+// absLocalDir 内容仓库根目录的绝对路径。
+//
+// config.LocalDir 默认是相对的（local_data），而 NapCat 进程的工作目录与本进程不同，
+// 因此路径归属判断必须以绝对路径为基准，否则「仓库内文件」会被误判成仓库外。
+func absLocalDir() string {
+	if abs, err := filepath.Abs(config.LocalDir); err == nil {
+		return filepath.Clean(abs)
+	}
+	return filepath.Clean(config.LocalDir)
+}
+
+// localContentRel 把本机路径（绝对或相对）换算成内容仓库内的相对路径（斜杠形态）
+func localContentRel(raw string) (string, bool) {
+	clean := strings.TrimSpace(raw)
+	if clean == "" {
+		return "", false
+	}
+	if !filepath.IsAbs(clean) {
+		resolved, err := filepath.Abs(clean)
+		if err != nil {
+			return "", false
+		}
+		clean = resolved
+	}
+	base := absLocalDir()
+	clean = filepath.Clean(clean)
+	if !strings.HasPrefix(clean, base+string(os.PathSeparator)) {
+		return "", false
+	}
+	rel, err := filepath.Rel(base, clean)
+	if err != nil {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
 }

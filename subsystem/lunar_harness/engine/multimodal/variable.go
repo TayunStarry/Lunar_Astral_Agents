@@ -29,6 +29,17 @@ var (
 	CaptureCooldown int64 = 50 * 1000 * 1000 // 50ms 最小截图间隔（纳秒）
 )
 
+// ==== 日志模块标签 ====
+//
+// 控制台按模块名路由：绘图屏只接收 sd.cpp 绘图链路。视频抽帧、关键帧与
+// 图片缩放属于「视觉处理」，混用同一个模块名会把切片消息打进绘图日志。
+const (
+	// LogModuleDraw 绘图（sd.cpp）编排与引擎日志
+	LogModuleDraw = "MultimodalAnalysis"
+	// LogModuleMedia 视频抽帧 / 关键帧 / 图片缩放等视觉处理日志（只进原始日志）
+	LogModuleMedia = "MediaAnalysis"
+)
+
 // ==== 绘图引擎日志钩子 ====
 
 var (

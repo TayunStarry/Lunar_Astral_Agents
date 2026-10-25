@@ -24,10 +24,6 @@ const (
 	EventBeforeReadingMessage = "before_reading_message"
 	// EventBeforeSendingMessage 消息发送前：改写、追加或取消即将发出的消息
 	EventBeforeSendingMessage = "before_sending_amessage"
-	// EventBeforeQueryStarts 查询开始前：改写或取消网络搜索请求
-	EventBeforeQueryStarts = "before_query_starts"
-	// EventBeforeQueryEnds 查询结束前：改写或取消搜索报告
-	EventBeforeQueryEnds = "before_query_ends"
 	// EventBeforeLifeStarts 生活开始前：可取消本次生活（取消仍消耗一次本日额度并计为完成）
 	EventBeforeLifeStarts = "before_life_starts"
 	// EventBeforeLifeEnds 生活结束前：纯触发通知，返回值不被使用

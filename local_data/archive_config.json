@@ -9,7 +9,6 @@
 		"local_data/database/memory/stickers",
 		"local_data/multimedia/background",
 		"local_data/multimedia/icon",
-		"local_data/multimedia/placeholder",
 		"local_data/models/models.ini",
 		"local_data/models/llama.cpp",
 		"local_data/models/stable_diffusion.cpp",

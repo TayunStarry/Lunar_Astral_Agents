@@ -170,7 +170,6 @@ export class FilePreviewManager {
                     const base64Data = await fileToRawBase64(preview.file);
                     const audioFormat = getAudioFormat(preview.file);
                     if (audioFormat) {
-                        contentBlocks.push({ type: 'text', text: '[语音] ' });
                         contentBlocks.push({
                             type: 'input_audio',
                             input_audio: { data: base64Data, format: audioFormat }
@@ -178,7 +177,7 @@ export class FilePreviewManager {
                     } else {
                         // llama.cpp 仅接受 wav/mp3，其他格式退回可访问链接
                         const url = preview.url;
-                        contentBlocks.push({ type: 'text', text: `[音频] 名称: ${res.fileName} 访问链接: ${url}` });
+                        contentBlocks.push({ type: 'text', text: `${res.fileName} 访问链接: ${url}` });
                     }
                 } catch (err) {
                     this.showError?.(`无法读取音频 ${res.fileName}`);
@@ -190,7 +189,6 @@ export class FilePreviewManager {
                 contentBlocks.push({ type: 'image_url', image_url: { url: res.fileUrl } });
             }
             else if (res.category === 'video') {
-                contentBlocks.push({ type: 'text', text: '[视频] ' });
                 contentBlocks.push({ type: 'video_url', video_url: { url: res.fileUrl } });
             }
             else if (res.category === 'text') {

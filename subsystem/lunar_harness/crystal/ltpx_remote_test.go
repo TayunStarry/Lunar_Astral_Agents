@@ -16,9 +16,8 @@ func TestUseTheProgramExposesToolEnumAndRefs(t *testing.T) {
 	if status.Tool == nil {
 		t.Fatal("工具链状态缺少聚合工具（tool）")
 	}
-	if len(status.Tools) == 0 {
-		t.Fatal("工具链状态缺少应用清单（tools）")
-	}
+	// 内置桌面操纵已不再暴露，未安装扩展包时工具链为空也是合法状态；
+	// 这里只校验「枚举与清单一致」的契约，不强制要求至少有一个工具。
 
 	names := make([]string, 0, len(status.Tools))
 	for _, ref := range status.Tools {

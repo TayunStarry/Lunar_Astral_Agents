@@ -12,6 +12,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/console/ltpxmarket"
 	"LunarSubsystem/LunarHarness/engine/console/updatepack"
+	"LunarSubsystem/LunarHarness/engine/sound"
 	"LunarSubsystem/LunarHarness/server"
 )
 
@@ -117,6 +118,8 @@ func main() {
 func exitVisible(msg string) {
 	fmt.Fprintf(os.Stderr, "\n[星月智能] 启动失败：%s\n\n", msg)
 	fmt.Fprintln(os.Stderr, "（本窗口将在 15 秒后自动关闭，按回车立即退出）")
+	// 端口被占用等服务级启动失败：日志管线尚未安装，直接同步播放失败音效
+	sound.FailureBlocking()
 	done := make(chan struct{})
 	go func() {
 		b := make([]byte, 1)

@@ -75,7 +75,7 @@ func VisionTransform(inAbsPath, cacheAbsPath string, side int, tag string) ([]by
 	// 落盘缓存（失败不阻断返回，下次请求重建）
 	if mkErr := os.MkdirAll(filepath.Dir(cacheAbsPath), 0o755); mkErr == nil {
 		if writeErr := os.WriteFile(cacheAbsPath, buf.Bytes(), 0o644); writeErr != nil {
-			logger.SubInfo("MultimodalAnalysis", "Vision", "副本缓存写入失败（不影响本次返回）: %v", writeErr)
+			logger.SubInfo(LogModuleMedia, "Vision", "副本缓存写入失败（不影响本次返回）: %v", writeErr)
 		}
 	}
 	return buf.Bytes(), "image/jpeg", false, nil

@@ -65,21 +65,20 @@ func handleGroupMessage(msg NapcatMessage) {
 	cacheMemberName(msg.GroupID, msg.UserID, memberName)
 	warmGroupMembers(msg.GroupID)
 
-	content, hasImages, videoURLs, audioURLs := parseMessageSegments(msg.GroupID, msg.Message)
+	content, hasImages, audioURLs := parseMessageSegments(msg.GroupID, msg.Message)
 
 	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
 	redPacket := parseRawRedPacket(msg.Raw)
 	if redPacket != nil {
 		content = buildRedPacketText(redPacket)
 		hasImages = false
-		videoURLs = nil
 		audioURLs = nil
-	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(videoURLs) == 0 && len(audioURLs) == 0 {
+	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(audioURLs) == 0 {
 		// 无可理解内容的空消息不入池不触发
 		return
 	}
 
-	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, VideoURLs: videoURLs, AudioURLs: audioURLs, MessageID: msg.MessageID}
+	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, AudioURLs: audioURLs, MessageID: msg.MessageID}
 
 	selfID := msg.SelfID
 	if selfID == 0 {
@@ -124,7 +123,6 @@ func handleGroupMessage(msg NapcatMessage) {
 		req := BridgeRequest{
 			Target:    BridgeTarget{ID: msg.GroupID, IsGroup: true, GroupName: groupName},
 			Messages:  buildGroupMessages(groupName, entries),
-			VideoURLs: collectGroupVideoURLs(entries),
 			AudioURLs: collectGroupAudioURLs(entries),
 			Trigger:   trigger,
 		}
@@ -379,15 +377,6 @@ func buildGroupMessages(groupName string, entries []GroupPoolEntry) []map[string
 	return messages
 }
 
-// collectGroupVideoURLs 汇总群聊缓存池条目中的视频地址
-func collectGroupVideoURLs(entries []GroupPoolEntry) []string {
-	var urls []string
-	for _, e := range entries {
-		urls = append(urls, e.VideoURLs...)
-	}
-	return urls
-}
-
 // collectGroupAudioURLs 汇总群聊缓存池条目中的语音/音频地址
 func collectGroupAudioURLs(entries []GroupPoolEntry) []string {
 	var urls []string
@@ -455,22 +444,21 @@ func pumpNext() {
 		awaitingResponse = false
 		logger.SubError("LunarCore", "Napcat", "SendMessageToAgent 回调未注册，无法推送消息")
 	}
-	if SendVideoToAgent != nil && len(req.VideoURLs) > 0 {
-		SendVideoToAgent(req.VideoURLs)
-	}
 	if SendAudioToAgent != nil && len(req.AudioURLs) > 0 {
 		SendAudioToAgent(req.AudioURLs)
 	}
 }
 
-// parseMessageSegments 解析消息段列表，返回 (内容, 是否含图片, 视频地址列表, 语音/音频地址列表)
-// 纯文本返回 string，包含图片返回 []map[string]any；视频与语音地址分别写入后两个返回值
+// parseMessageSegments 解析消息段列表，返回 (内容, 是否含图片, 语音/音频地址列表)
+//
+// 纯文本返回 string，包含图片返回 []map[string]any；视频与文件在解析阶段即收进
+// 资源归档层、正文只写规范句柄（句柄不可得时退化为文件名），语音地址另行返回，
+// 由智能体侧的语音管线完成入库与转写。
 // groupID 用于 @ 目标与回复引用的成员名称解析（私聊传 0）
-func parseMessageSegments(groupID int64, segments []MessageSegment) (any, bool, []string, []string) {
+func parseMessageSegments(groupID int64, segments []MessageSegment) (any, bool, []string) {
 	var contentArray []map[string]any
 	var contentStr string
 	var hasImages bool
-	var videoURLs []string
 	var audioURLs []string
 
 	for _, segment := range segments {
@@ -522,19 +510,21 @@ func parseMessageSegments(groupID int64, segments []MessageSegment) (any, bool, 
 		case "video":
 			var videoData VideoData
 			if json.Unmarshal(segment.Data, &videoData) == nil {
-				if source := resolveVideoSource(videoData); source != "" {
-					videoURLs = append(videoURLs, source)
-				}
-				appendContent(&contentArray, &contentStr, "[视频] ")
+				source := resolveVideoSource(videoData)
+				name := mediaDisplayName(file.KindVideo, "视频.mp4", videoData.File, source)
+				appendContent(&contentArray, &contentStr, mediaSegmentText(source, file.KindVideo, name))
 			}
 		case "record":
 			var recordData RecordData
 			if json.Unmarshal(segment.Data, &recordData) == nil {
-				if source := resolveAudioSource(recordData); source != "" {
+				source := resolveAudioSource(recordData)
+				// 语音地址仍交给智能体侧：入库与转写（ASR）统一在那里完成
+				if source != "" {
 					audioURLs = append(audioURLs, source)
 				}
+				name := mediaDisplayName(file.KindAudio, "语音.mp3", recordData.File, source)
+				appendContent(&contentArray, &contentStr, mediaSegmentText(source, file.KindAudio, name))
 			}
-			appendContent(&contentArray, &contentStr, "[语音] ")
 		case "face":
 			if text := faceDisplayText(segment.Data); text != "" {
 				appendContent(&contentArray, &contentStr, "[表情: "+text+"] ")
@@ -587,9 +577,9 @@ func parseMessageSegments(groupID int64, segments []MessageSegment) (any, bool, 
 	}
 
 	if hasImages {
-		return contentArray, true, videoURLs, audioURLs
+		return contentArray, true, audioURLs
 	}
-	return contentStr, false, videoURLs, audioURLs
+	return contentStr, false, audioURLs
 }
 
 // renderReplyQuote 通过 get_msg 还原被回复消息，渲染为 [回复 <发送者>: <内容摘要>]
@@ -614,7 +604,7 @@ func renderReplyQuote(groupID int64, messageID string) string {
 	if len(segments) == 0 {
 		segments = detail.Content
 	}
-	summary := extractSegmentText(groupID, 0, segments, false)
+	summary := extractSegmentText(groupID, 0, segments)
 	if summary == "" {
 		return "[回复] "
 	}
@@ -702,16 +692,17 @@ func localImageDataURI(path string) string {
 	return imageDataURI(data)
 }
 
-// admitForwardImage 把合并转发内的图片收进统一资源归档层并返回持久句柄。
+// admitInboundImage 把入站引用中的图片（合并转发 / 回复引用）收进统一资源归档层并返回持久句柄。
 //
-// 合并转发与普通消息不同：普通图片会作为多模态内容项直接进入思考链，而转发内的图片
-// 只需要“可回引”的句柄。此处必须同时兼容两种来源形态：
+// 普通消息里的图片会作为多模态内容项直接进入思考链；而引用/转发里的图片不在正文
+// 内容项中，必须换成可回引的句柄，模型之后才能用 use_resource 查看。此处必须同时
+// 兼容两种来源形态：
 //   - 远程直链（image.url）：按 url 来源下载；
 //   - 仅本地文件引用（image.file）：get_image 下载后得到 data URI，必须按 data 来源解码，
 //     不能把 data: 当成 http URL 去请求——那会直接失败并退化成 [图片]。
 //
 // 直链下载失败时再尝试用 file 引用兜底，避免 QQ CDN 地址过期导致整条转发图全部丢失。
-func admitForwardImage(imageData ImageData) (string, bool) {
+func admitInboundImage(imageData ImageData) (string, bool) {
 	candidates := make([]string, 0, 2)
 	if imgURL := resolveImageURL(imageData); imgURL != "" {
 		candidates = append(candidates, imgURL)
@@ -724,10 +715,7 @@ func admitForwardImage(imageData ImageData) (string, bool) {
 	}
 
 	for _, source := range candidates {
-		sourceKind := file.SourceKindURL
-		if strings.HasPrefix(source, "data:") {
-			sourceKind = file.SourceKindData
-		}
+		sourceKind := admitSourceKind(source)
 		// 归档层按「建议文件名」的扩展名推断类型：data URI 与无扩展名的 QQ CDN
 		// 直链都必须补一个图片扩展名，否则会被当成文档（或直接失败退化成 [图片]）。
 		name := forwardImageName(source)
@@ -749,6 +737,82 @@ func admitForwardImage(imageData ImageData) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// admitSourceKind 按来源形态选择入库通道：data URI 解码、直链下载、其余按本地文件
+func admitSourceKind(source string) string {
+	lower := strings.ToLower(source)
+	switch {
+	case strings.HasPrefix(lower, "data:"):
+		return file.SourceKindData
+	case strings.HasPrefix(lower, "http://"), strings.HasPrefix(lower, "https://"):
+		return file.SourceKindURL
+	default:
+		return file.SourceKindPath
+	}
+}
+
+// admitInboundMedia 把入站媒体（视频 / 音频）收进统一资源归档层并返回持久句柄。
+//
+// 与图片一样，渠道消息里的媒体只有可回引的句柄才能被模型之后用 use_resource 取用；
+// 入库失败不阻断消息本身，调用方退回文件名。
+func admitInboundMedia(source, kindHint, name string) (string, bool) {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return "", false
+	}
+	res, err := file.ResourceAdmit(file.AdmitInput{
+		SourceKind: admitSourceKind(source),
+		Source:     source,
+		Name:       name,
+		KindHint:   kindHint,
+		Origin:     file.OriginChannel,
+		Retain:     file.RetainNormal,
+	})
+	if err != nil || res.Handle == "" {
+		if err != nil {
+			logger.SubWarn("LunarCore", "Napcat", "媒体入库失败（%s）: %v", name, err)
+		}
+		return "", false
+	}
+	return res.Handle, true
+}
+
+// mediaSegmentText 构造媒体段的上下文文本：句柄优先，句柄不可得时退化为文件名。
+//
+// 绝不再写 "[视频]" / "[语音]" 这类无信息占位——它们既无法回引，也丢掉了文件名。
+func mediaSegmentText(source, kindHint, name string) string {
+	if handle, ok := admitInboundMedia(source, kindHint, name); ok {
+		return "[" + handle + "] " + name + " "
+	}
+	return name + " "
+}
+
+// mediaDisplayName 推断入站媒体的展示文件名
+//
+// 取值顺序：显式文件名 → 文件引用 → 直链；扩展名缺失或与媒体类型不符时按
+// fallbackName 的扩展名补正（QQ 语音常以 .silk 或无扩展名的引用下发，
+// 但 NapCat 转码后是 mp3）。全部取不到时返回 fallbackName。
+func mediaDisplayName(kindHint, fallbackName string, candidates ...string) string {
+	for _, candidate := range candidates {
+		name := strings.TrimSpace(candidate)
+		if name == "" || strings.HasPrefix(name, "data:") || strings.HasPrefix(name, "base64://") {
+			continue
+		}
+		if cut := strings.IndexAny(name, "?#"); cut >= 0 {
+			name = name[:cut]
+		}
+		name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
+		if name == "" || name == "." || name == "/" {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(name))
+		if kindHint != "" && file.KindOfExt(ext) != kindHint {
+			name = strings.TrimSuffix(name, ext) + filepath.Ext(fallbackName)
+		}
+		return name
+	}
+	return fallbackName
 }
 
 // resolveVideoSource 获取视频的可访问地址（优先 url，其次通过 get_file 下载）
@@ -810,16 +874,7 @@ func resolveAudioSource(recordData RecordData) string {
 // NapCat 的文件段字段组合不固定（file / path / url / file_id 任意组合），
 // 因此读取字节按 path → file_id/file → url 依次兜底。
 func processFileSegment(fileData FileData) (string, bool, string) {
-	fileName := fileData.FileName
-	if fileName == "" {
-		fileName = fileData.Name
-	}
-	if fileName == "" {
-		fileName = fileData.File
-	}
-	if fileName == "" && fileData.Path != "" {
-		fileName = filepath.Base(fileURLPath(fileData.Path))
-	}
+	fileName := fileSegmentName(fileData)
 
 	// 未提供任何可读取标识时，仅回传名称与大小信息
 	if fileData.FileID == "" && fileData.File == "" && fileData.URL == "" && fileData.Path == "" {
@@ -860,7 +915,16 @@ func processFileSegment(fileData FileData) (string, bool, string) {
 	if name == "" {
 		name = fileName
 	}
-	return "[已收录] " + res.Handle + " " + name + " ", false, ""
+	return "[" + res.Handle + "] " + name + " ", false, ""
+}
+
+// fileSegmentName 取文件段的展示文件名（显式名优先，其次引用路径基名）
+func fileSegmentName(fileData FileData) string {
+	candidates := []string{fileData.FileName, fileData.Name, fileData.File}
+	if fileData.Path != "" {
+		candidates = append(candidates, fileURLPath(fileData.Path))
+	}
+	return mediaDisplayName("", "未命名文件", candidates...)
 }
 
 // readFileSegmentBytes 按可用性依次尝试文件段的三种读取来源
@@ -882,16 +946,19 @@ func readFileSegmentBytes(fileData FileData) ([]byte, error) {
 }
 
 // describeFile 构建文件的名称与大小信息描述
+//
+// 句柄不可得时退化为文件名（附带大小），不再写 "[文件]" 这类无信息占位。
 func describeFile(fileName string, sizeRaw json.RawMessage) string {
-	var sb strings.Builder
-	sb.WriteString("[文件]")
-	if fileName != "" {
-		sb.WriteString(" 名称: ")
-		sb.WriteString(fileName)
+	name := strings.TrimSpace(fileName)
+	if name == "" {
+		name = "未命名文件"
 	}
+	var sb strings.Builder
+	sb.WriteString(name)
 	if size := fileSizeText(sizeRaw); size != "" {
-		sb.WriteString(" 大小: ")
+		sb.WriteString("（")
 		sb.WriteString(size)
+		sb.WriteString(" 字节）")
 	}
 	sb.WriteString(" ")
 	return sb.String()
@@ -1056,7 +1123,7 @@ func processForwardSegment(groupID int64, id string, depth int) string {
 		sb.WriteString(indent)
 		sb.WriteString(sender)
 		sb.WriteString(": ")
-		sb.WriteString(extractSegmentText(groupID, depth, segments, true))
+		sb.WriteString(extractSegmentText(groupID, depth, segments))
 		sb.WriteString("\n")
 	}
 	return sb.String()
@@ -1090,10 +1157,11 @@ func rawIDString(raw json.RawMessage) string {
 	return ""
 }
 
-// extractSegmentText 从消息段列表中提取文本摘要（回复引用与合并转发子消息共用）
-// resolveImages 为 true 时（合并转发展开）图片注册进共享图片缓存并内嵌 [图片.00x] 占位标签；
-// 为 false 时（回复引用摘要）图片仅显示为 [图片] 字样
-func extractSegmentText(groupID int64, depth int, segments []MessageSegment, resolveImages bool) string {
+// extractSegmentText 从消息段列表中提取文本摘要（回复引用与合并转发子消息共用）。
+// 图片、商城表情、视频、语音与文件都会先尝试收进资源归档层并写成规范句柄
+// （[@I.00x] / [@V.00x] / [@A.00x] / [@D.00x]），入库失败才退化为文件名，
+// 保证引用里的媒体仍可被后续回引，也不会出现无信息的占位文本。
+func extractSegmentText(groupID int64, depth int, segments []MessageSegment) string {
 	var sb strings.Builder
 	for _, segment := range segments {
 		switch segment.Type {
@@ -1110,42 +1178,45 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment, res
 				sb.WriteString(" 说] ")
 			}
 		case "image":
-			registered := false
 			var imageData ImageData
-			if resolveImages && json.Unmarshal(segment.Data, &imageData) == nil {
-				if handle, ok := admitForwardImage(imageData); ok {
+			if json.Unmarshal(segment.Data, &imageData) == nil {
+				if handle, ok := admitInboundImage(imageData); ok {
 					sb.WriteString("[")
 					sb.WriteString(handle)
 					sb.WriteString("]")
-					registered = true
+				} else {
+					sb.WriteString(mediaDisplayName(file.KindImage, "图片.png", imageData.File, imageData.URL, imageData.Path))
 				}
 			}
-			if !registered {
-				sb.WriteString("[图片]")
-			}
 		case "video":
-			sb.WriteString("[视频]")
+			var videoData VideoData
+			if json.Unmarshal(segment.Data, &videoData) == nil {
+				source := resolveVideoSource(videoData)
+				name := mediaDisplayName(file.KindVideo, "视频.mp4", videoData.File, source)
+				sb.WriteString(mediaSegmentText(source, file.KindVideo, name))
+			}
 		case "record":
-			sb.WriteString("[语音]")
+			var recordData RecordData
+			if json.Unmarshal(segment.Data, &recordData) == nil {
+				source := resolveAudioSource(recordData)
+				name := mediaDisplayName(file.KindAudio, "语音.mp3", recordData.File, source)
+				sb.WriteString(mediaSegmentText(source, file.KindAudio, name))
+			}
 		case "file":
 			var fileData FileData
 			if json.Unmarshal(segment.Data, &fileData) == nil {
-				name := fileData.FileName
-				if name == "" {
-					name = fileData.Name
-				}
-				if name == "" {
-					name = fileData.File
-				}
-				if name != "" {
-					sb.WriteString("[文件: ")
-					sb.WriteString(name)
-					sb.WriteString("]")
+				text, isImage, dataURI := processFileSegment(fileData)
+				if isImage {
+					if handle, ok := admitInboundImage(ImageData{URL: dataURI}); ok {
+						sb.WriteString("[")
+						sb.WriteString(handle)
+						sb.WriteString("]")
+					} else {
+						sb.WriteString(mediaDisplayName(file.KindImage, "图片.png", fileData.FileName, fileData.Name))
+					}
 				} else {
-					sb.WriteString("[文件]")
+					sb.WriteString(text)
 				}
-			} else {
-				sb.WriteString("[文件]")
 			}
 		case "face":
 			if text := faceDisplayText(segment.Data); text != "" {
@@ -1159,13 +1230,11 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment, res
 			var mfaceData MFaceData
 			if json.Unmarshal(segment.Data, &mfaceData) == nil {
 				registered := false
-				if resolveImages {
-					if handle, ok := admitForwardImage(ImageData{URL: mfaceData.URL, Path: mfaceData.Path}); ok {
-						sb.WriteString("[")
-						sb.WriteString(handle)
-						sb.WriteString("]")
-						registered = true
-					}
+				if handle, ok := admitInboundImage(ImageData{URL: mfaceData.URL, Path: mfaceData.Path}); ok {
+					sb.WriteString("[")
+					sb.WriteString(handle)
+					sb.WriteString("]")
+					registered = true
 				}
 				if !registered {
 					sb.WriteString("[表情: ")

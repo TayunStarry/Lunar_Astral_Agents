@@ -162,7 +162,7 @@ func (d *domainDB) close() error {
 	return err
 }
 
-// EnsureWebDB 打开网络检索缓存库（web.db）；供 WebLTP 等上层模块复用同一连接与表结构。
+// EnsureWebDB 打开网络检索缓存库（web.db）；供 WebSearch 等上层模块复用同一连接与表结构。
 func EnsureWebDB() (*sql.DB, error) { return webDatabase.open() }
 
 // InitDomainDBs 启动时统一打开各领域库并建表（幂等）。

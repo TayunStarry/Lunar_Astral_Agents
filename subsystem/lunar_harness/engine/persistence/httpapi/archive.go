@@ -4,6 +4,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/sound"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -86,6 +87,8 @@ func createZip(w http.ResponseWriter, r *http.Request) {
 		}
 		relPath = filepath.ToSlash(relPath)
 		logger.SubInfo("FileManager", "Archive", "ZIP已保存到服务器: %s (%d 字节)", fullSavePath, len(zipData))
+		// 打包归档产出成品：统一播放完成提示音
+		sound.Notify()
 		writeJSON(w, http.StatusOK, map[string]any{
 			"success": true,
 			"path":    relPath,
@@ -107,6 +110,8 @@ func createZip(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Archive请求[ERROR] -> 发送ZIP文件失败: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// 客户端下载归档同样视为一次打包产出
+	sound.Notify()
 }
 
 // CreateZipHandler 服务端压缩：根据相对 LocalDir 的路径列表在服务器本地创建 ZIP 并保存
@@ -166,6 +171,8 @@ func CreateZipHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	relPath = filepath.ToSlash(relPath)
 	logger.SubInfo("FileManager", "Archive", "服务端ZIP已保存: %s (%d 字节)", fullSavePath, len(zipData))
+	// 服务端压缩产出成品：统一播放完成提示音
+	sound.Notify()
 	writeJSON(w, http.StatusOK, persistence.ZipCreateResponse{
 		Success: true,
 		Path:    relPath,
@@ -521,6 +528,8 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		logger.Info("FileManager", "包导出成功: %s -> %s", req.PackageName, fullSavePath)
+		// 包导出（打包归档）产出成品：统一播放完成提示音
+		sound.Notify()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":   true,
@@ -537,6 +546,8 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(zipData)))
 		w.WriteHeader(http.StatusOK)
 		w.Write(zipData)
+		// 下载导出包同样视为一次打包产出
+		sound.Notify()
 	}
 }
 

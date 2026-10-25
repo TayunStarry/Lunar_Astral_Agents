@@ -1,7 +1,7 @@
 package StarLTP
 
-// ==== 媒体能力实现：视频抽帧 video.frames / 图像缩放与编码 image.resize|convert / WebLTP 网络搜索 ====
-// 复用 MultimodalAnalysis 模块的抽帧/图像基础组元与 WebLTP 进程内搜索流水线，
+// ==== 媒体能力实现：视频抽帧 video.frames / 图像缩放与编码 image.resize|convert / WebSearch 网络搜索 ====
+// 复用 MultimodalAnalysis 模块的抽帧/图像基础组元与 WebSearch 进程内搜索流水线，
 // 沙箱侧契约见 docs/LTP 9.1 Flash.d.ts。
 
 import (
@@ -16,7 +16,7 @@ import (
 	"os"
 	"strings"
 
-	webltp "LunarSubsystem/LunarHarness/agents/WebLTP"
+	websearch "LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
 
@@ -314,14 +314,14 @@ func engineImageConvert(p *plugin, path, format string, opts map[string]any) (an
 	return imageResult(enc, ct, b.Dx(), b.Dy()), nil
 }
 
-// ==== Web-LTP 网络搜索 agent.search（双权限：allow-agent 绑定 + allow-network 执行） ====
+// ==== Web-Search 网络搜索 agent.search（双权限：allow-agent 绑定 + allow-network 执行） ====
 
-// engineAgentSearch 调用进程内 Web-LTP 搜索流水线，返回自然语言搜索报告。
+// engineAgentSearch 调用进程内 Web-Search 搜索流水线，返回自然语言搜索报告。
 func engineAgentSearch(p *plugin, instruction string) map[string]any {
 	if !p.hasPerm("allow-network") {
 		return map[string]any{"success": false, "error": "agent.search 需要 allow-network 权限"}
 	}
-	text, err := webltp.Run(instruction)
+	text, err := websearch.Run(instruction)
 	if err != nil {
 		return map[string]any{"success": false, "error": err.Error()}
 	}

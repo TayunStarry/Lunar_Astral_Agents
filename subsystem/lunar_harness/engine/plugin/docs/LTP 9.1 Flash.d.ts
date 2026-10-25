@@ -143,32 +143,6 @@ interface EventContract {
 			cancel?: boolean
 		}
 	}
-	/** 查询开始前：改写搜索指令或取消本次网络搜索 */
-	before_query_starts: {
-		payload: {
-			/** 即将交给网络搜索智能体的自然语言指令 */
-			instruction: string
-		}
-		/** instruction 替换搜索指令；cancel=true 取消（月华的工具调用立即收到取消回执） */
-		return: {
-			instruction?: string
-			cancel?: boolean
-		}
-	}
-	/** 查询结束前：改写、追加或取消搜索报告 */
-	before_query_ends: {
-		payload: {
-			/** 本次搜索使用的自然语言指令 */
-			instruction: string
-			/** 网络搜索智能体产出的报告全文 */
-			report: string
-		}
-		/** report 替换报告内容；cancel=true 取消（月华的工具调用立即收到取消回执） */
-		return: {
-			report?: string
-			cancel?: boolean
-		}
-	}
 	/** 生活开始前：可取消本次生活（取消仍消耗一次本日额度，并计为完成一次生活） */
 	before_life_starts: {
 		payload: {

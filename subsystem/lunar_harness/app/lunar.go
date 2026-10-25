@@ -9,9 +9,9 @@ import (
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/lunar"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
+	"LunarSubsystem/LunarHarness/lunar"
 	"LunarSubsystem/LunarHarness/transport/napcat"
 )
 
@@ -102,15 +102,10 @@ func initNapcatBridge() {
 		}
 	}
 
-	// 视频/音频地址包装为媒体URL内容项，按到达顺序写入统一未读队列
-	napcat.SendVideoToAgent = func(urls []string) {
-		for _, url := range urls {
-			lunar.EnqueueMediaURL("video_url", url, "qq")
-		}
-	}
+	// 语音/音频地址包装为媒体URL内容项，按到达顺序写入统一未读队列
 	napcat.SendAudioToAgent = func(urls []string) {
 		for _, url := range urls {
-			lunar.EnqueueMediaURL("audio_url", url, "qq")
+			lunar.EnqueueAudioURL(url, "qq")
 		}
 	}
 

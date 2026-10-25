@@ -102,7 +102,7 @@ func (w *engineLogWriter) warnVAETilingFallback() {
 	if already {
 		return
 	}
-	logger.Warn("MultimodalAnalysis",
+	logger.Warn(LogModuleDraw,
 		"VAE 解码显存不足，引擎已自行改用空间分片：画面接缝处可能出现硬边纯色方块。"+
 			"建议把 sd_vae_backend 设为 cpu（整段 CPU 解码）或降低出图分辨率")
 }

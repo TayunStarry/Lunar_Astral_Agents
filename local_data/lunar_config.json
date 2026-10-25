@@ -31,6 +31,9 @@
 		"chat_vram_guard_mib": 1024,
 		"chat_vram_guard_interval": 16,
 		"character_renderer": "live2d",
+		"loop_node_runes": 1024,
+		"loop_segment_runes": 128,
+		"loop_similarity": 0.65,
 		"-enumerate": [
 			"bedrock",
 			"live2d"

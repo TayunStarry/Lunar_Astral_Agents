@@ -69,20 +69,20 @@ func firstFrameOfGIF(imgData []byte) (*image.RGBA, error) {
 func ResizeImage(imgData []byte) ([]map[string]any, error) {
 	// 1. 输入验证
 	if len(imgData) == 0 {
-		logger.Error("MultimodalAnalysis", "ResizeImage: 图片数据为空")
+		logger.Error(LogModuleMedia, "ResizeImage: 图片数据为空")
 		return nil, fmt.Errorf("图片数据为空")
 	}
 	const maxImageSize = 50 * 1024 * 1024 // 50MB
 	if len(imgData) > maxImageSize {
-		logger.Error("MultimodalAnalysis", "ResizeImage: 图片数据过大: %d bytes", len(imgData))
+		logger.Error(LogModuleMedia, "ResizeImage: 图片数据过大: %d bytes", len(imgData))
 		return nil, fmt.Errorf("图片数据过大，超过50MB限制")
 	}
 
-	logger.Info("MultimodalAnalysis", "ResizeImage: 开始处理，原始大小=%d bytes", len(imgData))
+	logger.Info(LogModuleMedia, "ResizeImage: 开始处理，原始大小=%d bytes", len(imgData))
 
 	// 2. 文件头格式检测
 	originalFormat := detectImageFormat(imgData)
-	logger.Info("MultimodalAnalysis", "ResizeImage: 检测到原始格式=%s", originalFormat)
+	logger.Info(LogModuleMedia, "ResizeImage: 检测到原始格式=%s", originalFormat)
 
 	var processedData []byte
 
@@ -92,12 +92,12 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 		// GIF（含动态图）：静态链路只取首帧；动态图理解见 AnimatedImageToFrames 帧序列链路
 		rgba, err := firstFrameOfGIF(imgData)
 		if err != nil {
-			logger.Error("MultimodalAnalysis", "ResizeImage: GIF首帧解码失败: %v", err)
+			logger.Error(LogModuleMedia, "ResizeImage: GIF首帧解码失败: %v", err)
 			return nil, err
 		}
 		buf := &bytes.Buffer{}
 		if err := png.Encode(buf, rgba); err != nil {
-			logger.Error("MultimodalAnalysis", "ResizeImage: GIF首帧编码失败: %v", err)
+			logger.Error(LogModuleMedia, "ResizeImage: GIF首帧编码失败: %v", err)
 			return nil, fmt.Errorf("GIF首帧编码失败: %v", err)
 		}
 		processedData = buf.Bytes()
@@ -109,29 +109,29 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 	case "webp":
 		// 静态与动态 WebP 均由 FFmpeg 转码：动态 WebP 经 image2pipe 输出多帧 PNG 流，
 		// 后续解码仅取第一帧，等价于首帧静态降级
-		logger.Info("MultimodalAnalysis", "ResizeImage: WebP，启动FFmpeg转码")
+		logger.Info(LogModuleMedia, "ResizeImage: WebP，启动FFmpeg转码")
 		converted, err := convertImageWithFFmpeg(imgData)
 		if err != nil {
-			logger.Error("MultimodalAnalysis", "ResizeImage: WebP转码失败: %v", err)
+			logger.Error(LogModuleMedia, "ResizeImage: WebP转码失败: %v", err)
 			return nil, fmt.Errorf("WebP转码失败: %v", err)
 		}
 		processedData = converted
-		logger.Info("MultimodalAnalysis", "ResizeImage: WebP转码完成，转换后大小=%d bytes", len(processedData))
+		logger.Info(LogModuleMedia, "ResizeImage: WebP转码完成，转换后大小=%d bytes", len(processedData))
 	default:
-		logger.Info("MultimodalAnalysis", "ResizeImage: 非JPG/PNG格式(%s)，启动FFmpeg转码", originalFormat)
+		logger.Info(LogModuleMedia, "ResizeImage: 非JPG/PNG格式(%s)，启动FFmpeg转码", originalFormat)
 		converted, err := convertImageWithFFmpeg(imgData)
 		if err != nil {
-			logger.Error("MultimodalAnalysis", "ResizeImage: FFmpeg转码失败: %v", err)
+			logger.Error(LogModuleMedia, "ResizeImage: FFmpeg转码失败: %v", err)
 			return nil, fmt.Errorf("FFmpeg转码失败（原始格式=%s）: %v", originalFormat, err)
 		}
 		processedData = converted
-		logger.Info("MultimodalAnalysis", "ResizeImage: FFmpeg转码完成，转换后大小=%d bytes", len(processedData))
+		logger.Info(LogModuleMedia, "ResizeImage: FFmpeg转码完成，转换后大小=%d bytes", len(processedData))
 	}
 
 	// 4. 解码图片
 	img, format, err := image.Decode(bytes.NewReader(processedData))
 	if err != nil {
-		logger.Error("MultimodalAnalysis", "ResizeImage: 解码失败: %v", err)
+		logger.Error(LogModuleMedia, "ResizeImage: 解码失败: %v", err)
 		return nil, fmt.Errorf("解码图片失败: %v", err)
 	}
 
@@ -142,7 +142,7 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 		return nil, fmt.Errorf("图片尺寸无效: %dx%d", oriWidth, oriHeight)
 	}
 	if oriWidth > 16384 || oriHeight > 16384 {
-		logger.Error("MultimodalAnalysis", "ResizeImage: 图片尺寸异常: %dx%d", oriWidth, oriHeight)
+		logger.Error(LogModuleMedia, "ResizeImage: 图片尺寸异常: %dx%d", oriWidth, oriHeight)
 		return nil, fmt.Errorf("图片尺寸异常（%dx%d），超过16384px限制", oriWidth, oriHeight)
 	}
 
@@ -152,7 +152,7 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 
 	newWidth := resizedImg.Bounds().Dx()
 	newHeight := resizedImg.Bounds().Dy()
-	logger.Info("MultimodalAnalysis", "ResizeImage: 缩放完成 %dx%d -> %dx%d", oriWidth, oriHeight, newWidth, newHeight)
+	logger.Info(LogModuleMedia, "ResizeImage: 缩放完成 %dx%d -> %dx%d", oriWidth, oriHeight, newWidth, newHeight)
 
 	// 7. 编码输出（严格限制仅PNG/JPG）
 	buf := &bytes.Buffer{}
@@ -163,23 +163,23 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 		outputFormat = "jpeg"
 		contentType = "image/jpeg"
 		if err := jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90}); err != nil {
-			logger.Error("MultimodalAnalysis", "ResizeImage: JPEG编码失败: %v", err)
+			logger.Error(LogModuleMedia, "ResizeImage: JPEG编码失败: %v", err)
 			return nil, fmt.Errorf("JPEG编码失败: %v", err)
 		}
 	case "png":
 		outputFormat = "png"
 		contentType = "image/png"
 		if err := png.Encode(buf, resizedImg); err != nil {
-			logger.Error("MultimodalAnalysis", "ResizeImage: PNG编码失败: %v", err)
+			logger.Error(LogModuleMedia, "ResizeImage: PNG编码失败: %v", err)
 			return nil, fmt.Errorf("PNG编码失败: %v", err)
 		}
 	default:
 		// 兜底：非预期格式统一输出为JPEG
-		logger.Info("MultimodalAnalysis", "ResizeImage: 非标准解码格式(%s)，兜底输出JPEG", format)
+		logger.Info(LogModuleMedia, "ResizeImage: 非标准解码格式(%s)，兜底输出JPEG", format)
 		outputFormat = "jpeg"
 		contentType = "image/jpeg"
 		if err := jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90}); err != nil {
-			logger.Error("MultimodalAnalysis", "ResizeImage: JPEG兜底编码失败: %v", err)
+			logger.Error(LogModuleMedia, "ResizeImage: JPEG兜底编码失败: %v", err)
 			return nil, fmt.Errorf("JPEG编码失败: %v", err)
 		}
 	}
@@ -197,7 +197,7 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 		"height": newHeight,
 	}
 
-	logger.Info("MultimodalAnalysis", "ResizeImage: 处理完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
+	logger.Info(LogModuleMedia, "ResizeImage: 处理完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
 		outputFormat, newWidth, newHeight, len(buf.Bytes()))
 	return []map[string]any{response}, nil
 }
@@ -402,7 +402,7 @@ func screenshotAllDisplaysOptimized() (*image.RGBA, error) {
 		displayImg, err := screenshot.CaptureDisplay(i)
 		if err != nil {
 			// 记录错误但继续处理其他显示器
-			logger.Error("MultimodalAnalysis", "截取显示器 %d 失败: %v", i, err)
+			logger.Error(LogModuleMedia, "截取显示器 %d 失败: %v", i, err)
 			continue
 		}
 

@@ -259,3 +259,72 @@ func reloadMoonEngine(reason string) error {
 	}
 	return hook(reason)
 }
+
+// ==== 桌面操纵钩子 ====
+//
+// 桌面操纵直接操作真实桌面键鼠，存在安全风险：不从月华 LTPX 工具链暴露，
+// 只能在「月华链路」屏由人工输入要求后启动，并支持随时中断。
+
+// DesktopOperatorStatus 桌面操纵运行状态摘要（渲染数据源，由宿主注入的 status 钩子提供）
+type DesktopOperatorStatus struct {
+	Running     bool      // 是否正在运行
+	Instruction string    // 本轮指令
+	StartedAt   time.Time // 启动时间
+	FinishedAt  time.Time // 结束时间（未结束时为零值）
+	Result      string    // 成功时的结果文本
+	Error       string    // 失败/中断原因（空串表示无）
+}
+
+var (
+	// desktopOperatorHookMu 保护桌面操纵控制钩子
+	desktopOperatorHookMu sync.RWMutex
+	// desktopOperatorStartHook 启动一次任务
+	desktopOperatorStartHook func(instruction string) error
+	// desktopOperatorStopHook 中断当前任务（返回是否确有任务在运行）
+	desktopOperatorStopHook func() bool
+	// desktopOperatorStatusHook 读取运行状态
+	desktopOperatorStatusHook func() DesktopOperatorStatus
+)
+
+// SetDesktopOperatorHooks 注入桌面操纵控制能力（宿主在 TUI 启动前调用；nil 表示不支持）
+// stop 返回是否确有任务被中断，便于调用方决定是否提示。
+func SetDesktopOperatorHooks(start func(instruction string) error, stop func() bool, status func() DesktopOperatorStatus) {
+	desktopOperatorHookMu.Lock()
+	defer desktopOperatorHookMu.Unlock()
+	desktopOperatorStartHook = start
+	desktopOperatorStopHook = stop
+	desktopOperatorStatusHook = status
+}
+
+// startDesktopOperator 启动桌面操纵（未注入时返回 errNotWired）
+func startDesktopOperator(instruction string) error {
+	desktopOperatorHookMu.RLock()
+	hook := desktopOperatorStartHook
+	desktopOperatorHookMu.RUnlock()
+	if hook == nil {
+		return errNotWired
+	}
+	return hook(instruction)
+}
+
+// stopDesktopOperator 中断桌面操纵并返回是否确有任务在运行（未注入时返回 false）
+func stopDesktopOperator() bool {
+	desktopOperatorHookMu.RLock()
+	hook := desktopOperatorStopHook
+	desktopOperatorHookMu.RUnlock()
+	if hook == nil {
+		return false
+	}
+	return hook()
+}
+
+// getDesktopOperatorStatus 读取桌面操纵状态；宿主未注入时返回空状态
+func getDesktopOperatorStatus() (DesktopOperatorStatus, bool) {
+	desktopOperatorHookMu.RLock()
+	hook := desktopOperatorStatusHook
+	desktopOperatorHookMu.RUnlock()
+	if hook == nil {
+		return DesktopOperatorStatus{}, false
+	}
+	return hook(), true
+}

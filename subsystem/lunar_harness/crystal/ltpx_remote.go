@@ -1,8 +1,6 @@
 package crystal
 
 import (
-	"LunarSubsystem/LunarHarness/agents/AutoLTP"
-	"LunarSubsystem/LunarHarness/agents/WebLTP"
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
@@ -26,8 +24,7 @@ import (
 //   2. 月华调用工具 → 异步受理（立即返回 pending + request_id）→ 按工具名路由到对应包
 //      → 通过 /ws 广播给前端 → 前端打开包页面并 postMessage 投递给包 → 包执行（含页面展示）
 //      → 回执 /ltpx/result 写入结果通道；月华在进程内经结果通道取回
-//      （内置 Auto-LTP / Web-LTP 智能体同样异步受理，在 goroutine 中执行后写入结果通道）
-//   3. LTP9 事件全部由 Go 边界触发（读取消息前 / 消息发送前 / 查询开始与结束前），
+//   3. LTP9 事件全部由 Go 边界触发（读取消息前 / 消息发送前），
 //      goja 对话链不再发送或处理事件；无插件订阅/未改写/未回传时沿用原始数据
 //   4. 琉璃核心不随包增删而改动：加载/卸载工具只影响扫描结果
 //
@@ -135,18 +132,6 @@ func appendInternalAtoaTools(defs []LTPXRemoteToolDef, pkgMap map[string]string)
 // Node-LTP 聚合体的工具名（月华侧提示词 use_the_program 必须与此一致）
 const integratedToolsName = "use_the_program"
 
-// Auto-LTP 智能体的工具名
-const operateToolName = "window_operate"
-
-// Auto-LTP 智能体的工具描述
-const operateToolDescription = "操作 Windows 系统来执行任务"
-
-// Web-LTP 智能体的工具名
-const searchToolName = "web_search"
-
-// Web-LTP 智能体的工具描述
-const searchToolDescription = "网络搜索：用浏览器检索网页、从上到下阅读页面并汇总情报"
-
 // buildUseTheProgram 将扫描到的全部 AtoA 工具收敛为单一 use_the_program 聚合工具。
 // 工具名直接写成 tool 参数的 enum：模型启动时即拿到完整枚举，不必先 list 再拼参数，
 // 避免「忘了查清单 / 照清单抄错名字」这条不可靠路径；
@@ -175,7 +160,7 @@ func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
 				"tool": map[string]any{
 					"type":        "string",
 					"enum":        names,
-					"description": "要使用的应用名（只能取枚举值，如 file_manager、web_search）；只填本项表示打开该应用",
+					"description": "要使用的应用名（只能取枚举值，如 file_manager、file_editor）；只填本项表示打开该应用",
 				},
 				"instruction": map[string]any{
 					"type":        "string",
@@ -218,10 +203,6 @@ func LTPRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defs, _ := scanAtoaToolchain()
-	// 声明 Auto-LTP <window 操作>智能体
-	defs = append(defs, LTPXRemoteToolDef{Name: operateToolName, Description: operateToolDescription})
-	// 声明 Web-LTP <网络搜索>智能体
-	defs = append(defs, LTPXRemoteToolDef{Name: searchToolName, Description: searchToolDescription})
 	// 收敛为单一 use_the_program 聚合工具，避免月华在多工具名间「迷航」
 	aggTool := buildUseTheProgram(defs)
 	logger.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，聚合为 %s（内含 %d 个目标工具）", aggTool.Name, len(defs))
@@ -234,7 +215,6 @@ func LTPRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 
 // LTPRemoteCallHandler 月华调用琉璃工具（POST /ltpx/call）
 // 异步受理协议：登记待定调用后立即返回 pending=true + request_id，不做同步等待。
-//   - 内置智能体（Auto-LTP / Web-LTP）：在独立 goroutine 中执行，完成后写入结果通道
 //   - 前端包工具：登记后经 /ws 广播给前端，包执行完毕回执 /ltpx/result 写入结果通道
 //
 // 调用方经进程内结果通道等待结果（Broker.Await），等待上限由调用方上下文决定。
@@ -272,19 +252,6 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// instruction 语义：打开应用后要它完成的任务；省略表示只打开应用。
-	// 内置智能体本身就是「执行任务」而非可打开的应用，缺 instruction 时无法开工，
-	// 直接给出可操作的错误，避免空指令跑到智能体内部才失败。
-	instruction, _ := req.Arguments["instruction"].(string)
-	instruction = strings.TrimSpace(instruction)
-	if (targetTool == operateToolName || targetTool == searchToolName) && instruction == "" {
-		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{
-			Success: false,
-			Error:   "工具 " + targetTool + " 需要 instruction 描述要执行的任务（如：把窗口切到文件管理器），不能只传 tool。",
-		})
-		return
-	}
-
 	// 单次扫描同时取得工具链与路由表：避免"先无条件广播、再回头扫描才发现无此包"
 	pkgMap := map[string]string{}
 	{
@@ -292,8 +259,7 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		pkgMap = mapping
 	}
 
-	// 登记待定调用（内置智能体与前端包工具共用同一张注册表与结果通道）；
-	// 随条目的定时器负责按龄清理与超时回执，保证调用方不会无限等待
+	// 登记待定调用；随条目的定时器负责按龄清理与超时回执，保证调用方不会无限等待
 	requestID := fmt.Sprintf("%d-%04d", time.Now().UnixNano(), rand.Intn(10000))
 	done := make(chan LTPXRemoteCallResponse, 1)
 	ltpPendingMutex.Lock()
@@ -301,80 +267,6 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 	ltpPendingMutex.Unlock()
 	// 按龄清理与超时回执：不依赖任何取回路径，异常遗留条目也会在时限后自清并给出答复
 	schedulePendingCallCleanup(requestID)
-
-	// 声明 Auto-LTP <窗口操作>智能体：进程内调用多角色编排智能体（goroutine 异步执行）
-	if targetTool == operateToolName {
-		logger.Info("CrystalAstral", "月华调用内置 Auto-LTP 智能体（工具=%s, request_id=%s）：%s", targetTool, requestID, instruction)
-		go func() {
-			// 处理器 panic 不得带崩宿主进程（进程内直调失去了 net/http 的 per-request recover）
-			defer func() {
-				if rec := recover(); rec != nil {
-					logger.Error("CrystalAstral", "Auto-LTP 智能体 (request_id=%s) panic: %v", requestID, rec)
-					writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: fmt.Sprintf("内置智能体执行异常: %v", rec)})
-				}
-			}()
-			text, err := AutoLTP.Run(instruction)
-			resp := LTPXRemoteCallResponse{Text: text}
-			if err != nil {
-				resp.Success, resp.Error = false, err.Error()
-			} else {
-				resp.Success = !strings.HasPrefix(text, "已达到最大执行轮次")
-				// 失败但仍带进展文本时保留文本，供模型判断已完成的部分
-				if !resp.Success && strings.TrimSpace(text) == "" {
-					resp.Text = "已达到最大执行轮次"
-				}
-				if text == "" {
-					resp.Text = "任务已执行完成"
-				}
-			}
-			logger.Info("CrystalAstral", "Auto-LTP 智能体 (request_id=%s) 执行完成: success=%v\ntext: %s\nerror: %s", requestID, resp.Success, resp.Text, resp.Error)
-			writePendingResult(requestID, resp)
-		}()
-		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Pending: true, RequestID: requestID})
-		return
-	}
-
-	// 声明 Web-LTP <网络搜索>智能体：进程内独立执行搜索流水线（goroutine 异步执行）
-	if targetTool == searchToolName {
-		logger.Info("CrystalAstral", "月华调用内置 Web-LTP 网络搜索（工具=%s, request_id=%s）：%s", targetTool, requestID, instruction)
-		go func() {
-			defer func() {
-				if rec := recover(); rec != nil {
-					logger.Error("CrystalAstral", "Web-LTP 网络搜索 (request_id=%s) panic: %v", requestID, rec)
-					writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: fmt.Sprintf("网络搜索执行异常: %v", rec)})
-				}
-			}()
-			// 查询开始前事件：插件改写指令或取消本次搜索
-			queryInstruction, allow := applyBeforeQueryStarts(instruction)
-			if !allow {
-				logger.Info("CrystalAstral", "Web-LTP 网络搜索被 LTP9 插件取消 (request_id=%s)", requestID)
-				writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: "网络搜索请求已被 LTP9 插件取消"})
-				return
-			}
-			text, err := WebLTP.Run(queryInstruction)
-			resp := LTPXRemoteCallResponse{Text: text}
-			if err != nil {
-				resp.Success, resp.Error = false, err.Error()
-			} else {
-				// 查询结束前事件：插件改写/追加报告或取消本次交付
-				report, deliver := applyBeforeQueryEnds(queryInstruction, text)
-				if !deliver {
-					logger.Info("CrystalAstral", "Web-LTP 搜索报告被 LTP9 插件取消 (request_id=%s)", requestID)
-					writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: "网络搜索报告已被 LTP9 插件取消"})
-					return
-				}
-				resp.Success = true
-				resp.Text = report
-				if resp.Text == "" {
-					resp.Text = "搜索已完成"
-				}
-			}
-			logger.Info("CrystalAstral", "Web-LTP 网络搜索 (request_id=%s) 执行完成: success=%v\ntext: %s\nerror: %s", requestID, resp.Success, resp.Text, resp.Error)
-			writePendingResult(requestID, resp)
-		}()
-		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Pending: true, RequestID: requestID})
-		return
-	}
 
 	// 路由：目标工具名 → 提供该工具的包 ID（未命中给出可操作的错误与可用工具清单）
 	appID := pkgMap[targetTool]
@@ -387,7 +279,6 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		for _, t := range tools {
 			available = append(available, t.Name)
 		}
-		available = append(available, operateToolName, searchToolName)
 		hint := "未找到提供工具 " + targetTool + " 的包（该包可能已卸载）"
 		if explicitTarget {
 			hint = "未找到目标工具 " + targetTool + "（该包可能已卸载）；当前可用工具：" + strings.Join(available, "、")

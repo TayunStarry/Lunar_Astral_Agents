@@ -204,7 +204,6 @@ async function loadPages() {
     try {
         const response = await fetch('/api/packages');
         pages = await response.json();
-        await loadDefaultIconPool(); // 先加载真实图标池，再渲染卡片，保证兜底图标基于真实数量
         await loadLayout();
         const changed = buildLayout();
         renderPageGrid();
@@ -213,27 +212,6 @@ async function loadPages() {
 }
 
 // ===== 网格渲染：预设网格布局页（应用图标分配到空格位置，可拖动摆放，位置 JSON 持久化） =====
-// 兜底应用图标：从 local_data/multimedia/icon 真实文件池随机选取（/file/list 获取真实数量，/file/read 读图）
-const DEFAULT_ICON_DIR = 'multimedia/icon';
-let defaultIconPool = [];
-
-async function loadDefaultIconPool() {
-    try {
-        const resp = await fetch('/file/list/' + DEFAULT_ICON_DIR, { method: 'POST' });
-        if (!resp.ok) return;
-        const items = await resp.json();
-        const pool = (items || [])
-            .filter(it => !it.isDir && /\.(webp|png|jpe?g|gif|bmp)$/i.test(it.name || ''))
-            .map(it => '/file/read/' + DEFAULT_ICON_DIR + '/' + it.name);
-        if (pool.length) defaultIconPool = pool;
-    } catch (e) { /* 池加载失败时保持已有池 */ }
-}
-
-function getRandomDefaultIcon() {
-    if (defaultIconPool.length) return defaultIconPool[Math.floor(Math.random() * defaultIconPool.length)];
-    // 池尚未就绪时的即时兜底（按 1..9 猜测常见命名，随池加载完成自然淘汰）
-    return '/file/read/' + DEFAULT_ICON_DIR + '/icon (' + (Math.floor(Math.random() * 9) + 1) + ').webp';
-}
 
 // 标签 → 卡片角标色彩修饰类（不同标签不同配色，无对应样式的标签回退默认紫色）
 function getTagModifierClass(tag) {
@@ -357,7 +335,7 @@ function buildPageCard(page) {
     card.innerHTML = `
         ${displayTag ? `<span class="card-tag${tagModifier ? ' ' + tagModifier : ''}">${displayTag}</span>` : ''}
         <div class="icon">
-            <img src="${page.icon || getRandomDefaultIcon()}" alt="${page.title}" draggable="false" onerror="this.onerror=null;this.src=getRandomDefaultIcon()">
+            <img src="${page.icon || '/favicon.ico'}" alt="${page.title}" draggable="false" onerror="this.onerror=null;this.src='/favicon.ico'">
         </div>
         <h3>${page.title}</h3>
         <button class="card-gear" title="设置"><i class="fas fa-cog"></i></button>

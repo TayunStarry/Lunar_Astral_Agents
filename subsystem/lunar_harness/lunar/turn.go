@@ -254,12 +254,14 @@ func slowTaskAckText(functionName string, args map[string]any) string {
 	if functionName == "dispatch_painter" {
 		return compose([]string{"这就动笔", "这就开画", "马上开工", "先起个稿"})
 	}
-	if functionName == "viewer" {
-		return compose([]string{"这就去看会儿", "那我去逛逛B站", "好，我去刷一会儿", "这就去挑个视频"})
-	}
-	if functionName == crystalToolName {
-		if strings.ToLower(strings.TrimSpace(stringArg(args, "tool"))) == "web_search" {
+	if functionName == networkExploreToolName {
+		switch strings.ToLower(strings.TrimSpace(stringArg(args, "tool"))) {
+		case networkWebSearchTool:
 			return compose([]string{"这就去翻资料", "这就去查", "马上去找", "先去翻一翻"})
+		case networkBilibilViewerTool:
+			return compose([]string{"这就去看会儿", "那我去逛逛B站", "好，我去刷一会儿", "这就去挑个视频"})
+		case networkQQSendTool:
+			return compose([]string{"这就去发", "马上把消息送过去", "这就帮你转达", "稍等，我去发一下"})
 		}
 	}
 	return ""

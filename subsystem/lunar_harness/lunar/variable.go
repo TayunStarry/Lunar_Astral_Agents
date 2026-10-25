@@ -15,6 +15,9 @@ const lunarCoreModule = "LunarCore"
 // 对话者的正式回答对完整性要求高，命中后先重试一次；仍失败交给对话链的失败处理。
 const lunarLoopRetries = 1
 
+// desktopActorStopHook 对话者开始推理前需终止的外部桌面智能体中断器（宿主注入，返回是否确有任务被中断）。
+var desktopActorStopHook atomic.Pointer[func() bool]
+
 // ==== 队列与思考状态 ====
 
 var (
@@ -188,10 +191,6 @@ const (
 
 	// asrFallbackText 语音转写失败时的兜底置换文本
 	asrFallbackText = "月华听不懂这段语音呢"
-	// videoFallbackText 视频入库失败时的兜底置换文本
-	videoFallbackText = "月华看不了这个视频呢"
-	// animatedFallbackText 动态图入库失败时的兜底置换文本
-	animatedFallbackText = "月华看不了这个动图呢"
 
 	// scheduleFilePath 计划表存储路径
 	scheduleFilePath = "database/schedule.json"

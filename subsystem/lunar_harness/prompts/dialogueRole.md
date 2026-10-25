@@ -41,7 +41,9 @@
 | 看图片、动图、视频的内容或细节 | `use_resource` |
 | 回忆某个用户以前说过什么、以前聊过什么 | `search_memory`（记忆库全局检索，返回文本记忆，不是资源检索） |
 | 定时提醒、日程安排（创建/修改/删除/查询计划） | `schedule`（`action`=create/edit/delete/query；查询可带 `keywords` 数组与 `date`/`scope` 时间范围） |
-| 打开、启动、操作某个程序、联网搜索 | `use_the_program`（`tool` 只能取该工具参数里的应用名枚举；只打开应用只填 `tool`；要让应用做事再填 `instruction`；想先了解某个应用时传 `details=true`） |
+| 查资料、看网页、刷 B 站视频 | `network_explore`（`tool` 取 `web_search` 或 `bilibil_viewer`，`instruction` 用自然语言说清要做什么；看几个视频、是否分享等由智能体自行决定） |
+| 给某个 QQ 群/好友发文本、图片或文件 | `network_explore`（`tool` 取 `qq_send`，`instruction` 写清目标与内容；文本直接写，图片/文件必须带上真实句柄；仅 QQ 桥接器就绪时可用） |
+| 打开、启动、操作某个程序 | `use_the_program`（`tool` 只能取该工具参数里的应用名枚举；只打开应用只填 `tool`；要让应用做事再填 `instruction`；想先了解某个应用时传 `details=true`） |
 
 补充规则：
 
@@ -51,6 +53,8 @@
 - 记忆检索用 `search_memory`（只查记忆，不查资源目录）：`keywords` 给 1-4 种你认为能命中的表述（自然语言或句柄均可），`exclude` 排除噪音；系统自动先语义检索、不够时关键词补齐，你不需要选模式。没有检索到就如实说没找到，不要编造。
 - 不需要画图/演奏时，不要调用对应工具。
 - `use_the_program` 的参数含义：`tool` 是应用名（只能取工具参数枚举里的值），填入即表示「打开这个应用」；`instruction` 是打开后交给该应用执行的任务。
+- 联网检索、B 站观影与 QQ 投递统一走 `network_explore`：只给 `tool` 与自然语言 `instruction`，不要替它指定流程或是否分享。
+- 向 QQ 投递时，`instruction` 要写明目标（群名/群号、好友昵称/QQ 号）与内容；图片/文件只能引用消息里真实出现过的句柄，不要自己编造句柄。
 - 只打开应用时只传 `tool`，不要用 `instruction` 重复「打开某应用」：`{"tool":"file_manager"}` 正确，`{"tool":"file_manager","instruction":"打开文件管理器"}` 等于让文件管理器去打开它自己，属于错误用法。
 - 让应用做事时，`instruction` 写清任务本身，如 `{"tool":"file_manager","instruction":"打开多媒体目录"}`。
 - 想确认某个应用能做什么时，传 `{"tool":"应用名","details":true}` 查看它的详细说明；`details` 只是查询，不代表已打开应用，不要据此宣称已经打开。

@@ -5,6 +5,8 @@ import (
 	"io"
 	"log"
 	"os"
+
+	"LunarSubsystem/LunarHarness/engine/sound"
 )
 
 // SetDevMode 设置开发模式开关
@@ -61,6 +63,15 @@ func emit(level, module, sub, format string, v ...any) {
 	hookMu.Unlock()
 	if hook != nil {
 		hook(level, module, sub, msg)
+	}
+
+	// 警告及以上统一播报失败音效：异步且带节流，不会阻塞日志与刷屏；
+	// 致命错误同步播完再退出，避免声音还没响进程就结束了。
+	switch level {
+	case levelWarn, levelError:
+		sound.Failure()
+	case levelFatal:
+		sound.FailureBlocking()
 	}
 
 	if !shouldPrint(level) {

@@ -3,6 +3,7 @@ package multimodal
 import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/sound"
 	"bytes"
 	"encoding/base64"
 	"fmt"
@@ -82,7 +83,7 @@ func ProcessTask(task GenerateTask) {
 	if schemeLabel == "" {
 		schemeLabel = "默认（扁平配置）"
 	}
-	logger.Info("MultimodalAnalysis", "开始处理任务: %s（模型方案: %s）", taskID, schemeLabel)
+	logger.Info(LogModuleDraw, "开始处理任务: %s（模型方案: %s）", taskID, schemeLabel)
 
 	// 构建输出文件名
 	timestamp := time.Now().Format("20060102_150405")
@@ -111,7 +112,7 @@ func ProcessTask(task GenerateTask) {
 		steps = 150
 	}
 	if width != task.Width || height != task.Height {
-		logger.Info("MultimodalAnalysis", "尺寸归一化: %dx%d -> %dx%d (32 的倍数)", task.Width, task.Height, width, height)
+		logger.Info(LogModuleDraw, "尺寸归一化: %dx%d -> %dx%d (32 的倍数)", task.Width, task.Height, width, height)
 	}
 	task.Width, task.Height, task.Steps = width, height, steps
 
@@ -191,7 +192,7 @@ func ProcessTask(task GenerateTask) {
 		free, err := config.ImageVRAMGuardHook()
 		freeMiB = free
 		if err != nil {
-			logger.Warn("MultimodalAnalysis", "显存守卫执行失败: %v", err)
+			logger.Warn(LogModuleDraw, "显存守卫执行失败: %v", err)
 		}
 	}
 
@@ -199,20 +200,20 @@ func ProcessTask(task GenerateTask) {
 	switch strings.ToLower(strings.TrimSpace(config.SDOffloadToCPU)) {
 	case "always", "true":
 		args = append(args, "--offload-to-cpu")
-		logger.Info("MultimodalAnalysis", "sd.cpp 权重内存卸载: always")
+		logger.Info(LogModuleDraw, "sd.cpp 权重内存卸载: always")
 	case "off", "false", "no":
 		// 显式禁用
 	default: // auto
 		if freeMiB > 0 && freeMiB < config.ImageVRAMGuardMiB {
 			args = append(args, "--offload-to-cpu")
-			logger.Info("MultimodalAnalysis", "可用显存 %d MiB 不足, sd.cpp 启用权重内存卸载", freeMiB)
+			logger.Info(LogModuleDraw, "可用显存 %d MiB 不足, sd.cpp 启用权重内存卸载", freeMiB)
 		}
 	}
 
 	// 显存预算：交给 sd.cpp 做图切割执行（GiB，支持 cuda0=9 形式）；未配置时由 --auto-fit 自动管理
 	if v := strings.TrimSpace(config.SDMaxVRAM); v != "" {
 		args = append(args, "--max-vram", v)
-		logger.Info("MultimodalAnalysis", "sd.cpp 显存预算: %s GiB", v)
+		logger.Info(LogModuleDraw, "sd.cpp 显存预算: %s GiB", v)
 	}
 
 	// ==== VAE 解码路径（必须在启动引擎前定死）====
@@ -229,11 +230,11 @@ func ProcessTask(task GenerateTask) {
 	plan := resolveVAEDecode(width, height, freeMiB, vaeBackendMode(), config.SDVaeConvDirect)
 	switch {
 	case plan.onCPU:
-		logger.Info("MultimodalAnalysis", "VAE 解码在 CPU 上进行: %s", plan.why)
+		logger.Info(LogModuleDraw, "VAE 解码在 CPU 上进行: %s", plan.why)
 	case plan.convDirect:
-		logger.Info("MultimodalAnalysis", "VAE 解码在 GPU 上进行（direct conv）: %s", plan.why)
+		logger.Info(LogModuleDraw, "VAE 解码在 GPU 上进行（direct conv）: %s", plan.why)
 	default:
-		logger.Info("MultimodalAnalysis", "VAE 解码在 GPU 上进行: %s", plan.why)
+		logger.Info(LogModuleDraw, "VAE 解码在 GPU 上进行: %s", plan.why)
 	}
 	if plan.convDirect {
 		args = append(args, "--vae-conv-direct")
@@ -258,7 +259,7 @@ func ProcessTask(task GenerateTask) {
 		if config.SDVaeTileOverlap > 0 {
 			args = append(args, "--vae-tile-overlap", fmt.Sprintf("%.2f", config.SDVaeTileOverlap))
 		}
-		logger.Warn("MultimodalAnalysis",
+		logger.Warn(LogModuleDraw,
 			"sd.cpp 启用 VAE 分片解码 (%dx%d)：分片接缝可能出现硬边纯色方块，仅建议在无法整段解码时使用", width, height)
 	}
 
@@ -276,8 +277,8 @@ func ProcessTask(task GenerateTask) {
 	}
 
 	// 显示命令参数，正确分组
-	logger.Info("MultimodalAnalysis", "执行命令参数:")
-	logger.Info("MultimodalAnalysis", "  程序: %s", config.VisualEngine)
+	logger.Info(LogModuleDraw, "执行命令参数:")
+	logger.Info(LogModuleDraw, "  程序: %s", config.VisualEngine)
 
 	// 正确分组显示参数
 	for i := 0; i < len(args); i++ {
@@ -298,9 +299,9 @@ func ProcessTask(task GenerateTask) {
 		}
 
 		if isValueParam {
-			logger.Info("MultimodalAnalysis", "  参数: %s %s", current, value)
+			logger.Info(LogModuleDraw, "  参数: %s %s", current, value)
 		} else {
-			logger.Info("MultimodalAnalysis", "  参数: %s", current)
+			logger.Info(LogModuleDraw, "  参数: %s", current)
 		}
 	}
 
@@ -312,7 +313,7 @@ func ProcessTask(task GenerateTask) {
 	stderr, _ := cmd.StderrPipe()
 
 	if err := cmd.Start(); err != nil {
-		logger.Error("MultimodalAnalysis", "任务[%s]执行失败: %v", taskID, err)
+		logger.Error(LogModuleDraw, "任务[%s]执行失败: %v", taskID, err)
 		TaskStatusMu.Lock()
 		task.Status = "failed"
 		task.Error = err.Error()
@@ -341,18 +342,23 @@ func ProcessTask(task GenerateTask) {
 
 	TaskStatusMu.Lock()
 	if err != nil {
-		logger.Error("MultimodalAnalysis", "任务[%s]执行失败: %v", taskID, err)
+		logger.Error(LogModuleDraw, "任务[%s]执行失败: %v", taskID, err)
 		task.Status = "failed"
 		task.Error = err.Error()
 	} else {
-		logger.Info("MultimodalAnalysis", "任务[%s]已完成", taskID)
-		logger.Info("MultimodalAnalysis", "生成结果: ./%s", outputPath)
+		logger.Info(LogModuleDraw, "任务[%s]已完成", taskID)
+		logger.Info(LogModuleDraw, "生成结果: ./%s", outputPath)
 		task.Status = "completed"
 		task.ResultPath = outputPath
 	}
 	completedTask := &task
 	TaskStatus[taskID] = completedTask
 	TaskStatusMu.Unlock()
+
+	// 图像产出完成：由 Go 层统一播放完成提示音（与前端无关，带节流）
+	if err == nil {
+		sound.Notify()
+	}
 
 	// 通知等待的客户端
 	NotifyWaitClients(taskID, completedTask)
@@ -490,7 +496,7 @@ func UpscaleImage(imageData []byte) (map[string]any, error) {
 		"-i", inputPath,
 		"-o", outputPath,
 	}
-	logger.Info("MultimodalAnalysis", "图像超分: %s %s", config.VisualEngine, strings.Join(args, " "))
+	logger.Info(LogModuleDraw, "图像超分: %s %s", config.VisualEngine, strings.Join(args, " "))
 
 	cmd := exec.Command(config.VisualEngine, args...)
 	stdout, _ := cmd.StdoutPipe()
@@ -502,7 +508,7 @@ func UpscaleImage(imageData []byte) (map[string]any, error) {
 	go func() { _, _ = io.Copy(stderrWriter, stderr); stderrWriter.Close() }()
 
 	if err := cmd.Run(); err != nil {
-		logger.Error("MultimodalAnalysis", "图像超分执行失败: %v", err)
+		logger.Error(LogModuleDraw, "图像超分执行失败: %v", err)
 		return nil, fmt.Errorf("超分执行失败: %v", err)
 	}
 
@@ -516,12 +522,13 @@ func UpscaleImage(imageData []byte) (map[string]any, error) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(imageResult))
 	width, height := 0, 0
 	if err != nil {
-		logger.Warn("MultimodalAnalysis", "超分结果尺寸解码失败: %v", err)
+		logger.Warn(LogModuleDraw, "超分结果尺寸解码失败: %v", err)
 	} else {
 		width, height = config.Width, config.Height
 	}
 
-	logger.Info("MultimodalAnalysis", "图像超分完成: %s (%dx%d)", outputPath, width, height)
+	logger.Info(LogModuleDraw, "图像超分完成: %s (%dx%d)", outputPath, width, height)
+	sound.Notify()
 	return map[string]any{
 		"path":   outputPath,
 		"base64": base64.StdEncoding.EncodeToString(imageResult),

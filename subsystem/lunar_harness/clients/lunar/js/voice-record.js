@@ -276,11 +276,11 @@ async function sendVoiceUtterance(frames, sampleRate) {
             showToast('离线模式：语音仅本地渲染', 'info');
             return;
         }
-        // QQ 适配器标准格式：[用户: xxx]: [语音] 前缀 + 音频内容块（统一数组保持时序）
+        // QQ 适配器标准格式：[用户: xxx]: 前缀 + 音频内容块（句柄与转写由服务端生成）
         await sendMessages([{
             role: 'user',
             content: [
-                { type: 'text', text: buildUserNamePrefix() + '[语音] ' },
+                { type: 'text', text: buildUserNamePrefix() },
                 { type: 'input_audio', input_audio: { data: base64Data, format: 'wav' } }
             ]
         }]);

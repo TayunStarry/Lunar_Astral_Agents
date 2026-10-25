@@ -153,6 +153,9 @@ func dispatchBeforeReadingMessage(messages []PostMessage) []PostMessage {
 
 // runDialogueTurn 对话链一次完整回合
 func runDialogueTurn(incoming []PostMessage) {
+	// 对话者即将推理：先终止外部桌面智能体（桌面操纵），避免它继续操作桌面干扰本轮响应
+	stopDesktopActor()
+
 	stateMu.Lock()
 	fastAckSent = false
 	turnFromQQ = false
@@ -251,15 +254,13 @@ func EnqueueMessage(messages ...PostMessage) {
 	unreadMu.Unlock()
 }
 
-// EnqueueMediaURL 将视频/音频 URL 包装为媒体内容项并追加到队列
-func EnqueueMediaURL(kind, url, source string) {
-	item := ContentItem{Type: kind}
-	if kind == ContentVideoURL {
-		item.VideoURL = &URLPayload{URL: url}
-	} else {
-		item.AudioURL = &URLPayload{URL: url}
-	}
-	EnqueueMessage(PostMessage{Role: RoleUser, Content: []ContentItem{item}, Source: source})
+// EnqueueAudioURL 将语音/音频 URL 包装为音频内容项并追加到队列（入库与转写出智能体侧完成）
+func EnqueueAudioURL(url, source string) {
+	EnqueueMessage(PostMessage{
+		Role:    RoleUser,
+		Content: []ContentItem{{Type: ContentAudioURL, AudioURL: &URLPayload{URL: url}}},
+		Source:  source,
+	})
 }
 
 // TakeUnreadContext 拉取并清空统一未读队列

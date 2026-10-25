@@ -128,12 +128,12 @@ func extractFrames(localPath string, times []float64, quality int) []MediaFrame 
 	for i, t := range times {
 		img, err := ExtractVideoFrameAt(localPath, t, MaxMediaWidth)
 		if err != nil {
-			logger.Warn("MultimodalAnalysis", "序列帧第%d帧(%s)抽取失败，跳过: %v", i, FormatSeconds(t), err)
+			logger.Warn(LogModuleMedia, "序列帧第%d帧(%s)抽取失败，跳过: %v", i, FormatSeconds(t), err)
 			continue
 		}
 		buf := &bytes.Buffer{}
 		if err := encodeImage(buf, img, "jpeg", quality); err != nil {
-			logger.Warn("MultimodalAnalysis", "序列帧第%d帧(%s)编码失败，跳过: %v", i, FormatSeconds(t), err)
+			logger.Warn(LogModuleMedia, "序列帧第%d帧(%s)编码失败，跳过: %v", i, FormatSeconds(t), err)
 			continue
 		}
 		frames = append(frames, MediaFrame{
@@ -185,7 +185,7 @@ func VideoToFrames(inputFile string) ([]MediaFrameGroup, error) {
 	for _, g := range groups {
 		frameCount += len(g.Frames)
 	}
-	logger.Info("MultimodalAnalysis", "VideoToFrames: 时长 %.2fs → %d 组 / %d 帧, 来源=%s",
+	logger.Info(LogModuleMedia, "VideoToFrames: 时长 %.2fs → %d 组 / %d 帧, 来源=%s",
 		duration, len(groups), frameCount, inputFile)
 	return groups, nil
 }
@@ -216,7 +216,7 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 
 	probe, probeErr := probeAnimatedInfo(tempFile)
 	if probeErr != nil {
-		logger.Warn("MultimodalAnalysis", "动态图帧数探测失败(%v)，回退为解码全部帧", probeErr)
+		logger.Warn(LogModuleMedia, "动态图帧数探测失败(%v)，回退为解码全部帧", probeErr)
 	}
 	totalFrames := probe.Frames
 	if totalFrames <= 0 {
@@ -227,7 +227,7 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 	// 支撑循环裁剪、运动窗口加密与近重复去重；失败时退回均匀骨架选帧。
 	analysis, analyzeErr := analyzeAnimatedFrames(tempFile, totalFrames)
 	if analyzeErr != nil {
-		logger.Warn("MultimodalAnalysis", "动态图逐帧分析失败(%v)，回退为均匀骨架选帧", analyzeErr)
+		logger.Warn(LogModuleMedia, "动态图逐帧分析失败(%v)，回退为均匀骨架选帧", analyzeErr)
 	}
 	useSmart := analyzeErr == nil && len(analysis.Grids) > 0
 	strategy := "均匀骨架"
@@ -308,7 +308,7 @@ func AnimatedImageToFrames(imgData []byte) ([]MediaFrameGroup, error) {
 		return nil, fmt.Errorf("动态图未解码出可用帧")
 	}
 
-	logger.Info("MultimodalAnalysis", "AnimatedImageToFrames: %s(%d bytes, 共 %d 帧) → 解读 %d 帧（长边≤%d，%s）",
+	logger.Info(LogModuleMedia, "AnimatedImageToFrames: %s(%d bytes, 共 %d 帧) → 解读 %d 帧（长边≤%d，%s）",
 		format, len(imgData), framesTotal, len(frames), AnimatedFrameMaxDim, strategy)
 	return []MediaFrameGroup{{Start: 0, End: probe.Duration, Frames: frames}}, nil
 }

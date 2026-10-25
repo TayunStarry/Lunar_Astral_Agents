@@ -712,7 +712,7 @@ func registerDialogueTools() {
 		return handleUseResource(args)
 	})
 	registerTool("schedule", handleScheduleTool)
-	registerTool("viewer", handleViewer)
+	registerTool(networkExploreToolName, handleNetworkExplore)
 	registerTool(crystalToolName, handleUseTheProgram)
 	logger.Info(lunarCoreModule, "[工具] 对话者工具已注册")
 }

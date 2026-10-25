@@ -9,9 +9,11 @@ import (
 	"strconv"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/BilibiliLife"
+	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
 	"LunarSubsystem/LunarHarness/agents/Descriptor"
-	"LunarSubsystem/LunarHarness/agents/WebLTP"
+	"LunarSubsystem/LunarHarness/agents/QQMessenger"
+	"LunarSubsystem/LunarHarness/agents/WebSearch"
+	"LunarSubsystem/LunarHarness/agents/desktop"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
@@ -83,7 +85,7 @@ func WireTUIEngineHooks() {
 	meter := func(prompt, completion int64, generation time.Duration, estimated bool) {
 		console.RecordModelCall(prompt, completion, generation, estimated)
 	}
-	BilibiliLife.SetModelObserver(
+	BilibiliViewer.SetModelObserver(
 		func(role string) { console.StreamBegin(role) },
 		func(role, kind, text string) {
 			streamKind := console.KindContent
@@ -106,8 +108,17 @@ func WireTUIEngineHooks() {
 		console.StreamDelta(role, streamKind, text)
 	}
 	streamEnd := func(role string) { console.StreamEnd(role) }
-	WebLTP.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
+	WebSearch.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
 	Descriptor.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
+	// QQ 投递的规划调用同样进实况与计量（投递内容不展示，只展示规划过程）。
+	QQMessenger.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
+	// 桌面操纵各角色的模型调用同样进实况与计量；
+	// 其请求本身受 loopguard 思考监管约束，命中重复会自动中断并重试。
+	desktop.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
+	// 桌面操纵的工具调用也进实况（工具名 + 参数），复盘时看得出它到底有没有真正去启动应用
+	desktop.SetToolObserver(func(role, name, args string) {
+		console.StreamTool(role, name, args)
+	})
 	console.SetEngineHooks(
 		func() console.EngineStatus {
 			state := lunar.EngineState()
@@ -131,6 +142,26 @@ func WireTUIEngineHooks() {
 			return lunar.ReloadMoonEngine(reason)
 		},
 	)
+
+	// 桌面操纵智能体：唯一入口在控制台「月华链路」屏（人工输入要求启动、随时中断）。
+	// 同时把中断器注入对话者：对话者开始推理与应答前会自动终止桌面操纵，
+	// 避免它继续抢占桌面键鼠、与本轮响应互相干扰。
+	console.SetDesktopOperatorHooks(
+		desktop.Start,
+		desktop.Stop,
+		func() console.DesktopOperatorStatus {
+			state := desktop.Snapshot()
+			return console.DesktopOperatorStatus{
+				Running:     state.Running,
+				Instruction: state.Instruction,
+				StartedAt:   state.StartedAt,
+				FinishedAt:  state.FinishedAt,
+				Result:      state.Result,
+				Error:       state.Error,
+			}
+		},
+	)
+	lunar.SetDesktopActorStopHook(desktop.Stop)
 }
 
 // callDumpHandler 进程内直调导出端点处理器并解析回执

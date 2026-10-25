@@ -102,25 +102,6 @@ function openPreview(url, name) {
     }
 }
 
-// ===== 生成完成提示音 =====
-
-/** 生成完成提示音（相对 local_data 的 audios 目录，经 /file/read 访问） */
-const PROMPT_TONE_URL = '/file/read/audios/prompt-tone.mp3';
-
-/** 播放生成完成提示音（自动播放被浏览器策略拦截时静默忽略） */
-function playPromptTone() {
-    try {
-        const audio = new Audio(PROMPT_TONE_URL);
-        audio.volume = 0.6;
-        const playing = audio.play();
-        if (playing && typeof playing.catch === 'function') {
-            playing.catch((e) => console.warn('提示音播放被拦截:', e && e.message));
-        }
-    } catch (e) {
-        console.warn('提示音播放失败:', e);
-    }
-}
-
 // ===== 文件接口（参考图像上传） =====
 
 /** 文件名编码（与琉璃文件接口约定一致：encodeURIComponent 后按字节 base64） */
@@ -460,8 +441,7 @@ async function handleGenerate() {
         }
         const newName = String(result.read_path || result.result || '').split('/').pop();
         setGenStatus('success', '生成完成：' + (newName || result.read_path || ''));
-        // 播放生成完成提示音
-        playPromptTone();
+        // 生成完成提示音由 Go 后端统一播放（避免前后端重复响）
         showToast('图像生成完成' + (newName ? '：' + newName : ''), 'success');
         // 刷新画廊并高亮新图
         await loadGallery(true);

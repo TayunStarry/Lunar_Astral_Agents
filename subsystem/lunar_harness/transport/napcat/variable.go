@@ -88,20 +88,33 @@ var botUserID int64
 // botNickname 当前登录账号昵称
 var botNickname string
 
+// ==== 主动投递目标目录缓存 ====
+//
+// 群/好友列表来自 NapCat 接口，模板对话每轮都会询问「能否投递」，
+// 因此缓存一小段时间，避免每轮都打两次接口。
+const qqDirectoryTTL = 30 * time.Second
+
+var (
+	qqDirectoryMu      sync.Mutex
+	qqDirectoryAt      time.Time
+	qqDirectoryGroups  []QQGroup
+	qqDirectoryFriends []QQFriend
+	qqDirectoryErr     error
+)
+
 // ==== Napcat 客户端全局变量 ====
 
 // httpClient Napcat HTTP API 客户端
 var httpClient = &http.Client{Timeout: 10 * time.Second}
+
+// uploadHTTPClient 文件上传专用客户端：大文件上传可能远超普通接口的 10 秒超时
+var uploadHTTPClient = &http.Client{Timeout: 120 * time.Second}
 
 // ==== 消息发送回调 ====
 
 // SendMessageToAgent 向智能体推送消息的回调函数，由服务器层注册
 // 参数为 OpenAI 格式消息列表 []map[string]any
 var SendMessageToAgent func(messages []map[string]any)
-
-// SendVideoToAgent 向智能体推送视频地址的回调函数，由服务器层注册
-// 参数为视频 URL / 本地路径列表，包装为媒体内容项按到达顺序写入智能体统一未读队列
-var SendVideoToAgent func(urls []string)
 
 // SendAudioToAgent 向智能体推送语音/音频地址的回调函数，由服务器层注册
 // 参数为语音 URL / 本地路径 / base64 data URI 列表，包装为媒体内容项按到达顺序写入智能体统一未读队列

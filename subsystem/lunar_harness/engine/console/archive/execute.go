@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/engine/sound"
 )
 
 // ListConfigs 返回候选打包配置：默认配置（local_data/archive_config.json，存在时）置于最前，
@@ -72,6 +74,8 @@ func Execute(configPath string, cfg *Config) error {
 	logf("  打包完成！")
 	logf("  总耗时: %s", elapsed)
 	logf("========================================")
+	// 打包归档属于资源产出：由 Go 层统一播放完成提示音
+	sound.Notify()
 
 	return nil
 }

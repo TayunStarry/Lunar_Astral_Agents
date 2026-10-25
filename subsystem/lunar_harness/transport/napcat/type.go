@@ -39,6 +39,21 @@ type QuoteCandidate struct {
 	Content   string // 消息文本（用于与回应计算相关性）
 }
 
+// ==================== 主动投递目标 ====================
+
+// QQGroup QQ 群信息（/get_group_list）
+type QQGroup struct {
+	GroupID   int64  `json:"group_id"`
+	GroupName string `json:"group_name"`
+}
+
+// QQFriend QQ 好友信息（/get_friend_list）
+type QQFriend struct {
+	UserID   int64  `json:"user_id"`
+	Nickname string `json:"nickname"`
+	Remark   string `json:"remark"`
+}
+
 // ==================== Napcat 消息类型 ====================
 
 // NapcatMessage Napcat 上行消息结构（私聊或群聊）
@@ -266,7 +281,6 @@ type BridgeTarget struct {
 type BridgeRequest struct {
 	Target    BridgeTarget
 	Messages  []map[string]any // OpenAI 格式消息列表
-	VideoURLs []string         // 视频地址列表，包装为媒体内容项写入智能体统一未读队列
 	AudioURLs []string         // 语音/音频地址列表，包装为媒体内容项写入智能体统一未读队列
 	Trigger   TriggerKind      // 本批次的触发原因
 }
@@ -276,7 +290,6 @@ type GroupPoolEntry struct {
 	Nickname  string   // 发言用户昵称（群名片优先）
 	Content   any      // string 或 []map[string]any（OpenAI 多模态格式）
 	HasImages bool     // 是否包含图片
-	VideoURLs []string // 视频地址列表
 	AudioURLs []string // 语音/音频地址列表
 	MessageID int64    // QQ 消息 ID（随机触发自动引用时定位到具体某条消息）
 }

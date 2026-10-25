@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.298.0029",
+    "version": "2026.298.1708",
     "x-service": "LunarHarness"
   },
   "servers": [

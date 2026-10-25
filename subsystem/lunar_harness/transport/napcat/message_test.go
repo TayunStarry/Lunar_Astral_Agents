@@ -68,7 +68,7 @@ func TestAdmitForwardImageDataURI(t *testing.T) {
 	})
 
 	const onePixelPNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-	handle, ok := admitForwardImage(ImageData{URL: onePixelPNG})
+	handle, ok := admitInboundImage(ImageData{URL: onePixelPNG})
 	if !ok || handle == "" {
 		t.Fatal("data URI 转发图片入库失败，会退化成 [图片]")
 	}
@@ -76,8 +76,93 @@ func TestAdmitForwardImageDataURI(t *testing.T) {
 		t.Fatalf("转发图片应返回图片句柄，实得 %q", handle)
 	}
 
-	if _, ok := admitForwardImage(ImageData{}); ok {
+	if _, ok := admitInboundImage(ImageData{}); ok {
 		t.Fatal("空图片数据不应返回句柄")
+	}
+}
+
+// TestExtractSegmentTextAdmitsImage 回复引用里的图片应换成句柄占位，
+// 这样写进 messages.json 的引用摘要才是 [@I.00x] 而不是不可回引的 [图片]。
+func TestExtractSegmentTextAdmitsImage(t *testing.T) {
+	origLocal := config.LocalDir
+	origArchive := config.ArchiveDBPath
+	tmp := t.TempDir()
+	config.LocalDir = tmp
+	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	t.Cleanup(func() {
+		_ = file.CloseArchiveDB()
+		config.LocalDir = origLocal
+		config.ArchiveDBPath = origArchive
+	})
+
+	const onePixelPNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+	data, _ := json.Marshal(map[string]string{"url": onePixelPNG})
+	quoted := extractSegmentText(0, 0, []MessageSegment{{Type: "image", Data: data}})
+	if !strings.Contains(quoted, "[@I.") || strings.Contains(quoted, "[图片]") {
+		t.Fatalf("引用图片应输出句柄占位，实际 %q", quoted)
+	}
+
+	fallback := extractSegmentText(0, 0, []MessageSegment{{Type: "image", Data: json.RawMessage(`{}`)}})
+	if fallback != "图片.png" {
+		t.Fatalf("图片入库失败时应退化为文件名而非占位符，实际 %q", fallback)
+	}
+}
+
+// TestExtractSegmentTextAdmitsMedia 引用里的视频 / 语音 / 文件同样要换成句柄，
+// 不允许退化成 [视频] / [语音] / [文件] 这类无信息占位。
+func TestExtractSegmentTextAdmitsMedia(t *testing.T) {
+	origLocal := config.LocalDir
+	origArchive := config.ArchiveDBPath
+	tmp := t.TempDir()
+	config.LocalDir = tmp
+	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	t.Cleanup(func() {
+		_ = file.CloseArchiveDB()
+		config.LocalDir = origLocal
+		config.ArchiveDBPath = origArchive
+	})
+
+	videoData, _ := json.Marshal(map[string]string{
+		"file": "clip.mp4",
+		"url":  "data:video/mp4;base64," + base64.StdEncoding.EncodeToString([]byte("fake-mp4-bytes")),
+	})
+	videoText := extractSegmentText(0, 0, []MessageSegment{{Type: "video", Data: videoData}})
+	if !strings.Contains(videoText, "[@V.") || !strings.Contains(videoText, "clip.mp4") {
+		t.Fatalf("视频应输出句柄 + 文件名，实际 %q", videoText)
+	}
+
+	audioData, _ := json.Marshal(map[string]string{
+		"file": "voice.amr",
+		"url":  "data:audio/mp3;base64," + base64.StdEncoding.EncodeToString([]byte("fake-mp3-bytes")),
+	})
+	audioText := extractSegmentText(0, 0, []MessageSegment{{Type: "record", Data: audioData}})
+	if !strings.Contains(audioText, "[@A.") || !strings.Contains(audioText, "voice.mp3") {
+		t.Fatalf("语音应输出句柄 + 纠正扩展名后的文件名，实际 %q", audioText)
+	}
+
+	fileData, _ := json.Marshal(map[string]string{
+		"file_name": "note.md",
+		"url":       "data:text/markdown;base64," + base64.StdEncoding.EncodeToString([]byte("# hi")),
+	})
+	fileText := extractSegmentText(0, 0, []MessageSegment{{Type: "file", Data: fileData}})
+	if !strings.Contains(fileText, "[@D.") || !strings.Contains(fileText, "note.md") {
+		t.Fatalf("文件应输出句柄 + 文件名，实际 %q", fileText)
+	}
+
+	for _, text := range []string{videoText, audioText, fileText} {
+		for _, placeholder := range []string{"[视频]", "[语音]", "[图片]", "[文件]"} {
+			if strings.Contains(text, placeholder) {
+				t.Fatalf("上下文中不应出现占位符 %s，实际 %q", placeholder, text)
+			}
+		}
+	}
+}
+
+// TestDescribeFileKeepsName 文件句柄不可得时至少要保留文件名，而不是 [文件] 占位
+func TestDescribeFileKeepsName(t *testing.T) {
+	text := describeFile("report.pdf", json.RawMessage(`20480`))
+	if strings.Contains(text, "[文件]") || !strings.Contains(text, "report.pdf") {
+		t.Fatalf("文件描述应保留文件名，实际 %q", text)
 	}
 }
 
@@ -122,7 +207,6 @@ func startBridgeTest(t *testing.T, groupID int64) (*fakeNapcat, *int) {
 	zero := 0.0
 	origConfig := bridgeConfig
 	origSender := SendMessageToAgent
-	origVideo := SendVideoToAgent
 	origAudio := SendAudioToAgent
 	origPools := groupPools
 	origWarmed := memberListWarmed
@@ -135,7 +219,6 @@ func startBridgeTest(t *testing.T, groupID int64) (*fakeNapcat, *int) {
 	t.Cleanup(func() {
 		bridgeConfig = origConfig
 		SendMessageToAgent = origSender
-		SendVideoToAgent = origVideo
 		SendAudioToAgent = origAudio
 		groupPools = origPools
 		memberListWarmed = origWarmed
@@ -156,7 +239,6 @@ func startBridgeTest(t *testing.T, groupID int64) (*fakeNapcat, *int) {
 	}
 	delivered := 0
 	SendMessageToAgent = func(messages []map[string]any) { delivered++ }
-	SendVideoToAgent = func(urls []string) {}
 	SendAudioToAgent = func(urls []string) {}
 	// 重置登录信息缓存：让 resolveAtDisplay 走假服务拿到测试用 selfID
 	botInfoLoaded = false
@@ -352,7 +434,7 @@ func TestParseMessageSegmentsMFaceText(t *testing.T) {
 		Type: "mface",
 		Data: json.RawMessage(`{"emoji_package_id":1,"emoji_id":"2","key":"k","summary":"[比心]"}`),
 	}}
-	content, hasImages, _, _ := parseMessageSegments(0, segments)
+	content, hasImages, _ := parseMessageSegments(0, segments)
 	if hasImages {
 		t.Fatal("无图片地址的商城表情不应被标记为图片")
 	}
@@ -372,7 +454,7 @@ func TestParseMessageSegmentsFileChannelImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("序列化文件段失败: %v", err)
 	}
-	content, hasImages, _, _ := parseMessageSegments(0, []MessageSegment{{Type: "file", Data: data}})
+	content, hasImages, _ := parseMessageSegments(0, []MessageSegment{{Type: "file", Data: data}})
 	if !hasImages {
 		t.Fatalf("文件通道图片未被识别: %#v", content)
 	}
@@ -458,12 +540,10 @@ func TestPrivateMessagesAreBatched(t *testing.T) {
 	const testUserID int64 = 30001
 	originalConfig := bridgeConfig
 	originalSender := SendMessageToAgent
-	originalVideo := SendVideoToAgent
 	originalAudio := SendAudioToAgent
 	t.Cleanup(func() {
 		bridgeConfig = originalConfig
 		SendMessageToAgent = originalSender
-		SendVideoToAgent = originalVideo
 		SendAudioToAgent = originalAudio
 		stopPrivateTimer(testUserID)
 		groupMutex.Lock()
@@ -486,7 +566,6 @@ func TestPrivateMessagesAreBatched(t *testing.T) {
 
 	deliveries := make([][]map[string]any, 0)
 	SendMessageToAgent = func(messages []map[string]any) { deliveries = append(deliveries, messages) }
-	SendVideoToAgent = func(urls []string) {}
 	SendAudioToAgent = func(urls []string) {}
 
 	newPrivate := func(text string) NapcatMessage {

@@ -43,6 +43,12 @@ func ConnectToNapcatWebSocket(messageHandler func([]byte)) error {
 	// 连接成功，立即设置状态为已连接
 	setBridgeState(BridgeConnected)
 	logger.SubInfo("LunarCore", "Napcat", "成功连接到 napcat 服务器")
+	// 预取登录账号与群/好友目录：让 network_explore 的 qq_send 尽快可用，
+	// 避免第一轮对话在构建工具列表时同步等待这几次接口。
+	go func() {
+		_, _ = resolveBotInfo()
+		_, _, _ = QQTargets()
+	}()
 
 	// 消息解析含 API 调用（回复引用、合并转发、成员名解析）可能阻塞，
 	// 用单协程顺序消费与 WS 读取循环解耦：保证消息顺序的同时不拖慢读取
@@ -82,6 +88,11 @@ func getNapcatHTTPBaseURL() string {
 
 // callNapcatAPI 统一调用 Napcat HTTP API，返回完整响应
 func callNapcatAPI(action string, params map[string]any) (*NapcatWSResponse, error) {
+	return callNapcatAPIWithClient(action, params, httpClient)
+}
+
+// callNapcatAPIWithClient 指定客户端的 API 调用（文件上传需要更长的超时）
+func callNapcatAPIWithClient(action string, params map[string]any, client *http.Client) (*NapcatWSResponse, error) {
 	url := getNapcatHTTPBaseURL() + action
 	token := bridgeConfig.BridgingToken
 
@@ -99,7 +110,7 @@ func callNapcatAPI(action string, params map[string]any) (*NapcatWSResponse, err
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -246,18 +257,17 @@ func outboundImageSource(img string) string {
 	if strings.HasPrefix(raw, "/") {
 		return base + raw
 	}
-	rel := strings.TrimPrefix(filepath.ToSlash(raw), "./")
-	// 本地绝对路径：位于 LocalDir 内时转成服务路径；否则原样交给 NapCat（它支持本地文件）
-	if filepath.IsAbs(raw) {
-		localDir := filepath.Clean(config.LocalDir)
-		if strings.HasPrefix(filepath.Clean(raw), localDir+string(os.PathSeparator)) {
-			if r, err := filepath.Rel(localDir, filepath.Clean(raw)); err == nil {
-				rel = filepath.ToSlash(r)
-			}
-		} else {
-			return raw
-		}
+	// 本机路径（绝对或相对）：能定位到内容仓库时换算成服务路径。
+	// 内容仓库根目录是相对路径（local_data），必须按绝对路径比较，
+	// 否则绝对路径会被误判为仓库外，最后把裸路径交给 NapCat。
+	if rel, ok := localContentRel(raw); ok {
+		return base + "/file/read/" + rel
 	}
+	if filepath.IsAbs(raw) {
+		// 仓库外的本机文件：NapCat 支持直接读取本地路径
+		return raw
+	}
+	rel := strings.TrimPrefix(filepath.ToSlash(raw), "./")
 	return base + "/file/read/" + rel
 }
 

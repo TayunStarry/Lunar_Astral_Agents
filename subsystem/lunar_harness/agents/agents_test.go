@@ -47,8 +47,8 @@ func TestReadScriptPathHandling(t *testing.T) {
 		"web/mini_ltp_agent.js",        // 历史缺陷形态：脚本曾在琉璃前端 web/ 下
 		"assets/mini_ltp_agent.js",     // 更早的错配形态
 		"prompts/dialogueRole.md",      // 提示词不属于智能体脚本
-		"AutoLTP/host.go",              // 子目录（Go 实现）不以脚本形式下发
-		"WebLTP/host.go",               //
+		"desktop/host.go",              // 子目录（Go 实现）不以脚本形式下发
+		"WebSearch/host.go",            //
 		"mini_ltp_agent.js/../main.go", // 路径穿越不得成功
 		"不存在的智能体.js",                   // 未知脚本
 	} {

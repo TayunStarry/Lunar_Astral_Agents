@@ -104,7 +104,6 @@ func flushPrivatePool(userID int64, trigger TriggerKind) {
 	req := BridgeRequest{
 		Target:    BridgeTarget{ID: userID, IsGroup: false},
 		Messages:  buildPrivateMessages(entries),
-		VideoURLs: collectGroupVideoURLs(entries),
 		AudioURLs: collectGroupAudioURLs(entries),
 		Trigger:   trigger,
 	}
@@ -133,16 +132,15 @@ func handlePrivateMessage(msg NapcatMessage) {
 	}
 
 	nickname := resolveNickname(msg.UserID, msg.Sender)
-	content, hasImages, videoURLs, audioURLs := parseMessageSegments(0, msg.Message)
+	content, hasImages, audioURLs := parseMessageSegments(0, msg.Message)
 
 	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
 	rp := parseRawRedPacket(msg.Raw)
 	if rp != nil {
 		content = buildRedPacketText(rp)
 		hasImages = false
-		videoURLs = nil
 		audioURLs = nil
-	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(videoURLs) == 0 && len(audioURLs) == 0 {
+	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(audioURLs) == 0 {
 		// 无可理解内容的空消息（系统提示、空卡片等）直接忽略
 		return
 	}
@@ -151,7 +149,6 @@ func handlePrivateMessage(msg NapcatMessage) {
 		Nickname:  nickname,
 		Content:   content,
 		HasImages: hasImages,
-		VideoURLs: videoURLs,
 		AudioURLs: audioURLs,
 		MessageID: msg.MessageID,
 	})
@@ -162,7 +159,6 @@ func handlePrivateMessage(msg NapcatMessage) {
 		req := BridgeRequest{
 			Target:    BridgeTarget{ID: msg.UserID, IsGroup: false},
 			Messages:  buildPrivateMessages(entries),
-			VideoURLs: collectGroupVideoURLs(entries),
 			AudioURLs: collectGroupAudioURLs(entries),
 			Trigger:   TriggerRedPacket,
 		}

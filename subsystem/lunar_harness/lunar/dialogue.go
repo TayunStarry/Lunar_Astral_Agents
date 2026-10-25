@@ -67,7 +67,7 @@ func (role *DialogueRole) continueDialogue(cache *ChatCache, guardNote *PostMess
 	tools = append(tools, memoryTools...)
 	tools = append(tools, resourceTools...)
 	tools = append(tools, scheduleTools...)
-	tools = append(tools, viewerTools...)
+	tools = append(tools, networkExploreToolCalls()...)
 	tools = append(tools, getCrystalRemoteTools()...)
 
 	response, err := role.run(contextMessages, tools)

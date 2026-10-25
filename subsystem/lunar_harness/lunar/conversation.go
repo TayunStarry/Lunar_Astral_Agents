@@ -194,7 +194,7 @@ func buildUserRecord(content any) *CachedMessage {
 		if sender == "" && parsedSender != "" {
 			sender = parsedSender
 		}
-		if parsedBody == "" || parsedBody == "[视频]" || parsedBody == "[语音]" {
+		if parsedBody == "" {
 			return
 		}
 		texts = append(texts, raw)

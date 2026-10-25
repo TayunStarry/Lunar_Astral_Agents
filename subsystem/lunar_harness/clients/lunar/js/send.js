@@ -48,11 +48,10 @@ async function handleSend() {
                     }
                     catch (err) { showToast(`无法上传 ${pf.name}`, 'error'); }
                     break;
-                // 多模态消息 -> 视频
+                // 多模态消息 -> 视频（句柄由服务端入库后生成，不在正文写占位符）
                 case 'video':
                     try {
                         const fileUrl = await saveFile(pf.file);
-                        contentBlocks.push({ type: 'text', text: '[视频] ' });
                         contentBlocks.push({ type: 'video_url', video_url: { url: fileUrl } });
                         attachments.push({ type: 'video', src: fileUrl.replace(window.location.origin, ''), label: pf.name });
                         categories.add('image');
@@ -64,7 +63,6 @@ async function handleSend() {
                     try {
                         const base64Data = await fileToRawBase64(pf.file);
                         const format = getAudioFormat(pf.file);
-                        contentBlocks.push({ type: 'text', text: '[语音] ' });
                         if (format) {
                             contentBlocks.push({ type: 'input_audio', input_audio: { data: base64Data, format } });
                         }
@@ -86,11 +84,11 @@ async function handleSend() {
                     }
                     catch (err) { showToast(`无法上传文件 ${pf.name}`, 'error'); }
                     break;
-                // 多模态消息 -> 其他文件
+                // 多模态消息 -> 其他文件（无法归档的二进制类型退化到文件名 + 访问链接）
                 default:
                     try {
                         const fileUrl = await saveFile(pf.file);
-                        const block = `[文件] 名称: ${pf.name} 大小: ${formatFileSize(pf.file.size)} 访问链接: ${fileUrl}`;
+                        const block = `${pf.name}（${formatFileSize(pf.file.size)}） 访问链接: ${fileUrl}`;
                         contentBlocks.push({ type: 'text', text: block });
                         attachments.push({ type: 'other', src: fileUrl.replace(window.location.origin, ''), label: pf.name });
                         categories.add('text');

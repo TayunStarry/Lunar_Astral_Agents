@@ -2,7 +2,8 @@
 //
 // 使用方包括：
 //   - Go 原生月华对话链（lunar 包，经 prompts.Read 读取）；
-//   - Go 侧内置智能体（agents/Descriptor 描述者、agents/WebLTP 网络搜索、agents/BilibiliLife 观影者）。
+//   - Go 侧内置智能体（agents/Descriptor 描述者、agents/WebSearch 网络搜索、agents/BilibiliViewer 观影者、
+//     agents/desktop 桌面操纵、agents/QQMessenger QQ 投递）。
 //
 // 提示词是数据而不是代码，集中到独立的 prompts/，运行期经 prompts.Read 以
 // "prompts/xxx.md" 的虚拟路径读取，调用方无需感知真实文件布局。

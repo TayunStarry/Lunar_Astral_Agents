@@ -14,6 +14,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/archive"
 	"LunarSubsystem/LunarHarness/engine/console/channel"
+	"LunarSubsystem/LunarHarness/engine/sound"
 )
 
 // Publish 发布更新包：收集资源 → 打包 → 创建 Release → 上传附件。
@@ -95,6 +96,8 @@ func Publish(cfg Config, version string) error {
 
 	logf("✓ 更新包 %s 发布完成（共 %d 个附件）", version, len(packFiles))
 	reportProgress(100)
+	// 更新包上传完成：统一播放完成提示音
+	sound.Notify()
 	return nil
 }
 

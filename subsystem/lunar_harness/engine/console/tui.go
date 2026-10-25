@@ -126,7 +126,7 @@ var menuItems = []menuItem{
 		desc: "把原始日志导出为 .log（JSON Lines）、把月华主上下文或任一子智能体上下文导出为 .json"},
 
 	{key: "b", title: "月华链路", group: "系统管理", screen: screenEngine,
-		desc: "查看 Go 对话链状态（就绪 / 重建次数 / 连续失败）并手动重建；连续应答失败达阈值时自动重建"},
+		desc: "查看 Go 对话链状态并手动重建；桌面操纵智能体的唯一人工入口（输入要求启动、随时中断）"},
 	{key: "c", title: "前端页面", group: "系统管理", screen: screenFrontend,
 		desc: "月华 / 琉璃桌面窗口状态探测与意外关闭重启"},
 	{key: "d", title: "局域共享", group: "系统管理", screen: screenProxy,
@@ -416,6 +416,8 @@ func (m appModel) inputFocused() bool {
 		case updateInputTag, updateInputHash, updateInputToken:
 			return true
 		}
+	case screenEngine:
+		return m.engine.inputMode
 	}
 	return false
 }

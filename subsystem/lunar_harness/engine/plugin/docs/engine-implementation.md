@@ -272,7 +272,7 @@ agent.chat(messages, opts?)   // OpenAI 兼容对话 → { success, text, tool_c
                               // opts: { temperature?, max_tokens?, system?, tools?: ChatTool[] }
 agent.embed(input, opts?)     // 文本嵌入（单条 string 或数组）→ { success, embedding } / { success, embeddings }
 agent.synergy(pkgId, text)    // 调用前端智能体（Mini-LTP / Node-LTP）→ { success, text } / { success:false, error }
-agent.search(instruction)     // Web-LTP 网络搜索（allow-agent 绑定 + allow-network 执行）→ { success, text: 报告 }
+agent.search(instruction)     // Web-Search 网络搜索（allow-agent 绑定 + allow-network 执行）→ { success, text: 报告 }
 ```
 
 - `agent.synergy` 目标包不存在或智能体不存在 → `{ success:false, error: "xxx 包拒绝响应" }`（不抛异常）。
@@ -348,11 +348,11 @@ command.register(name, pattern, (match, context) => result, { aliases?: string[]
 exportFunction("myFunction", (a, b) => { return a + b })   // 同步函数，供 callFunction 调用
 ```
 
-### 5.16 Web-LTP 网络搜索 `agent.search`（双权限：allow-agent 绑定 + allow-network 执行）
+### 5.16 Web-Search 网络搜索 `agent.search`（双权限：allow-agent 绑定 + allow-network 执行）
 
 ```js
 agent.search(instruction)   // 自然语言指令 → 检索 → 多页面摘要 → 报告 → { success, text: 报告, error? }
-// instruction 可含「前N页/个」等数量要求，底层复用 Web-LTP 进程内搜索流水线
+// instruction 可含「前N页/个」等数量要求，底层复用 Web-Search 进程内搜索流水线
 // 无 allow-network 时返回 { success:false, error }
 ```
 
@@ -374,9 +374,9 @@ LTP9-Flash 用**权限密钥 + 沙箱注入控制**双层实现。引擎经哈�
 | `allow-file` | `file.*` / `image.loadValid/resize/convert` / `video.frames` | 文件读写删 + 图片读/校验/缩放/转码 + 视频抽帧 |
 | `allow-database` | `database.*` | SQL 数据库读写 |
 | `allow-memory` | `memory.*` | 向量记忆库与图片记忆读写 |
-| `allow-network` | `http.*` / `network.*` / `fetch` / `WebSocket` / `image.download` / `video.frames(URL源)` / `agent.search(执行)` | 同步/异步网络、裸套接字、图片下载、视频URL下载与 Web-LTP 搜索 |
+| `allow-network` | `http.*` / `network.*` / `fetch` / `WebSocket` / `image.download` / `video.frames(URL源)` / `agent.search(执行)` | 同步/异步网络、裸套接字、图片下载、视频URL下载与 Web-Search 搜索 |
 | `allow-call` | `callFunction` | 调用其他插件导出函数 |
-| `allow-agent` | `agent.*` | LLM 对话 / 文本嵌入 / 前端智能体 / Web-LTP 搜索 |
+| `allow-agent` | `agent.*` | LLM 对话 / 文本嵌入 / 前端智能体 / Web-Search 搜索 |
 | `allow-signal` | `signal.*` | 广播收发 |
 | `allow-certificate` | `encoding.*` / `hash.*` | 编解码 + lunar 加解密 + JWT/摘要/HMAC/Ed25519 |
 | `allow-send` | （预留） | 保留权限名，Flash 当前未挂载能力 |
@@ -428,19 +428,15 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 
 ### 7.3 月华事件的触发来源（全部在 Go 侧）
 
-月华不再从 goja 对话链发起事件；下列四个事件都由 Go 边界同步派发，无插件订阅、未回传业务结果
+月华不再从 goja 对话链发起事件；下列事件都由 Go 边界同步派发，无插件订阅、未回传业务结果
 或回传结构非法时沿用原始数据（契约见 `docs/LTP 9.1 Flash.d.ts`）：
 
 | 事件 | 触发点 | payload | return |
 |------|--------|---------|--------|
 | `before_reading_message` | `lunar` 包的 `pullContext`（交付未读队列前） | `{ messages }` | `{ messages? }`（空数组=清空本轮） |
 | `before_sending_amessage` | `lunar` 包的 `pushContext`（推送消息前） | `{ messages }` | `{ messages?, cancel? }` |
-| `before_query_starts` | `crystal` 的 `web_search` 执行前 | `{ instruction }` | `{ instruction?, cancel? }` |
-| `before_query_ends` | `crystal` 的 `web_search` 报告回传前 | `{ instruction, report }` | `{ report?, cancel? }` |
-| `before_life_starts` | `agents/BilibiliLife` 每次生活启动前（自动 / TUI 强制） | `{ forced, videosPerRound, slicesPerVideo, repliesPerRound, dailyCount, dailyLimit }` | `{ cancel?, reason? }`（取消仍消耗一次本日额度并计为完成） |
-| `before_life_ends` | `agents/BilibiliLife` 正常完成 / 中途失败时 | `{ result, forced, videosWatched, repliesUsed, reason? }` | 纯触发器，返回值不被使用 |
-
-`cancel` 语义：查询类取消会让月华的工具调用立即收到「网络搜索请求/报告已被 LTP9 插件取消」。
+| `before_life_starts` | `agents/BilibiliViewer` 每次生活启动前（自动 / TUI 强制） | `{ forced, videosPerRound, slicesPerVideo, repliesPerRound, dailyCount, dailyLimit }` | `{ cancel?, reason? }`（取消仍消耗一次本日额度并计为完成） |
+| `before_life_ends` | `agents/BilibiliViewer` 正常完成 / 中途失败时 | `{ result, forced, videosWatched, repliesUsed, reason? }` | 纯触发器，返回值不被使用 |
 
 ---
 

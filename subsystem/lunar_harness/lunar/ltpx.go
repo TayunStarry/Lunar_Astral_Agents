@@ -114,7 +114,7 @@ func crystalToolDefinition() ToolCall {
 		Type: "function",
 		Function: ToolDefinition{
 			Name: crystalToolName,
-			Description: "调用星月智能的扩展应用（如文件管理、文件编辑、窗口操作、网络搜索）。" +
+			Description: "调用星月智能的扩展应用（如文件管理、文件编辑、窗口操作）。" +
 				"tool 只能取参数枚举中的应用名，填入即表示「打开这个应用」；instruction 填打开后要该应用完成的任务。" +
 				"只打开应用时只填 tool；需要先了解某个应用的能力时传 details=true 与 tool，此时不执行任何操作。",
 			Parameters: map[string]any{

@@ -71,7 +71,7 @@ func LiteImageFile() {
 						}
 					}
 					if tag == "" {
-						tag = animatedFallbackText
+						tag = mediaName(source, guessImageExt(source))
 					}
 					newItems = append(newItems, ContentItem{Type: ContentText, Text: tag})
 					continue
@@ -122,16 +122,17 @@ func resourceVideo(source, name, origin string) string {
 	return media.Handle
 }
 
-// resourceVideoOrFallback 视频资源化包装
+// resourceVideoOrFallback 视频资源化包装：句柄优先，入库失败退化为文件名
 func resourceVideoOrFallback(source string) string {
+	name := mediaName(source, ".mp4")
 	origin := "channel"
 	if strings.HasPrefix(source, "data:") {
 		origin = "client-upload"
 	}
-	if handle := resourceVideo(source, mediaName(source, ".mp4"), origin); handle != "" {
+	if handle := resourceVideo(source, name, origin); handle != "" {
 		return handle
 	}
-	return videoFallbackText
+	return name
 }
 
 // understandAudio 理解音频（ASR 转写）
@@ -216,17 +217,18 @@ func resourceAudio(originalSource, name, origin string) string {
 	return media.Handle + transcript
 }
 
-// resourceAudioOrFallback 音频资源化包装
+// resourceAudioOrFallback 音频资源化包装：句柄优先，入库失败退化为文件名
 func resourceAudioOrFallback(source string) string {
+	name := mediaName(source, ".wav")
 	origin := "channel"
 	if strings.HasPrefix(source, "data:") {
 		origin = "client-upload"
 	}
-	if text := resourceAudio(source, mediaName(source, ".wav"), origin); text != "" {
+	if text := resourceAudio(source, name, origin); text != "" {
 		return text
 	}
 	if text, err := understandAudio(source); err == nil && text != "" {
 		return text
 	}
-	return asrFallbackText
+	return name
 }
