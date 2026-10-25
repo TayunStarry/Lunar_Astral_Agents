@@ -280,7 +280,12 @@ func (c *WSClient) readPump(h *Hub) {
 	for {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+			// 关闭页面、刷新或窗口跨断点跳转（桌面页 ↔ 移动页）时，浏览器往往直接断开
+			// 连接而不带关闭状态（1005），或让 TCP 被异常关闭（1006）。这些都属于正常
+			// 下线，断开计数已由 Unregister 统一记录；若按故障记 ERROR 会误播失败音效。
+			if websocket.IsUnexpectedCloseError(err,
+				websocket.CloseNormalClosure, websocket.CloseGoingAway,
+				websocket.CloseNoStatusReceived, websocket.CloseAbnormalClosure) {
 				logger.Error("StudioHub", "WebSocket 读取错误: %v", err)
 			}
 			return

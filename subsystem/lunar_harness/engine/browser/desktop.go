@@ -21,12 +21,16 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 
 	webview "github.com/webview/webview_go"
 )
+
+// desktopWatchInterval 桌面窗口存活检查间隔（兜底 Run() 不返回的情况）
+const desktopWatchInterval = 2 * time.Second
 
 // DesktopWindowSpec 桌面窗口规格
 type DesktopWindowSpec struct {
@@ -62,6 +66,8 @@ var (
 	desktopClosedCh = make(chan struct{}, 1)
 	// desktopCloseOnce 保证关闭信号只发一次
 	desktopCloseOnce sync.Once
+	// desktopWatchOnce 保证窗口存活监视只启动一次
+	desktopWatchOnce sync.Once
 )
 
 // BuildReturnButtonJS 生成「返回主页面」悬浮按钮的页面注入脚本。
@@ -98,6 +104,9 @@ func OpenDesktopWindow(spec DesktopWindowSpec) error {
 	win := &desktopWindow{spec: spec}
 	desktopWindows[spec.ID] = win
 	desktopMu.Unlock()
+
+	// 兜底监视：webview 的 Run() 在部分窗口关闭后不返回，仅靠 Run() 无法感知关闭
+	desktopWatchOnce.Do(func() { go watchDesktopWindows() })
 
 	created := make(chan error, 1)
 	go func() {
@@ -140,15 +149,22 @@ func OpenDesktopWindow(spec DesktopWindowSpec) error {
 
 		// 先登记关闭并发出整体关闭信号，再释放底层资源：
 		// Destroy 可能长时间阻塞，置于信号之前会拖住退出。
+		// 只删除「仍是自己」的登记项：窗口重建后旧协程迟到的返回不能误删新窗口。
 		desktopMu.Lock()
-		delete(desktopWindows, spec.ID)
+		closed := false
+		if desktopWindows[spec.ID] == win {
+			delete(desktopWindows, spec.ID)
+			closed = true
+		}
 		remaining := len(desktopWindows)
 		desktopMu.Unlock()
 
-		logger.SubInfo("browser", "OpenDesktopWindow", "桌面窗口已关闭 id=%s，剩余 %d", spec.ID, remaining)
+		if closed {
+			logger.SubInfo("browser", "OpenDesktopWindow", "桌面窗口已关闭 id=%s，剩余 %d", spec.ID, remaining)
+		}
 
 		// 快速路径：全部窗口的 Run() 均已返回（可靠判据见宿主侧前端会话监视）
-		if remaining == 0 {
+		if closed && remaining == 0 {
 			desktopCloseOnce.Do(func() {
 				select {
 				case desktopClosedCh <- struct{}{}:
@@ -166,6 +182,42 @@ func OpenDesktopWindow(spec DesktopWindowSpec) error {
 
 	logger.SubInfo("browser", "OpenDesktopWindow", "桌面窗口已打开 id=%s url=%s", spec.ID, spec.URL)
 	return nil
+}
+
+// watchDesktopWindows 周期校验已登记窗口的句柄存活。
+//
+// webview 的 Run() 在窗口被用户关闭后可能不返回（见文件头，且两个窗口行为不一致），
+// 只靠 Run() 返回会让「已关闭」既不落日志、也不从注册表摘除。这里用 IsWindow 兜底，
+// 使月华与琉璃的关闭日志、DesktopWindowIDs 状态保持一致。
+func watchDesktopWindows() {
+	ticker := time.NewTicker(desktopWatchInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		var closedIDs []string
+		desktopMu.Lock()
+		for id, win := range desktopWindows {
+			// wv 尚未创建（正在开窗）时跳过，避免把启动中的窗口误判为已关闭
+			if win.wv == nil || desktopWindowAlive(win.wv) {
+				continue
+			}
+			delete(desktopWindows, id)
+			closedIDs = append(closedIDs, id)
+		}
+		remaining := len(desktopWindows)
+		desktopMu.Unlock()
+
+		for _, id := range closedIDs {
+			logger.SubInfo("browser", "OpenDesktopWindow", "桌面窗口已关闭 id=%s，剩余 %d", id, remaining)
+		}
+		if len(closedIDs) > 0 && remaining == 0 {
+			desktopCloseOnce.Do(func() {
+				select {
+				case desktopClosedCh <- struct{}{}:
+				default:
+				}
+			})
+		}
+	}
 }
 
 // FocusDesktopWindow 将指定桌面窗口恢复并置前；句柄已失效时返回错误
