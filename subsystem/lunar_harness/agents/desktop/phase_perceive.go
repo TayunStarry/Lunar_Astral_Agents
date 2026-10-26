@@ -10,12 +10,22 @@ import (
 	"context"
 )
 
+// uiaTreeResult UIA 树读取结果（用于带超时调用）
+type uiaTreeResult struct {
+	tree string
+	ok   bool
+}
+
 // uiaReaderPhase UIA 理解者：读取前台窗口 UI 树并让模型整理与任务相关的元素清单。
 func uiaReaderPhase(ctx context.Context, plan editorTask) (string, []string) {
-	tree, ok, err := DTUIADump()
-	if !ok || err != nil {
+	result, err := callDesktop(ctx, uiaDumpTimeout, "读取 UIA 树", func() (uiaTreeResult, error) {
+		tree, ok, dumpErr := DTUIADump()
+		return uiaTreeResult{tree: tree, ok: ok}, dumpErr
+	})
+	if err != nil || !result.ok {
 		return "（UIA 树读取失败）", nil
 	}
+	tree := result.tree
 	elements := []string{}
 	msg := chatMessage{Role: "user", Content: buildPlanContext(plan) + "\n\n【UI 树】\n" + truncateStr(tree, 4096) + "\n\n请整理与任务相关的元素清单与摘要 JSON。"}
 	text, err := autoChatText(ctx, autoRoleUIA, []chatMessage{{Role: "system", Content: promptUIAReader}, msg})

@@ -2,8 +2,9 @@ package WebSearch
 
 // scroll.go 页面滚动与正文提取（基于 browser.WebViewSession）
 //
-// 统一流程：页面复位到顶部后，每步按视口高度的 85% 下移，留出重叠区避免切断段落；
-// 每步同时提取整页正文，触底或停滞即止，触底后再取一次快照纳入懒加载的尾部内容。
+// 统一流程：页面复位到顶部后，每步按视口高度的 150% 快速下移（中途只滚动不提取，
+// 文本反正以最终快照为准）；走查结束后统一等待懒加载窗口，再做一次带正文提取的
+// 最终快照——触底时纳入懒加载尾部内容，非触底收尾时也能拿到当前位置的正文。
 
 import (
 	"LunarSubsystem/LunarHarness/engine/browser"
@@ -12,6 +13,10 @@ import (
 	"fmt"
 	"time"
 )
+
+// bottomSettleMS 走查结束后的懒加载等待毫秒数：给「滚动到位后才触发加载」的尾部
+// 内容留出进入文档的时间，随后一次性提取最终快照。
+const bottomSettleMS = 600
 
 // navTo 导航并等待就绪 + 渲染稳定。仅导航调用本身失败才返回错误；
 // 就绪等待超时仅记日志（后续提取自行决定成败）。
@@ -45,14 +50,15 @@ func ensurePageTop(sess *browser.WebViewSession) error {
 	return err
 }
 
-// scrollStep 向下滚动约一屏（85% 视口），同时提取整页正文，返回滚动状态与文本。
+// scrollStep 向下滚动约一屏半（150% 视口），返回滚动状态；extract 为 true 时
+// 同时提取整页正文（innerText 开销大，仅在最终快照时使用）。
 // 自动识别真正承载滚动的元素（普通文档或 SPA 内部滚动容器），并缓存到页面供后续步骤复用。
-func scrollStep(sess *browser.WebViewSession, textMax int) (stepState, error) {
+func scrollStep(sess *browser.WebViewSession, textMax int, extract bool) (stepState, error) {
 	var st stepState
 	if textMax <= 0 {
 		textMax = 24000
 	}
-	raw, err := sess.EvalJSON(scrollStepScript(textMax), 8*time.Second)
+	raw, err := sess.EvalJSON(scrollStepScript(textMax, extract), 8*time.Second)
 	if err != nil {
 		return st, err
 	}
@@ -62,8 +68,8 @@ func scrollStep(sess *browser.WebViewSession, textMax int) (stepState, error) {
 	return st, nil
 }
 
-// scrollStepScript 滚动 + 正文提取脚本
-func scrollStepScript(textMax int) string {
+// scrollStepScript 滚动 + 可选的正文提取脚本
+func scrollStepScript(textMax int, extract bool) string {
 	return fmt.Sprintf(`return (function(){
     function pickScroller() {
         var doc = document.scrollingElement || document.documentElement;
@@ -89,14 +95,17 @@ func scrollStepScript(textMax int) string {
     var before = el ? el.scrollTop : 0;
     var viewport = el ? (el.clientHeight || window.innerHeight) : (window.innerHeight || 0);
     if (el) {
-        var step = Math.max(200, Math.round(viewport * 0.85));
+        var step = Math.max(300, Math.round(viewport * 1.5));
         el.scrollTop = Math.min(before + step, el.scrollHeight);
     }
     var after = el ? el.scrollTop : 0;
     var height = el ? el.scrollHeight : 0;
-    var root = document.querySelector('article') || document.querySelector('main') || document.querySelector('[role="main"]') || document.body;
-    var text = root ? (root.innerText || root.textContent || '') : '';
-    text = text.replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    var text = '';
+    if (%t) {
+        var root = document.querySelector('article') || document.querySelector('main') || document.querySelector('[role="main"]') || document.body;
+        text = root ? (root.innerText || root.textContent || '') : '';
+        text = text.replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    }
     return {
         before: before,
         after: after,
@@ -108,12 +117,13 @@ func scrollStepScript(textMax int) string {
         textChars: text.length,
         text: text.slice(0, %d)
     };
-})();`, textMax)
+})();`, extract, textMax)
 }
 
-// walkPage 从页面顶部滚动到底部，逐屏提取正文；onText 非空时把每屏快照交给摘要流水线。
-// 触底后再取一次快照，纳入滚动期间懒加载出来的尾部内容。
-func walkPage(sess *browser.WebViewSession, cfg Config, deadline time.Time, onText func(string)) walkResult {
+// walkPage 从页面顶部滚动到底部快速走查（中途只滚动不提取，单页正文按 textMax
+// 配额截断——总提取上限由所有参与页面均分后的单页额度）；onText 非空时把最终
+// 快照正文交给回调。走查结束后等待懒加载窗口，再做一次带提取的最终快照。
+func walkPage(sess *browser.WebViewSession, textMax int, cfg Config, deadline time.Time, onText func(string)) walkResult {
 	res := walkResult{}
 	if err := ensurePageTop(sess); err != nil {
 		logger.SubWarn("CrystalAstral", "WebSearch", "页面复位到顶部失败（从当前位置开始滚动）: %v", err)
@@ -128,16 +138,16 @@ func walkPage(sess *browser.WebViewSession, cfg Config, deadline time.Time, onTe
 		if !sess.IsAlive() || time.Now().After(deadline) {
 			break
 		}
-		st, err := scrollStep(sess, cfg.TextMaxChars)
+		st, err := scrollStep(sess, textMax, false)
 		if err != nil {
 			logger.SubWarn("CrystalAstral", "WebSearch", "页面滚动失败（停止走查）: %v", err)
 			break
 		}
-		res = applyStep(res, st)
 		res.Steps = i + 1
-		if onText != nil {
-			onText(st.Text)
-		}
+		res.Height = st.Height
+		res.Viewport = st.Viewport
+		res.URL = st.URL
+		res.Title = st.Title
 		time.Sleep(settle)
 		if st.AtBottom {
 			res.AtBottom = true
@@ -150,12 +160,14 @@ func walkPage(sess *browser.WebViewSession, cfg Config, deadline time.Time, onTe
 		}
 	}
 
-	// 触底后的最后一次快照：滚动等待期间懒加载出的尾部内容此时已进入文档
-	if res.AtBottom && sess.IsAlive() && !time.Now().After(deadline) {
-		if st, err := scrollStep(sess, cfg.TextMaxChars); err == nil {
-			res = applyStep(res, st)
-			if onText != nil {
-				onText(st.Text)
+	// 最终快照：等待懒加载窗口后带正文提取一次（触底纳入尾部内容；
+	// 非触底收尾——超时/步数用尽/瞬时失败——也能拿到当前位置的正文）
+	if sess.IsAlive() && !time.Now().After(deadline) {
+		time.Sleep(time.Duration(bottomSettleMS) * time.Millisecond)
+		if final, err := scrollStep(sess, textMax, true); err == nil {
+			res = applyStep(res, final)
+			if onText != nil && final.Text != "" {
+				onText(final.Text)
 			}
 		}
 	}

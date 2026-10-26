@@ -1,10 +1,10 @@
 package BilibiliViewer
 
-// flow.go 观影者的工作流定义：由对话者通过工具参数枚举选择。
+// flow.go 哔哩观影的工作流定义：由对话者通过工具参数枚举选择。
 
 import "strings"
 
-// Flow 观影者工作流
+// Flow 哔哩观影工作流
 type Flow string
 
 const (

@@ -16,16 +16,14 @@ var (
 // swRestore 还原最小化窗口并激活
 const swRestore = 9
 
-// applyDesktopWindowStyle 应用桌面窗口图标（需在 UI 线程、Run 之前调用）
+// applyDesktopWindowStyle 应用桌面窗口图标（需在 UI 线程、Run 之前调用）。
+// 月华/琉璃前端显式传入各自图标；未指定时回退默认图标，与其他窗口保持一致。
 func applyDesktopWindowStyle(w webview.WebView, iconPath string) {
-	if iconPath == "" {
-		return
-	}
 	hwnd := uintptr(w.Window())
 	if hwnd == 0 {
 		return
 	}
-	setWindowIcon(hwnd, iconPath)
+	setWindowIcon(hwnd, iconPathOr(iconPath))
 }
 
 // desktopWindowAlive 判断 webview 窗口句柄是否仍然有效。

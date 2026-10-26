@@ -11,9 +11,11 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
 	"LunarSubsystem/LunarHarness/agents/Descriptor"
+	"LunarSubsystem/LunarHarness/agents/LunarMatrix"
 	"LunarSubsystem/LunarHarness/agents/QQMessenger"
 	"LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/agents/desktop"
+	"LunarSubsystem/LunarHarness/engine/agentinfo"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
@@ -80,10 +82,13 @@ func WireTUIDataDumpHooks() {
 // Go 对话链不再依赖整块可替换的脚本运行时；重建入口用于逻辑坏死或上下文损坏时
 // 以最小代价恢复，避免重启整个程序与全部子系统。
 func WireTUIEngineHooks() {
-	// 观影者的模型调用也进「核心智能 实况」，用户不用只盯着日志干等。
+	// 「工具列表」屏：宿主汇总全部 Go 智能体的工具目录（控制台只负责展示）。
+	console.SetToolCatalogHook(buildToolCatalog)
+
+	// 哔哩观影的模型调用也进「核心智能 实况」，用户不用只盯着日志干等。
 	// 计量回调让这些 Go 侧调用一并计入「运行状态」的模型计量。
-	meter := func(prompt, completion int64, generation time.Duration, estimated bool) {
-		console.RecordModelCall(prompt, completion, generation, estimated)
+	meter := func(prompt, completion, cached int64, generation time.Duration, estimated bool) {
+		console.RecordModelCall(prompt, completion, cached, generation, estimated)
 	}
 	BilibiliViewer.SetModelObserver(
 		func(role string) { console.StreamBegin(role) },
@@ -110,8 +115,10 @@ func WireTUIEngineHooks() {
 	streamEnd := func(role string) { console.StreamEnd(role) }
 	WebSearch.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
 	Descriptor.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
-	// QQ 投递的规划调用同样进实况与计量（投递内容不展示，只展示规划过程）。
+	// 专项通讯的规划调用同样进实况与计量（投递内容不展示，只展示规划过程）。
 	QQMessenger.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
+	// Lunar Matrix 的论坛规划与工具调用同样进实况与计量。
+	LunarMatrix.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
 	// 桌面操纵各角色的模型调用同样进实况与计量；
 	// 其请求本身受 loopguard 思考监管约束，命中重复会自动中断并重试。
 	desktop.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
@@ -143,7 +150,7 @@ func WireTUIEngineHooks() {
 		},
 	)
 
-	// 桌面操纵智能体：唯一入口在控制台「月华链路」屏（人工输入要求启动、随时中断）。
+	// 桌面操纵智能体：唯一入口在控制台「运行状态」屏（人工输入要求启动、随时中断）。
 	// 同时把中断器注入对话者：对话者开始推理与应答前会自动终止桌面操纵，
 	// 避免它继续抢占桌面键鼠、与本轮响应互相干扰。
 	console.SetDesktopOperatorHooks(
@@ -153,6 +160,7 @@ func WireTUIEngineHooks() {
 			state := desktop.Snapshot()
 			return console.DesktopOperatorStatus{
 				Running:     state.Running,
+				Stopping:    state.Stopping,
 				Instruction: state.Instruction,
 				StartedAt:   state.StartedAt,
 				FinishedAt:  state.FinishedAt,
@@ -162,6 +170,18 @@ func WireTUIEngineHooks() {
 		},
 	)
 	lunar.SetDesktopActorStopHook(desktop.Stop)
+}
+
+// buildToolCatalog 汇总全部 Go 智能体的工具目录（供控制台「工具列表」屏扫描展示）。
+func buildToolCatalog() []agentinfo.Agent {
+	out := lunar.ToolCatalog()
+	out = append(out, Descriptor.ToolCatalog()...)
+	out = append(out, QQMessenger.ToolCatalog()...)
+	out = append(out, WebSearch.ToolCatalog()...)
+	out = append(out, BilibiliViewer.ToolCatalog()...)
+	out = append(out, desktop.ToolCatalog()...)
+	out = append(out, LunarMatrix.ToolCatalog()...)
+	return out
 }
 
 // callDumpHandler 进程内直调导出端点处理器并解析回执

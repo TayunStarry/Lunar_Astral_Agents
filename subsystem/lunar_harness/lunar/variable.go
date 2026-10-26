@@ -61,7 +61,7 @@ var (
 
 	// dialogueRole 对话者角色实例
 	dialogueRole *DialogueRole
-	// memorizerRole 记忆者角色实例
+	// memorizerRole 记忆流程实例（不是独立智能体：只做记忆入库与检索摘要）
 	memorizerRole *MemorizerRole
 	// painterRole 绘制者角色实例
 	painterRole *PainterRole

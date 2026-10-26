@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/engine/agentdump"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/lunar"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 )
 
@@ -162,10 +162,10 @@ func DataDumpTranscriptHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DataDumpContextHandler 导出智能体上下文为 JSON（POST /debug/dump/context?agent=xxx）。
+// DataDumpContextHandler 导出 Go 智能体上下文/状态为 JSON（POST /debug/dump/context?agent=xxx）。
 //
-// agent 取值：lunar（月华主上下文/未读队列）或子智能体名
-// （dialogue / painter / musician / memorizer）。
+// agent 取值来自 engine/agentdump 的注册表：core（核心人格集合）、web_search、
+// bilibili、desktop、qq、lunar_matrix 等。分角色的旧目标已合并到 core。
 // include_images=1 时保留图片原始 base64（体积很大，仅深度排查用）。
 func DataDumpContextHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -174,11 +174,11 @@ func DataDumpContextHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	agent := strings.TrimSpace(r.URL.Query().Get("agent"))
 	if agent == "" {
-		agent = "lunar"
+		agent = "core"
 	}
 	includeImages := r.URL.Query().Get("include_images") == "1"
 
-	content, err := lunar.DumpAgentContext(agent, includeImages)
+	content, err := agentdump.Export(agent, includeImages)
 	if err != nil {
 		writeJSON(w, http.StatusOK, DataDumpResponse{OK: false, Target: agent, Error: err.Error()})
 		return

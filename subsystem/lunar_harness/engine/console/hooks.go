@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"LunarSubsystem/LunarHarness/engine/agentinfo"
 	"LunarSubsystem/LunarHarness/engine/console/ltpxmarket"
 	"LunarSubsystem/LunarHarness/engine/console/updatepack"
 )
@@ -125,6 +126,33 @@ func DumpContext(target string) (DataDumpResult, error) {
 		return DataDumpResult{}, errNotWired
 	}
 	return hook(target)
+}
+
+// ==== Go 智能体工具目录 ====
+
+var (
+	// toolCatalogMu 保护工具目录钩子
+	toolCatalogMu sync.RWMutex
+	// toolCatalogHook 由宿主汇总全部 Go 智能体的工具清单
+	toolCatalogHook func() []agentinfo.Agent
+)
+
+// SetToolCatalogHook 注入 Go 智能体工具目录（宿主在 TUI 启动前调用）。
+func SetToolCatalogHook(hook func() []agentinfo.Agent) {
+	toolCatalogMu.Lock()
+	defer toolCatalogMu.Unlock()
+	toolCatalogHook = hook
+}
+
+// getToolCatalog 读取工具目录；未注入时返回 nil，由界面明确提示。
+func getToolCatalog() []agentinfo.Agent {
+	toolCatalogMu.RLock()
+	hook := toolCatalogHook
+	toolCatalogMu.RUnlock()
+	if hook == nil {
+		return nil
+	}
+	return hook()
 }
 
 // ==== LTP9 授权签发钩子注入 ====
@@ -268,6 +296,7 @@ func reloadMoonEngine(reason string) error {
 // DesktopOperatorStatus 桌面操纵运行状态摘要（渲染数据源，由宿主注入的 status 钩子提供）
 type DesktopOperatorStatus struct {
 	Running     bool      // 是否正在运行
+	Stopping    bool      // 是否已请求中断、正在等待退出
 	Instruction string    // 本轮指令
 	StartedAt   time.Time // 启动时间
 	FinishedAt  time.Time // 结束时间（未结束时为零值）

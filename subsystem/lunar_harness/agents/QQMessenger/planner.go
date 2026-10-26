@@ -15,7 +15,7 @@ import (
 func planSend(instruction string, groups []napcat.QQGroup, friends []napcat.QQFriend) (sendPlan, error) {
 	system, err := prompts.Read("qqMessenger.md")
 	if err != nil {
-		return sendPlan{}, fmt.Errorf("读取 QQ 投递提示词失败: %w", err)
+		return sendPlan{}, fmt.Errorf("读取 专项通讯提示词失败: %w", err)
 	}
 	text, err := chatText(string(system), buildPlanMaterial(instruction, groups, friends))
 	if err != nil {
@@ -25,11 +25,32 @@ func planSend(instruction string, groups []napcat.QQGroup, friends []napcat.QQFr
 	if err := json.Unmarshal([]byte(extractJSONObject(text)), &plan); err != nil {
 		return sendPlan{}, fmt.Errorf("解析投递计划失败: %w（模型输出：%s）", err, truncate(text, 160))
 	}
-	plan.TargetType = strings.ToLower(strings.TrimSpace(plan.TargetType))
-	plan.Target = strings.TrimSpace(plan.Target)
-	plan.Text = strings.TrimSpace(plan.Text)
-	plan.Reason = strings.TrimSpace(plan.Reason)
+	plan.normalize()
 	return plan, nil
+}
+
+// normalize 收敛模型输出：多目标清单逐项去空白，并兼容旧的单目标字段。
+func (plan *sendPlan) normalize() {
+	plan.Reason = strings.TrimSpace(plan.Reason)
+	out := make([]sendDelivery, 0, len(plan.Deliveries)+1)
+	for _, delivery := range plan.Deliveries {
+		delivery.TargetType = strings.ToLower(strings.TrimSpace(delivery.TargetType))
+		delivery.Target = strings.TrimSpace(delivery.Target)
+		delivery.Text = strings.TrimSpace(delivery.Text)
+		delivery.Reason = strings.TrimSpace(delivery.Reason)
+		out = append(out, delivery)
+	}
+	if len(out) == 0 && strings.TrimSpace(plan.Target) != "" {
+		out = append(out, sendDelivery{
+			TargetType: strings.ToLower(strings.TrimSpace(plan.TargetType)),
+			Target:     strings.TrimSpace(plan.Target),
+			Text:       strings.TrimSpace(plan.Text),
+			Images:     plan.Images,
+			Files:      plan.Files,
+			Reason:     plan.Reason,
+		})
+	}
+	plan.Deliveries = out
 }
 
 // buildPlanMaterial 组装模型输入：可投递目标清单 + 对话者需求。

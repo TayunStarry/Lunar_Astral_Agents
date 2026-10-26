@@ -29,7 +29,6 @@ func Start() error {
 	screenshoterRole = newScreenshoterRole()
 	dialogueRole = newDialogueRole(painterRole.lunarAppearance(), painterRole.crystalAppearance())
 	memorizerRole = &MemorizerRole{}
-	initRoleEntries()
 
 	initConversationCache(func(messages []PostMessage) {
 		dialogueRole.coverContext(messages)

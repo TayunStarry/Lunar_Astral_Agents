@@ -8,7 +8,7 @@
 /** 智能整理触发阈值（当前层级文件数达到该值显示按钮） */
 const ORGANIZE_THRESHOLD = 50;
 /** 整理 AI 模型名（与全项目约定一致，硬编码） */
-const ORGANIZE_MODEL = 'system-multimodal';
+const ORGANIZE_MODEL = 'primary_reasoning';
 /** 文本内容取样长度（开头 / 结尾各 2000 字） */
 const TEXT_SAMPLE_LEN = 2000;
 

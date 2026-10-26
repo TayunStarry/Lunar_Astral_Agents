@@ -5,9 +5,10 @@ import (
 	"time"
 )
 
-// RunState 桌面操纵当前/最近一次运行状态（供控制台「月华链路」屏展示）。
+// RunState 桌面操纵当前/最近一次运行状态（供控制台「运行状态」屏展示）。
 type RunState struct {
 	Running     bool      // 是否正在运行
+	Stopping    bool      // 是否已请求中断、正在等待任务退出
 	Instruction string    // 本轮指令
 	StartedAt   time.Time // 启动时间
 	FinishedAt  time.Time // 结束时间（未结束时为零值）
@@ -78,8 +79,14 @@ type ltpStreamOptions struct {
 
 // ltpUsage 模型响应的 token 用量。
 type ltpUsage struct {
-	Prompt     int64 `json:"prompt_tokens"`
-	Completion int64 `json:"completion_tokens"`
+	Prompt              int64               `json:"prompt_tokens"`
+	Completion          int64               `json:"completion_tokens"`
+	PromptTokensDetails *promptTokenDetails `json:"prompt_tokens_details,omitempty"`
+}
+
+// promptTokenDetails 输入 token 的细分（提示缓存命中数）。
+type promptTokenDetails struct {
+	CachedTokens int64 `json:"cached_tokens"`
 }
 
 // ltpStreamToolCall 流式响应中工具调用分片（按 index 聚合）。
@@ -163,12 +170,14 @@ type HandoffRecord struct {
 
 // ActionAttempt 一次执行尝试的结构化记录。
 type ActionAttempt struct {
-	Round    int    `json:"round"`    // 轮次
-	Decision string `json:"decision"` // keyboard / uia / mouse / complete
-	Tool     string `json:"tool"`     // 实际调用的工具（空表示未执行任何工具）
-	Result   string `json:"result"`   // 工具返回摘要
-	Success  bool   `json:"success"`  // 工具自身是否成功
-	Changed  bool   `json:"changed"`  // 是否产生可见变化（画面或窗口状态）
+	Round     int    `json:"round"`      // 轮次
+	Decision  string `json:"decision"`   // keyboard / uia / mouse / complete
+	Tool      string `json:"tool"`       // 实际调用的工具（空表示未执行任何工具）
+	InputText string `json:"input_text"` // 文本输入类工具写入的内容（用于防止重复输入）
+	Duplicate bool   `json:"duplicate"`  // 是否因窗口已包含相同文本而跳过重复输入
+	Result    string `json:"result"`     // 工具返回摘要
+	Success   bool   `json:"success"`    // 工具自身是否成功
+	Changed   bool   `json:"changed"`    // 是否产生可见变化（画面或窗口状态）
 }
 
 // editorTask 编纂者输出。

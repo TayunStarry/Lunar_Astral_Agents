@@ -31,15 +31,21 @@ func TestParseMsgFeedReply(t *testing.T) {
 		t.Fatalf("应解析出 2 条，实际 %d", len(items))
 	}
 	video := items[0]
-	if video.Type != 1 || video.Oid != "111" || video.Root != "222" || video.Parent != "333" {
-		t.Fatalf("视频评论归一化错误: %+v", video)
+	if video.Type != 1 || video.Oid != "111" || video.Root != "222" || video.Parent != "222" {
+		t.Fatalf("视频评论应回在根评论（target_id 兜底）下，实际 %+v", video)
+	}
+	if !video.Nested {
+		t.Fatalf("对方回复了我的评论，回应需带 @ 前缀，Nested 应为 true")
 	}
 	if video.Message != "谢谢你" || video.MyContent != "我的评论" || video.Kind != "reply" {
 		t.Fatalf("视频评论内容错误: %+v", video)
 	}
 	dynamic := items[1]
-	if dynamic.Type != 17 || dynamic.Oid != "444" || dynamic.Root != "555" || dynamic.Parent != "777" {
-		t.Fatalf("动态评论归一化错误: %+v", dynamic)
+	if dynamic.Type != 17 || dynamic.Oid != "444" || dynamic.Root != "555" || dynamic.Parent != "555" {
+		t.Fatalf("动态评论回应应发在根评论 555 的追评位置，实际 %+v", dynamic)
+	}
+	if !dynamic.Nested {
+		t.Fatalf("对方处于嵌套会话，Nested 应为 true")
 	}
 	if dynamic.Message != "哈哈" || dynamic.MyContent != "我的动态评论" {
 		t.Fatalf("动态评论内容错误: %+v", dynamic)
@@ -74,6 +80,9 @@ func TestParseMsgFeedOpusBusinessID(t *testing.T) {
 	if item.Root != "317943121233" || item.Parent != "317943121233" {
 		t.Fatalf("顶层回复的 root/parent 应指向对方评论，实际 %q/%q", item.Root, item.Parent)
 	}
+	if item.Nested {
+		t.Fatalf("对方本身就是根评论作者，回应发在其追评位置即可，Nested 应为 false")
+	}
 }
 
 // TestParseMsgFeedAt 钉住「@我的」：source_content 才是对方发的内容，
@@ -100,6 +109,9 @@ func TestParseMsgFeedAt(t *testing.T) {
 	}
 	if item.Root != "888" || item.Parent != "888" {
 		t.Fatalf("root/parent 应回退到 source_id，实际 %q/%q", item.Root, item.Parent)
+	}
+	if item.Nested {
+		t.Fatalf("@消息的对方是根评论作者，Nested 应为 false")
 	}
 }
 
@@ -147,6 +159,47 @@ func TestInboxSeenRoundTrip(t *testing.T) {
 	// 已记录的消息不应再被当作未读
 	if got := filterUnreadInbox([]inboxItem{item}, store, time.Now()); len(got) != 0 {
 		t.Fatalf("已处理消息不应再次进入未读队列: %+v", got)
+	}
+}
+
+// TestParseMsgFeedNestedReply 钉住本次修复的核心场景：
+// 有人追评了月华发在视频评论区的根评论（root_id=我的根评论，source_id=对方的追评），
+// 月华的回应必须发在根评论的追评位置（parent=root），绝不嵌套成「追评的追评」；
+// 同时解析对方 mid，供发布时附 at 字段补上系统通知。
+func TestParseMsgFeedNestedReply(t *testing.T) {
+	raw := `{"code":0,"data":{"items":[
+		{"id":4001,"user":{"mid":9527,"nickname":"追评君"},"reply_time":1700000003,"item":{
+			"business":"comment","business_id":1,"subject_id":111,
+			"root_id":222,"target_id":222,"source_id":333,
+			"source_content":"楼主说得不对","target_reply_content":"我的根评论",
+			"title":"视频A","uri":"bilibili://video/111"}}
+	]}}`
+	items, err := parseMsgFeed(raw, "reply")
+	if err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("应解析出 1 条，实际 %d", len(items))
+	}
+	item := items[0]
+	if item.Root != "222" || item.Parent != "222" {
+		t.Fatalf("回应应发在根评论 222 的追评位置（parent=root），实际 root=%q parent=%q", item.Root, item.Parent)
+	}
+	if !item.Nested || item.Mid != 9527 {
+		t.Fatalf("嵌套会话需要 @ 前缀与通知，Nested=%v Mid=%v", item.Nested, item.Mid)
+	}
+}
+
+// TestInboxReplyMessage 钉住发布文本的组装：嵌套会话带「回复 @昵称」前缀，
+// 对方是根评论作者时保持正文原样。
+func TestInboxReplyMessage(t *testing.T) {
+	nested := inboxItem{User: "追评君", Mid: 9527, Nested: true}
+	if got := inboxReplyMessage(nested, "谢谢支持啦"); got != "回复 @追评君 : 谢谢支持啦" {
+		t.Fatalf("嵌套会话应带回复前缀，实际 %q", got)
+	}
+	direct := inboxItem{User: "根作者", Mid: 100, Nested: false}
+	if got := inboxReplyMessage(direct, "谢谢支持啦"); got != "谢谢支持啦" {
+		t.Fatalf("非嵌套会话不应改写正文，实际 %q", got)
 	}
 }
 

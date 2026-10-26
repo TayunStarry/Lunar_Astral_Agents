@@ -2,19 +2,19 @@ package config
 
 var (
 	// AgentEmbeddingModel 核心智能体嵌入模型名称
-	AgentEmbeddingModel = "system-embedding"
+	AgentEmbeddingModel = "text_embedding"
 	// AgentEmbeddingURL 核心智能体嵌入服务 API 地址
 	AgentEmbeddingURL = "http://127.0.0.1:36789/v1"
 	// AgentEmbeddingKey 核心智能体嵌入服务 API 密钥
 	AgentEmbeddingKey = ""
 	// AgentMultimodalModel 核心智能体多模态模型名称
-	AgentMultimodalModel = "system-multimodal"
+	AgentMultimodalModel = "primary_reasoning"
 	// AgentMultimodalURL 核心智能体多模态服务 API 地址
 	AgentMultimodalURL = "http://127.0.0.1:36789/v1"
 	// AgentMultimodalKey 核心智能体多模态服务 API 密钥
 	AgentMultimodalKey = ""
 	// AgentASRModel 核心智能体语音识别模型名称
-	AgentASRModel = "system-asr"
+	AgentASRModel = "audio_transcriber"
 
 	// MmprojModel 多模态投影模型路径
 	MmprojModel = LocalDir + "/models/mmproj-Qwen3.GGUF"

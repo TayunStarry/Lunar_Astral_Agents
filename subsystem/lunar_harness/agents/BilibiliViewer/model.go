@@ -31,8 +31,14 @@ type chatMessage struct {
 
 // modelUsage OpenAI 兼容响应中的 token 用量
 type modelUsage struct {
-	Prompt     int64 `json:"prompt_tokens"`
-	Completion int64 `json:"completion_tokens"`
+	Prompt              int64               `json:"prompt_tokens"`
+	Completion          int64               `json:"completion_tokens"`
+	PromptTokensDetails *promptTokenDetails `json:"prompt_tokens_details,omitempty"`
+}
+
+// promptTokenDetails 输入 token 的细分（llama.cpp 回传的提示缓存命中数）
+type promptTokenDetails struct {
+	CachedTokens int64 `json:"cached_tokens"`
 }
 
 type imageURL struct {
@@ -61,16 +67,16 @@ var (
 	modelDelta      func(role, kind, text string)
 	modelEnd        func(role string)
 	// modelMeter 模型调用计量回调：生活链的调用同样计入「运行状态」的模型计量
-	modelMeter func(prompt, completion int64, generation time.Duration, estimated bool)
+	modelMeter func(prompt, completion, cached int64, generation time.Duration, estimated bool)
 )
 
-func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion int64, generation time.Duration, estimated bool)) {
+func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion, cached int64, generation time.Duration, estimated bool)) {
 	modelObserverMu.Lock()
 	defer modelObserverMu.Unlock()
 	modelBegin, modelDelta, modelEnd, modelMeter = begin, delta, end, meter
 }
 
-const lifeModelRole = "观影者"
+const lifeModelRole = "哔哩观影"
 
 func observeBegin() {
 	modelObserverMu.Lock()
@@ -120,19 +126,23 @@ func reportModelCall(requestBody []byte, completionText string, usage *modelUsag
 		return
 	}
 	if usage != nil && (usage.Prompt > 0 || usage.Completion > 0) {
-		fn(usage.Prompt, usage.Completion, elapsed, false)
+		cached := int64(0)
+		if usage.PromptTokensDetails != nil {
+			cached = usage.PromptTokensDetails.CachedTokens
+		}
+		fn(usage.Prompt, usage.Completion, cached, elapsed, false)
 		return
 	}
 	prompt := int64(utf8.RuneCountInString(string(requestBody))) / 3
 	completion := int64(utf8.RuneCountInString(completionText))
-	fn(prompt, completion, elapsed, true)
+	fn(prompt, completion, 0, elapsed, true)
 }
 
 func resolveModel() {
 	modelOnce.Do(func() {
 		modelName = strings.TrimSpace(config.AgentMultimodalModel)
 		if modelName == "" {
-			modelName = "system-multimodal"
+			modelName = "primary_reasoning"
 		}
 		modelURL = strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
 		if modelURL == "" {

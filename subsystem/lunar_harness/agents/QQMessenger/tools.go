@@ -1,6 +1,6 @@
 package QQMessenger
 
-// tools.go QQ 投递智能体的私有工具：解析目标、校验句柄、发送文本/图片/文件。
+// tools.go 专项通讯智能体的私有工具：解析目标、校验句柄、发送文本/图片/文件。
 //
 // 这些工具不暴露给对话者：对话者只能通过 network_explore(qq_send) 提交自然语言
 // 需求，由本智能体决定目标与投递方式，保证「发到哪里、发了什么」可控且可回报。
@@ -16,21 +16,54 @@ import (
 	"LunarSubsystem/LunarHarness/transport/napcat"
 )
 
-// executePlan 执行一次投递计划并返回给对话者的简要报告。
+// executePlan 依次执行多目标投递计划，并汇总每个目标的成败。
 func executePlan(plan sendPlan, instruction string, groups []napcat.QQGroup, friends []napcat.QQFriend) (string, error) {
-	if plan.Target == "" {
+	if len(plan.Deliveries) == 0 {
 		reason := plan.Reason
 		if reason == "" {
 			reason = "没有解析出明确的投递目标"
 		}
 		return "未执行：" + reason, nil
 	}
+
+	total := len(plan.Deliveries)
+	reports := make([]string, 0, total)
+	successes := 0
+	for index, delivery := range plan.Deliveries {
+		report, ok := executeDelivery(delivery, instruction, groups, friends)
+		if ok {
+			successes++
+		}
+		if total > 1 {
+			report = fmt.Sprintf("目标 %d/%d：\n%s", index+1, total, report)
+		}
+		reports = append(reports, report)
+	}
+
+	text := strings.Join(reports, "\n\n")
+	if successes == 0 {
+		return text, fmt.Errorf("全部投递失败")
+	}
+	// 部分成功不视为整体失败：报告里已逐项写明哪些目标未完成。
+	return text, nil
+}
+
+// executeDelivery 执行单个目标的投递，返回报告与该目标是否至少成功投递一项。
+func executeDelivery(delivery sendDelivery, instruction string, groups []napcat.QQGroup, friends []napcat.QQFriend) (string, bool) {
+	plan := delivery.asPlan()
+	if plan.Target == "" {
+		reason := plan.Reason
+		if reason == "" {
+			reason = "没有解析出明确的投递目标"
+		}
+		return "未执行：" + reason, false
+	}
 	target, err := resolveTarget(plan, groups, friends)
 	if err != nil {
-		return "", err
+		return "未执行：目标解析失败：" + err.Error(), false
 	}
 	if plan.Text == "" && len(plan.Images) == 0 && len(plan.Files) == 0 {
-		return "未执行：没有可发送的内容（文本 / 图片 / 文件都为空）", nil
+		return "未执行：没有可发送的内容（文本 / 图片 / 文件都为空）", false
 	}
 
 	images, files, failures := resolveAttachments(plan, instruction)
@@ -65,10 +98,20 @@ func executePlan(plan sendPlan, instruction string, groups []napcat.QQGroup, fri
 	}
 
 	report := outcome.report(target)
-	if !outcome.TextSent && outcome.ImagesSent == 0 && outcome.FilesSent == 0 && len(outcome.Failures) > 0 {
-		return report, fmt.Errorf("全部投递失败")
+	ok := outcome.TextSent || outcome.ImagesSent > 0 || outcome.FilesSent > 0
+	return report, ok
+}
+
+// asPlan 把单个投递目标转成旧的 sendPlan 视图，复用已有的目标解析与附件校验。
+func (delivery sendDelivery) asPlan() sendPlan {
+	return sendPlan{
+		TargetType: delivery.TargetType,
+		Target:     delivery.Target,
+		Text:       delivery.Text,
+		Images:     delivery.Images,
+		Files:      delivery.Files,
+		Reason:     delivery.Reason,
 	}
-	return report, nil
 }
 
 // attachment 已解析的句柄附件

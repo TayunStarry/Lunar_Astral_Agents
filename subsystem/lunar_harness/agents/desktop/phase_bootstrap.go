@@ -8,6 +8,7 @@ package desktop
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -52,8 +53,13 @@ func launcherPhase(ctx context.Context, plan editorTask, handoff *HandoffRecord)
 		messages = append(messages, chatMessage{Role: "assistant", Content: msg.Content, ToolCalls: []ltpToolCall{tc}})
 		args := parseLTPArgs(tc.Function.Arguments)
 		observeTool(autoRoleLauncher, tc.Function.Name, tc.Function.Arguments)
-		res, _ := dispatchWithDiff(tc.Function.Name, args)
-		if res.Success {
+		res, _, dispatchErr := dispatchWithDiff(ctx, tc.Function.Name, args)
+		if dispatchErr != nil {
+			if ctx.Err() != nil || errors.Is(dispatchErr, ErrCanceled) {
+				return ErrCanceled
+			}
+			lastErr = dispatchErr.Error()
+		} else if res.Success {
 			switch tc.Function.Name {
 			case "launch_program":
 				openedKey = ltpArgStr(args, "name")
@@ -70,14 +76,24 @@ func launcherPhase(ctx context.Context, plan editorTask, handoff *HandoffRecord)
 						key = filepath.Base(strings.TrimSpace(strings.TrimRight(p, `\`)))
 					}
 				}
-				if t := DTActivateLaunchByName(key); t != "" {
-					traceAuto("【启动者】启动即置前台: %s", t)
+				activated, _ := callDesktop(ctx, 3*time.Second, "激活目标窗口", func() (string, error) {
+					return DTActivateLaunchByName(key), nil
+				})
+				if activated != "" {
+					traceAuto("【启动者】启动即置前台: %s", activated)
 				} else {
 					// 首次启动可能慢于 900ms：再补两次，确保执行循环开始时前台已是目标应用
 					for attempt := 0; attempt < 2; attempt++ {
-						time.Sleep(600 * time.Millisecond)
-						if t := DTActivateLaunchByName(key); t != "" {
-							traceAuto("【启动者】启动即置前台（重试 %d）: %s", attempt+1, t)
+						select {
+						case <-ctx.Done():
+							return ErrCanceled
+						case <-time.After(600 * time.Millisecond):
+						}
+						retried, _ := callDesktop(ctx, 3*time.Second, "激活目标窗口", func() (string, error) {
+							return DTActivateLaunchByName(key), nil
+						})
+						if retried != "" {
+							traceAuto("【启动者】启动即置前台（重试 %d）: %s", attempt+1, retried)
 							break
 						}
 					}

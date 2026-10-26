@@ -105,9 +105,23 @@ type ModelTimings struct {
 
 // TokenUsage token 用量
 type TokenUsage struct {
-	PromptTokens     int64 `json:"prompt_tokens"`
-	CompletionTokens int64 `json:"completion_tokens"`
-	TotalTokens      int64 `json:"total_tokens"`
+	PromptTokens        int64               `json:"prompt_tokens"`
+	CompletionTokens    int64               `json:"completion_tokens"`
+	TotalTokens         int64               `json:"total_tokens"`
+	PromptTokensDetails *promptTokenDetails `json:"prompt_tokens_details,omitempty"`
+}
+
+// promptTokenDetails 输入 token 的细分（提示缓存命中数）
+type promptTokenDetails struct {
+	CachedTokens int64 `json:"cached_tokens"`
+}
+
+// cachedTokens 命中提示缓存的输入 token 数（未回传时为 0）
+func (u *TokenUsage) cachedTokens() int64 {
+	if u == nil || u.PromptTokensDetails == nil {
+		return 0
+	}
+	return u.PromptTokensDetails.CachedTokens
 }
 
 // AssistantMessage 助手回复消息
@@ -575,12 +589,9 @@ type DialogueRole struct {
 	ToolRounds         int
 	ActionClaimGuarded bool
 	ImageWindow        int
-	// PendingSpeeches 「边说边调工具」时随工具调用一起输出的正文，按时间顺序暂存；
-	// 拿到工具回调后的正式回答时统一拼到前面，避免中途文本被下一轮响应覆盖而丢失。
-	PendingSpeeches []string
 }
 
-// MemorizerRole 记忆者角色
+// MemorizerRole 记忆入库与检索流程（非独立智能体：不持有模型上下文，也不参与 function calling）
 type MemorizerRole struct{}
 
 // PainterRole 绘制者角色

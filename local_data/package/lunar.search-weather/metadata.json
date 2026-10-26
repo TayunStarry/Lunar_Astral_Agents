@@ -9,7 +9,7 @@
 	"tools": [
 		{
 			"name": "weather_news_query",
-			"description": "查询指定城市天气（智能体可选择和风天气/Open-Meteo/wttr.in 策略，支持自动回退与空气质量）或获取当日新闻摘要"
+			"description": "查询指定城市天气或获取当日新闻摘要"
 		}
 	],
 	"background_retention": true

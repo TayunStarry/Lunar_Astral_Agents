@@ -482,7 +482,7 @@ type webChatMessage struct {
 func webviewSummarize(page webExtract, queryHint string) (string, error) {
 	model := strings.TrimSpace(config.AgentMultimodalModel)
 	if model == "" {
-		model = "system-multimodal"
+		model = "primary_reasoning"
 	}
 	baseURL := strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
 	if baseURL == "" {

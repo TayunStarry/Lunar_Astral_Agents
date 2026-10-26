@@ -73,27 +73,31 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 		}
 	}
 
-	// 回归防线：上下文那组的热键应继续是 1-7（用户既有习惯不得因插入新条目而改变）
-	wantContext := []string{"1", "2", "3", "4", "5", "6"}
-	idx := 0
-	for _, opt := range dumpOptionList {
-		if opt.kind != dumpKindContext {
-			continue
+	// 回归防线：导出范围重划后，运行数据与各 Go 智能体的助记键必须固定。
+	wantKeys := []struct {
+		key  string
+		kind dumpKind
+	}{
+		{"l", dumpKindLogs},
+		{"t", dumpKindTranscript},
+		{"c", dumpKindContext},
+		{"w", dumpKindContext},
+		{"b", dumpKindContext},
+		{"d", dumpKindContext},
+		{"s", dumpKindContext},
+		{"q", dumpKindContext},
+		{"m", dumpKindContext},
+	}
+	for _, want := range wantKeys {
+		got := dumpHotkeyIndex(want.key)
+		if got < 0 || dumpOptionList[got].kind != want.kind {
+			t.Fatalf("热键 %q 未指向期望的导出类型", want.key)
 		}
-		if idx >= len(wantContext) || opt.hotkey != wantContext[idx] {
-			t.Fatalf("上下文热键位移: 第 %d 个为 %q，期望 %q", idx, opt.hotkey, wantContext[idx])
-		}
-		idx++
 	}
-	if idx != len(wantContext) {
-		t.Fatalf("上下文条目数应为 %d，实际 %d", len(wantContext), idx)
+	if got := dumpHotkeyIndex("c"); dumpOptionList[got].key != "core" {
+		t.Fatal("热键 c 应指向核心人格")
 	}
-
-	// 两个新增的运行数据条目用助记键
-	if got := dumpHotkeyIndex("l"); dumpOptionList[got].kind != dumpKindLogs {
-		t.Fatal("热键 l 应指向原始日志")
-	}
-	if got := dumpHotkeyIndex("t"); dumpOptionList[got].kind != dumpKindTranscript {
-		t.Fatal("热键 t 应指向核心智能实况")
+	if got := dumpHotkeyIndex("m"); dumpOptionList[got].key != "lunar_matrix" {
+		t.Fatal("热键 m 应指向互助论坛")
 	}
 }

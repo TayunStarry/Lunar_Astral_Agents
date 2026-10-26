@@ -1,6 +1,6 @@
 package BilibiliViewer
 
-// 观影者 · B 站真实浏览器版：一次完整观影流程。
+// 哔哩观影 · B 站真实浏览器版：一次完整观影流程。
 //
 // 流程由 flow 决定（standard / watch_comment / share / reply_only）：
 //   打开 B 站首页 → 未登录则点登录并等扫码（10s 一次，60s 放弃）
@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/prompts"
 )
 
@@ -274,106 +273,6 @@ func mentionAtFields(targets []MentionTarget) (names, mids string) {
 		midList = append(midList, fmt.Sprintf("%d", target.UID))
 	}
 	return strings.Join(nameList, ","), strings.Join(midList, ",")
-}
-
-// replyDynamic 读取动态评论并逐条回复，最多 max 条。
-func (w *webSession) replyDynamic(dynID string, max int) error {
-	listURL := fmt.Sprintf("https://api.bilibili.com/x/v2/reply?type=17&oid=%s&sort=2&ps=20", url.QueryEscape(dynID))
-	raw, err := w.pageFetchText("GET", listURL, "", "", 25*time.Second)
-	if err != nil {
-		return err
-	}
-	var list struct {
-		Code int `json:"code"`
-		Data struct {
-			Replies []struct {
-				Rpid      int64  `json:"rpid"`
-				RpidStr   string `json:"rpid_str"`
-				Root      int64  `json:"root"`
-				RootStr   string `json:"root_str"`
-				Parent    int64  `json:"parent"`
-				ParentStr string `json:"parent_str"`
-				Member    struct {
-					Uname string `json:"uname"`
-				} `json:"member"`
-				Content struct {
-					Message string `json:"message"`
-				} `json:"content"`
-			} `json:"replies"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(raw), &list); err != nil {
-		return err
-	}
-	if list.Code == -404 {
-		logger.Info("BilibiliViewer", "动态刚发布，评论索引尚未就绪或暂时没有评论")
-		return nil
-	}
-	if list.Code != 0 {
-		return fmt.Errorf("动态评论接口 code=%d", list.Code)
-	}
-	csrf := w.csrf()
-	if csrf == "" {
-		return fmt.Errorf("页面里读不到 bili_jct，无法回复动态")
-	}
-	sent := 0
-	for _, r := range list.Data.Replies {
-		if sent >= max {
-			break
-		}
-		if strings.TrimSpace(r.Content.Message) == "" {
-			continue
-		}
-		reply, err := generateReply(r.Member.Uname, r.Content.Message)
-		if err != nil {
-			logger.Warn("BilibiliViewer", "动态回复文案生成失败: %v", err)
-			continue
-		}
-		rpid := r.RpidStr
-		if rpid == "" && r.Rpid != 0 {
-			rpid = fmt.Sprintf("%d", r.Rpid)
-		}
-		root := r.RootStr
-		if root == "" && r.Root != 0 {
-			root = fmt.Sprintf("%d", r.Root)
-		}
-		parent := r.ParentStr
-		if parent == "" && r.Parent != 0 {
-			parent = fmt.Sprintf("%d", r.Parent)
-		}
-		if root == "" {
-			root = rpid
-		}
-		if parent == "" {
-			parent = rpid
-		}
-		form := url.Values{}
-		form.Set("type", "17")
-		form.Set("oid", dynID)
-		form.Set("message", reply)
-		form.Set("plat", "1")
-		form.Set("csrf", csrf)
-		form.Set("root", root)
-		form.Set("parent", parent)
-		text, err := w.pageFetchText("POST", "https://api.bilibili.com/x/v2/reply/add",
-			"application/x-www-form-urlencoded", form.Encode(), 25*time.Second)
-		if err != nil {
-			logger.Warn("BilibiliViewer", "回复 %s 失败: %v", r.Member.Uname, err)
-			continue
-		}
-		var resp struct {
-			Code int    `json:"code"`
-			Msg  string `json:"message"`
-		}
-		if err := json.Unmarshal([]byte(text), &resp); err != nil || resp.Code != 0 {
-			logger.Warn("BilibiliViewer", "回复 %s 被拒: %s", r.Member.Uname, truncate(text, 160))
-			continue
-		}
-		sent++
-		logger.Info("BilibiliViewer", "回复动态评论（%d/%d）→ %s：%s", sent, max, r.Member.Uname, reply)
-		time.Sleep(2 * time.Second)
-	}
-	return nil
 }
 
 func generateReply(user, message string) (string, error) {

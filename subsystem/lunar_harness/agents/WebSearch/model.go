@@ -23,7 +23,7 @@ func resolveModel() {
 	modelOnce.Do(func() {
 		modelName = strings.TrimSpace(config.AgentMultimodalModel)
 		if modelName == "" {
-			modelName = "system-multimodal"
+			modelName = "primary_reasoning"
 		}
 		modelURL = strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
 		if modelURL == "" {
@@ -240,17 +240,6 @@ func profileChatOptions(profile summaryProfile) chatOptions {
 		return chatOptions{}
 	}
 	return searchChatOptions(profile.Model)
-}
-
-// warmUpSearchModel 预热搜索模型：router 按需加载子进程，首字请求返回即可视为可用。
-func warmUpSearchModel(model string) error {
-	opts := searchChatOptions(model)
-	opts.MaxTokens = 8
-	opts.Silent = true
-	_, err := chatWithOptions([]chatMessage{
-		{Role: "user", Content: "回复一个字：好"},
-	}, opts)
-	return err
 }
 
 // ExtractQuery 把月华的自然语言指令提炼为检索词；失败时返回原指令。

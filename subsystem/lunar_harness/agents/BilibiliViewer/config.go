@@ -1,6 +1,6 @@
 package BilibiliViewer
 
-// 观影者 · B 站真实浏览器版：选片偏好与安全过滤。
+// 哔哩观影 · B 站真实浏览器版：选片偏好与安全过滤。
 //
 // 用户参考词与过滤词放在 local_data/bilibili_life.json（已 gitignore），
 // 不在代码里硬编码个人偏好；文件缺失时使用安全默认值。
@@ -69,7 +69,7 @@ type Config struct {
 	// @分享评论可以 @ 的用户列表；不再硬编码为某一个人
 	MentionTargets []MentionTarget `json:"mention_targets"`
 
-	// 每日可调用观影者刷视频的次数上限（仅统计包含观看视频的流程）
+	// 每日可调用哔哩观影刷视频的次数上限（仅统计包含观看视频的流程）
 	DailyLimit      int `json:"daily_limit"`
 	VideosPerRound  int `json:"videos_per_round"`  // 一轮最多刷几个视频（1-5）
 	RepliesPerRound int `json:"replies_per_round"` // 一轮可回应几次消息（评论/动态/私信共享）

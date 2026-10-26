@@ -2,14 +2,13 @@ package WebSearch
 
 // Web-Search · 网络搜索内置智能体（web_search）
 //
-//	步骤 0：卸载 system-multimodal → 加载 system-search → 搜索模型提炼检索词
-//	步骤 1：打开搜索结果页，从顶部到底部完整滚动并提取全部正文
-//	步骤 2：筛选指定数量的近期未访问链接，逐个进入详情页滚动并提取正文
-//	步骤 3：任一页面提取不到有效正文时直接舍弃该网页
-//	步骤 4：滚动过程中同步摘要，触底后停留等待摘要完成
-//	步骤 5：所有详情页完成后回到搜索结果主页面，整体汇总、归纳与结构化排版
-//	步骤 6：卸载 system-search（主模型交给 router 按需重载）
-//	步骤 7：返回最终搜索报告
+//	步骤 0：卸载 primary_reasoning → 加载 light_reasoning → 搜索模型提炼检索词（模型调用 1/2）
+//	步骤 1：打开「网页搜索:首页」，搜索引擎降级链 + 完整滚动 + 结果与正文提取，随后关闭首页
+//	步骤 2：从结果中筛选出需打开的详情页链接（去重/近期已访问过滤/数量上限）
+//	步骤 3：用「网页搜索:详情」同时打开全部详情页，全部等待加载后统一滚动提取正文，随后统一关窗
+//	步骤 4：把全部页面正文拼接为长文，连同提示词一口气交给模型做针对性摘要提取（模型调用 2/2）
+//	步骤 5：摘要提取结果即最终输出；仅失败时走确定性兜底
+//	步骤 6：卸载 light_reasoning（主模型交给 router 按需重载），返回最终输出
 //
 // 全程只使用文本，不依赖任何截图或视觉识别路径；业务完成后关闭浏览器页面。
 // 配置来自 engine/config 统一解析的 web_search 节。
@@ -43,13 +42,6 @@ func Run(instruction string) (string, error) {
 	defer unloadSearchModel()
 	query := ExtractQuery(instruction, profile)
 
-	// 步骤 1：打开独立浏览器会话，搜索引擎降级链 + 完整滚动 + 正文提取
-	sess, err := browser.OpenWebViewSession("", "琉璃 · 网络搜索", 1280, 860)
-	if err != nil {
-		return "", fmt.Errorf("打开浏览器会话失败: %w", err)
-	}
-	defer sess.Close()
-
 	var cache *PageCache
 	if cfg.cacheEnabled() {
 		if pc, perr := openPageCache(time.Duration(cfg.CacheTTLDays) * 24 * time.Hour); perr == nil {
@@ -60,40 +52,83 @@ func Run(instruction string) (string, error) {
 		}
 	}
 
-	outcome, err := searchWithFallback(sess, query, cfg, deadline)
+	// 步骤 1：打开「网页搜索:首页」，搜索降级链 + 完整滚动提取，完成后立即关闭首页
+	// （首页配额 = 总提取上限 ÷ 计划页面条目数，与详情页均分一致）
+	home, err := browser.OpenWebViewSession("", "网页搜索:首页", 1280, 860)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("打开浏览器会话失败: %w", err)
+	}
+	outcome, searchErr := searchWithFallback(home, query, cfg.perPageChars(cfg.detailCount()+1), cfg, deadline)
+	home.Close() // 首页使命完成，无论成败都关闭
+	if searchErr != nil {
+		return "", searchErr
 	}
 	logger.Info("CrystalAstral", "Web-Search 使用引擎 [%s]: %d 条结果", outcome.Engine.name, len(outcome.Extract.Results))
 
-	// 步骤 2-4：筛选指定数量的近期未访问链接，逐页滚动并同步摘要
-	n := cfg.MaxPages
+	// 步骤 2：筛选需打开的详情页链接（指令中的「前N个」优先于配置的条目余量）
+	n := cfg.detailCount()
 	if m := pageCountFromInstruction(instruction); m > 0 {
 		n = m
 	}
-	if n > webSearchPagesHardCap {
-		n = webSearchPagesHardCap
+	if n > webSearchPagesHardCap-1 {
+		n = webSearchPagesHardCap - 1
 	}
-	intels, interrupted := collectDetailPages(sess, outcome, query, cfg, cache, profile, n, deadline)
+	targets := planDetailPages(outcome, cache, n)
+	if len(targets) == 0 {
+		return "", fmt.Errorf("结果页中没有可打开的详情页（全部为重复/近期已访问）")
+	}
 
-	// 步骤 5：回到搜索结果主页面，整体汇总、归纳与结构化排版
-	searchText := revisitSearchPage(sess, outcome, cfg, deadline)
+	// 步骤 3：用「网页搜索:详情」同时打开全部详情页，全部加载后统一提取，随后统一关窗
+	captures, interrupted := collectDetailPages(targets, cfg, deadline)
+	cacheCaptures(cache, captures)
+
+	// 步骤 4：把全部页面正文拼接为长文，一次模型调用完成针对性摘要提取
+	// （以月华原始指令为准绳剔除噪音：只保留与所需信息直接相关的内容）
+	digest, digestErr := composeDigest(instruction, query, buildDigestSources(outcome.SearchText, captures), profile)
+	if digestErr != nil {
+		loggerWarn("摘要提取失败，输出将走确定性兜底: %v", digestErr)
+	}
+
+	// 步骤 5：摘要提取结果即最终输出（失败时兜底）
 	in := reportInput{
 		Instruction:    instruction,
 		Query:          query,
 		EngineName:     engineDisplayName(outcome.Engine.name),
 		Engine:         outcome.Extract,
-		SearchPageText: searchText,
-		Pages:          intels,
+		SearchPageText: outcome.SearchText,
+		Digest:         digest,
+		Pages:          captures,
 		Interrupted:    interrupted,
 		Elapsed:        time.Since(started).Truncate(time.Second).String(),
 	}
-	report := composeReport(in, profile)
+	report := composeReport(in)
+	recordLastSearch(query, outcome.Engine.name, report, len(captures), started)
 
-	// 步骤 6-7：返回前由 defer 卸载搜索模型，随后把报告交给月华
+	// 步骤 6：返回前由 defer 卸载搜索模型，随后把最终输出交给月华
 	logger.Info("CrystalAstral", "Web-Search 网络搜索完成: 引擎=%s, 检索词=%s, 页面=%d/%d, 中断=%v, 耗时=%s",
-		outcome.Engine.name, query, len(intels), n, interrupted, time.Since(started).Truncate(time.Second))
+		outcome.Engine.name, query, len(captures), n, interrupted, time.Since(started).Truncate(time.Second))
 	return report, nil
+}
+
+// buildDigestSources 组装统一摘要的正文来源：搜索结果页在前，详情页按打开顺序在后
+func buildDigestSources(searchText string, captures []PageCapture) []digestSource {
+	sources := make([]digestSource, 0, len(captures)+1)
+	if strings.TrimSpace(searchText) != "" {
+		sources = append(sources, digestSource{
+			Label: "搜索结果页",
+			Title: "搜索结果页（首页提取）",
+			Text:  searchText,
+		})
+	}
+	for i, cap := range captures {
+		sources = append(sources, digestSource{
+			Label: fmt.Sprintf("详情页 %d", i+1),
+			Title: firstNonEmpty(cap.Title, cap.Domain),
+			URL:   cap.URL,
+			Text:  cap.Text,
+		})
+	}
+	return sources
 }
 
 // pageCountFromInstruction 从指令中解析「前N个/页/条」的数量要求（无则 0）

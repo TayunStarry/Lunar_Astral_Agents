@@ -183,7 +183,7 @@ func ltp9HostTestAction(action string, m map[string]any, ack func(any, error)) {
 		payload["status"] = status
 		ack(payload, nil)
 	case "qwen_asr":
-		// 语音识别：base64 音频 → 经月华 system-asr（Qwen3-ASR）HTTP 接口转写为文本
+		// 语音识别：base64 音频 → 经月华 audio_transcriber（Qwen3-ASR）HTTP 接口转写为文本
 		// wav/mp3/flac/ogg 由 llama-server 音频解码器直接识别；其他格式先经 ffmpeg 转为 16kHz 单声道 WAV
 		audioB64 := asString("audio")
 		if strings.TrimSpace(audioB64) == "" {
@@ -287,7 +287,7 @@ func sniffAudioFormat(b64 string) string {
 	}
 }
 
-// transcribeViaYuehua 经 HTTP 调用月华的语音识别接口（system-asr，Qwen3-ASR）转写音频
+// transcribeViaYuehua 经 HTTP 调用月华的语音识别接口（audio_transcriber，Qwen3-ASR）转写音频
 // audioB64 为 llama-server 音频解码器原生支持格式（wav/mp3/flac/ogg）的 base64 编码
 // 返回剥离 "language xxx<asr_text>" 前缀后的转写正文
 func transcribeViaYuehua(audioB64 string, format string) (string, error) {

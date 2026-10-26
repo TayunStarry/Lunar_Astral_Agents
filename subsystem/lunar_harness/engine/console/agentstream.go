@@ -194,13 +194,23 @@ func GetTurnStoreInfo() TurnStoreInfo {
 // ==== 模型调用计量器（流式桥在每次调用完成时入账） ====
 
 // RecordModelCall 入账一次模型调用：
-// promptTokens/completionTokens 来自响应 usage（缺失时由调用方估算并置 estimated）。
-func RecordModelCall(promptTokens, completionTokens int64, generation time.Duration, estimated bool) {
+// promptTokens/completionTokens/cachedTokens 来自响应 usage（缺失时由调用方估算并置 estimated；
+// cachedTokens 表示其中命中提示缓存的输入 token，估算调用固定为 0）。
+func RecordModelCall(promptTokens, completionTokens, cachedTokens int64, generation time.Duration, estimated bool) {
 	meterMu.Lock()
 	defer meterMu.Unlock()
 	meterStats.Calls++
 	meterStats.PromptTokens += promptTokens
 	meterStats.CompletionTokens += completionTokens
+	if !estimated {
+		meterStats.CachedPromptTokens += cachedTokens
+	}
+	if promptTokens > meterStats.MaxPromptTokens {
+		meterStats.MaxPromptTokens = promptTokens
+	}
+	if completionTokens > meterStats.MaxCompletionTokens {
+		meterStats.MaxCompletionTokens = completionTokens
+	}
 	meterStats.GenerationNanos += int64(generation)
 	if estimated {
 		meterStats.EstimatedCalls++

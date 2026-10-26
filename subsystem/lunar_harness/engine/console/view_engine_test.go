@@ -24,10 +24,10 @@ func TestEngineScreenWithoutHooks(t *testing.T) {
 
 	m := newAppModel()
 	m.width, m.height = 120, 34
-	m.screen = screenEngine
+	m.screen = screenStats
 	out := m.View()
-	if !strings.Contains(out, "月华对话链") {
-		t.Fatalf("对话链屏标题缺失:\n%s", out)
+	if !strings.Contains(out, "对话链状态") {
+		t.Fatalf("运行状态页缺少对话链区块:\n%s", out)
 	}
 	if !strings.Contains(out, "宿主未接入") {
 		t.Fatalf("未接入钩子时应明确提示:\n%s", out)
@@ -57,9 +57,9 @@ func TestEngineScreenShowsStatus(t *testing.T) {
 
 	m := newAppModel()
 	m.width, m.height = 120, 40
-	m.screen = screenEngine
+	m.screen = screenStats
 	out := m.View()
-	for _, want := range []string{"对话链", "智能体", "重建次数", "3 次", "连续失败", "自动重建", "开启", "r", "b"} {
+	for _, want := range []string{"对话链", "智能体", "重建次数", "3 次", "连续失败", "自动重建", "开启", "r"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("状态表缺少 %q:\n%s", want, out)
 		}
@@ -82,7 +82,7 @@ func TestEngineScreenAcceptsLowercaseKeys(t *testing.T) {
 
 	m := newAppModel()
 	m.width, m.height = 120, 34
-	m.screen = screenEngine
+	m.screen = screenStats
 
 	// 小写 r：等同于大写 R，进入重载中
 	model, cmd := m.updateEngine(keyMsg("r"))
@@ -111,7 +111,7 @@ func TestEngineScreenManualReload(t *testing.T) {
 
 	m := newAppModel()
 	m.width, m.height = 120, 34
-	m.screen = screenEngine
+	m.screen = screenStats
 
 	// 第一次按 R：进入"重载中"
 	model, cmd := m.updateEngine(keyMsg("R"))
@@ -155,7 +155,7 @@ func TestEngineScreenReloadFailure(t *testing.T) {
 
 	m := newAppModel()
 	m.width, m.height = 120, 34
-	m.screen = screenEngine
+	m.screen = screenStats
 	model, _ := m.updateEngine(keyMsg("R"))
 	m = model.(appModel)
 	cmd := reloadEngineCmd("测试")
@@ -180,7 +180,7 @@ func TestEngineScreenDesktopOperatorManualStart(t *testing.T) {
 
 	m := newAppModel()
 	m.width, m.height = 120, 40
-	m.screen = screenEngine
+	m.screen = screenStats
 
 	model, _ := m.updateEngine(keyMsg("i"))
 	m = model.(appModel)
@@ -214,7 +214,7 @@ func TestEngineScreenDesktopOperatorInterrupt(t *testing.T) {
 
 	m := newAppModel()
 	m.width, m.height = 120, 40
-	m.screen = screenEngine
+	m.screen = screenStats
 
 	model, _ := m.updateEngine(keyMsg("x"))
 	m = model.(appModel)
@@ -241,7 +241,7 @@ func TestEngineScreenDesktopOperatorWithoutHooks(t *testing.T) {
 
 	m := newAppModel()
 	m.width, m.height = 120, 46
-	m.screen = screenEngine
+	m.screen = screenStats
 	out := m.View()
 	if !strings.Contains(out, "桌面操纵") || !strings.Contains(out, "宿主未接入桌面操纵") {
 		t.Fatalf("未接入桌面操纵钩子时应明确提示:\n%s", out)

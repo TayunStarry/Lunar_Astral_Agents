@@ -32,13 +32,16 @@ type engineState struct {
 	input textinput.Model
 }
 
-// engineKeys 引擎屏键位
+// engineKeys 引擎相关键位（运行状态屏底部提示）
 func engineKeys(s engineState) []keyHint {
 	if s.inputMode {
 		return []keyHint{kh("Enter", "启动桌面操纵"), kh("Esc", "取消输入")}
 	}
 	if s.busy {
-		return []keyHint{kh("r", "重建进行中…"), kh("i", "输入桌面操纵要求"), kh("x", "中断桌面操纵"), kh("Esc", "返回")}
+		return []keyHint{kh("r", "重建进行中…"), kh("i", "输入桌面操纵要求"), kh("x", "中断/强制结束"), kh("Esc", "返回")}
+	}
+	if status, wired := getDesktopOperatorStatus(); wired && status.Running && status.Stopping {
+		return []keyHint{kh("r", "重建对话链"), kh("i", "输入桌面操纵要求"), kh("x", "强制结束"), kh("Esc", "返回")}
 	}
 	return []keyHint{kh("r", "重建对话链"), kh("i", "输入桌面操纵要求"), kh("x", "中断桌面操纵"), kh("Esc", "返回")}
 }
@@ -83,9 +86,15 @@ func (m appModel) updateEngine(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			stopDesktopOperator()
-			m.engine.msg = "已请求中断桌面操纵"
-			m.engine.err = false
-			m.setNotice("桌面操纵中断中", false)
+			if status.Stopping {
+				m.engine.msg = "已强制结束桌面操纵"
+				m.engine.err = false
+				m.setNotice("桌面操纵已强制结束", false)
+			} else {
+				m.engine.msg = "已请求中断；若 4 秒内未退出，再按 x 可强制结束"
+				m.engine.err = false
+				m.setNotice("桌面操纵中断中", false)
+			}
 			return m, nil
 		case "R", "r":
 			if m.engine.busy {
@@ -150,61 +159,6 @@ func reloadEngineCmd(reason string) tea.Cmd {
 	return func() tea.Msg {
 		return engineDoneMsg{err: reloadMoonEngine(reason)}
 	}
-}
-
-// viewEngine 对话链屏渲染：状态 + 手动重建 + 人工入口
-func (m appModel) viewEngine() string {
-	const labelW = 12
-
-	f := m.frameFor("月华对话链 管理", "Go native", engineKeys(m.engine))
-	w, h := f.bodySize()
-
-	lines := append([]string{}, sectionRule("对话链状态", w), "")
-	lines = append(lines, viewEngineChainState(w)...)
-
-	lines = append(lines, "", sectionRule("手动重建", w), "")
-	hint := []string{
-		"按 " + keyStyle.Render("r") + " 清空并重建 Go 对话链状态（上下文会重置）；",
-		"重建期间对话链暂停，模型服务若已停止会一并拉起。",
-	}
-	for _, one := range hint {
-		for _, seg := range wrapPlain(one, maxInt(20, w-4)) {
-			lines = append(lines, "  "+dimStyle.Render(seg))
-		}
-	}
-
-	if m.engine.busy {
-		lines = append(lines, "", "  "+selectStyle.Render(m.spinner.View()+" 正在重建…"))
-	} else if m.engine.msg != "" {
-		lines = append(lines, "")
-		if m.engine.err {
-			lines = append(lines, "  "+errStyle.Render("✗ "+m.engine.msg))
-		} else {
-			lines = append(lines, "  "+okStyle.Render("✓ "+m.engine.msg))
-		}
-	}
-
-	lines = append(lines, "", sectionRule("桌面操纵智能体", w), "")
-	lines = append(lines, m.viewDesktopOperatorState(w)...)
-	lines = append(lines, "")
-	if m.engine.inputMode {
-		lines = append(lines, formBox([]string{
-			fieldRow("任务要求", m.engine.input, true, labelW),
-		}, w)...)
-		for _, seg := range wrapPlain("Enter 启动 · Esc 取消；运行中可随时按 x 中断", maxInt(20, w-4)) {
-			lines = append(lines, "  "+dimStyle.Render(seg))
-		}
-	} else {
-		for _, seg := range wrapPlain(
-			"按 "+keyStyle.Render("i")+" 输入要求并启动，按 "+keyStyle.Render("x")+" 随时中断；"+
-				"对话者开始推理与应答时会自动终止桌面操纵，避免继续抢占桌面键鼠。",
-			maxInt(20, w-4)) {
-			lines = append(lines, "  "+dimStyle.Render(seg))
-		}
-	}
-
-	f.status = dimStyle.Render("Go 对话链")
-	return f.render(fitLines(lines, h))
 }
 
 // viewEngineChainState 对话链状态区块（未接入钩子时给出明确结论，而不是一片空白）
@@ -297,7 +251,9 @@ func (m appModel) viewDesktopOperatorState(w int) []string {
 
 	lines := make([]string, 0, 6)
 	stateText := okStyle.Render("空闲")
-	if status.Running {
+	if status.Stopping {
+		stateText = warnStyle.Render(m.spinner.View() + " 停止中…")
+	} else if status.Running {
 		stateText = selectStyle.Render(m.spinner.View() + " 运行中")
 	}
 	lines = append(lines, "  "+kvRow("状态", stateText, labelW))
@@ -319,10 +275,16 @@ func (m appModel) viewDesktopOperatorState(w int) []string {
 	addWrap("本轮要求", status.Instruction)
 	if status.Running {
 		addWrap("已运行", formatDuration(time.Since(status.StartedAt)))
-	} else if status.Error != "" {
-		addWrap("最近结果", errStyle.Render(status.Error))
-	} else if status.Result != "" {
-		addWrap("最近结果", status.Result)
+	}
+	if status.Running && status.Stopping {
+		addWrap("提示", "已请求中断，等待任务退出；再按 x 可立即强制结束")
+	}
+	if !status.Running {
+		if status.Error != "" {
+			addWrap("最近结果", errStyle.Render(status.Error))
+		} else if status.Result != "" {
+			addWrap("最近结果", status.Result)
+		}
 	}
 	return lines
 }

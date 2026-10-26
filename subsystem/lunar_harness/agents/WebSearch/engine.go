@@ -18,7 +18,8 @@ import (
 
 // searchWithFallback 依序尝试搜索引擎降级链，返回首个有效结果页。
 // 有效 = 导航成功 + 识别为搜索结果页 + 过滤字典站/去重后仍有结果 + 非工具站兜底 + 正文可提取。
-func searchWithFallback(sess *browser.WebViewSession, query string, cfg Config, deadline time.Time) (searchOutcome, error) {
+// homeTextMax 是首页（搜索结果页）的正文提取配额（总上限由所有页面均分）。
+func searchWithFallback(sess *browser.WebViewSession, query string, homeTextMax int, cfg Config, deadline time.Time) (searchOutcome, error) {
 	var lastErr error
 	for _, e := range engineFallbackOrder {
 		searchURL := e.searchURL + url.QueryEscape(query)
@@ -55,7 +56,7 @@ func searchWithFallback(sess *browser.WebViewSession, query string, cfg Config, 
 		page.Results = results
 
 		// 搜索结果页：从顶部到底部完整滚动，同步提取整页文本（触发懒加载并补全结果）
-		walk := walkPage(sess, cfg, deadline, nil)
+		walk := walkPage(sess, homeTextMax, cfg, deadline, nil)
 		if strings.TrimSpace(walk.Text) == "" {
 			lastErr = fmt.Errorf("%s 结果页无法提取有效正文", e.name)
 			logger.Info("CrystalAstral", "Web-Search [%s] 结果页正文为空，尝试下一引擎", e.name)

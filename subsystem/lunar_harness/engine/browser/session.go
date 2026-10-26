@@ -86,6 +86,8 @@ func OpenWebViewSession(url string, title string, width int, height int) (*WebVi
 		s.wv = w
 		w.SetTitle(title)
 		w.SetSize(width, height, webview.HintNone)
+		// 会话窗口（网络搜索、B 站等）统一使用默认图标 icon.ico
+		applyDefaultWindowIcon(w)
 
 		// 结果回传绑定：Eval 注入的脚本通过 __lunarReport 把结果送回 Go（UI 线程回调，只做非阻塞投递）
 		_ = w.Bind("__lunarReport", func(args ...interface{}) interface{} {

@@ -97,21 +97,19 @@ type ModelConfig struct {
 		// 未配置或空数组时不追加任何内容）
 		AppendSettings []string `json:"append_settings"`
 	} `json:"agent"`
-	// 网络搜索智能体（web_search）：检索词提炼、逐页摘要与浏览器滚动策略。
+	// 网络搜索智能体（web_search）：检索词提炼、统一摘要与浏览器滚动策略。
 	// 仅由琉璃的内置 Web-LTP（agents/WebSearch）消费，与其余配置节统一在此解析，
 	// 智能体侧只读取解析后的全局值，不再自行读取 lunar_config.json。
 	WebSearch struct {
-		SearchModel     string `json:"search_model"`            // 检索词提炼与逐页摘要使用的模型名
+		SearchModel     string `json:"search_model"`            // 检索词提炼与统一摘要使用的模型名
 		SwapModel       *bool  `json:"swap_model,omitempty"`    // 搜索前卸载主模型、加载搜索模型（未配置默认开启）
-		MaxPages        int    `json:"max_pages"`               // 进入详情页的页数上限（智能体侧再施加硬上限）
+		MaxPages        int    `json:"max_pages"`               // 页面条目总数：首页恒占 1 条，其余为同时打开的详情页
 		MaxResults      int    `json:"max_results"`             // 结果页解析的检索结果条数
-		SummaryMaxChars int    `json:"summary_max_chars"`       // 单页摘要硬切断字符数
+		SummaryMaxChars int    `json:"summary_max_chars"`       // 统一摘要硬切断字符数
 		MaxRunSeconds   int    `json:"max_run_seconds"`         // 单次检索总时长软上限（秒）
 		CacheEnabled    *bool  `json:"cache_enabled,omitempty"` // 近期访问标记开关（未配置默认开启）
 		CacheTTLDays    int    `json:"cache_ttl_days"`          // 近期访问标记的有效期（天）
-		TextChunkChars  int    `json:"text_chunk_chars"`        // 文本摘要的单段字符数
-		TextMaxChars    int    `json:"text_max_chars"`          // 单页正文提取硬上限
-		TextMaxChunks   int    `json:"text_max_chunks"`         // 单页最多参与摘要的文本段数
+		TextTotalChars  int    `json:"text_total_chars"`        // 全部页面正文的总提取硬上限（由所有页面均分）
 		ScrollSettleMS  int    `json:"scroll_settle_ms"`        // 每次滚动后的等待毫秒数
 		ScrollMaxSteps  int    `json:"scroll_max_steps"`        // 单页滚动步数上限
 	} `json:"web_search"`
@@ -549,14 +547,8 @@ func applyConfig(parameter *ModelConfig) []string {
 	if parameter.WebSearch.CacheTTLDays > 0 {
 		WebSearchCacheTTLDays = parameter.WebSearch.CacheTTLDays
 	}
-	if parameter.WebSearch.TextChunkChars > 0 {
-		WebSearchTextChunkChars = parameter.WebSearch.TextChunkChars
-	}
-	if parameter.WebSearch.TextMaxChars > 0 {
-		WebSearchTextMaxChars = parameter.WebSearch.TextMaxChars
-	}
-	if parameter.WebSearch.TextMaxChunks > 0 {
-		WebSearchTextMaxChunks = parameter.WebSearch.TextMaxChunks
+	if parameter.WebSearch.TextTotalChars > 0 {
+		WebSearchTextTotalChars = parameter.WebSearch.TextTotalChars
 	}
 	if parameter.WebSearch.ScrollSettleMS > 0 {
 		WebSearchScrollSettleMS = parameter.WebSearch.ScrollSettleMS

@@ -81,7 +81,7 @@ const (
 	screenMarket
 	screenLTP9Auth
 	screenDump
-	screenEngine
+	screenTools
 )
 
 // menuItem 主菜单条目：快捷键、分组与目标屏幕均显式声明。
@@ -123,10 +123,10 @@ var menuItems = []menuItem{
 	{key: "9", title: "绘图日志", group: "运行观测", screen: screenDraw,
 		desc: "sd.cpp 绘图引擎输出（进度 / 采样速度 / 时间统计），顶部附采样进度"},
 	{key: "a", title: "数据导出", group: "运行观测", screen: screenDump,
-		desc: "把原始日志导出为 .log（JSON Lines）、把月华主上下文或任一子智能体上下文导出为 .json"},
+		desc: "导出原始日志、推理实况、核心人格，以及网络搜索 / 哔哩观影 / 桌面操作 / 专项通讯 / 互助论坛 等 Go 智能体上下文"},
 
-	{key: "b", title: "月华链路", group: "系统管理", screen: screenEngine,
-		desc: "查看 Go 对话链状态并手动重建；桌面操纵智能体的唯一人工入口（输入要求启动、随时中断）"},
+	{key: "b", title: "工具列表", group: "系统管理", screen: screenTools,
+		desc: "扫描并展示全部 Go 智能体（对话者 / 绘制者 / 演奏者 / 描述者 / 网络搜索 / 哔哩观影 / 专项通讯 / 桌面操作 / 互助论坛）的工具与说明"},
 	{key: "c", title: "前端页面", group: "系统管理", screen: screenFrontend,
 		desc: "月华 / 琉璃桌面窗口状态探测与意外关闭重启"},
 	{key: "d", title: "局域共享", group: "系统管理", screen: screenProxy,
@@ -186,6 +186,7 @@ type appModel struct {
 	ltp9Auth  ltp9AuthState
 	dump      dumpState
 	engine    engineState
+	tools     toolsState
 
 	streamUnsub func() // 流式事件订阅注销
 	sizeLogged  bool   // 首帧尺寸自检是否已落盘
@@ -261,6 +262,10 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statsTickMsg:
 		m.stats.snap = GetSnapshot()
 		return m, tickStats()
+
+	case engineDoneMsg:
+		// 重建可能在用户切屏后完成：在顶层收尾，避免状态永远停在「重建中」。
+		return m.updateEngine(msg)
 
 	case progressMsg:
 		m.applyProgress(int(msg))
@@ -353,8 +358,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateLTP9Auth(msg)
 	case screenDump:
 		return m.updateDump(msg)
-	case screenEngine:
-		return m.updateEngine(msg)
+	case screenTools:
+		return m.updateTools(msg)
 	}
 	return m, nil
 }
@@ -416,7 +421,7 @@ func (m appModel) inputFocused() bool {
 		case updateInputTag, updateInputHash, updateInputToken:
 			return true
 		}
-	case screenEngine:
+	case screenStats:
 		return m.engine.inputMode
 	}
 	return false
@@ -524,6 +529,8 @@ func (m *appModel) enterScreen(id screenID) tea.Cmd {
 		return m.ltp9AuthEnter()
 	case screenDump:
 		return m.dumpEnter()
+	case screenTools:
+		return m.toolsEnter()
 	}
 	return nil
 }
@@ -789,8 +796,8 @@ func (m appModel) View() string {
 		return m.viewLTP9Auth()
 	case screenDump:
 		return m.viewDump()
-	case screenEngine:
-		return m.viewEngine()
+	case screenTools:
+		return m.viewTools()
 	}
 	return ""
 }
@@ -803,7 +810,7 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 	case screenAgent:
 		return "核心智能 实况", "", agentKeys(m.agent)
 	case screenStats:
-		return "运行状态", "采样间隔 1s", statsKeys()
+		return "运行状态", "采样 1s · Go 对话链", engineKeys(m.engine)
 	case screenRaw:
 		return "原始日志", "全量 stdout + 结构化日志", logsKeys()
 	case screenLunarJS:
@@ -830,8 +837,8 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 		return "LTP9 授权签发", ltp9AuthContext(m.ltp9Auth), ltp9AuthKeys(m.ltp9Auth)
 	case screenDump:
 		return "数据导出", dumpContextLine(m.dump), dumpKeys(m.dump)
-	case screenEngine:
-		return "月华对话链 管理", "Go native", engineKeys(m.engine)
+	case screenTools:
+		return "工具列表", toolsContextLine(m.tools), toolsKeys()
 	}
 	return "未知", "", nil
 }

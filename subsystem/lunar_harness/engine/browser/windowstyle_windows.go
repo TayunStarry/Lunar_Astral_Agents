@@ -33,15 +33,24 @@ func applyWindowStyle(w webview.WebView) {
 		return
 	}
 
-	if config.WebViewIconPath != "" {
-		setWindowIcon(hwnd, config.WebViewIconPath)
-	}
+	// 未显式指定 --webview-icon 时统一使用默认图标（icon.ico）
+	setWindowIcon(hwnd, iconPathOr(config.WebViewIconPath))
 
 	if config.WebViewCaptionColor != "" ||
 		config.WebViewBorderColor != "" ||
 		config.WebViewDarkTitleBar {
 		setTitleBarStyle(hwnd)
 	}
+}
+
+// applyDefaultWindowIcon 为通用窗口（非月华/琉璃前端）应用默认图标 icon.ico（需在 UI 线程、Run 之前调用）
+func applyDefaultWindowIcon(w webview.WebView) {
+	hwnd := uintptr(w.Window())
+	if hwnd == 0 {
+		logger.SubError("browser", "applyDefaultWindowIcon", "获取窗口句柄失败，跳过图标设置")
+		return
+	}
+	setWindowIcon(hwnd, defaultIconPath)
 }
 
 // setWindowIcon 通过 WM_SETICON 设置窗口小图标（标题栏/Alt-Tab）与大图标（任务栏）

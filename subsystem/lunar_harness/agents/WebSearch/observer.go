@@ -15,7 +15,7 @@ func loggerWarn(format string, args ...any) {
 }
 
 // SetModelObserver 注入实况观察者与计量回调（app 层启动时调用）
-func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion int64, generation time.Duration, estimated bool)) {
+func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion, cached int64, generation time.Duration, estimated bool)) {
 	observerMu.Lock()
 	defer observerMu.Unlock()
 	observerBegin, observerDelta, observerEnd, observerMeter = begin, delta, end, meter
@@ -64,10 +64,14 @@ func reportModelCall(requestBody []byte, completionText string, usage *modelUsag
 		return
 	}
 	if usage != nil && (usage.Prompt > 0 || usage.Completion > 0) {
-		fn(usage.Prompt, usage.Completion, elapsed, false)
+		cached := int64(0)
+		if usage.PromptTokensDetails != nil {
+			cached = usage.PromptTokensDetails.CachedTokens
+		}
+		fn(usage.Prompt, usage.Completion, cached, elapsed, false)
 		return
 	}
 	prompt := int64(utf8.RuneCountInString(string(requestBody))) / 3
 	completion := int64(utf8.RuneCountInString(completionText))
-	fn(prompt, completion, elapsed, true)
+	fn(prompt, completion, 0, elapsed, true)
 }

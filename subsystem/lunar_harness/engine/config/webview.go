@@ -13,7 +13,7 @@ var (
 	WebViewMinHeight = 324
 	// WebViewResizable webview 窗口是否可调整大小
 	WebViewResizable = true
-	// WebViewIconPath webview 窗口图标 .ico 文件路径（空则不设置）
+	// WebViewIconPath webview 窗口图标 .ico 文件路径（空则使用默认图标 icon.ico）
 	WebViewIconPath = ""
 	// WebViewCaptionColor webview 标题栏背景色（#RRGGBB，仅 Windows 11 生效）
 	WebViewCaptionColor = ""

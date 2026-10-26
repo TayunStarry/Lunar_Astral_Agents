@@ -43,7 +43,7 @@ type DesktopWindowSpec struct {
 	// Width/Height 窗口尺寸
 	Width  int
 	Height int
-	// IconPath 窗口图标（.ico 路径，空则沿用默认图标）
+	// IconPath 窗口图标（.ico 路径，空则使用默认图标 icon.ico）
 	IconPath string
 	// InitJS 页面注入脚本（每个新文档创建时执行）
 	InitJS string

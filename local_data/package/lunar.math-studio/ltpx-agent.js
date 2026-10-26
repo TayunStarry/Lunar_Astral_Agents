@@ -42,9 +42,9 @@ async function loadMSAgentModel() {
             if (!resp.ok) throw new Error('读取配置失败 HTTP ' + resp.status);
             const cfg = await resp.json();
             const agent = (cfg && cfg.agent) || {};
-            return (agent.multimodal_model && String(agent.multimodal_model)) || 'system-multimodal';
+            return (agent.multimodal_model && String(agent.multimodal_model)) || 'primary_reasoning';
         } catch (e) {
-            return 'system-multimodal';
+            return 'primary_reasoning';
         }
     })();
     return msModelConfigPromise;

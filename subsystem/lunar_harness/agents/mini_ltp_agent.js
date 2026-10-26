@@ -60,14 +60,14 @@
                 const cfg = await resp.json();
                 const agent = (cfg && cfg.agent) || {};
                 modelConfig = {
-                    model: (agent.multimodal_model && String(agent.multimodal_model)) || 'system-multimodal',
+                    model: (agent.multimodal_model && String(agent.multimodal_model)) || 'primary_reasoning',
                     base_url: (agent.multimodal_url && String(agent.multimodal_url)) || '/v1',
                     api_key: agent.multimodal_key || null
                 };
                 return modelConfig;
             } catch (e) {
                 // 读取失败回退默认（与配置中的占位值一致，仍走同源 /v1 代理解析）
-                modelConfig = { model: 'system-multimodal', base_url: '/v1', api_key: null };
+                modelConfig = { model: 'primary_reasoning', base_url: '/v1', api_key: null };
                 return modelConfig;
             }
         })();

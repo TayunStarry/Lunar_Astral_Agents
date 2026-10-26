@@ -531,7 +531,7 @@ async function streamAI(messages) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: 'system-multimodal',
+            model: 'primary_reasoning',
             messages: messages,
             stream: true,
             temperature: 0.3
@@ -579,7 +579,7 @@ async function callAI(messages) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: 'system-multimodal',
+            model: 'primary_reasoning',
             messages: messages,
             stream: false,
             temperature: 0.3

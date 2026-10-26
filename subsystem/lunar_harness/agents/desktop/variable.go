@@ -46,7 +46,7 @@ var (
 	autoObsDelta   func(role, kind, text string)
 	autoObsEnd     func(role string)
 	autoObsTool    func(role, name, args string)
-	autoObsMeter   func(prompt, completion int64, generation time.Duration, estimated bool)
+	autoObsMeter   func(prompt, completion, cached int64, generation time.Duration, estimated bool)
 )
 
 // dtBuiltinPrograms 常见系统程序的中文/口语别名 → 实际可执行文件名。
@@ -74,8 +74,23 @@ var runMu sync.Mutex
 // runCancel 取消当前运行中的任务（nil 表示没有任务在运行）。
 var runCancel context.CancelFunc
 
+// runDone 当前任务的退出信号；任务 goroutine 在真正收尾时关闭。
+var runDone chan struct{}
+
+// runSeq 运行代次：强制结束后递增，用于忽略旧任务迟到的收尾。
+var runSeq int64
+
 // runState 当前/最近一次运行状态。
 var runState RunState
+
+const (
+	// stopWaitTimeout 请求中断后等待任务自行退出的时长；超时则强制收尾。
+	stopWaitTimeout = 4 * time.Second
+	// desktopCallTimeout 单个桌面原语（UIA / 键鼠 / 截图）的最长执行时间。
+	desktopCallTimeout = 10 * time.Second
+	// uiaDumpTimeout 读取 UIA 树的最长执行时间。
+	uiaDumpTimeout = 5 * time.Second
+)
 
 // 模型配置缓存：惰性读取一次后端 lunar_config.json 中 agent 多模态字段。
 var autoConfigOnce sync.Once

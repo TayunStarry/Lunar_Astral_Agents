@@ -57,7 +57,7 @@ var (
 	// observerEnd 实况结束回调
 	observerEnd func(role string)
 	// observerMeter 模型调用计量回调（运行状态屏的模型计量）
-	observerMeter func(prompt, completion int64, generation time.Duration, estimated bool)
+	observerMeter func(prompt, completion, cached int64, generation time.Duration, estimated bool)
 
 	// promptMu 保护提示词缓存
 	promptMu sync.Mutex

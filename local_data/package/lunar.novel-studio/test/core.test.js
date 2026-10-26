@@ -80,7 +80,7 @@ test('ConfigManager.getConfig 默认兜底配置', () => {
     const cm = new ConfigManager({});
     cm.agentConfig = null;
     const cfg = cm.getConfig();
-    assert.strictEqual(cfg.name, 'system-multimodal');
+    assert.strictEqual(cfg.name, 'primary_reasoning');
     assert.strictEqual(cfg.url, 'http://127.0.0.1:36789/v1');
     assert.strictEqual(cfg.key, '');
 });
@@ -102,7 +102,7 @@ test('ConfigManager.getConfig 读取 agent 配置（兼容 {url,name,key} 形态
 test('ConfigManager.getEmbeddingModel 默认与自定义', () => {
     const cm = new ConfigManager({});
     cm.agentConfig = null;
-    assert.strictEqual(cm.getEmbeddingModel(), 'system-embedding');
+    assert.strictEqual(cm.getEmbeddingModel(), 'text_embedding');
     cm.agentConfig = { embedding_model: 'my-embed' };
     assert.strictEqual(cm.getEmbeddingModel(), 'my-embed');
 });

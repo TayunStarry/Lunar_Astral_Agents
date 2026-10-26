@@ -14,7 +14,7 @@ import (
 
 // embeddingRequest 对应 OpenAI 兼容 /v1/embeddings 请求体
 type embeddingRequest struct {
-	Model string   `json:"model"` // 模型名，固定 [system-embedding]
+	Model string   `json:"model"` // 模型名，固定 [text_embedding]
 	Input []string `json:"input"` // 待嵌入文本列表
 }
 

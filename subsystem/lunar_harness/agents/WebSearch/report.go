@@ -1,80 +1,32 @@
 package WebSearch
 
-// report.go 报告汇编：搜索页正文 + 逐页文本情报 + 「网络搜索」口吻的结构化报告
+// report.go 输出收口：摘要提取的产出（digest）就是递交给对话者的最终内容，
+// 不再有报告撰写模型调用——一次网络搜索只调用两次模型（检索词提炼 + 摘要提取）。
+// 仅当摘要提取失败时，用确定性文本兜底，保证调用方拿到结构清晰的结果。
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 )
 
-// composeReport 汇编搜索报告：优先模型撰写（网络搜索操作旅程口吻），失败时确定性文本兜底
-func composeReport(in reportInput, profile summaryProfile) string {
-	report, err := composeReportByModel(in, profile)
-	if err != nil {
-		loggerWarn("模型报告撰写失败，使用确定性报告: %v", err)
-		return composeReportFallback(in)
+// composeReport 输出收口：优先采用模型的摘要提取结果；失败时确定性兜底
+func composeReport(in reportInput) string {
+	if strings.TrimSpace(in.Digest) != "" {
+		return strings.TrimSpace(in.Digest)
 	}
-	return report
+	loggerWarn("摘要提取为空，使用确定性兜底输出")
+	return composeReportFallback(in)
 }
 
-// composeReportByModel 模型撰写报告（纯文本）；模型由摘要档位决定
-func composeReportByModel(in reportInput, profile summaryProfile) (string, error) {
-	engineHits := make([]map[string]any, 0, len(in.Engine.Results))
-	for i, hit := range in.Engine.Results {
-		if i >= 15 {
-			break
-		}
-		engineHits = append(engineHits, map[string]any{
-			"title":   hit.Title,
-			"domain":  domainOf(hit.URL),
-			"snippet": truncateRunes(hit.Snippet, 100),
-		})
-	}
-	pages := make([]map[string]any, 0, len(in.Pages))
-	for i, p := range in.Pages {
-		pages = append(pages, map[string]any{
-			"order":      i + 1,
-			"title":      p.Title,
-			"url":        p.URL,
-			"domain":     p.Domain,
-			"summary":    p.Summary,
-			"text_chars": p.TextChars,
-			"chunks":     p.Chunks,
-		})
-	}
-
-	payload, err := json.Marshal(map[string]any{
-		"instruction":      in.Instruction,
-		"query":            in.Query,
-		"engine":           map[string]any{"count": len(in.Engine.Results), "results": engineHits},
-		"search_page_text": truncateRunes(in.SearchPageText, 4000),
-		"pages":            pages,
-		"elapsed":          in.Elapsed,
-		"interrupted":      in.Interrupted,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	engineName := firstNonEmpty(in.EngineName, "必应")
-	system := renderPrompt(loadPrompt("webSearchReport.md"), "{engine}", engineName)
-
-	return chatWithOptions([]chatMessage{
-		{Role: "system", Content: system},
-		{Role: "user", Content: string(payload)},
-	}, profileChatOptions(profile))
-}
-
-// composeReportFallback 确定性报告兜底（模型不可用时）
+// composeReportFallback 确定性兜底（摘要模型调用失败时）
 func composeReportFallback(in reportInput) string {
 	engineName := firstNonEmpty(in.EngineName, "必应")
 	var b strings.Builder
-	b.WriteString("【网络搜索报告】")
+	b.WriteString("【网络搜索兜底输出】")
 	if in.Interrupted {
 		b.WriteString("（浏览器窗口在中途被关闭，以下基于已采集信息）")
 	}
-	b.WriteString("\n\n检索词「")
+	b.WriteString("\n\n本次未能完成针对性摘要提取，以下为原始采集信息。\n检索词「")
 	b.WriteString(in.Query)
 	b.WriteString("」，")
 	b.WriteString(engineName)
@@ -86,7 +38,7 @@ func composeReportFallback(in reportInput) string {
 
 	if strings.TrimSpace(in.SearchPageText) != "" {
 		b.WriteString("\n◆ 搜索页概览：\n")
-		b.WriteString(truncateRunes(in.SearchPageText, 1500))
+		b.WriteString(hardCutRunes(in.SearchPageText, 1500))
 		b.WriteString("\n")
 	}
 
@@ -101,12 +53,12 @@ func composeReportFallback(in reportInput) string {
 	}
 
 	if len(in.Pages) > 0 {
-		b.WriteString("\n◆ 逐页情报：\n")
+		b.WriteString("\n◆ 打开的页面：\n")
 		for i, p := range in.Pages {
-			fmt.Fprintf(&b, "%d. 打开了「%s」（%s，正文 %d 字）：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.TextChars, p.Summary)
+			fmt.Fprintf(&b, "%d. 「%s」（%s，正文 %d 字）\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.TextChars)
 		}
 	} else {
-		b.WriteString("\n◆ 逐页情报：本次未获取到可用的详情页内容。\n")
+		b.WriteString("\n◆ 打开的页面：本次未获取到可用的详情页内容。\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

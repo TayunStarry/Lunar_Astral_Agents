@@ -30,7 +30,6 @@ func (role *DialogueRole) generateDialogue(cache *ChatCache) {
 	role.applyAppendSettings()
 	role.ToolRounds = 0
 	role.ActionClaimGuarded = false
-	role.PendingSpeeches = nil
 	stateMu.Lock()
 	lastFailure = ""
 	stateMu.Unlock()
@@ -91,16 +90,16 @@ func (role *DialogueRole) continueDialogue(cache *ChatCache, guardNote *PostMess
 		role.writeContext(messageFromAssistant(message))
 		if role.ToolRounds >= maxToolRounds {
 			logger.Warn(lunarCoreModule, "[对话者] 工具调用轮次达到上限（%d），停止继续调用", maxToolRounds)
-			// 本轮随工具调用说出的正文同样暂存，交给终稿一起输出
-			role.rememberPendingSpeech(content)
+			// 本轮随工具调用说出的正文同样作为快速消息推送
+			role.speakAsFastMessage(content)
 			role.rejectPendingToolCalls(cache)
 			role.finalizeWithoutTools()
 			return
 		}
 		if role.batchExecutionToolCall(cache) {
-			// 模型一边说话一边调用工具：这段正文先按时间顺序暂存，
-			// 等工具回调后的正式回答出现时再拼到前面，避免被下一轮响应覆盖而丢失。
-			role.rememberPendingSpeech(content)
+			// 模型一边说话一边调用工具：这段正文直接作为快速消息逐条推送
+			// （执行长任务时自动触发的类型，不占用应答额度），不并入终稿。
+			role.speakAsFastMessage(content)
 			role.ToolRounds++
 			role.continueDialogue(cache, nil)
 			return
@@ -118,30 +117,23 @@ func (role *DialogueRole) continueDialogue(cache *ChatCache, guardNote *PostMess
 
 	role.writeContext(messageFromAssistant(message))
 	notifyAgentSuccess()
-	final := role.composeFinalSpeech(content)
+	final := content
 	stateMu.Lock()
 	finalResponse = final
 	stateMu.Unlock()
 }
 
-// rememberPendingSpeech 暂存「边说边调工具」时随工具调用输出的正文
-func (role *DialogueRole) rememberPendingSpeech(content string) {
+// speakAsFastMessage 把「边说边调工具」时随工具调用输出的正文逐条作为快速消息推送
+// （执行长任务时自动触发的那类消息，不占用应答额度），不再暂存拼接进终稿。
+func (role *DialogueRole) speakAsFastMessage(content string) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return
 	}
-	role.PendingSpeeches = append(role.PendingSpeeches, content)
-}
-
-// composeFinalSpeech 把暂存的途中正文按时间顺序拼到正式回答前面，并清空暂存
-func (role *DialogueRole) composeFinalSpeech(final string) string {
-	parts := make([]string, 0, len(role.PendingSpeeches)+1)
-	parts = append(parts, role.PendingSpeeches...)
-	if final = strings.TrimSpace(final); final != "" {
-		parts = append(parts, final)
-	}
-	role.PendingSpeeches = nil
-	return strings.Join(parts, "\n\n")
+	stateMu.Lock()
+	fromQQ := turnFromQQ
+	stateMu.Unlock()
+	pushAssistantContext("text", content, "", fromQQ)
 }
 
 func (role *DialogueRole) fail(err error) {
@@ -169,14 +161,14 @@ func (role *DialogueRole) finalizeWithoutTools() {
 		content := strings.TrimSpace(response.Body.Choices[0].Message.Content)
 		if content != "" {
 			stateMu.Lock()
-			finalResponse = role.composeFinalSpeech(content)
+			finalResponse = content
 			stateMu.Unlock()
 			role.writeContext(PostMessage{Role: RoleAssistant, Content: content})
 			return
 		}
 	}
 	stateMu.Lock()
-	finalResponse = role.composeFinalSpeech("这轮步骤有点多了，我先停在这里，你可以接着往下说。")
+	finalResponse = "这轮步骤有点多了，我先停在这里，你可以接着往下说。"
 	stateMu.Unlock()
 }
 

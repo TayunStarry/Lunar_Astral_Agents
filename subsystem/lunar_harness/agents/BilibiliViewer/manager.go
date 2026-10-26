@@ -1,6 +1,6 @@
 package BilibiliViewer
 
-// 观影者管理器：由对话者通过 viewer 工具按流程同步调用。
+// 哔哩观影管理器：由对话者通过 viewer 工具按流程同步调用。
 //
 // 三种流程（Flow）：
 //   standard      回复未读评论 + 看视频与评论 + 写日记动态 + 回复动态评论
@@ -142,7 +142,7 @@ func localRoot() string {
 	return dir
 }
 
-// RunFlow 同步执行一次观影者流程，返回可直接作为工具回复的文本。
+// RunFlow 同步执行一次哔哩观影流程，返回可直接作为工具回复的文本。
 // flow 由对话者通过 viewer 工具的枚举选择；share 决定是否为本轮选中的视频构建分享评论；
 // instruction 只作为任务提示（可空）。
 func RunFlow(flow Flow, share bool, instruction string) (string, error) {
@@ -153,7 +153,7 @@ func RunFlow(flow Flow, share bool, instruction string) (string, error) {
 	manager.mu.Lock()
 	if manager.running {
 		manager.mu.Unlock()
-		return "观影者正在忙，等这次结束再试", nil
+		return "哔哩观影正在忙，等这次结束再试", nil
 	}
 	manager.reloadConfigLocked()
 	cfg := manager.cfg
@@ -184,7 +184,7 @@ func RunFlow(flow Flow, share bool, instruction string) (string, error) {
 		r.prepareDesireKeywords()
 	}
 	if strings.TrimSpace(instruction) != "" {
-		logger.Info("BilibiliViewer", "观影者收到任务提示[%s]: %s", flow, truncate(instruction, 120))
+		logger.Info("BilibiliViewer", "哔哩观影收到任务提示[%s]: %s", flow, truncate(instruction, 120))
 	}
 	text, err := runSync(r)
 
@@ -199,7 +199,7 @@ func RunFlow(flow Flow, share bool, instruction string) (string, error) {
 // 对话者只表达需求，不再传 flow/share 参数。
 func RunInstruction(instruction string) (string, error) {
 	flow, share := decidePlan(instruction)
-	logger.Info("BilibiliViewer", "观影者自决编排：flow=%s，share=%v，指令=%s", flow, share, truncate(instruction, 80))
+	logger.Info("BilibiliViewer", "哔哩观影自决编排：flow=%s，share=%v，指令=%s", flow, share, truncate(instruction, 80))
 	return RunFlow(flow, share, instruction)
 }
 
@@ -220,7 +220,7 @@ func newRunner(cfg Config, flow Flow, share bool, instruction string) *runner {
 	}
 	// 对话者的本轮想法与配置偏好综合成本轮关键词：只在本次运行内生效，不落盘。
 	// 具体提炼在 RunFlow 释放 manager 锁之后执行（会调用模型，不能占着锁）。
-	logger.Info("BilibiliViewer", "观影者流程[%s]：默认参考词 %d 个（本轮将结合对话者欲求综合生成关键词）；@目标 %d 个；目标视频 %d 个；每视频切片由模型按时长决定（%d-%d，默认 %d）；构建分享=%v",
+	logger.Info("BilibiliViewer", "哔哩观影流程[%s]：默认参考词 %d 个（本轮将结合对话者欲求综合生成关键词）；@目标 %d 个；目标视频 %d 个；每视频切片由模型按时长决定（%d-%d，默认 %d）；构建分享=%v",
 		flow, len(cfg.PreferenceKeywords), len(cfg.MentionTargets), cfg.VideosPerRound,
 		sliceMinCount, sliceMaxCount, defaultSlicesPerVideo, share)
 	return &runner{
@@ -249,7 +249,7 @@ func (r *runner) flow() Flow {
 // 真正刷过视频才返回日记句柄；只回复了评论时返回成功回复的条数。
 func (r *runner) resultText() string {
 	if r == nil || r.state == nil {
-		return "[系统提示]观影者已完成本次流程"
+		return "[系统提示]哔哩观影已完成本次流程"
 	}
 	s := r.state
 	if s.VideoIndex > 0 && s.DiaryHandle != "" {
@@ -264,7 +264,7 @@ func (r *runner) resultText() string {
 	if s.VideoIndex > 0 {
 		return fmt.Sprintf("[系统提示]看了 %d 个视频，本轮结束", s.VideoIndex)
 	}
-	return "[系统提示]观影者已完成本次流程"
+	return "[系统提示]哔哩观影已完成本次流程"
 }
 
 // logActivity 追加一条本轮互动记录（写进历史记忆的材料）
@@ -334,7 +334,7 @@ func runSync(r *runner) (string, error) {
 			return text, nil
 		}
 	}
-	err := fmt.Errorf("观影者流程步数超限")
+	err := fmt.Errorf("哔哩观影流程步数超限")
 	abortRun(r, err)
 	return r.resultText(), err
 }
@@ -349,12 +349,12 @@ func (m *lifeManager) setProgress(text string) {
 
 func finishRun(r *runner) {
 	dispatchBeforeLifeEnds(r, "finished", "")
-	logger.Info("BilibiliViewer", "观影者流程完成[%s]", r.flow())
+	logger.Info("BilibiliViewer", "哔哩观影流程完成[%s]", r.flow())
 	r.cleanup()
 }
 
 func abortRun(r *runner, err error) {
-	logger.Error("BilibiliViewer", "观影者流程失败[%s]: %v", r.flow(), err)
+	logger.Error("BilibiliViewer", "哔哩观影流程失败[%s]: %v", r.flow(), err)
 	dispatchBeforeLifeEnds(r, "failed", err.Error())
 	r.cleanup()
 }
@@ -465,6 +465,8 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 		m.setProgress(fmt.Sprintf("正在回应 B 站未读消息 %d/%d…", s.RepliesUsed+1, r.cfg.RepliesPerRound))
 		text, err := generateInboxReply(item)
 		if err == nil {
+			// 嵌套会话补「回复 @昵称」前缀：回应发在根评论追评位置后，靠它指向回应对象
+			text = inboxReplyMessage(item, text)
 			err = r.browser.postInboxReply(item, text)
 		}
 		if err != nil {
@@ -601,7 +603,7 @@ func (r *runner) step(m *lifeManager) (bool, error) {
 			return false, nil
 		}
 		total := len(cur.Segments)
-		m.setProgress(fmt.Sprintf("观影者正在看第 %d/%d 组《%s》，看到了 %d/%d", s.VideoIndex+1, r.cfg.VideosPerRound, cur.Info.Title, cur.SliceIndex+1, total))
+		m.setProgress(fmt.Sprintf("哔哩观影正在看第 %d/%d 组《%s》，看到了 %d/%d", s.VideoIndex+1, r.cfg.VideosPerRound, cur.Info.Title, cur.SliceIndex+1, total))
 		text, err := understandOneSlice(cur.Info, cur.Segments[cur.SliceIndex], cur.SliceIndex+1, total)
 		if err != nil {
 			if errors.Is(err, loopguard.ErrLoop) {

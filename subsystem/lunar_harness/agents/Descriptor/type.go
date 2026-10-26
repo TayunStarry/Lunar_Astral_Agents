@@ -93,6 +93,14 @@ type modelUsage struct {
 	Prompt int64 `json:"prompt_tokens"`
 	// Completion 输出 token 数
 	Completion int64 `json:"completion_tokens"`
+	// PromptTokensDetails 输入 token 的细分（提示缓存命中数）
+	PromptTokensDetails *promptTokenDetails `json:"prompt_tokens_details,omitempty"`
+}
+
+// promptTokenDetails 输入 token 的细分
+type promptTokenDetails struct {
+	// CachedTokens 命中提示缓存的输入 token 数
+	CachedTokens int64 `json:"cached_tokens"`
 }
 
 // modelReply 一次模型调用的结果（助手消息 + 思考文本 + 服务端用量）

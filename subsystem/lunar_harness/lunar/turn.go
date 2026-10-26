@@ -3,6 +3,7 @@ package lunar
 import (
 	"bytes"
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -244,27 +245,129 @@ func maybeSendFastAck(functionName string, args map[string]any) {
 	pushAssistantContext("text", text, "", fromQQ)
 }
 
+// slowTaskAckText 高耗时任务的口语化快速应答
+//
+// 应答由「开头 / 正文 / 结尾」三段随机拼装：每段都可能缺席，三段的先后顺序也随机，
+// 段间连接词与句尾语气再各自随机，尽量不让固定句式被风控识别成机器人。
 func slowTaskAckText(functionName string, args map[string]any) string {
-	leads := []string{"收到", "好嘞", "交给我吧", "没问题", "这个我来"}
-	ends := []string{"～", "，稍等我一下～", "，等我好消息～", "，一会儿就好～"}
-	pick := func(items []string) string { return items[randomFloor(0, len(items)-1)] }
-	compose := func(actions []string) string {
-		return pick(leads) + "！" + pick(actions) + pick(ends)
+	actions := slowAckActions(functionName, args)
+	if len(actions) == 0 {
+		return ""
 	}
-	if functionName == "dispatch_painter" {
-		return compose([]string{"这就动笔", "这就开画", "马上开工", "先起个稿"})
+	openings := []string{
+		"", "", "", // 有时没有开头，直接说正文
+		"收到", "收到收到", "好嘞", "好嘞好嘞", "交给我吧", "这个交给我", "没问题",
+		"没问题哈", "这个我来", "我来我来", "嗯嗯", "嗯呢", "好的", "好哒", "好呀",
+		"行", "可以呀", "知道啦", "知道知道", "明白", "明白啦", "来啦", "来咯",
+		"我看看", "这就安排", "马上安排", "安排上了", "OK", "OK啦", "这个简单",
+		"放心交给我", "包在我身上", "我来接手", "我这边来", "好说好说", "哦哦",
+		"嗯", "诶好", "可以可以", "我这就弄",
 	}
-	if functionName == networkExploreToolName {
-		switch strings.ToLower(strings.TrimSpace(stringArg(args, "tool"))) {
-		case networkWebSearchTool:
-			return compose([]string{"这就去翻资料", "这就去查", "马上去找", "先去翻一翻"})
-		case networkBilibilViewerTool:
-			return compose([]string{"这就去看会儿", "那我去逛逛B站", "好，我去刷一会儿", "这就去挑个视频"})
-		case networkQQSendTool:
-			return compose([]string{"这就去发", "马上把消息送过去", "这就帮你转达", "稍等，我去发一下"})
+	endings := []string{
+		"", "", "", // 有时没有结尾，说完正文就收
+		"稍等我一下", "稍等哈", "稍等片刻", "稍等哦", "等我一下下", "等我一会儿",
+		"等我下哈", "等我下下", "等我好消息", "一会儿就好", "一会儿见", "马上回来",
+		"马上就来", "马上搞定", "马上就好", "马上给你结果", "很快的", "很快哦",
+		"很快搞定", "很快回来", "很快就有结果", "这就去办", "这就给你办",
+		"不耽误你太久", "给我点时间", "我尽快", "别急哈", "耐心等我一小会儿",
+		"这边很快就完事", "一下下就好", "马上哈", "稍等马上来",
+	}
+	text := joinAckParts([]string{
+		pickAckText(openings),
+		pickAckText(actions),
+		pickAckText(endings),
+	})
+	if text == "" {
+		for _, action := range actions {
+			if action != "" {
+				text = action
+				break
+			}
 		}
 	}
-	return ""
+	return text
+}
+
+// slowAckActions 按工具给出正文候选；空串表示这次不说正文，返回 nil 表示该工具不需要快速应答
+func slowAckActions(functionName string, args map[string]any) []string {
+	switch functionName {
+	case "dispatch_painter":
+		return []string{
+			"这就动笔", "这就开画", "马上开工", "先起个稿", "我先构图", "我调下画笔",
+			"先铺个底色", "这就安排画面", "先把色稿打出来", "马上开始画", "让我先想想构图",
+			"我这就画起来", "这就给你画一张", "先把线稿理出来", "我找找灵感就开工",
+			"先试试笔触", "我这就动手", "开始画啦", "先把草稿起一下", "马上给你出图",
+			"这就铺色", "先把轮廓勾出来", "马上落笔", "先画个大概", "", "",
+		}
+	case networkExploreToolName:
+		switch strings.ToLower(strings.TrimSpace(stringArg(args, "tool"))) {
+		case networkWebSearchTool:
+			return []string{
+				"这就去翻资料", "这就去查", "马上去找", "先去翻一翻", "我去搜一圈",
+				"这就帮你搜", "我查查看", "让我去扒一下资料", "马上把资料找回来",
+				"我去网上问问", "这就去找找看", "我先搜一遍", "这题我查查", "我这就去搜",
+				"让我翻翻看", "去检索一下", "先看看网上怎么说", "这就去核实一下",
+				"我先去检索", "马上收集资料", "去查查最新消息", "我上网翻翻", "", "",
+			}
+		case networkBilibilViewerTool:
+			return []string{
+				"这就去看会儿", "那我去逛逛B站", "我去刷一会儿", "这就去挑个视频",
+				"我去B站看看", "这就打开B站", "我去刷两个", "让我先刷刷看", "这就去逛一圈",
+				"去看看有没有好玩的", "马上开刷", "我去B站转一圈", "这就给你挑", "我去瞅瞅",
+				"我这就去刷", "去B站找找乐子", "先随便刷两下", "去看看热门", "我去翻翻推荐",
+				"找个视频看看", "", "",
+			}
+		case networkQQSendTool:
+			return []string{
+				"这就去发", "马上把消息送过去", "这就帮你转达", "稍等我去发一下",
+				"我这就发出去", "马上发", "这就发给你", "我去发送一下", "我这就把话带到",
+				"这就去发消息", "马上送达", "我这就传过去", "这就发过去", "马上去发",
+				"我这就去传达", "帮你传达一下", "这就把消息发出去", "我去联系一下",
+				"马上转告", "", "",
+			}
+		}
+	}
+	return nil
+}
+
+// joinAckParts 丢掉缺席的段落，随机打乱顺序后用随机连接词拼接，再偶尔补一个句尾语气
+func joinAckParts(parts []string) string {
+	kept := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if strings.TrimSpace(part) != "" {
+			kept = append(kept, part)
+		}
+	}
+	if len(kept) == 0 {
+		return ""
+	}
+	lastRune := func(value string) rune {
+		runes := []rune(value)
+		return runes[len(runes)-1]
+	}
+	joiner := func(current string) string {
+		if strings.ContainsRune("，。！？～、", lastRune(current)) {
+			return ""
+		}
+		return pickAckText([]string{"，", "，", "，", "～", "！", "。", "", ""})
+	}
+	rand.Shuffle(len(kept), func(i, j int) { kept[i], kept[j] = kept[j], kept[i] })
+	text := kept[0]
+	for _, part := range kept[1:] {
+		text += joiner(text) + part
+	}
+	if !strings.ContainsRune("，。！？～、", lastRune(text)) {
+		text += pickAckText([]string{"", "", "", "～", "～", "！", "。", "呀～", "哈～", "啦～", "哦～"})
+	}
+	return text
+}
+
+// pickAckText 从候选集中随机取一条，空集合返回空串
+func pickAckText(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	return items[randomFloor(0, len(items)-1)]
 }
 
 // synthesizeSpeech 语音合成（前端不在线时返回空串）

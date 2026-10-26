@@ -14,6 +14,19 @@ var (
 	webviewCleanupDone = make(chan struct{}, 1) // 清理完成信号，用于同步重开
 )
 
+// ==== 默认窗口图标 ====
+// defaultIconPath 非「月华/琉璃 前端专用窗口」统一使用的窗口图标。
+// 相对可执行文件目录；exe 输出在仓库根目录，故路径自仓库根起。
+const defaultIconPath = "subsystem/lunar_harness/icon.ico"
+
+// iconPathOr 返回给定的图标路径；为空时回退默认图标
+func iconPathOr(iconPath string) string {
+	if iconPath != "" {
+		return iconPath
+	}
+	return defaultIconPath
+}
+
 // ==== Win32 常量（窗口图标与标题栏样式，仅 Windows 平台使用） ====
 const (
 	// 窗口消息与图标类型

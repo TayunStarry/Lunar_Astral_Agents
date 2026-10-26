@@ -61,7 +61,10 @@ func Run(ctx context.Context, instruction string) (resultText string, err error)
 			return "", ErrCanceled
 		}
 		// 目标窗口保活：每轮开始先确认目标应用在前台，避免对着控制台/资源管理器空转
-		if err := ensureTargetForeground(handoff.TargetApp); err != nil {
+		if err := ensureTargetForeground(ctx, handoff.TargetApp); err != nil {
+			if errors.Is(err, ErrCanceled) {
+				return "", ErrCanceled
+			}
 			logger.Warn("LunarHarness", "桌面操纵第 %d 轮目标窗口未就绪: %v", round, err)
 			return "目标窗口未就绪，任务暂停：" + err.Error(), nil
 		}
@@ -72,6 +75,9 @@ func Run(ctx context.Context, instruction string) (resultText string, err error)
 
 		// 3.1 UIA 理解者（读 UI 树/定向查）
 		treeSummary, elements := uiaReaderPhase(ctx, plan)
+		if err := ctx.Err(); err != nil {
+			return "", ErrCanceled
+		}
 		// 3.2 任务规划者（无工具，决策）
 		decision := plannerPhase(ctx, plan, handoff, treeSummary, elements)
 		if err := ctx.Err(); err != nil {
@@ -83,8 +89,12 @@ func Run(ctx context.Context, instruction string) (resultText string, err error)
 		}
 
 		// 3.3 仅启用一个操作者；记录本轮尝试与是否产生可见变化
-		attempt := operationPhase(ctx, decision)
+		attempt := operationPhase(ctx, decision, handoff)
 		attempt.Round = round
+		if attempt.Duplicate {
+			logger.Info("LunarHarness", "桌面操纵检测到重复输入：%s，已跳过并判定完成", attempt.InputText)
+			return "任务完成：窗口标题已包含输入内容「" + attempt.InputText + "」，已跳过重复输入", nil
+		}
 		handoff.LastAction = attempt.Result
 		handoff.Attempts = appendAttempt(handoff.Attempts, attempt)
 		if attempt.Changed {

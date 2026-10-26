@@ -64,7 +64,7 @@ func currentMemoryEmbeddingModel() string {
 	if model := strings.TrimSpace(config.AgentEmbeddingModel); model != "" {
 		return model
 	}
-	return "system-embedding"
+	return "text_embedding"
 }
 
 // MemoryInitInstance 初始化记忆库实例：一次性加载全部集合，并补齐默认分组与集合名向量。

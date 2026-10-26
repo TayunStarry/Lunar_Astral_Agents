@@ -3,6 +3,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -179,37 +180,57 @@ func isSelfOpTool(name string) bool {
 	return false
 }
 
+// diffCallOutcome 一次带差异检测的桌面操作结果。
+type diffCallOutcome struct {
+	res    ltpToolResult
+	effect bool
+}
+
 // dispatchWithDiff 执行工具前先拍摄窗口缩略图，操作后对比画面差异并追加提示。
-// 第二个返回值表示本次操作是否产生了可见变化（供编排层判定停滞）。
-func dispatchWithDiff(name string, args map[string]any) (ltpToolResult, bool) {
-	var before any
-	if isOpTool(name) {
-		img, err := dtCaptureWindowThumb()
-		if err == nil {
-			before = img
-		}
+// 第二个返回值表示本次操作是否产生了可见变化（供编排层判定停滞）；
+// 第三个返回值用于把取消/超时与普通失败区分开。
+func dispatchWithDiff(ctx context.Context, name string, args map[string]any) (ltpToolResult, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return fail("操作已中断"), false, ErrCanceled
 	}
-	res := dispatchTool(name, args)
-	effect := res.Success
-	// 键盘/文本类工具的实际效果往往只改变少量像素（甚至不改画面，如回车），
-	// 不能仅凭截图差异判失败；点击类工具则必须看到画面变化才算有效。
-	inputTool := isTextInputTool(name)
-	if before != nil {
-		if after, err := dtCaptureWindowThumb(); err == nil {
-			changed, ratio, detail := DTDiffWindowThumb(before.(*image.RGBA), after)
-			if changed {
-				res.Text += fmt.Sprintf("\n【差异检测】操作后画面有变化：%s（变化占比约 %.1f%%）——这从画面侧佐证了操作可能已生效，请再结合截图确认。", detail, ratio*100)
-			} else {
-				res.Text += fmt.Sprintf("\n【差异检测】操作后画面几乎无变化（%.1f%%）——从画面侧看不出效果，请务必结合截图判断操作是否真正生效。", ratio*100)
-			}
-			if inputTool {
-				effect = res.Success
-			} else {
-				effect = res.Success && changed
+	outcome, err := callDesktop(ctx, desktopCallTimeout, "桌面操作", func() (diffCallOutcome, error) {
+		var before any
+		if isOpTool(name) {
+			img, captureErr := dtCaptureWindowThumb()
+			if captureErr == nil {
+				before = img
 			}
 		}
+		res := dispatchTool(name, args)
+		effect := res.Success
+		// 键盘/文本类工具的实际效果往往只改变少量像素（甚至不改画面，如回车），
+		// 不能仅凭截图差异判失败；点击类工具则必须看到画面变化才算有效。
+		inputTool := isTextInputTool(name)
+		if before != nil {
+			if after, captureErr := dtCaptureWindowThumb(); captureErr == nil {
+				changed, ratio, detail := DTDiffWindowThumb(before.(*image.RGBA), after)
+				if changed {
+					res.Text += fmt.Sprintf("\n【差异检测】操作后画面有变化：%s（变化占比约 %.1f%%）——这从画面侧佐证了操作可能已生效，请再结合截图确认。", detail, ratio*100)
+				} else if inputTool {
+					// 文本/按键类输入经常只改变极少像素（标题栏或单个字符），
+					// 不能把「画面无变化」写成失败信号，否则规划者会重复输入。
+					res.Text += fmt.Sprintf("\n【差异检测】画面几乎无变化（%.1f%%）——文本/按键类操作以工具返回为准，可能已生效；请结合窗口标题/UIA 判断，不要重复输入相同内容。", ratio*100)
+				} else {
+					res.Text += fmt.Sprintf("\n【差异检测】操作后画面几乎无变化（%.1f%%）——从画面侧看不出效果，请务必结合截图判断操作是否真正生效。", ratio*100)
+				}
+				if inputTool {
+					effect = res.Success
+				} else {
+					effect = res.Success && changed
+				}
+			}
+		}
+		return diffCallOutcome{res: res, effect: effect}, nil
+	})
+	if err != nil {
+		return fail(err.Error()), false, err
 	}
-	return res, effect
+	return outcome.res, outcome.effect, nil
 }
 
 // isTextInputTool 文本/按键类工具：成功即视为产生效果（截图差异可能极小）。

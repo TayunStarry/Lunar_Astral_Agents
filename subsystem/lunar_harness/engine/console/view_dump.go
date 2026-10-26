@@ -9,14 +9,11 @@ import (
 // ==== 数据导出屏 ====
 //
 // 用途：把运行期数据落到磁盘，供离线排查（模型看到了什么、它怎么想的、
-// 上下文怎么涨的、日志里到底哪条先发生）。三类数据、两种格式：
-//   - 原始日志 → `.log`（JSON Lines：一行一条 JSON，可直接 grep / jq / tail）
-//   - 核心智能实况 → `.json`（模型调用轮次：思考全文 / 输出全文 / 工具序列 / 时长）
-//   - 智能体上下文 → `.json`（月华主上下文，或任选一个子智能体）
-//
-// 三者的数据来源互不重叠，因此导出项也分开：
-//   - 实况轮次在 TUI 的轮次缓冲里（本模块直接可见）；
-//   - 智能体上下文只在月华 goja 运行时内（经宿主钩子向运行时索取）。
+// 上下文怎么涨的、日志里到底哪条先发生）。导出范围按「运行数据 / Go 智能体」重划：
+//   - 原始日志 → `.log`（JSON Lines）
+//   - 推理实况 → `.json`（模型调用轮次：思考全文 / 输出全文 / 工具序列 / 时长）
+//   - 核心人格 → `.json`（对话者 + 绘制者 + 演奏者 + 截图者 + 主上下文合并）
+//   - 各 Go 智能体 → `.json`（网络搜索 / 哔哩观影 / 桌面操作 / 专项通讯 / 互助论坛）
 //
 // 设计取舍：
 //   - **所有导出项都是列表里可选的一行**，回车即导出。不把动作挂到底栏快捷键上：
@@ -25,10 +22,8 @@ import (
 //   - 数字/字母热键只是**快捷键**，条目的显示键位来自自身 hotkey 字段而非行号，
 //     因此今后插入新条目不会让既有热键发生位移。
 //   - 导出是**一次性动作**而非持续录制：出问题时按一下、拿到文件，不引入后台写盘任务；
-//   - 清单固定声明：子智能体集合是编译期已知的，动态发现只会引入
-//     "列表里突然多出一个不可用目标"的不确定性；
-//   - 只回显「文件 + 条数 + 大小」，不把内容打进 TUI：上下文可达数 MB，
-//     塞进终端既看不清也拖慢渲染，要看内容请直接打开文件。
+//   - 清单固定声明：导出目标来自 engine/agentdump 注册表，控制台不复制智能体实现；
+//   - 只回显「文件 + 条数 + 大小」，不把内容打进 TUI。
 
 // dumpKind 导出项的取数通道
 type dumpKind int
@@ -38,7 +33,7 @@ const (
 	dumpKindLogs dumpKind = iota
 	// dumpKindTranscript 核心智能实况（TUI 轮次缓冲）
 	dumpKindTranscript
-	// dumpKindContext 智能体上下文（Go 对话链）
+	// dumpKindContext 智能体上下文（agentdump 注册表）
 	dumpKindContext
 )
 
@@ -53,30 +48,29 @@ type dumpOption struct {
 	toolTip string // 进行中提示
 }
 
-// dumpOptionList 可导出的数据清单：顺序即显示顺序，按「日志 / 实况 / 上下文」分组。
-//
-// 热键分配刻意让上下文那组继续占用 1-6（与既有习惯一致），
-// 两个新的运行数据用 l / t——它们是「日志」与「实况」的助记。
+// dumpOptionList 可导出的数据清单：按「运行数据 / Go 智能体」分组。
 var dumpOptionList = []dumpOption{
 	{kind: dumpKindLogs, hotkey: "l", group: "运行数据", title: "原始日志",
 		desc:    "全量 stdout + 结构化日志，导出为 .log（JSON Lines，可 grep / jq / tail）",
 		toolTip: "正在导出原始日志…"},
-	{kind: dumpKindTranscript, hotkey: "t", group: "运行数据", title: "核心智能 实况",
+	{kind: dumpKindTranscript, hotkey: "t", title: "推理实况",
 		desc:    "模型调用轮次：思考全文 / 输出全文 / 工具调用序列 / 每轮耗时，导出为 .json",
-		toolTip: "正在导出核心智能实况…"},
+		toolTip: "正在导出推理实况…"},
 
-	{kind: dumpKindContext, key: "lunar", hotkey: "1", group: "智能体上下文", title: "月华 主上下文",
-		desc: "未读消息队列 + 长期记忆摘要（进入对话者前的输入）"},
-	{kind: dumpKindContext, key: "dialogue", hotkey: "2", title: "对话者",
-		desc: "与用户交互的主智能体：最近 48 条上下文（含图片标签降级结果）"},
-	{kind: dumpKindContext, key: "painter", hotkey: "3", title: "绘制者",
-		desc: "绘图子智能体：任务描述与绘画工具返回"},
-	{kind: dumpKindContext, key: "musician", hotkey: "4", title: "演奏者",
-		desc: "音乐子智能体：任务描述与乐理工具返回"},
-	{kind: dumpKindContext, key: "memorizer", hotkey: "5", title: "记忆者",
-		desc: "长期记忆写入与检索摘要子智能体"},
-	{kind: dumpKindContext, key: "screenshoter", hotkey: "6", title: "截图者",
-		desc: "截图子智能体：取景要求与截图工具返回"},
+	{kind: dumpKindContext, key: "core", hotkey: "c", group: "Go 智能体", title: "核心人格",
+		desc: "对话者 + 绘制者 + 演奏者 + 截图者 + 月华主上下文的合并快照"},
+	{kind: dumpKindContext, key: "web_search", hotkey: "w", title: "网络搜索",
+		desc: "最近一次检索的检索词、引擎、页数与结构化报告"},
+	{kind: dumpKindContext, key: "bilibili", hotkey: "b", title: "哔哩观影",
+		desc: "哔哩观影选片配置、已看视频规模与日记/历史记忆"},
+	{kind: dumpKindContext, key: "desktop", hotkey: "d", title: "桌面操作",
+		desc: "最近一次桌面操纵任务的要求、起止时间、结果或中断原因"},
+	{kind: dumpKindContext, key: "descriptor", hotkey: "s", title: "描述者",
+		desc: "描述者的文件查询工具清单与运行说明（按次执行，不保留上下文）"},
+	{kind: dumpKindContext, key: "qq", hotkey: "q", title: "专项通讯",
+		desc: "最近一次多目标投递计划与逐项执行报告"},
+	{kind: dumpKindContext, key: "lunar_matrix", hotkey: "m", title: "互助论坛",
+		desc: "互助论坛智能体最近的需求/答复上下文（模块：Lunar Matrix；不含内部凭证）"},
 }
 
 // dumpState 数据导出屏状态
@@ -285,7 +279,7 @@ func (m appModel) viewDump() string {
 		body = append(body, "  "+selectStyle.Render(m.spinner.View())+" "+valueStyle.Render("正在导出…"))
 	case m.dump.lastErr != "":
 		body = append(body, "  "+errStyle.Render("✗ 导出失败："+m.dump.lastErr),
-			"  "+dimStyle.Render("智能体上下文导出依赖月华运行时；若提示未就绪，请等月华启动完成后再试"))
+			"  "+dimStyle.Render("核心人格需要月华运行时就绪；其余智能体需先运行过对应功能才有内容可导"))
 	case m.dump.lastLabel != "":
 		body = append(body,
 			"  "+okStyle.Render("✓ 已写出 "+m.dump.lastResult.Path),

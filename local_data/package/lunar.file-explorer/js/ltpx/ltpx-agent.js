@@ -40,9 +40,9 @@ async function loadLTPXAgentModel() {
             if (!resp.ok) throw new Error('读取配置失败 HTTP ' + resp.status);
             const cfg = await resp.json();
             const agent = (cfg && cfg.agent) || {};
-            return (agent.multimodal_model && String(agent.multimodal_model)) || 'system-multimodal';
+            return (agent.multimodal_model && String(agent.multimodal_model)) || 'primary_reasoning';
         } catch (e) {
-            return 'system-multimodal';
+            return 'primary_reasoning';
         }
     })();
     return ltpModelConfigPromise;
@@ -527,7 +527,7 @@ async function execLTPXReadFileContent(fm, args) {
         return { success: false, error: '暂时不方便看这个文件' };
     }
 
-    // 调用多模态模型解读（与智能整理同一套调用，模型名 system-multimodal，走 /v1 代理）
+    // 调用多模态模型解读（与智能整理同一套调用，模型名 primary_reasoning，走 /v1 代理）
     try {
         const summary = await callOrganizeAI([
             { role: 'system', content: '你是星月智能的文档/图片解读助手，只输出对内容的简洁中文解读，不要输出其他内容或代码块。' },

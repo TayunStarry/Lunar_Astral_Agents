@@ -2,7 +2,7 @@ package BilibiliViewer
 
 // inbox.go 未读消息：B 站「回复我的」与「@我的」消息中心。
 //
-// 观影者每轮在进入选片前先把未读处理掉，覆盖三类触发场景：
+// 哔哩观影每轮在进入选片前先把未读处理掉，覆盖三类触发场景：
 //   - 视频评论区里对月华评论的回复与追评；
 //   - 月华发布的动态（日记动态）下对她的动态或评论的回复；
 //   - 直接 @月华 的评论或动态。
@@ -57,6 +57,7 @@ func (f flexID) String() string {
 type msgFeedItem struct {
 	ID   flexID `json:"id"`
 	User struct {
+		Mid      flexID `json:"mid"`
 		Nickname string `json:"nickname"`
 	} `json:"user"`
 	ReplyTime int64 `json:"reply_time"`
@@ -80,6 +81,11 @@ type msgFeedItem struct {
 }
 
 // inboxItem 归一化后的待回应消息：带上回复接口需要的 type/oid/root/parent。
+//
+// B 站评论区只有「根评论 + 追评」两级：月华的回应一律发在根评论的追评位置
+// （root = parent = 根评论 rpid），绝不嵌套成「追评的追评」——那会把回应沉进
+// 根评论的「查看更多回复」折叠区，谁都看不见。对方处于嵌套层时（Nested），
+// 发布的文本会带「回复 @昵称」并附 at 字段，替对方补上系统通知。
 type inboxItem struct {
 	Kind      string `json:"kind"`  // reply / at
 	Venue     string `json:"venue"` // video / dynamic / article
@@ -90,6 +96,8 @@ type inboxItem struct {
 	SourceID  string `json:"source_id,omitempty"`
 	MessageID string `json:"message_id,omitempty"`
 	User      string `json:"user"`
+	Mid       flexID `json:"mid,omitempty"`
+	Nested    bool   `json:"nested,omitempty"`
 	Message   string `json:"message"`
 	MyContent string `json:"my_content,omitempty"`
 	Title     string `json:"title,omitempty"`
@@ -215,32 +223,31 @@ func (m msgFeedItem) toInboxItem(kind string) (inboxItem, bool) {
 		venue = "article"
 	}
 
-	// parent 指向对方这条内容；root 指向会话根评论（我的评论是顶层时它就是根）
-	parent := p.SourceID.String()
-	if parent == "" {
-		parent = p.TargetID.String()
+	// 定位回应位置。root_id 是会话根评论；target_id 是被回复的「我的评论」
+	// （它要么就是根评论，要么在根评论之下，缺失 root_id 时是最可靠的锚点）。
+	source := p.SourceID.String()
+	if source == "" {
+		source = p.TargetID.String()
 	}
 	root := p.RootID.String()
 	if root == "" {
 		root = p.TargetID.String()
 	}
-	if root == "" {
-		root = parent
-	}
-	if parent == "" {
-		parent = root
-	}
-	// 个别 @ 消息把「动态/视频本体 ID」放在 source_id：它不是评论，不能当 parent
-	if parent == oid {
-		parent = ""
+	// 个别 @ 消息把「动态/视频本体 ID」放在 source_id / root_id：它们不是评论，不能当 parent/root
+	if source == oid {
+		source = ""
 	}
 	if root == oid {
 		root = ""
 	}
-	if parent == "" && root != "" {
-		parent = root
+	// root 有值 ⇒ 对方挂在某条根评论的会话树里（追评/子回复），不是根评论作者。
+	// 此时月华的回应发布为根评论的追评后，对方收不到系统通知（通知只发给根作者），需要 @ 补偿。
+	nested := root != ""
+	if root == "" {
+		// 对方本身就是根评论（直接评论/@月华）：回应作为对方评论的追评
+		root = source
 	}
-
+	parent := root
 	when := m.ReplyTime
 	if when == 0 {
 		when = p.ReplyTime
@@ -259,6 +266,8 @@ func (m msgFeedItem) toInboxItem(kind string) (inboxItem, bool) {
 		SourceID:  p.SourceID.String(),
 		MessageID: m.ID.String(),
 		User:      user,
+		Mid:       m.User.Mid,
+		Nested:    nested,
 		Message:   message,
 		MyContent: myContent,
 		Title:     strings.TrimSpace(p.Title),
@@ -344,7 +353,19 @@ func (w *webSession) fetchInboxItems() ([]inboxItem, error) {
 	return out, nil
 }
 
+// inboxReplyMessage 组装最终发布的回应文本。
+// 对方处于根评论下的嵌套会话时，月华的回应会发布为根评论的追评（parent=root），
+// 追评者本人不会收到系统通知，因此文本带上「回复 @昵称」（@ 后留空格供 B 站解析），
+// 配合发布时的 at_name/at_mid 字段把通知补上。
+func inboxReplyMessage(item inboxItem, body string) string {
+	if !item.Nested || item.User == "" {
+		return body
+	}
+	return fmt.Sprintf("回复 @%s : %s", item.User, body)
+}
+
 // postInboxReply 按消息来源回到原帖回复：视频用 type=1，动态用 type=17。
+// root/parent 一律指向根评论（回应发布为根评论的追评）；嵌套会话补 at 字段通知对方。
 func (w *webSession) postInboxReply(item inboxItem, message string) error {
 	csrf := w.csrf()
 	if csrf == "" {
@@ -361,6 +382,10 @@ func (w *webSession) postInboxReply(item inboxItem, message string) error {
 	}
 	if item.Parent != "" {
 		form.Set("parent", item.Parent)
+	}
+	if item.Nested && item.Mid > 0 && item.User != "" {
+		form.Set("at_name", item.User)
+		form.Set("at_mid", item.Mid.String())
 	}
 	text, err := w.pageFetchText("POST", "https://api.bilibili.com/x/v2/reply/add",
 		"application/x-www-form-urlencoded", form.Encode(), 25*time.Second)

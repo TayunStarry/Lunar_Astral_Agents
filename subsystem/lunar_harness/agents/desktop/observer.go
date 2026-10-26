@@ -4,7 +4,7 @@ package desktop
 
 // ==== 模型实况与计量 ====
 // 把桌面操纵各角色的模型调用同步到 TUI「核心智能 实况」，
-// 并把 token 消耗计入「运行状态」，与对话者/观影者等智能体保持一致。
+// 并把 token 消耗计入「运行状态」，与对话者/哔哩观影等智能体保持一致。
 
 import (
 	"strings"
@@ -15,7 +15,7 @@ import (
 )
 
 // SetModelObserver 注入实况观察者与模型计量回调（宿主在 TUI 启动前调用）。
-func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion int64, generation time.Duration, estimated bool)) {
+func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion, cached int64, generation time.Duration, estimated bool)) {
 	autoObserverMu.Lock()
 	defer autoObserverMu.Unlock()
 	autoObsBegin, autoObsDelta, autoObsEnd, autoObsMeter = begin, delta, end, meter
@@ -81,12 +81,16 @@ func reportModelCall(requestBody []byte, completionText string, usage *ltpUsage,
 		return
 	}
 	if usage != nil && (usage.Prompt > 0 || usage.Completion > 0) {
-		fn(usage.Prompt, usage.Completion, elapsed, false)
+		cached := int64(0)
+		if usage.PromptTokensDetails != nil {
+			cached = usage.PromptTokensDetails.CachedTokens
+		}
+		fn(usage.Prompt, usage.Completion, cached, elapsed, false)
 		return
 	}
 	prompt := int64(utf8.RuneCountInString(string(requestBody))) / 3
 	completion := int64(utf8.RuneCountInString(completionText))
-	fn(prompt, completion, elapsed, true)
+	fn(prompt, completion, 0, elapsed, true)
 }
 
 // 流式增量的种类（与 loopguard 的文本分类一致）。

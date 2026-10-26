@@ -22,7 +22,7 @@ import (
 
 // SetModelObserver 注入实况观察者与模型计量（app 启动时调用；nil 表示不接入）。
 func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string),
-	meter func(prompt, completion int64, generation time.Duration, estimated bool)) {
+	meter func(prompt, completion, cached int64, generation time.Duration, estimated bool)) {
 	observerMu.Lock()
 	defer observerMu.Unlock()
 	obsBegin, obsDelta, obsEnd, obsMeter = begin, delta, end, meter
@@ -66,11 +66,15 @@ func reportModelCall(requestBody []byte, completion string, usage *modelUsage, e
 		return
 	}
 	if usage != nil && (usage.Prompt > 0 || usage.Completion > 0) {
-		fn(usage.Prompt, usage.Completion, elapsed, false)
+		cached := int64(0)
+		if usage.PromptTokensDetails != nil {
+			cached = usage.PromptTokensDetails.CachedTokens
+		}
+		fn(usage.Prompt, usage.Completion, cached, elapsed, false)
 		return
 	}
 	prompt := int64(utf8.RuneCountInString(string(requestBody))) / 3
-	fn(prompt, int64(utf8.RuneCountInString(completion)), elapsed, true)
+	fn(prompt, int64(utf8.RuneCountInString(completion)), 0, elapsed, true)
 }
 
 // resolveModel 解析主多模态模型端点（只解析一次）

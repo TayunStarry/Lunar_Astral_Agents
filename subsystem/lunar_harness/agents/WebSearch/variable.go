@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	// webSearchPagesHardCap 单次搜索进入结果页的硬上限
+	// webSearchPagesHardCap 页面条目总数的硬上限（含首页 1 条）
 	webSearchPagesHardCap = 10
 	// webSearchLoopRetries 模型输出陷入重复时，单次调用的额外重试次数。
 	// 网络搜索的每次调用都有兜底路径，重试一次仍失败就交给调用点降级。
@@ -69,5 +69,5 @@ var (
 	observerDelta func(role, kind, text string)
 	observerEnd   func(role string)
 	// observerMeter 模型调用计量回调：网络搜索的调用同样计入「运行状态」的模型计量
-	observerMeter func(prompt, completion int64, generation time.Duration, estimated bool)
+	observerMeter func(prompt, completion, cached int64, generation time.Duration, estimated bool)
 )

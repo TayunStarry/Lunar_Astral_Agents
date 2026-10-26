@@ -242,7 +242,7 @@ func engineImageDownload(p *plugin, url, fileName string) (any, error) {
 // engineLLMChat 调用 OpenAI 兼容 v1/chat/completions，返回首个 choice 的文本内容。
 // 配置统一读取 engine/config 的 agent.multimodal_*（来自 lunar_config.json，与 embed/memory 同源）。
 func engineLLMChat(messages []any, opts map[string]any) (any, error) {
-	model := stringOr(config.AgentMultimodalModel, "system-multimodal")
+	model := stringOr(config.AgentMultimodalModel, "primary_reasoning")
 	baseURL := strings.TrimSpace(config.AgentMultimodalURL)
 	apiKey := config.AgentMultimodalKey
 	if baseURL == "" {
@@ -314,7 +314,7 @@ func engineLLMChat(messages []any, opts map[string]any) (any, error) {
 
 // readEmbedConfig 从项目配置读取智能体文本嵌入模型配置（lunar_config.json 的 agent 字段，不硬编码）。
 func readEmbedConfig() (model, baseURL, apiKey string) {
-	return stringOr(config.AgentEmbeddingModel, "system-embedding"),
+	return stringOr(config.AgentEmbeddingModel, "text_embedding"),
 		stringOr(config.AgentEmbeddingURL, config.LocalV1URL()),
 		stringOr(config.AgentEmbeddingKey, "")
 }

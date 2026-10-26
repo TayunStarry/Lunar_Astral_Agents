@@ -886,7 +886,7 @@ async function handleSend() {
     const allMessages = [{ role: 'system', content: enhancedSystemPrompt }, ...messages];
 
     try {
-        const modelName = configData?.agent?.multimodal_model || 'system-multimodal';
+        const modelName = configData?.agent?.multimodal_model || 'primary_reasoning';
         const st = await streamAssistantReply(modelName, allMessages);
 
         if (!st.content && st.toolCalls.size === 0 && !st.reasoning) {
@@ -2306,7 +2306,7 @@ async function aiGenerateModuleInfo() {
         // 1) 提取项目真实内容
         const project = await inspectModuleProject();
         const projectText = buildInspectPrompt(project);
-        const modelName = configData?.cloud?.multimodal_model_name || 'system-multimodal';
+        const modelName = configData?.cloud?.multimodal_model_name || 'primary_reasoning';
         // 元信息提示词：id 前缀不硬编码任何厂商（后端在 id 为空时自动生成 module.<包名>），
         // 命名空间按项目自身来源推导，避免所有导入项目都套用同一家的前缀
         const prompt = [

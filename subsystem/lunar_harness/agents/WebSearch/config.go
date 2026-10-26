@@ -19,35 +19,27 @@ func LoadConfig() Config {
 		MaxRunSeconds:   config.WebSearchMaxRunSeconds,
 		CacheEnabled:    config.WebSearchCacheEnabled,
 		CacheTTLDays:    config.WebSearchCacheTTLDays,
-		TextChunkChars:  config.WebSearchTextChunkChars,
-		TextMaxChars:    config.WebSearchTextMaxChars,
-		TextMaxChunks:   config.WebSearchTextMaxChunks,
+		TextTotalChars:  config.WebSearchTextTotalChars,
 		ScrollSettleMS:  config.WebSearchScrollSettleMS,
 		ScrollMaxSteps:  config.WebSearchScrollMaxSteps,
 	}
-	// 结果页分析页数硬上限：避免单次检索进入过多详情页
+	// 页面条目总数硬上限（含首页 1 条）：避免单次检索同时打开过多窗口
 	if cfg.MaxPages > webSearchPagesHardCap {
 		cfg.MaxPages = webSearchPagesHardCap
 	}
-	// 摘要长度硬上限：报告提示词按 4096 字预算编写
+	if cfg.MaxPages < 1 {
+		cfg.MaxPages = 1
+	}
+	// 统一摘要长度硬上限：摘要即最终输出，超长没有意义
 	if cfg.SummaryMaxChars > 4096 {
 		cfg.SummaryMaxChars = 4096
 	}
-	// 文本分段与提取的上下界：过小会放大模型调用次数，过大会超出小模型上下文
-	if cfg.TextChunkChars < 800 {
-		cfg.TextChunkChars = 800
+	// 全部页面正文的总提取硬上限：过小会丢信息，过大超出搜索模型长文承受范围
+	if cfg.TextTotalChars < 6000 {
+		cfg.TextTotalChars = 6000
 	}
-	if cfg.TextChunkChars > 8000 {
-		cfg.TextChunkChars = 8000
-	}
-	if cfg.TextMaxChars < 2000 {
-		cfg.TextMaxChars = 2000
-	}
-	if cfg.TextMaxChars > 60000 {
-		cfg.TextMaxChars = 60000
-	}
-	if cfg.TextMaxChunks > 12 {
-		cfg.TextMaxChunks = 12
+	if cfg.TextTotalChars > 48000 {
+		cfg.TextTotalChars = 48000
 	}
 	// 滚动节奏与步数的上下界：等待过短会漏掉懒加载内容，步数过多会拖长单页耗时
 	if cfg.ScrollSettleMS < 100 {

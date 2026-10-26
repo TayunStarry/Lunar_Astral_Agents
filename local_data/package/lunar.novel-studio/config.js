@@ -11,10 +11,10 @@
 
     // ==== 默认 agent 配置（读取失败时兜底） ====
     var DEFAULT_AGENT_CONFIG = {
-        multimodal_model: 'system-multimodal',
+        multimodal_model: 'primary_reasoning',
         multimodal_url: 'http://127.0.0.1:36789/v1',
         multimodal_key: '',
-        embedding_model: 'system-embedding',
+        embedding_model: 'text_embedding',
         embedding_url: 'http://127.0.0.1:36789/v1',
         embedding_key: ''
     };
@@ -48,7 +48,7 @@
             var cfg = this.agentConfig || DEFAULT_AGENT_CONFIG;
             return {
                 url: cfg.multimodal_url || '',
-                name: cfg.multimodal_model || 'system-multimodal',
+                name: cfg.multimodal_model || 'primary_reasoning',
                 key: cfg.multimodal_key || ''
             };
         }
@@ -56,7 +56,7 @@
         // ==== 获取嵌入模型名 ====
         getEmbeddingModel() {
             var cfg = this.agentConfig || DEFAULT_AGENT_CONFIG;
-            return cfg.embedding_model || 'system-embedding';
+            return cfg.embedding_model || 'text_embedding';
         }
 
         // ==== 聊天 API 调用（始终走同源代理） ====

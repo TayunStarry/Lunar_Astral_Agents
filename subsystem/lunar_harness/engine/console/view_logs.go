@@ -552,44 +552,51 @@ type statsState struct {
 	snap Snapshot
 }
 
-// statsKeys 运行状态屏键位
-func statsKeys() []keyHint {
-	return []keyHint{kh("Esc", "返回菜单")}
-}
-
-// updateStats 运行状态屏事件
+// updateStats 运行状态屏事件：采样刷新 + 对话链重建 + 桌面操纵入口
 func (m appModel) updateStats(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
+	switch msg := msg.(type) {
+	case statsTickMsg:
+		m.stats.snap = GetSnapshot()
+		return m, tickStats()
+	case engineDoneMsg:
+		return m.updateEngine(msg)
+	case tea.KeyMsg:
+		if m.engine.inputMode {
+			return m.updateEngine(msg)
+		}
+		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
 		case "esc":
 			m.screen = screenMenu
 			return m, nil
+		case "r", "R", "i", "I", "x", "X":
+			return m.updateEngine(msg)
 		}
-	}
-	if _, ok := msg.(statsTickMsg); ok {
-		m.stats.snap = GetSnapshot()
-		return m, tickStats()
 	}
 	return m, nil
 }
 
-// viewStats 运行状态屏渲染：宽屏双栏（运行环境 / 模型计量）
+// viewStats 运行状态屏：运行环境 / 模型计量 + 对话链 / 桌面操纵 + 手动重建入口。
+//
+// 布局取舍：宽屏用两栏，左栏「机器与模型」、右栏「月华链路与桌面操纵」；
+// 窄屏退化为顺序堆叠。手动重建与桌面任务输入作为底部全宽区块，避免表单被挤成窄条。
 func (m appModel) viewStats() string {
-	f := m.frameFor("运行状态", "采样间隔 1s", statsKeys())
+	f := m.frameFor("运行状态", "采样 1s · Go 对话链", engineKeys(m.engine))
 	w, h := f.bodySize()
 
 	s := m.stats.snap
 	stats := s.Stats
-	keyW := 16
+	keyW := 14
 
-	// 宽屏双栏：左右两栏各自按栏宽生成区块线，避免分隔线被截成省略号
-	twoCol := w >= 88
-	colW, rightW := w, w
-	if twoCol {
-		colW = (w - 3) / 2
-		rightW = w - colW - 3
+	footer := m.statsFooter(w)
+	contentH := maxInt(6, h-len(footer))
+
+	wide := w >= 96
+	leftW, rightW := w, w
+	if wide {
+		leftW = (w - 3) / 2
+		rightW = w - leftW - 3
 	}
 
 	version := s.BuildVersion
@@ -597,46 +604,88 @@ func (m appModel) viewStats() string {
 		version = "未知"
 	}
 	env := []string{
-		sectionRule("运行环境", colW),
+		sectionRule("运行环境", leftW),
 		"",
 		labelValue("构建版本", version, keyW),
 		labelValue("进程 CPU", fmt.Sprintf("%.1f %%", s.CPUPercent), keyW),
 		labelValue("进程内存", fmt.Sprintf("%.1f MB", s.WorkingSetMB), keyW),
+		labelValue("可用内存", fmt.Sprintf("%.0f MB", s.SysAvailMB), keyW),
 		labelValue("Go 堆内存", fmt.Sprintf("%.1f MB", s.HeapMB), keyW),
-		labelValue("系统可用内存", fmt.Sprintf("%.0f MB", s.SysAvailMB), keyW),
 		labelValue("Go 协程", fmt.Sprintf("%d", s.Goroutines), keyW),
 	}
-
 	model := []string{
-		sectionRule("模型计量", rightW),
+		sectionRule("模型计量", leftW),
 		"",
 		labelValue("调用次数", fmt.Sprintf("%d 次", stats.Calls), keyW),
-		labelValue("token 消耗总量", fmt.Sprintf("%d", stats.Total())+estimateMark(stats), keyW),
-		labelValue("平均每次调用", fmt.Sprintf("%.0f token", stats.AvgPerCall()), keyW),
-		labelValue("输出平均速度", fmt.Sprintf("%.1f token/s", stats.SpeedTokensPerSec()), keyW),
-		labelValue("平均上下文", fmt.Sprintf("%.0f token", stats.AvgContext()), keyW),
-	}
-	if stats.LastCompletion > 0 {
-		model = append(model, "",
-			labelValue("最近调用", fmt.Sprintf("%s · %d token · %s",
-				stats.LastCallAt.Format("15:04:05"), stats.LastCompletion, formatDuration(stats.LastDuration)), keyW))
+		labelValue("总上下文", fmt.Sprintf("%d token（%d/%d）%s", stats.Total(), stats.PromptTokens, stats.CompletionTokens, estimateMark(stats)), keyW),
+		labelValue("平均速度", fmt.Sprintf("%.1f token/s", stats.SpeedTokensPerSec()), keyW),
+		labelValue("缓存命中", fmt.Sprintf("%.1f %%", stats.CacheHitRate()*100), keyW),
+		labelValue("峰值输入", fmt.Sprintf("%d token", stats.MaxPromptTokens), keyW),
+		labelValue("峰值输出", fmt.Sprintf("%d token", stats.MaxCompletionTokens), keyW),
+		labelValue("平均输入", fmt.Sprintf("%.0f token", stats.AvgContext()), keyW),
+		labelValue("平均输出", fmt.Sprintf("%.0f token", stats.AvgCompletionPerCall()), keyW),
 	}
 
+	chain := append([]string{sectionRule("对话链状态", rightW), ""}, viewEngineChainState(rightW)...)
+	desktop := append([]string{sectionRule("桌面操纵智能体", rightW), ""}, m.viewDesktopOperatorState(rightW)...)
+
 	var body []string
-	if twoCol {
-		left := fitLines(env, h)
-		right := fitLines(model, h)
+	if wide {
+		left := fitLines(append(append([]string{}, env...), append([]string{""}, model...)...), contentH)
+		right := fitLines(append(append([]string{}, chain...), append([]string{""}, desktop...)...), contentH)
 		separator := ruleStyle.Render(" │ ")
-		body = make([]string, 0, h)
-		for i := 0; i < h; i++ {
-			body = append(body, fitWidth(left[i], colW)+separator+right[i])
+		body = make([]string, 0, contentH)
+		for i := 0; i < contentH; i++ {
+			body = append(body, fitWidth(left[i], leftW)+separator+right[i])
 		}
 	} else {
-		body = append(body, env...)
-		body = append(body, "")
-		body = append(body, model...)
+		stacked := append(append([]string{}, env...), "")
+		stacked = append(stacked, model...)
+		stacked = append(stacked, "")
+		stacked = append(stacked, chain...)
+		stacked = append(stacked, "")
+		stacked = append(stacked, desktop...)
+		body = fitLines(stacked, contentH)
 	}
-	return f.render(body)
+
+	body = append(body, footer...)
+	return f.render(fitLines(body, h))
+}
+
+// statsFooter 底部：手动重建与桌面任务入口（输入态时显示表单）
+func (m appModel) statsFooter(w int) []string {
+	const labelW = 12
+	lines := []string{"", sectionRule("手动重建与桌面任务", w), ""}
+
+	if m.engine.inputMode {
+		lines = append(lines, formBox([]string{
+			fieldRow("任务要求", m.engine.input, true, labelW),
+		}, w)...)
+		for _, seg := range wrapPlain("Enter 启动 · Esc 取消；运行中可随时按 x 中断", maxInt(20, w-4)) {
+			lines = append(lines, "  "+dimStyle.Render(seg))
+		}
+		return lines
+	}
+
+	for _, one := range []string{
+		"按 " + keyStyle.Render("r") + " 清空并重建 Go 对话链（上下文会重置，模型服务若已停止会一并拉起）；",
+		"按 " + keyStyle.Render("i") + " 输入桌面任务并启动；按 " + keyStyle.Render("x") + " 中断，停止中再按 x 强制结束。",
+	} {
+		for _, seg := range wrapPlain(one, maxInt(20, w-4)) {
+			lines = append(lines, "  "+dimStyle.Render(seg))
+		}
+	}
+	if m.engine.busy {
+		lines = append(lines, "", "  "+selectStyle.Render(m.spinner.View()+" 正在重建…"))
+	} else if m.engine.msg != "" {
+		lines = append(lines, "")
+		if m.engine.err {
+			lines = append(lines, "  "+errStyle.Render("✗ "+m.engine.msg))
+		} else {
+			lines = append(lines, "  "+okStyle.Render("✓ "+m.engine.msg))
+		}
+	}
+	return lines
 }
 
 // estimateMark 存在估算调用时的标注

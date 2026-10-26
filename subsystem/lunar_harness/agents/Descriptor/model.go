@@ -25,7 +25,7 @@ import (
 )
 
 // SetModelObserver 注入实况观察者与计量回调（app 层启动时调用）
-func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion int64, generation time.Duration, estimated bool)) {
+func SetModelObserver(begin func(role string), delta func(role, kind, text string), end func(role string), meter func(prompt, completion, cached int64, generation time.Duration, estimated bool)) {
 	observerMu.Lock()
 	defer observerMu.Unlock()
 	observerBegin, observerDelta, observerEnd, observerMeter = begin, delta, end, meter
@@ -74,7 +74,11 @@ func reportModelCall(requestBody []byte, reply modelReply, elapsed time.Duration
 		return
 	}
 	if reply.Usage != nil && (reply.Usage.Prompt > 0 || reply.Usage.Completion > 0) {
-		fn(reply.Usage.Prompt, reply.Usage.Completion, elapsed, false)
+		cached := int64(0)
+		if reply.Usage.PromptTokensDetails != nil {
+			cached = reply.Usage.PromptTokensDetails.CachedTokens
+		}
+		fn(reply.Usage.Prompt, reply.Usage.Completion, cached, elapsed, false)
 		return
 	}
 	completion := int64(utf8.RuneCountInString(stringOf(reply.Message.Content)) +
@@ -83,7 +87,7 @@ func reportModelCall(requestBody []byte, reply modelReply, elapsed time.Duration
 		completion += int64(utf8.RuneCountInString(call.Function.Arguments))
 	}
 	prompt := int64(utf8.RuneCountInString(string(requestBody))) / 3
-	fn(prompt, completion, elapsed, true)
+	fn(prompt, completion, 0, elapsed, true)
 }
 
 // resolveModel 解析模型配置（仅首次调用）
@@ -91,7 +95,7 @@ func resolveModel() {
 	modelOnce.Do(func() {
 		modelName = strings.TrimSpace(config.AgentMultimodalModel)
 		if modelName == "" {
-			modelName = "system-multimodal"
+			modelName = "primary_reasoning"
 		}
 		rawURL := strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
 		if rawURL == "" {

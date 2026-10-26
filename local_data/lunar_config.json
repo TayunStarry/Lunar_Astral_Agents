@@ -41,10 +41,10 @@
 	},
 	"agent": {
 		"user_name": "钛宇星光阁",
-		"embedding_model": "system-embedding",
+		"embedding_model": "text_embedding",
 		"embedding_url": "http://127.0.0.1:36789/v1",
 		"embedding_key": null,
-		"multimodal_model": "system-multimodal",
+		"multimodal_model": "primary_reasoning",
 		"multimodal_url": "http://127.0.0.1:36789/v1",
 		"multimodal_key": null,
 		"video_input": "file",
@@ -89,7 +89,7 @@
 		"idle_unload_minutes": 5
 	},
 	"web_search": {
-		"search_model": "system-search",
+		"search_model": "light_reasoning",
 		"swap_model": true,
 		"max_pages": 5,
 		"max_results": 15,

@@ -15,7 +15,7 @@ const defaultGuardThresholdMiB = 1024
 // 卸载会一并释放 KV 缓存，模型在下次被使用时按需自动重新加载。
 //
 // 请求体可选：{"threshold_mib": 1024}
-// 响应：{"free_mib": 8867, "threshold_mib": 1024, "triggered": true, "unloaded": ["system-multimodal"]}
+// 响应：{"free_mib": 8867, "threshold_mib": 1024, "triggered": true, "unloaded": ["primary_reasoning"]}
 func VRAMGuardHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "VRAM守卫 → 不允许的请求方法", http.StatusMethodNotAllowed)
@@ -65,8 +65,8 @@ func VRAMGuardHandler(w http.ResponseWriter, r *http.Request) {
 // VRAMUnloadHandler 定向卸载端点：卸载路由服务器上指定 ID 的已加载模型，释放其显存/资源占用。
 // 典型场景：思维链运行时未读消息中不含语音消息，卸载 ASR 模型（下次语音到达时按需自动重载）。
 //
-// 请求体：{"model": "system-asr"}
-// 响应：{"model": "system-asr", "unloaded": true}（unloaded=false 表示模型本就未加载或不存在）
+// 请求体：{"model": "audio_transcriber"}
+// 响应：{"model": "audio_transcriber", "unloaded": true}（unloaded=false 表示模型本就未加载或不存在）
 func VRAMUnloadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "VRAM卸载 → 不允许的请求方法", http.StatusMethodNotAllowed)

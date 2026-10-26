@@ -78,14 +78,17 @@ type AgentTurn struct {
 
 // ModelCallStats 模型调用累计计量
 type ModelCallStats struct {
-	Calls            int64         `json:"calls"`             // 调用次数
-	PromptTokens     int64         `json:"prompt_tokens"`     // 上下文 token 累计
-	CompletionTokens int64         `json:"completion_tokens"` // 输出 token 累计
-	GenerationNanos  int64         `json:"generation_nanos"`  // 生成耗时累计（纳秒）
-	EstimatedCalls   int64         `json:"estimated_calls"`   // 使用估算的调用次数
-	LastCallAt       time.Time     `json:"last_call_at"`      // 最近一次调用时刻
-	LastDuration     time.Duration `json:"last_duration"`     // 最近一次生成耗时
-	LastCompletion   int64         `json:"last_completion"`   // 最近一次输出 token
+	Calls               int64         `json:"calls"`                 // 调用次数
+	PromptTokens        int64         `json:"prompt_tokens"`         // 输入（上下文）token 累计
+	CompletionTokens    int64         `json:"completion_tokens"`     // 输出 token 累计
+	CachedPromptTokens  int64         `json:"cached_prompt_tokens"`  // 命中提示缓存的输入 token 累计
+	MaxPromptTokens     int64         `json:"max_prompt_tokens"`     // 单次调用输入 token 峰值
+	MaxCompletionTokens int64         `json:"max_completion_tokens"` // 单次调用输出 token 峰值
+	GenerationNanos     int64         `json:"generation_nanos"`      // 生成耗时累计（纳秒）
+	EstimatedCalls      int64         `json:"estimated_calls"`       // 使用估算的调用次数
+	LastCallAt          time.Time     `json:"last_call_at"`          // 最近一次调用时刻
+	LastDuration        time.Duration `json:"last_duration"`         // 最近一次生成耗时
+	LastCompletion      int64         `json:"last_completion"`       // 最近一次输出 token
 }
 
 // Total 消耗总量（prompt + completion）
@@ -107,6 +110,22 @@ func (s ModelCallStats) AvgContext() float64 {
 		return 0
 	}
 	return float64(s.PromptTokens) / float64(s.Calls)
+}
+
+// AvgCompletionPerCall 平均每轮输出 token 数
+func (s ModelCallStats) AvgCompletionPerCall() float64 {
+	if s.Calls == 0 {
+		return 0
+	}
+	return float64(s.CompletionTokens) / float64(s.Calls)
+}
+
+// CacheHitRate 提示缓存命中率（命中 token / 输入 token），0~1
+func (s ModelCallStats) CacheHitRate() float64 {
+	if s.PromptTokens == 0 {
+		return 0
+	}
+	return float64(s.CachedPromptTokens) / float64(s.PromptTokens)
 }
 
 // SpeedTokensPerSec 模型输出平均速度（tokens/s）

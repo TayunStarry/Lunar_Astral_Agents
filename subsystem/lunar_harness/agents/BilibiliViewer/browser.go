@@ -36,7 +36,7 @@ type webSession struct {
 }
 
 func openBilibiliBrowser() (*webSession, error) {
-	sess, err := browser.OpenWebViewSession(biliHome, "月华 · B 站生活", 1280, 900)
+	sess, err := browser.OpenWebViewSession(biliHome, "哔哩观影", 1280, 900)
 	if err != nil {
 		return nil, fmt.Errorf("打开浏览器失败: %w", err)
 	}

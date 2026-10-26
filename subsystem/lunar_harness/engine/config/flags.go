@@ -112,7 +112,7 @@ func RegisterFlags() {
 	flag.IntVar(&WebViewMinWidth, "webview-min-width", WebViewMinWidth, "webview 窗口最小宽度")
 	flag.IntVar(&WebViewMinHeight, "webview-min-height", WebViewMinHeight, "webview 窗口最小高度")
 	flag.BoolVar(&WebViewResizable, "webview-resizable", WebViewResizable, "webview 窗口是否可调整大小")
-	flag.StringVar(&WebViewIconPath, "webview-icon", WebViewIconPath, "webview 窗口图标 .ico 文件路径")
+	flag.StringVar(&WebViewIconPath, "webview-icon", WebViewIconPath, "webview 窗口图标 .ico 文件路径（空则使用默认 icon.ico）")
 	flag.StringVar(&WebViewCaptionColor, "webview-caption-color", WebViewCaptionColor, "webview 标题栏背景色")
 	flag.StringVar(&WebViewBorderColor, "webview-border-color", WebViewBorderColor, "webview 窗口边框色")
 	flag.BoolVar(&WebViewDarkTitleBar, "webview-dark-titlebar", WebViewDarkTitleBar, "webview 标题栏使用深色模式")

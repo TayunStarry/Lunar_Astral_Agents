@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// scrollInfo 列表窗口的位置信息：驱动右侧滚动条与底栏「第几项 / 共几项」。
+// scrollInfo 列表窗口的位置信息：驱动底栏「第几项 / 共几项」。
 type scrollInfo struct {
 	Items int // 条目总数
 	First int // 窗口内首个（部分）可见条目
@@ -24,11 +24,7 @@ func (info scrollInfo) positionText() string {
 	return fmt.Sprintf("%d/%d", info.Cur+1, info.Items)
 }
 
-// listGutter 列表行构造成本应让出的常驻列数。
-//
-// 定高窗口在超屏时会把最右侧 2 列用于「间隔 + 滚动条」。为了让行宽既不超窗
-// 又在有无滚动条时都保持一致（不因出现滚动条而抖动），列表行统一按
-// 「窗口宽度 - listGutter」构造：超屏时恰好填满内容列，未超屏时右侧留白。
+// listGutter 列表行构造成本应让出的常驻列数：右侧留出 2 列空白，避免文字贴边。
 const listGutter = 2
 
 // listPane 定高滚动窗口的滚动状态。
@@ -44,8 +40,8 @@ type listPane struct {
 }
 
 // layoutView 计算窗口并渲染为恰好 height 行、width 列的内容：
-// 保证选中项完整可见（块高于窗口时对齐块顶，优先展示标题），
-// 列表超屏时最右侧占用 1 列绘制滚动条。
+// 保证选中项完整可见（块高于窗口时对齐块顶，优先展示标题）。
+// 不绘制滚动条：位置信息由底栏「第几项 / 共几项」承担。
 func (p *listPane) layoutView(blocks [][]string, cursor, width, height int) ([]string, scrollInfo) {
 	info := scrollInfo{Items: len(blocks), Cur: cursor, View: height}
 	if width <= 0 || height <= 0 || len(blocks) == 0 {
@@ -109,45 +105,13 @@ func (p *listPane) layoutView(blocks [][]string, cursor, width, height int) ([]s
 		info.Last = i
 	}
 
-	// 滚动条（仅超屏时占用最右侧 1 列，其前留 1 列间隔）
-	bar := total > height
-	contentW := width
-	barW := 0
-	if bar {
-		barW = 2
-		contentW = width - barW
-	}
-	if contentW < 1 {
-		contentW, barW = width, 0
-		bar = false
-	}
-
-	thumbTop, thumbLen := 0, 0
-	if bar {
-		thumbLen = maxInt(1, height*height/total)
-		thumbTop = top * height / total
-		if thumbTop+thumbLen > height {
-			thumbTop = height - thumbLen
-		}
-	}
-
 	out := make([]string, 0, height)
 	for i := 0; i < height; i++ {
-		var line string
 		if j := top + i; j < len(lines) && j < total {
-			line = fitWidth(lines[j], contentW)
-		} else {
-			line = strings.Repeat(" ", contentW)
+			out = append(out, fitWidth(lines[j], width))
+			continue
 		}
-		if bar {
-			// 轨道用 ░ 而不是 │：贴着外框的竖线会被读成「多画了一条框线」
-			glyph, style := "░", faintStyle
-			if i >= thumbTop && i < thumbTop+thumbLen {
-				glyph, style = "█", valueStyle
-			}
-			line += " " + style.Render(glyph)
-		}
-		out = append(out, line)
+		out = append(out, strings.Repeat(" ", width))
 	}
 	return out, info
 }

@@ -247,7 +247,7 @@ func chatCompletionOnce(roleTag, bodyText string) (*ModelResponse, error) {
 				}
 			}
 			console.StreamEnd(roleTag)
-			console.RecordModelCall(0, 0, time.Since(start), true)
+			console.RecordModelCall(0, 0, 0, time.Since(start), true)
 			return full, nil
 		}
 	}
@@ -260,11 +260,11 @@ func chatCompletionOnce(roleTag, bodyText string) (*ModelResponse, error) {
 	tools.report(roleTag)
 	console.StreamEnd(roleTag)
 	if usage != nil {
-		console.RecordModelCall(usage.PromptTokens, usage.CompletionTokens, time.Since(start), false)
+		console.RecordModelCall(usage.PromptTokens, usage.CompletionTokens, usage.cachedTokens(), time.Since(start), false)
 	} else {
 		prompt := int64(utf8.RuneCountInString(bodyText)) / 3
 		completion := int64(utf8.RuneCountInString(content.String()) + utf8.RuneCountInString(reasoning.String()) + utf8.RuneCountInString(tools.argsText()))
-		console.RecordModelCall(prompt, completion, time.Since(start), true)
+		console.RecordModelCall(prompt, completion, 0, time.Since(start), true)
 	}
 
 	message := AssistantMessage{Role: RoleAssistant, Content: content.String(), ReasoningContent: reasoning.String()}

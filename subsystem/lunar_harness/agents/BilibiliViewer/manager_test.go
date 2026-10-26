@@ -95,7 +95,7 @@ func TestResultText(t *testing.T) {
 	watched.state.DiaryHandle = "@D.diary"
 	watched.state.DiaryStart = 3
 	watched.state.DiaryEnd = 20
-	want := "[系统提示]请向用户汇报已经看完视频了, 汇报前可选择查询 @D.diary|L3-20 获取摘要后再汇报"
+	want := "[系统提示]你已经看完视频了, 可查询 @D.diary|L3-20 后向用户汇报内容"
 	if got := watched.resultText(); got != want {
 		t.Fatalf("刷过视频应返回日记句柄，实际 %q", got)
 	}
