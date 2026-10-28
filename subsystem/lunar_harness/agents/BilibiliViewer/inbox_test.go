@@ -8,8 +8,7 @@ import (
 )
 
 // TestParseMsgFeedReply 钉住「回复我的」的归一化：
-// source_content 是对方的新回复、target_reply_content 是我的原评论；
-// business_id 是评论区类型（1/17），oid 必须取 subject_id 或 uri，不能取 business_id。
+// business_id 是评论区类型（1/17），oid 必须取 subject_id 或 uri。
 func TestParseMsgFeedReply(t *testing.T) {
 	raw := `{"code":0,"data":{"items":[
 		{"id":1001,"user":{"nickname":"小明"},"reply_time":1700000000,"item":{
@@ -31,30 +30,72 @@ func TestParseMsgFeedReply(t *testing.T) {
 		t.Fatalf("应解析出 2 条，实际 %d", len(items))
 	}
 	video := items[0]
-	if video.Type != 1 || video.Oid != "111" || video.Root != "222" || video.Parent != "222" {
-		t.Fatalf("视频评论应回在根评论（target_id 兜底）下，实际 %+v", video)
+	if video.Type != 1 || video.Oid != "111" || video.SourceID != "333" {
+		t.Fatalf("视频评论归一化错误: %+v", video)
 	}
-	if !video.Nested {
-		t.Fatalf("对方回复了我的评论，回应需带 @ 前缀，Nested 应为 true")
+	if video.Category != notifyVideoReply {
+		t.Fatalf("有目标评论应归到视频追评，实际 %v", video.Category)
 	}
 	if video.Message != "谢谢你" || video.MyContent != "我的评论" || video.Kind != "reply" {
 		t.Fatalf("视频评论内容错误: %+v", video)
 	}
+	if video.TargetID != "222" || video.RootID != "" {
+		t.Fatalf("视频评论应保留 target_id、root_id 为空: %+v", video)
+	}
 	dynamic := items[1]
-	if dynamic.Type != 17 || dynamic.Oid != "444" || dynamic.Root != "555" || dynamic.Parent != "555" {
-		t.Fatalf("动态评论回应应发在根评论 555 的追评位置，实际 %+v", dynamic)
+	if dynamic.Type != 17 || dynamic.Oid != "444" || dynamic.SourceID != "777" {
+		t.Fatalf("动态评论归一化错误: %+v", dynamic)
 	}
-	if !dynamic.Nested {
-		t.Fatalf("对方处于嵌套会话，Nested 应为 true")
+	if dynamic.RootID != "555" || dynamic.TargetID != "666" {
+		t.Fatalf("动态评论应保留 root_id/target_id: %+v", dynamic)
 	}
-	if dynamic.Message != "哈哈" || dynamic.MyContent != "我的动态评论" {
-		t.Fatalf("动态评论内容错误: %+v", dynamic)
+	if dynamic.Category != notifyDynamic {
+		t.Fatalf("动态互动应归到 notifyDynamic，实际 %v", dynamic.Category)
 	}
 }
 
-// TestParseMsgFeedOpusBusinessID 钉住线上踩到的坑：
-// 图片动态的 business_id=11 是「评论区类型」，不是对象 ID；
-// oid 必须取 subject_id（评论 rid），不能取 business_id，也不能取 opus 展示 ID。
+// TestReplyIDs 钉住 root/parent 推导：子回复、我的根评论被回复、根级评论三种情况。
+func TestReplyIDs(t *testing.T) {
+	cases := []struct {
+		name         string
+		item         inboxItem
+		root, parent string
+		ok           bool
+	}{
+		{"子回复", inboxItem{Oid: "111", RootID: "555", TargetID: "666", SourceID: "777"}, "555", "777", true},
+		{"我的根评论被回复", inboxItem{Oid: "111", TargetID: "222", SourceID: "333"}, "222", "333", true},
+		{"根级评论直接回复", inboxItem{Oid: "444", SourceID: "888"}, "888", "888", true},
+		{"缺少对象 ID", inboxItem{SourceID: "888"}, "", "", false},
+	}
+	for _, c := range cases {
+		root, parent, ok := replyIDs(c.item)
+		if ok != c.ok || root != c.root || parent != c.parent {
+			t.Fatalf("%s: root=%q parent=%q ok=%v", c.name, root, parent, ok)
+		}
+	}
+}
+
+// TestReplyPageURL 钉住页面地址：优先消息中心 web URI，opus 用 URI 里的页面 ID。
+func TestReplyPageURL(t *testing.T) {
+	opus := inboxItem{Type: 11, Oid: "413077136", SourceID: "317943121233",
+		URI: "https://www.bilibili.com/opus/1262374137649692673#reply317943121233"}
+	if got := replyPageURL(opus); got != opus.URI {
+		t.Fatalf("应直接使用消息中心的 web URI，实际 %q", got)
+	}
+	video := inboxItem{Type: 1, Oid: "111", SourceID: "333"}
+	if got := replyPageURL(video); got != "https://www.bilibili.com/video/av111?comment_on=1#reply333" {
+		t.Fatalf("视频页地址错误：%q", got)
+	}
+	dy := inboxItem{Type: 17, SourceID: "777", URI: "bilibili://dynamic/444"}
+	if got := replyPageURL(dy); got != "https://www.bilibili.com/opus/444#reply777" {
+		t.Fatalf("动态页地址应取 URI 中的页面 ID：%q", got)
+	}
+	if got := replyPageURL(inboxItem{Type: 12, Oid: "9"}); got != "" {
+		t.Fatalf("暂不支持的类型应返回空，实际 %q", got)
+	}
+}
+
+// TestParseMsgFeedOpusBusinessID 钉住 business_id=11 是评论区类型，不是对象 ID。
 func TestParseMsgFeedOpusBusinessID(t *testing.T) {
 	raw := `{"code":0,"data":{"items":[
 		{"id":3001,"user":{"nickname":"钛宇-星光阁"},"reply_time":1792762157,"item":{
@@ -75,18 +116,11 @@ func TestParseMsgFeedOpusBusinessID(t *testing.T) {
 		t.Fatalf("图片动态应以 business_id=11 作为评论区类型，实际 %d", item.Type)
 	}
 	if item.Oid != "413077136" {
-		t.Fatalf("oid 应取 subject_id（评论 rid），实际 %q", item.Oid)
-	}
-	if item.Root != "317943121233" || item.Parent != "317943121233" {
-		t.Fatalf("顶层回复的 root/parent 应指向对方评论，实际 %q/%q", item.Root, item.Parent)
-	}
-	if item.Nested {
-		t.Fatalf("对方本身就是根评论作者，回应发在其追评位置即可，Nested 应为 false")
+		t.Fatalf("oid 应取 subject_id，实际 %q", item.Oid)
 	}
 }
 
-// TestParseMsgFeedAt 钉住「@我的」：source_content 才是对方发的内容，
-// 且没有 target_id 时 parent 回退到 source_id（直接回复那条 @ 评论）。
+// TestParseMsgFeedAt 钉住「@我的」归类。
 func TestParseMsgFeedAt(t *testing.T) {
 	raw := `{"code":0,"data":{"items":[
 		{"id":2001,"user":{"nickname":"小刚"},"at_time":1700000002,"item":{
@@ -104,18 +138,15 @@ func TestParseMsgFeedAt(t *testing.T) {
 	if item.Kind != "at" || item.Type != 1 || item.Oid != "999" {
 		t.Fatalf("@消息归一化错误: %+v", item)
 	}
+	if item.Category != notifyAt {
+		t.Fatalf("@消息应归到 notifyAt，实际 %v", item.Category)
+	}
 	if item.Message != "@月华 你觉得呢" {
 		t.Fatalf("@消息内容错误: %q", item.Message)
 	}
-	if item.Root != "888" || item.Parent != "888" {
-		t.Fatalf("root/parent 应回退到 source_id，实际 %q/%q", item.Root, item.Parent)
-	}
-	if item.Nested {
-		t.Fatalf("@消息的对方是根评论作者，Nested 应为 false")
-	}
 }
 
-// TestParseMsgFeedError 钉住未登录/接口异常不会被当成「没有未读」静默吞掉。
+// TestParseMsgFeedError 钉住未登录/接口异常不会被静默吞掉。
 func TestParseMsgFeedError(t *testing.T) {
 	if _, err := parseMsgFeed(`{"code":-101,"message":"账号未登录"}`, "reply"); err == nil {
 		t.Fatal("code != 0 应返回错误")
@@ -126,26 +157,26 @@ func TestParseMsgFeedError(t *testing.T) {
 func TestFilterUnreadInbox(t *testing.T) {
 	now := time.Unix(1700000100, 0)
 	items := []inboxItem{
-		{Type: 1, Oid: "1", Parent: "10", SourceID: "11", MessageID: "m1", Time: now.Unix()},
-		{Type: 1, Oid: "1", Parent: "10", SourceID: "11", MessageID: "m1", Time: now.Unix()},
-		{Type: 1, Oid: "1", Parent: "20", SourceID: "21", MessageID: "m2", Time: now.Unix()},
-		{Type: 17, Oid: "2", Parent: "30", SourceID: "31", MessageID: "m3", Time: now.Add(-8 * 24 * time.Hour).Unix()},
+		{Type: 1, Oid: "1", SourceID: "11", MessageID: "m1", Time: now.Unix()},
+		{Type: 1, Oid: "1", SourceID: "11", MessageID: "m1", Time: now.Unix()},
+		{Type: 1, Oid: "1", SourceID: "21", MessageID: "m2", Time: now.Unix()},
+		{Type: 17, Oid: "2", SourceID: "31", MessageID: "m3", Time: now.Add(-8 * 24 * time.Hour).Unix()},
 	}
-	seen := inboxSeenStore{Keys: map[string]int64{"reply:1:1:20": now.Unix()}}
+	seen := inboxSeenStore{Keys: map[string]int64{"source:1:1:21": now.Unix()}}
 	out := filterUnreadInbox(items, seen, now)
 	if len(out) != 1 || out[0].MessageID != "m1" {
 		t.Fatalf("应只留下未处理的 m1，实际 %+v", out)
 	}
 }
 
-// TestInboxSeenRoundTrip 钉住去重记录能落盘并读回（下一轮据此避免重复回复）。
+// TestInboxSeenRoundTrip 钉住去重记录能落盘并读回。
 func TestInboxSeenRoundTrip(t *testing.T) {
 	tmp := t.TempDir()
 	orig := inboxSeenFile
 	inboxSeenFile = func() string { return filepath.Join(tmp, "inbox.json") }
 	t.Cleanup(func() { inboxSeenFile = orig })
 
-	item := inboxItem{Type: 1, Oid: "1", Parent: "10", SourceID: "11", MessageID: "m1"}
+	item := inboxItem{Type: 1, Oid: "1", SourceID: "11", MessageID: "m1"}
 	markInboxSeen(item)
 
 	raw, err := os.ReadFile(inboxSeenFile())
@@ -156,67 +187,7 @@ func TestInboxSeenRoundTrip(t *testing.T) {
 	if !store.has(item.keys()) {
 		t.Fatalf("读回后仍有未记录键，文件内容: %s", raw)
 	}
-	// 已记录的消息不应再被当作未读
 	if got := filterUnreadInbox([]inboxItem{item}, store, time.Now()); len(got) != 0 {
 		t.Fatalf("已处理消息不应再次进入未读队列: %+v", got)
-	}
-}
-
-// TestParseMsgFeedNestedReply 钉住本次修复的核心场景：
-// 有人追评了月华发在视频评论区的根评论（root_id=我的根评论，source_id=对方的追评），
-// 月华的回应必须发在根评论的追评位置（parent=root），绝不嵌套成「追评的追评」；
-// 同时解析对方 mid，供发布时附 at 字段补上系统通知。
-func TestParseMsgFeedNestedReply(t *testing.T) {
-	raw := `{"code":0,"data":{"items":[
-		{"id":4001,"user":{"mid":9527,"nickname":"追评君"},"reply_time":1700000003,"item":{
-			"business":"comment","business_id":1,"subject_id":111,
-			"root_id":222,"target_id":222,"source_id":333,
-			"source_content":"楼主说得不对","target_reply_content":"我的根评论",
-			"title":"视频A","uri":"bilibili://video/111"}}
-	]}}`
-	items, err := parseMsgFeed(raw, "reply")
-	if err != nil {
-		t.Fatalf("解析失败: %v", err)
-	}
-	if len(items) != 1 {
-		t.Fatalf("应解析出 1 条，实际 %d", len(items))
-	}
-	item := items[0]
-	if item.Root != "222" || item.Parent != "222" {
-		t.Fatalf("回应应发在根评论 222 的追评位置（parent=root），实际 root=%q parent=%q", item.Root, item.Parent)
-	}
-	if !item.Nested || item.Mid != 9527 {
-		t.Fatalf("嵌套会话需要 @ 前缀与通知，Nested=%v Mid=%v", item.Nested, item.Mid)
-	}
-}
-
-// TestInboxReplyMessage 钉住发布文本的组装：嵌套会话带「回复 @昵称」前缀，
-// 对方是根评论作者时保持正文原样。
-func TestInboxReplyMessage(t *testing.T) {
-	nested := inboxItem{User: "追评君", Mid: 9527, Nested: true}
-	if got := inboxReplyMessage(nested, "谢谢支持啦"); got != "回复 @追评君 : 谢谢支持啦" {
-		t.Fatalf("嵌套会话应带回复前缀，实际 %q", got)
-	}
-	direct := inboxItem{User: "根作者", Mid: 100, Nested: false}
-	if got := inboxReplyMessage(direct, "谢谢支持啦"); got != "谢谢支持啦" {
-		t.Fatalf("非嵌套会话不应改写正文，实际 %q", got)
-	}
-}
-
-// TestFlexIDAcceptsStringAndNumber 钉住 B 站 ID 的两种编码都能解析。
-func TestFlexIDAcceptsStringAndNumber(t *testing.T) {
-	var fromString flexID
-	if err := fromString.UnmarshalJSON([]byte(`"1234567890123456789"`)); err != nil {
-		t.Fatalf("字符串 ID 解析失败: %v", err)
-	}
-	if fromString.String() != "1234567890123456789" {
-		t.Fatalf("字符串 ID 解析错误: %s", fromString.String())
-	}
-	var fromNumber flexID
-	if err := fromNumber.UnmarshalJSON([]byte(`42`)); err != nil {
-		t.Fatalf("数字 ID 解析失败: %v", err)
-	}
-	if fromNumber.String() != "42" {
-		t.Fatalf("数字 ID 解析错误: %s", fromNumber.String())
 	}
 }

@@ -106,7 +106,7 @@ func ExecuteMove(req MoveItemRequest) MoveResponse {
 			case "overwrite":
 				// 目标实体会被覆盖：先清掉它对应的句柄映射
 				if tgtRel, relErr := filepath.Rel(localDir, tgtPath); relErr == nil {
-					RemoveHandlesForPath(tgtRel)
+					NotifyDelete(filepath.ToSlash(tgtRel))
 				}
 				if err := os.RemoveAll(tgtPath); err != nil {
 					result.Error = fmt.Sprintf("覆盖同名目标失败: %v", err)
@@ -136,12 +136,7 @@ func ExecuteMove(req MoveItemRequest) MoveResponse {
 			result.Target = relativeToLocal(tgtPath, localDir)
 			// 句柄维护：旧路径映射改写到新路径；移入内容仓库时补登记
 			oldRel := relativeToLocal(entry.srcPath, localDir)
-			RewriteHandlesForMove(oldRel, result.Target)
-			if IsStoragePath(result.Target) {
-				if _, handleErr := UpsertHandleForPath(result.Target); handleErr != nil {
-					logger.SubWarn("Persistence", "Move", "句柄登记失败(%s): %v", result.Target, handleErr)
-				}
-			}
+			NotifyMove(oldRel, result.Target)
 			logger.SubInfo("Persistence", "Move", "移动: %s -> %s", result.Source, result.Target)
 		}
 		response.Results = append(response.Results, result)

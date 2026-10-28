@@ -2,31 +2,53 @@ package lunar
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/Descriptor"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	persistence "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/memory"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // ==== 工具定义 ====
 
+const (
+	// techniqueToolName 技法创作聚合工具名
+	techniqueToolName = "dispatch_technique"
+	// techniquePainter 绘图子工具
+	techniquePainter = "painter"
+	// techniqueMusician 音乐子工具
+	techniqueMusician = "musician"
+	// techniqueScreenshoter 截图子工具
+	techniqueScreenshoter = "screenshoter"
+)
+
 var agentControlTools = []ToolCall{
-	functionTool("dispatch_painter", "向绘图者子智能体发布绘画创作任务。绘图者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。若用户要求参照图片创作，通过 reference_tag 指定图片句柄。",
-		map[string]any{"description": map[string]any{"type": "string", "description": "绘画需求描述"}, "reference_tag": map[string]any{"type": "string", "description": "图生图基座图的图片句柄（如 @I.003）"}},
-		[]string{"description"}),
-	functionTool("dispatch_musician", "向演奏者子智能体发布音乐创作任务。演奏者会完善需求并创作音乐，完成后将乐谱和音频推送至前端展示。",
-		map[string]any{"description": map[string]any{"type": "string", "description": "音乐需求描述"}},
-		[]string{"description"}),
-	functionTool("dispatch_screenshoter", "把截图诉求交给截图者子智能体。截图者理解自然语言要求并精确取景，截图会直接展示给用户，同时把主图回传给你查看。",
-		map[string]any{"requirement": map[string]any{"type": "string", "description": "截图要求，保留用户原话里的关键细节"}},
-		[]string{"requirement"}),
+	functionTool(techniqueToolName, "技法创作：type 选择 painter、musician、screenshoter，instruction 用自然语言说明任务；",
+		map[string]any{
+			"type": map[string]any{
+				"type":        "string",
+				"enum":        []string{techniquePainter, techniqueMusician, techniqueScreenshoter},
+				"description": "painter=绘画创作、musician=音乐创作、screenshoter=屏幕截图",
+			},
+			"instruction": map[string]any{
+				"type":        "string",
+				"description": "例如: 画一张赛博朋克风格的自画像；创作一段安静的钢琴曲；截取当前屏幕上弹出的对话框",
+			},
+			"reference_tag": map[string]any{
+				"type":        "string",
+				"description": "可选，仅 painter 使用：图生图基座图的图片句柄（如 @I.003）",
+			},
+		}, []string{"type", "instruction"}),
 }
 
 var memoryTools = []ToolCall{
-	functionTool("search_memory", "从长期记忆库检索历史对话与知识片段。这是聊天记忆检索，不是文档资源检索——查文件/资料请用 browse_resources。",
+	functionTool("search_memory", "只读长期记忆与资源目录中已保存的标题/摘要：回忆用户说过什么、之前看过什么时用它。不会触发视频观看、网页搜索或任何实时读取；没有记录就直接说“不记得”，不要改用 use_resource 现场查看。",
 		map[string]any{
 			"keywords": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "用自然语言描述，或直接给视频 URL / BV 号；提供 1-4 种不同表述能显著提高命中率"},
 			"exclude":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "结果正文命中任意一个词就丢弃"},
@@ -35,7 +57,7 @@ var memoryTools = []ToolCall{
 }
 
 var resourceTools = []ToolCall{
-	functionTool("use_resource", "按句柄读取或探查资源。每个句柄可写成 @D.003、@D.003|§4、@D.003|L120-168。规则：不填 ask 时，文档/表格直接返回原文；填写 ask 时交给描述者按需求探查；图片/动图/视频返回描述；音频返回已有转写。"+grammarCheatsheet(),
+	functionTool("use_resource", "按句柄读取或探查资源。规则：不填 ask 时，文档/表格直接返回原文，链接返回完整地址、站点、标题与缓存摘要；图片/动图返回描述；音频返回已有转写；视频统一使用 @U 链接句柄；"+grammarCheatsheet(),
 		map[string]any{
 			"handles": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "资源句柄数组"},
 			"ask":     map[string]any{"type": "string", "description": "可选：交给描述者的自然语言需求"},
@@ -43,7 +65,7 @@ var resourceTools = []ToolCall{
 	functionTool("browse_resources", "浏览资源目录或跨资源检索。不传 query 时按 kind 列出句柄 + 类型 + 标题/描述 + 内容状态；传 query 时在标题、摘要、标签与段落标题中匹配。",
 		map[string]any{
 			"query": map[string]any{"type": "string", "description": "可选：搜索关键词"},
-			"kind":  map[string]any{"type": "string", "description": "可选：D 文档 / I 图片 / V 视频 / A 音频 / T 表格"},
+			"kind":  map[string]any{"type": "string", "description": "可选：D 文档 / I 图片 / A 音频 / T 表格 / U 链接"},
 			"limit": map[string]any{"type": "number", "description": "返回条目数量上限"},
 		}, []string{}),
 }
@@ -89,8 +111,23 @@ func lookupTool(name string) ToolHandler {
 
 // ==== 智能体控制 ====
 
-func handleDispatchPainter(args map[string]any) ToolResult {
-	description := strings.TrimSpace(stringArg(args, "description"))
+// handleDispatchTechnique 技法创作聚合工具：按 type 分派给对应子智能体
+func handleDispatchTechnique(args map[string]any) ToolResult {
+	kind := strings.ToLower(strings.TrimSpace(stringArg(args, "type")))
+	instruction := strings.TrimSpace(stringArg(args, "instruction"))
+	switch kind {
+	case techniquePainter:
+		return dispatchPainter(instruction, stringArg(args, "reference_tag"))
+	case techniqueMusician:
+		return dispatchMusician(instruction)
+	case techniqueScreenshoter:
+		return dispatchScreenshoter(instruction)
+	default:
+		return ToolResult{Text: "技法创作调度失败：type 只能取 painter / musician / screenshoter"}
+	}
+}
+
+func dispatchPainter(description, referenceTag string) ToolResult {
 	if description == "" {
 		return ToolResult{Text: "绘画任务调度失败：创作描述不能为空"}
 	}
@@ -98,7 +135,7 @@ func handleDispatchPainter(args map[string]any) ToolResult {
 		return ToolResult{Text: "绘画任务调度失败：绘制者子智能体未就绪"}
 	}
 	var reference *ImageReference
-	if tag := strings.TrimSpace(stringArg(args, "reference_tag")); tag != "" {
+	if tag := strings.TrimSpace(referenceTag); tag != "" {
 		handle, source, desc, ok := resolveImageRef(tag)
 		if !ok {
 			return ToolResult{Text: "绘画任务调度失败：图片句柄 " + tag + " 不存在，请用 browse_resources（kind=\"I\"）查看可引用的图片句柄后重试"}
@@ -116,8 +153,7 @@ func handleDispatchPainter(args map[string]any) ToolResult {
 	return ToolResult{Text: result}
 }
 
-func handleDispatchMusician(args map[string]any) ToolResult {
-	description := strings.TrimSpace(stringArg(args, "description"))
+func dispatchMusician(description string) ToolResult {
 	if description == "" {
 		return ToolResult{Text: "音乐任务调度失败：创作描述不能为空"}
 	}
@@ -127,8 +163,7 @@ func handleDispatchMusician(args map[string]any) ToolResult {
 	return ToolResult{Text: musicianRole.createCreativeWork(description)}
 }
 
-func handleDispatchScreenshoter(args map[string]any) ToolResult {
-	requirement := strings.TrimSpace(stringArg(args, "requirement"))
+func dispatchScreenshoter(requirement string) ToolResult {
 	if requirement == "" {
 		return ToolResult{Text: "截图任务调度失败：截图要求不能为空"}
 	}
@@ -171,8 +206,9 @@ func handleSearchMemory(args map[string]any) ToolResult {
 		hits = hits[:topK]
 	}
 	videoSummaries := findVideoSummaries(extractVideoKeys(keywords))
-	if len(hits) == 0 && len(videoSummaries) == 0 {
-		return ToolResult{Text: "记忆库中没有检索到相关记录。可以换一种表述再试一次；不要编造记忆内容。"}
+	resourceMemories := findResourceMemories(keywords)
+	if len(hits) == 0 && len(videoSummaries) == 0 && len(resourceMemories) == 0 {
+		return ToolResult{Text: "记忆库与资源目录中都没有相关记录, 可以换一种表述再试一次；"}
 	}
 	sections := make([]string, 0)
 	if len(hits) > 0 {
@@ -190,7 +226,10 @@ func handleSearchMemory(args map[string]any) ToolResult {
 	if len(videoSummaries) > 0 {
 		sections = append(sections, fmt.Sprintf("已看视频摘要 %d 条（月华自己刷B站时留下的观看理解）：\n%s", len(videoSummaries), strings.Join(videoSummaries, "\n\n")))
 	}
-	text := strings.Join(sections, "\n\n") + "\n\n只依据以上原文回答；原文不足以回答用户问题时，直接说明没有找到相关信息，不要编造。"
+	if len(resourceMemories) > 0 {
+		sections = append(sections, fmt.Sprintf("资源目录中已保存的内容记忆 %d 条：\n%s", len(resourceMemories), strings.Join(resourceMemories, "\n\n")))
+	}
+	text := strings.Join(sections, "\n\n") + "\n\n只依据以上原文回答；原文不足以回答用户问题时，直接说明不记得/没有找到相关信息，不要编造，也不要为了补记忆而调用 use_resource。"
 	return ToolResult{Text: text}
 }
 
@@ -279,11 +318,46 @@ func findVideoSummaries(keys []string) []string {
 	return found
 }
 
+var resourceMemoryHandleRegex = regexp.MustCompile(resource.HandlePattern)
+
+// findResourceMemories 只读资源目录中已保存的标题与摘要，不触发任何观看/搜索。
+func findResourceMemories(keywords []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0)
+	add := func(handle, title, summary string) {
+		handle = strings.TrimSpace(handle)
+		summary = strings.TrimSpace(summary)
+		if handle == "" || summary == "" || seen[handle] {
+			return
+		}
+		seen[handle] = true
+		if strings.TrimSpace(title) == "" {
+			title = handle
+		}
+		out = append(out, fmt.Sprintf("[%s] %s\n%s", handle, title, previewText(summary, 400)))
+	}
+	for _, keyword := range keywords {
+		for _, match := range resourceMemoryHandleRegex.FindAllString(keyword, -1) {
+			if res, ok := resource.Lookup(match); ok {
+				title := res.Title
+				if title == "" {
+					title = res.Name
+				}
+				add(res.Handle, title, res.Summary)
+			}
+		}
+		for _, hit := range searchResources(keyword, "", 5) {
+			add(hit.Handle, hit.Title, hit.Summary)
+		}
+	}
+	return out
+}
+
 func vectorSearch(keywords []string, topK int, exclude []string) []MemorySearchHit {
 	merged := map[string]MemorySearchHit{}
 	order := make([]string, 0)
 	for _, keyword := range keywords {
-		results, err := persistence.MemoryQueryWithOptions(context.Background(), keyword, "text", topK, persistence.MemoryQueryOptions{})
+		results, err := memory.Query(context.Background(), keyword, "text", topK, memory.QueryOptions{})
 		if err != nil {
 			continue
 		}
@@ -353,7 +427,7 @@ func keywordFallback(keywords []string, topK int, exclude []string, known map[st
 	merged := map[string]entry{}
 	order := make([]string, 0)
 	for _, term := range terms {
-		results, err := persistence.MemoryKeywordSearch("text", []string{term}, false, topK*2)
+		results, err := memory.KeywordSearch("text", []string{term}, false, topK*2)
 		if err != nil {
 			continue
 		}
@@ -426,7 +500,11 @@ func readHandleBlock(raw, ask string, missing *[]string) string {
 		deleteResource(normalized)
 		return "【" + normalized + "】\n" + lostFileNotice
 	}
-	if parsed.Kind == "I" || parsed.Kind == "V" || parsed.Kind == "A" {
+	if parsed.Kind == "V" {
+		// @V 已废弃：视频统一走 @U 链接句柄。
+		return "【" + normalized + "】\n视频已统一使用 @U 链接句柄，请改用对应的链接句柄"
+	}
+	if parsed.Kind == "I" || parsed.Kind == "A" {
 		desc := describeResource(normalized, ask)
 		if desc == "" && getResourceEntry(normalized) == nil {
 			return "【" + normalized + "】\n" + lostFileNotice
@@ -434,7 +512,37 @@ func readHandleBlock(raw, ask string, missing *[]string) string {
 		if desc == "" {
 			desc = "（暂无描述，且本体不可直接解读）"
 		}
-		return "【" + normalized + "｜" + kindLabels[parsed.Kind] + "｜" + entry.Title + "】\n" + desc
+		return "【" + normalized + "｜" + kindLabel(parsed.Kind) + "｜" + entry.Title + "】\n" + desc
+	}
+	// 链接句柄：取回站点、标题与缓存摘要。链接没有正文可供探查，ask 对它是空操作，
+	// 直接返回已登记内容即可（绝不能再转给描述者做「文本探查」）。
+	if parsed.Kind == "U" {
+		// 本机视频 URL：走观看管线解读画面，不再只返回链接摘要。
+		if entry.URL != "" && (resource.IsVideoURL(entry.URL) || resource.KindOfExt(strings.ToLower(filepath.Ext(entry.Title))) == resource.KindVideo) {
+			if ask == "" && strings.TrimSpace(entry.Summary) != "" {
+				return "【" + normalized + "｜" + kindLabel(parsed.Kind) + "｜" + entry.Title + "】\n" + entry.Summary
+			}
+			desc, err := describeVideoURL(entry.URL, ask)
+			if err != nil {
+				if errors.Is(err, Descriptor.ErrVideoExpired) {
+					return "【" + normalized + "｜" + entry.Title + "】\n这段视频的远程地址已经失效，本地也没有可复用的副本；请对方重新发送一次视频。"
+				}
+				return "【" + normalized + "｜" + entry.Title + "】\n视频读取失败：" + err.Error()
+			}
+			if desc == "" {
+				desc = "（视频暂无可用描述）"
+			}
+			return "【" + normalized + "｜" + kindLabel(parsed.Kind) + "｜" + entry.Title + "】\n" + desc
+		}
+		result := readResource(normalized, 12000)
+		if result == nil {
+			*missing = append(*missing, normalized)
+			return ""
+		}
+		if result.Lost {
+			return "【" + normalized + "｜" + result.Title + "】\n" + lostFileNotice
+		}
+		return "【" + normalized + "｜" + kindLabel(parsed.Kind) + "｜" + entry.Title + "】\n" + result.Content
 	}
 	if ask != "" {
 		answer := inspectTextResource(normalized, ask)
@@ -480,8 +588,8 @@ func finishResourceBlocks(blocks, missing []string) ToolResult {
 
 func handleBrowseResources(args map[string]any) ToolResult {
 	kind := strings.ToUpper(strings.TrimSpace(stringArg(args, "kind")))
-	if kind != "" && kindLabels[kind] == "" {
-		return ToolResult{Text: "类型码无效：" + kind + "。可用类型码：D 文档 / I 图片 / V 视频 / A 音频 / T 表格"}
+	if !isKnownKind(kind) && kind != "" {
+		return ToolResult{Text: "类型码无效：" + kind + "。可用类型码：D 文档 / I 图片 / A 音频 / T 表格 / U 链接"}
 	}
 	query := strings.TrimSpace(stringArg(args, "query"))
 	limit := int(numberArg(args, "limit"))
@@ -534,7 +642,7 @@ func listResourcesText(kind string, limit int) string {
 		if entry.SectionCount > 0 {
 			sectionNote = fmt.Sprintf(" %d节", entry.SectionCount)
 		}
-		lines = append(lines, fmt.Sprintf("%s [%s] %s%s%s", entry.Handle, kindLabels[entry.Kind], entry.Title, sectionNote, desc))
+		lines = append(lines, fmt.Sprintf("%s [%s] %s%s%s", entry.Handle, kindLabel(entry.Kind), entry.Title, sectionNote, desc))
 	}
 	purgeNote := ""
 	if purged > 0 {
@@ -556,7 +664,7 @@ func searchResourcesText(query, kind string, limit int) string {
 	}
 	lines := make([]string, 0, len(hits))
 	for _, hit := range hits {
-		line := fmt.Sprintf("%s [%s] %s", hit.Handle, kindLabels[hit.Kind], hit.Title)
+		line := fmt.Sprintf("%s [%s] %s", hit.Handle, kindLabel(hit.Kind), hit.Title)
 		if hit.Summary != "" {
 			line += "：" + previewText(strings.Join(strings.Fields(hit.Summary), " "), 120)
 		}
@@ -695,9 +803,7 @@ func scheduleDelete(args map[string]any) ToolResult {
 
 // registerDialogueTools 注册对话者可用的全部工具
 func registerDialogueTools() {
-	registerTool("dispatch_painter", handleDispatchPainter)
-	registerTool("dispatch_musician", handleDispatchMusician)
-	registerTool("dispatch_screenshoter", handleDispatchScreenshoter)
+	registerTool(techniqueToolName, handleDispatchTechnique)
 	registerTool("search_memory", handleSearchMemory)
 	registerTool("use_resource", handleUseResource)
 	registerTool("browse_resources", handleBrowseResources)

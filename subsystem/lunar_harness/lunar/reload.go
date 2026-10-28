@@ -65,6 +65,7 @@ func ReloadMoonEngine(reason string) error {
 		dialogueRole.ToolRounds = 0
 		dialogueRole.ActionClaimGuarded = false
 	}
+	restartTickScheduler()
 	engineMu.Lock()
 	engineStatus.ReloadCount++
 	engineStatus.LastReloadAt = time.Now()

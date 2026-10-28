@@ -4,6 +4,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
+	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -27,6 +29,10 @@ var (
 	unreadContext []PostMessage
 	// unreadRecords 对话者淘汰的历史消息（待记忆流程写入记忆库）
 	unreadRecords []PostMessage
+	// lastUserTextMu 保护最新用户发言
+	lastUserTextMu sync.Mutex
+	// lastUserText 最新用户发言（供生活事件更新心情）
+	lastUserText string
 
 	// reasoningInProgress 对话模型是否正在跑（为 true 时下一个 tick 直接跳过）
 	reasoningInProgress bool
@@ -118,8 +124,6 @@ var (
 var (
 	// ltpMu 保护聚合工具缓存
 	ltpMu sync.RWMutex
-	// ltpTool 最近一次同步到的聚合工具
-	ltpTool *LTPXRemoteToolDef
 	// ltpSubTools 可调用应用清单
 	ltpSubTools []LTPXRemoteToolRef
 	// ltpLoggedNames 上次打日志的应用名清单
@@ -192,8 +196,40 @@ const (
 	// asrFallbackText 语音转写失败时的兜底置换文本
 	asrFallbackText = "月华听不懂这段语音呢"
 
+	// channelOrigin 渠道消息来源（资源目录的 origin 语义）
+	channelOrigin = "channel"
+	// clientUploadOrigin 前端直传来源
+	clientUploadOrigin = "client-upload"
+
+	// urlExtractLimit 一次未读转换内现场提炼陌生链接的次数上限
+	urlExtractLimit = 2
+	// unavailableLinkText 链接无法登记时的中性占位（绝不回显地址与 BV 号）
+	unavailableLinkText = "（这条链接暂时无法归档）"
+	// urlFocusRemainRunes 提炼指令里保留的诉求文字长度（去掉链接后）
+	urlFocusRemainRunes = 160
+
 	// scheduleFilePath 计划表存储路径
 	scheduleFilePath = "database/schedule.json"
 	// scheduleTriggerPrefix 计划到期触发消息统一前缀
 	scheduleTriggerPrefix = "[计划提醒]"
+	// scheduleSource 计划到期触发消息的来源标记：只进模型上下文，不写入前端可见的对话缓存
+	scheduleSource = "schedule"
+
+	// tickModule Tick 调度日志模块名
+	tickModule = "TickLoop"
+	// tickStateFile 调度器状态文件（相对 LocalDir）
+	tickStateFile = "database/tick_state.json"
+	// tickIdleThreshold 生活体系冷却阈值：连续 905 个空闲 Tick 后触发
+	tickIdleThreshold = 905
+	// tickPersistEveryN 空闲计数每 N 个 Tick 落盘一次（触发/释放时立即落盘）
+	tickPersistEveryN = 10
 )
+
+// tickSchedulerInstance 全局 Tick 调度器（Start 时创建）
+var tickSchedulerInstance *tickScheduler
+
+// viewingPendingHook 观影待办探测；测试可替换，生产默认走 BilibiliViewer。
+var viewingPendingHook = BilibiliViewer.HasPendingWork
+
+// notifyIdleHook 空闲 Tick 通知 QQ 桥接推进队列；测试可替换。
+var notifyIdleHook = DialogueBridging.NotifyAgentIdle

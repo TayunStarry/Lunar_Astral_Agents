@@ -16,13 +16,15 @@ import (
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 var (
 	userPrefixRegex = regexp.MustCompile(`^\[用户:\s*([^\]]*)\]\s*[:：]\s*`)
-	fileRefRegex    = regexp.MustCompile(`@[DIVAT]\.\d{3,}`)
-	noticeRegex     = regexp.MustCompile(`^\[已收录\]\s*(@[DIVAT]\.\d{3,})\s*(.*)$`)
-	handlePathRegex = regexp.MustCompile(`^/file/read/(@[DIVAT]\.\d{3,})/?$`)
+	// 以下三个正则都由 engine/resource 的权威文法拼出，禁止另写类型码集合
+	fileRefRegex    = regexp.MustCompile(resource.HandlePattern)
+	noticeRegex     = regexp.MustCompile(`^\[已收录\]\s*(` + resource.HandlePattern + `)\s*(.*)$`)
+	handlePathRegex = regexp.MustCompile(`^/file/read/(` + resource.HandlePattern + `)/?$`)
 )
 
 // newID 生成消息 ID（时间戳 + 随机后缀）
@@ -147,12 +149,13 @@ func saveBase64Media(base64Text, mime, kind string) string {
 			raw = match[2]
 		}
 	}
-	if kind != "voice" && !strings.HasPrefix(contentType, "image/") {
+	if kind != "voice" && kind != "video" && !strings.HasPrefix(contentType, "image/") {
 		contentType = "image/png"
 	}
 	extMap := map[string]string{
 		"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/bmp": "bmp",
 		"audio/wav": "wav", "audio/x-wav": "wav", "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/flac": "flac", "audio/ogg": "ogg",
+		"video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/x-msvideo": "avi", "video/x-matroska": "mkv",
 	}
 	ext := extMap[contentType]
 	if ext == "" {
@@ -312,10 +315,12 @@ func recordAssistantContext(kind, content, audio string) {
 		if match := noticeRegex.FindStringSubmatch(strings.TrimSpace(record.Content)); match != nil {
 			record.Categories = []string{"text", "file"}
 			record.FileRef = match[1]
-			record.FileLabel = match[2]
-			if record.FileLabel == "" {
-				record.FileLabel = match[1]
+			// 句柄文法内含 5 个捕获组，标签是最后一个捕获组
+			label := strings.TrimSpace(match[len(match)-1])
+			if label == "" {
+				label = match[1]
 			}
+			record.FileLabel = label
 		}
 	default:
 		record.Categories = []string{kind}
@@ -420,7 +425,7 @@ func registerPushedImage(raw string) string {
 	default:
 		return raw
 	}
-	canonical, _, err := persistence.RegisterPath(rel)
+	canonical, _, err := resource.RegisterPath(rel)
 	if err != nil || canonical == "" || strings.HasPrefix(canonical, "@") {
 		return raw
 	}
@@ -464,7 +469,7 @@ func repairHandleImageURL(source string) string {
 	if match == nil {
 		return source
 	}
-	result, err := persistence.ResourceRead(match[1], 1)
+	result, err := resource.Read(match[1], 1)
 	if err == nil && !result.Lost && result.BlobPath != "" {
 		return fileReadPath + result.BlobPath
 	}
@@ -553,30 +558,10 @@ func cachedToContext(record CachedMessage) *PostMessage {
 		for _, attachment := range record.Attachments {
 			switch attachment.Type {
 			case "image":
-				vision := toVisionSource(attachment.Src)
-				if vision == "" {
-					continue
-				}
-				animated, err := isAnimatedImageSource(attachment.Src)
-				if err != nil {
-					items = append(items, ContentItem{Type: ContentText, Text: "[历史图片不可用：" + attachment.Label + "]"})
-					continue
-				}
-				if animated {
-					summary := strings.TrimSpace(getPromptFromKnowledgeAny(animatedSummaryKeys(attachment.Src)))
-					label := "[动态图]"
-					if summary != "" {
-						label = "[动态图: " + truncateRunes(summary, 1200) + "]"
-					}
-					items = append(items, ContentItem{Type: ContentText, Text: label})
-					continue
-				}
-				items = append(items, ContentItem{Type: ContentImageURL, ImageURL: &URLPayload{URL: vision}})
+				// 历史重放只做句柄化，不现场提炼链接（提炼只发生在消息首次进入上下文时）
+				items = append(items, convertImageResource(attachment.Src, channelOrigin, nil, ""))
 			case "video":
-				display := toDisplaySource(attachment.Src)
-				if strings.HasPrefix(display, fileReadPath) {
-					items = append(items, ContentItem{Type: ContentVideoURL, VideoURL: &URLPayload{URL: config.LocalBaseURL() + display}})
-				}
+				items = append(items, ContentItem{Type: ContentText, Text: urlHandleText(attachment.Src, ".mp4", channelOrigin, nil, "")})
 			}
 		}
 		if len(items) == 0 {
@@ -677,15 +662,23 @@ func initConversationCache(loadContext func([]PostMessage)) {
 		return
 	}
 	records := make([]CachedMessage, 0, len(rows))
+	// 历史文件里可能残留计划表触发的内部提醒：它们不属于用户对话，载入时剔除并回写
+	removedSchedule := false
 	for _, row := range rows {
-		if record := normalizeRecord(row); record != nil {
-			records = append(records, *record)
+		record := normalizeRecord(row)
+		if record == nil {
+			continue
 		}
+		if record.Role == RoleUser && strings.HasPrefix(strings.TrimSpace(record.Content), scheduleTriggerPrefix) {
+			removedSchedule = true
+			continue
+		}
+		records = append(records, *record)
 	}
 	if len(records) > maxCacheMessages {
 		records = records[len(records)-maxCacheMessages:]
 	}
-	migrated := false
+	migrated := removedSchedule
 	for i := range records {
 		if records[i].ImageSrc != "" {
 			fixed := repairHandleImageURL(records[i].ImageSrc)

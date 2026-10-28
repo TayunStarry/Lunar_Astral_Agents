@@ -1,7 +1,7 @@
 package BilibiliViewer
 
 // inbox_seen.go 未读消息的去重记录：落盘保存已回应的消息键，
-// 避免同一轮或下一轮重复回复；动态即时回复（phaseReplies）也复用这份记录。
+// 避免同一轮或下一轮重复回复。
 
 import (
 	"encoding/json"
@@ -63,7 +63,7 @@ func markInboxSeen(items ...inboxItem) {
 	markInboxSeenKeys(keys)
 }
 
-// markInboxSeenKeys 记录已处理的消息键；动态即时回复（phaseReplies）也用它避免下轮重复。
+// markInboxSeenKeys 记录已处理的消息键（同一条互动可能命中多个去重键）。
 func markInboxSeenKeys(keys []string) {
 	if len(keys) == 0 {
 		return

@@ -6,7 +6,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	persistence "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/memory"
 )
 
 // ensureMemoryReady 确保记忆库已初始化
@@ -17,8 +17,8 @@ func ensureMemoryReady() bool {
 	if ready {
 		return true
 	}
-	persistence.InitMemoryDB(config.MemoryDBDir)
-	if err := persistence.MemoryInitInstance(); err != nil {
+	memory.Init(config.MemoryDBDir)
+	if err := memory.EnsureReady(); err != nil {
 		logger.Error(lunarCoreModule, "记忆库初始化失败: %v", err)
 		return false
 	}
@@ -28,8 +28,8 @@ func ensureMemoryReady() bool {
 	return true
 }
 
-// memoryResults 把持久层查询结果转换为检索命中
-func memoryResults(results []persistence.MemoryQueryResult) []MemorySearchHit {
+// memoryResults 把记忆库查询结果转换为检索命中
+func memoryResults(results []memory.Entry) []MemorySearchHit {
 	hits := make([]MemorySearchHit, 0, len(results))
 	for _, item := range results {
 		hits = append(hits, MemorySearchHit{
@@ -106,12 +106,12 @@ func searchMemoryGlobal(query string, limit int, options MemorySearchOptions) []
 	if len(terms) == 0 {
 		return nil
 	}
-	var raw []persistence.MemoryQueryResult
+	var raw []memory.Entry
 	var err error
 	if mode == "vector" {
-		raw, err = persistence.MemoryQueryWithOptions(context.Background(), text, "text", limit, persistence.MemoryQueryOptions{ForceGlobal: options.ForceGlobal})
+		raw, err = memory.Query(context.Background(), text, "text", limit, memory.QueryOptions{ForceGlobal: options.ForceGlobal})
 	} else {
-		raw, err = persistence.MemoryKeywordSearch("text", terms, mode == "regex", limit)
+		raw, err = memory.KeywordSearch("text", terms, mode == "regex", limit)
 	}
 	if err != nil {
 		logger.Warn(lunarCoreModule, "[记忆检索] 查询失败: %v", err)
@@ -145,7 +145,7 @@ func queryEmotionSticker(query string) string {
 	if query == "" || !ensureMemoryReady() {
 		return ""
 	}
-	results, err := persistence.MemoryQueryWithOptions(context.Background(), query, "image", 10, persistence.MemoryQueryOptions{ForceGlobal: true})
+	results, err := memory.Query(context.Background(), query, "image", 10, memory.QueryOptions{ForceGlobal: true})
 	if err != nil || len(results) == 0 {
 		return ""
 	}
@@ -161,11 +161,11 @@ func queryEmotionSticker(query string) string {
 
 // getMemoryEntry 按 ID 读取记忆
 func getMemoryEntry(id string) *MemorySearchHit {
-	item, err := persistence.MemoryGetEntry(strings.TrimSpace(id))
+	item, err := memory.Get(strings.TrimSpace(id))
 	if err != nil || item == nil {
 		return nil
 	}
-	hits := memoryResults([]persistence.MemoryQueryResult{*item})
+	hits := memoryResults([]memory.Entry{*item})
 	if len(hits) == 0 {
 		return nil
 	}
@@ -174,11 +174,11 @@ func getMemoryEntry(id string) *MemorySearchHit {
 
 // listMemoryEntries 逐条列举记忆
 func listMemoryEntries(mediaType string, limit, offset int) []MemorySearchHit {
-	entries, _ := persistence.MemoryListEntries(mediaType, offset, limit)
+	entries, _ := memory.List(mediaType, offset, limit)
 	return memoryResults(entries)
 }
 
 // addMemory 写入一条文本记忆
 func addMemory(role, content string) (string, error) {
-	return persistence.MemoryAddMessage(context.Background(), role, content)
+	return memory.AddText(context.Background(), role, content)
 }

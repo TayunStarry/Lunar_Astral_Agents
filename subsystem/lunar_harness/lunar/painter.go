@@ -6,7 +6,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
-	persistence "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // newPainterRole 创建绘制者角色
@@ -184,7 +184,7 @@ func (role *PainterRole) rememberRuntimeArtwork(source, note string) {
 		return
 	}
 	handle := ""
-	if entry, ok := persistence.ArchiveDatabase.FindResourceByBlobPath(rel); ok {
+	if entry, ok := resource.ForPath(rel); ok {
 		handle = entry.Handle
 	}
 	role.setRuntimeImage(handle, visionReference(handle, rel), note)

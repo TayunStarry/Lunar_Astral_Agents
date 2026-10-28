@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -25,7 +25,7 @@ func ResourceAdmitHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ResourceAdmit请求[ERROR] -> path 与 name 不能为空", http.StatusBadRequest)
 		return
 	}
-	res, err := persistence.ResourceAdmitDocument(req.Path, req.Name)
+	res, err := resource.AdmitDocument(req.Path, req.Name)
 	if err != nil {
 		http.Error(w, "ResourceAdmit请求[ERROR] -> "+err.Error(), http.StatusInternalServerError)
 		return
@@ -48,7 +48,7 @@ func ResourceResolveHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ResourceResolve请求[ERROR] -> handle 不能为空", http.StatusBadRequest)
 		return
 	}
-	res, err := persistence.ResourceResolve(handle)
+	res, err := resource.Resolve(handle)
 	if err != nil {
 		http.Error(w, "ResourceResolve请求[ERROR] -> "+err.Error(), http.StatusNotFound)
 		return

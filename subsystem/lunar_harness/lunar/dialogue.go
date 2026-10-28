@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
@@ -47,16 +46,20 @@ func (role *DialogueRole) continueDialogue(cache *ChatCache, guardNote *PostMess
 		}
 	}()
 
-	LiteImageFile()
+	// 取走未读队列并写入模型上下文：runDialogueTurn 会把本回合消息重新放回队列，
+	// 这里一次性转入 role.Messages，队列随之清空；漏掉这一步会导致
+	// 「队列永远非空 → 每秒都重新生成一轮应答」的死循环。
 	unreadMu.Lock()
 	pending := append([]PostMessage(nil), unreadContext...)
 	unreadContext = make([]PostMessage, 0)
 	unreadMu.Unlock()
-	for _, message := range pending {
+	// 转换是幂等的：本回合消息在 pullContext 已转换过一次，这里再走一遍兜住
+	// 「转换期间新到队」的迟到消息，保证任何资源进模型上下文前都已被句柄化。
+	for _, message := range ResourcesConversionHandle(pending) {
 		role.writeContext(message)
 	}
 	role.formatHistoricalMessages()
-	role.RuntimeMessages = []PostMessage{{Role: RoleUser, Content: "当前时间: " + time.Now().Format("2006-01-02 15:04:05")}}
+	role.RuntimeMessages = []PostMessage{buildRuntimeGlobalMessage()}
 
 	contextMessages := role.RagMessages
 	if guardNote != nil {

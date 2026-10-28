@@ -7,7 +7,7 @@ import {
     fileToRawBase64,
     getAudioFormat,
 } from './file.js';
-import { saveFile } from './fetch.js';
+import { saveFile, admitDocumentFile } from './fetch.js';
 
 /**
  * 待发送附件管理器
@@ -122,8 +122,9 @@ export class FilePreviewManager {
     /**
      * 上传附件并返回处理结果
      *
-     * 音频文件不上传服务器（后续以 base64 直接嵌入消息），
-     * 其余文件统一经 /file/write 保存并返回可访问 URL。
+     * 音频文件不上传服务器（后续以 base64 直接嵌入消息）；
+     * 文本与其他文件按文档入库，只带回句柄（正文不进上下文）；
+     * 图片与视频经 /file/write 保存并返回可访问 URL。
      */
     async processFileUpload(preview) {
         const category = getFileCategory(preview.file);
@@ -135,6 +136,17 @@ export class FilePreviewManager {
                 fileName: preview.name,
                 fileSize: preview.file.size,
                 previewUrl: URL.createObjectURL(preview.file),
+            };
+        }
+
+        if (category === 'text' || category === 'other') {
+            const admitted = await admitDocumentFile(preview.file);
+            return {
+                fileUrl: null,
+                handle: admitted.handle,
+                category,
+                fileName: admitted.name,
+                fileSize: preview.file.size,
             };
         }
 
@@ -151,9 +163,9 @@ export class FilePreviewManager {
      * 构建 OpenAI 兼容的消息内容块
      *
      * 规则与电脑端一致：
-     * - 图片 → image_url；视频 → 文本标记 + video_url
+     * - 图片 → image_url；视频 → video_url（句柄由服务端生成）
      * - 音频 → input_audio（仅 wav/mp3 支持，其余退回 audio_url）
-     * - 文本 → 围栏代码块；其他 → 文件名/大小/访问链接
+     * - 文本 / 其他文件 → 只带文档句柄，正文不进上下文
      *
      * @param {Array<object>} fileResults - processFileUpload 的结果列表
      * @returns {Promise<Array<object>>} 内容块数组
@@ -175,9 +187,12 @@ export class FilePreviewManager {
                             input_audio: { data: base64Data, format: audioFormat }
                         });
                     } else {
-                        // llama.cpp 仅接受 wav/mp3，其他格式退回可访问链接
-                        const url = preview.url;
-                        contentBlocks.push({ type: 'text', text: `${res.fileName} 访问链接: ${url}` });
+                        // llama.cpp 仅接受 wav/mp3：其余格式先上传，服务端再按句柄转写
+                        const saved = await saveFile(preview.file, true);
+                        contentBlocks.push({
+                            type: 'audio_url',
+                            audio_url: { url: `${window.location.origin}/file/read/${saved.filename}` }
+                        });
                     }
                 } catch (err) {
                     this.showError?.(`无法读取音频 ${res.fileName}`);
@@ -191,26 +206,13 @@ export class FilePreviewManager {
             else if (res.category === 'video') {
                 contentBlocks.push({ type: 'video_url', video_url: { url: res.fileUrl } });
             }
-            else if (res.category === 'text') {
-                if (!preview) continue;
-                try {
-                    const rawText = await preview.file.text();
-                    const MAX_TEXT_LEN = 50000;
-                    const textContent = rawText.length > MAX_TEXT_LEN
-                        ? rawText.slice(0, MAX_TEXT_LEN) + '\n\n[文件内容过长，已截断]'
-                        : rawText;
-                    contentBlocks.push({
-                        type: 'text',
-                        text: `【文件 ${res.fileName}】\n内容：\n\`\`\`\n${textContent}\n\`\`\`\n访问链接：${res.fileUrl}`
-                    });
-                } catch (err) {
-                    this.showError?.(`无法读取文件 ${res.fileName}`);
-                }
+            else if (res.handle) {
+                contentBlocks.push({ type: 'text', text: `${res.handle} ${res.fileName}` });
             }
             else {
                 contentBlocks.push({
                     type: 'text',
-                    text: `【文件 ${res.fileName}】\n大小：${formatFileSize(res.fileSize)}\n访问链接：${res.fileUrl}`
+                    text: `${res.fileName}（${formatFileSize(res.fileSize)}）`
                 });
             }
         }

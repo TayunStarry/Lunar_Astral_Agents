@@ -52,13 +52,8 @@ func (b *Broker) Status() ltpx.Status {
 	}
 
 	return ltpx.Status{
-		Tool: &ltpx.ToolDef{
-			Name:        resp.Tool.Name,
-			Description: resp.Tool.Description,
-			// 参数 schema 必须随定义透传：缺失会让模型收到 parameters=null 的函数定义，
-			// 无从得知 {details, tool, instruction} 的参数语义
-			Parameters: resp.Tool.Parameters,
-		},
+		// 聚合工具只作「工具链可用」标记：参数 schema 由月华按清单统一构建，本端不再透传
+		Tool:  &ltpx.ToolDef{Name: resp.Tool.Name, Description: resp.Tool.Description},
 		Tools: tools,
 	}
 }

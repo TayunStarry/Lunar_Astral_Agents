@@ -19,7 +19,7 @@ class LunarCoreApp {
 	fileManager = null;
 
 	constructor() {
-		// 加载后端用户名（lunar_config.json 的 agent.user_name）
+		// 确保称呼可用：优先读取浏览器缓存，缺失时显示覆盖层
 		initUserName();
 		this.initElements();
 		this.initVoiceChat();

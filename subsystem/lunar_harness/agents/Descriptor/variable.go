@@ -12,10 +12,6 @@ import (
 const (
 	// roleLabel TUI 实况屏显示的角色标签
 	roleLabel = "描述者"
-	// maxSegments 单次观看最多评估的片段/分组数（超出部分等距抽样）
-	maxSegments = 8
-	// summaryThreshold 拼接理解文本超过该字符数时触发客观摘要
-	summaryThreshold = 4096
 	// summaryStoreChars 写回资源目录的摘要最大字符数
 	summaryStoreChars = 1000
 	// maxToolRounds 文件探查的最大工具轮次

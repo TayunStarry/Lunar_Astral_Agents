@@ -18,11 +18,11 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/multimodal"
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // resourceVisionURI 生成静态图片的视觉副本并返回 data URI
-func resourceVisionURI(res persistence.ArchiveResource, abs string) (string, error) {
+func resourceVisionURI(res resource.Resource, abs string) (string, error) {
 	side := config.VisionMaxSide
 	if side <= 0 {
 		side = 1080
@@ -40,16 +40,16 @@ func resourceVisionURI(res persistence.ArchiveResource, abs string) (string, err
 		return "", fmt.Errorf("生成视觉副本失败: %w", err)
 	}
 	if cached {
-		persistence.VisionCacheTouch(hash, side)
+		resource.VisionCacheTouch(hash, side)
 	} else {
-		_ = persistence.VisionCachePut(persistence.VisionCacheEntry{
+		_ = resource.VisionCachePut(resource.VisionCacheEntry{
 			ContentHash: hash,
 			Side:        side,
 			Tag:         res.Handle,
 			CachePath:   cacheRel,
 			Bytes:       int64(len(data)),
 		})
-		if removed, freed := persistence.VisionCacheEvict(int64(config.VisionCacheCapMB) << 20); removed > 0 {
+		if removed, freed := resource.VisionCacheEvict(int64(config.VisionCacheCapMB) << 20); removed > 0 {
 			logger.Info("CrystalAstral", "描述者：视觉副本缓存淘汰 %d 个（释放 %d 字节）", removed, freed)
 		}
 	}

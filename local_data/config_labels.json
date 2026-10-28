@@ -24,7 +24,6 @@
 	"allow_lan": "允许局域网访问",
 	"insecure_tls": "跳过TLS证书校验",
 
-	"user_name": "用户名",
 	"embedding_model": "嵌入模型名称",
 	"embedding_url": "嵌入模型地址",
 	"embedding_key": "嵌入模型密钥",

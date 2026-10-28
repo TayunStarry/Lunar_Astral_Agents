@@ -127,7 +127,7 @@ function normalizeFileName(name, content) {
 }
 
 /** 统一资源句柄正则（与资源目录文法一致，可带 |§n / |Lx-y 锚点） */
-const RESOURCE_HANDLE_RE = /^@[DIVAT]\.\d{3,}(?:\|(?:§\d+|L\d+-\d+))?$/;
+const RESOURCE_HANDLE_RE = /^@[DIVATU]\.\d{3,}(?:\|(?:§\d+|L\d+-\d+))?$/;
 
 /**
  * 把「文件名或资源句柄」解析为文档库中的实际文件名

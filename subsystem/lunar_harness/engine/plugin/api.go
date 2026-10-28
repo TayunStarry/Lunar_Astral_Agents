@@ -13,7 +13,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	module "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/memory"
 
 	"github.com/dop251/goja"
 
@@ -100,8 +100,8 @@ func memorySearchImage(query string, limit int) (any, error) {
 		return rwResult{Success: false, Error: "query 必填"}, nil
 	}
 	// 图片记忆分散在表情包/截图/图片素材等集合，稀疏媒体必须全局检索
-	results, err := module.MemoryQueryWithOptions(context.Background(), query, module.MemoryTypeImage, limit,
-		module.MemoryQueryOptions{ForceGlobal: true})
+	results, err := memory.Query(context.Background(), query, memory.TypeImage, limit,
+		memory.QueryOptions{ForceGlobal: true})
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
@@ -130,7 +130,7 @@ func memoryStoreImage(image string) (any, error) {
 	if strings.TrimSpace(image) == "" {
 		return rwResult{Success: false, Error: "image 必填"}, nil
 	}
-	id, err := module.MemoryAddImage(context.Background(), image, "auto", "")
+	id, err := memory.AddImage(context.Background(), image, "auto", "")
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
@@ -146,8 +146,8 @@ func memoryRandomImage(query string) (any, error) {
 	if strings.TrimSpace(q) == "" {
 		q = "general"
 	}
-	results, err := module.MemoryQueryWithOptions(context.Background(), q, module.MemoryTypeImage, 3,
-		module.MemoryQueryOptions{ForceGlobal: true})
+	results, err := memory.Query(context.Background(), q, memory.TypeImage, 3,
+		memory.QueryOptions{ForceGlobal: true})
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
@@ -251,11 +251,11 @@ var memoryErr error
 func ensureMemory() error {
 	memoryOnce.Do(func() {
 		// 若宿主尚未初始化全局记忆库，则自建实例（baseDir 沿用项目 MemoryDBDir），
-		// 使 engine.memory 在引擎自足场景下也能工作，而不仅依赖宿主预先 InitMemoryDB。
-		if !module.IsMemoryInitialized() {
-			module.InitMemoryDB(config.MemoryDBDir)
+		// 使 engine.memory 在引擎自足场景下也能工作，而不仅依赖宿主预先调用 memory.Init。
+		if !memory.Ready() {
+			memory.Init(config.MemoryDBDir)
 		}
-		memoryErr = module.MemoryInitInstance()
+		memoryErr = memory.EnsureReady()
 	})
 	return memoryErr
 }
@@ -266,7 +266,7 @@ func memoryStore(v map[string]any) (any, error) {
 	}
 	// 图片记忆 —— base64 字段走多模态标签理解嵌入，内容自动归组
 	if b64, hasB64 := v["base64"].(string); hasB64 && strings.TrimSpace(b64) != "" {
-		id, err := module.MemoryAddImage(context.Background(), b64, "auto", "")
+		id, err := memory.AddImage(context.Background(), b64, "auto", "")
 		if err != nil {
 			return rwResult{Success: false, Error: err.Error()}, nil
 		}
@@ -285,7 +285,7 @@ func memoryStore(v map[string]any) (any, error) {
 		}
 	}
 	// 文本记忆：有预设标签则以标签文本嵌入，无标签回退为正文全文嵌入；内容自动归组
-	id, err := module.MemoryAddMessageWithTags(context.Background(), "ltp9", content, tags, "")
+	id, err := memory.AddTextWithTags(context.Background(), "ltp9", content, tags, "")
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
@@ -303,9 +303,9 @@ func memorySearch(v map[string]any) (any, error) {
 	if n, ok := v["limit"].(int64); ok && n > 0 && n <= 50 {
 		limit = int(n)
 	}
-	mediaType := module.MemoryTypeText
+	mediaType := memory.TypeText
 	if rawType, ok := v["type"].(string); ok && strings.TrimSpace(rawType) != "" {
-		normalized, err := module.NormalizeMemoryType(rawType)
+		normalized, err := memory.NormalizeType(rawType)
 		if err != nil {
 			return rwResult{Success: false, Error: err.Error()}, nil
 		}
@@ -313,8 +313,8 @@ func memorySearch(v map[string]any) (any, error) {
 	}
 	// 插件可选择 force_global=true 跳过快速路由（稀疏数据、需要确保不漏时）
 	forceGlobal, _ := v["force_global"].(bool)
-	results, err := module.MemoryQueryWithOptions(context.Background(), query, mediaType, limit,
-		module.MemoryQueryOptions{ForceGlobal: forceGlobal})
+	results, err := memory.Query(context.Background(), query, mediaType, limit,
+		memory.QueryOptions{ForceGlobal: forceGlobal})
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}

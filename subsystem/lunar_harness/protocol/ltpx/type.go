@@ -2,13 +2,12 @@ package ltpx
 
 import "context"
 
-// ToolDef 聚合工具定义（use_the_program）：工具名 + 功能简述 + 参数 schema。
-// Parameters 为该聚合工具自身的 JSON Schema（{details, tool, instruction}，
-// 由琉璃侧 buildUseTheProgram 提供），随定义下发给模型。
+// ToolDef 聚合工具定义（use_the_program）：工具名 + 功能简述。
+// 参数 schema（{details, tool, instruction} 与 tool 枚举）由月华按应用清单统一构建，
+// 提供方只负责返回清单，不再重复携带 schema。
 type ToolDef struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Parameters  any    `json:"parameters,omitempty"`
 	AppID       string `json:"app_id,omitempty"`
 }
 

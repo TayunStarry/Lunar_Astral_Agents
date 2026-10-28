@@ -2,7 +2,7 @@ package WebSearch
 
 // tool_catalog.go 网络搜索的能力目录（供控制台「工具列表」屏展示）。
 
-import "LunarSubsystem/LunarHarness/engine/agentinfo"
+import "LunarSubsystem/LunarHarness/protocol/agentinfo"
 
 // ToolCatalog 返回网络搜索流程的阶段能力。
 //

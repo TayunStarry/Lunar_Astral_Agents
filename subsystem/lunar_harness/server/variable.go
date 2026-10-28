@@ -61,7 +61,7 @@ var SystemEndpoints = []SystemEndpoint{
 	// TUI「数据导出」调用：把原始日志 / 实况轮次 / 智能体上下文落盘为 .log / .json，便于离线排查
 	{Path: "/debug/dump/logs", Handler: DataDumpLogsHandler, Method: "POST", Description: "导出原始日志为 JSON Lines（.log）"},
 	{Path: "/debug/dump/transcript", Handler: DataDumpTranscriptHandler, Method: "POST", Description: "导出核心智能实况的模型调用轮次（思考/输出/工具序列/时长）为 JSON（.json）"},
-	{Path: "/debug/dump/context", Handler: DataDumpContextHandler, Method: "POST", Description: "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / qq / lunar_matrix 互助论坛）"},
+	{Path: "/debug/dump/context", Handler: DataDumpContextHandler, Method: "POST", Description: "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）"},
 
 	// ==================== 知识库与记忆库 ====================
 	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},

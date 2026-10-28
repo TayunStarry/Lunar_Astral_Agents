@@ -19,6 +19,8 @@ const (
 	webSearchModelRole = "网络搜索"
 	// promptUserMarker 任务型提示词的「系统段 / 用户模板」分隔符
 	promptUserMarker = "\n---user---\n"
+	// readURLInstruction 指定页面提炼的默认指令（没有任何具体诉求时使用）
+	readURLInstruction = "用中文概括这个页面的主要内容、关键结论与值得注意的信息；只依据页面正文，不要编造页面里没有的内容"
 )
 
 // engineFallbackOrder 搜索引擎降级顺序：bing → baidu → sogou

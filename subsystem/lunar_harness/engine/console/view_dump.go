@@ -13,7 +13,7 @@ import (
 //   - 原始日志 → `.log`（JSON Lines）
 //   - 推理实况 → `.json`（模型调用轮次：思考全文 / 输出全文 / 工具序列 / 时长）
 //   - 核心人格 → `.json`（对话者 + 绘制者 + 演奏者 + 截图者 + 主上下文合并）
-//   - 各 Go 智能体 → `.json`（网络搜索 / 哔哩观影 / 桌面操作 / 专项通讯 / 互助论坛）
+//   - 各 Go 智能体 → `.json`（网络搜索 / 哔哩观影 / 桌面操作 / 通讯桥接 / 互助论坛）
 //
 // 设计取舍：
 //   - **所有导出项都是列表里可选的一行**，回车即导出。不把动作挂到底栏快捷键上：
@@ -67,10 +67,10 @@ var dumpOptionList = []dumpOption{
 		desc: "最近一次桌面操纵任务的要求、起止时间、结果或中断原因"},
 	{kind: dumpKindContext, key: "descriptor", hotkey: "s", title: "描述者",
 		desc: "描述者的文件查询工具清单与运行说明（按次执行，不保留上下文）"},
-	{kind: dumpKindContext, key: "qq", hotkey: "q", title: "专项通讯",
+	{kind: dumpKindContext, key: "dialogue_bridging", hotkey: "q", title: "通讯桥接",
 		desc: "最近一次多目标投递计划与逐项执行报告"},
-	{kind: dumpKindContext, key: "lunar_matrix", hotkey: "m", title: "互助论坛",
-		desc: "互助论坛智能体最近的需求/答复上下文（模块：Lunar Matrix；不含内部凭证）"},
+	{kind: dumpKindContext, key: "mutual_forum", hotkey: "m", title: "互助论坛",
+		desc: "互助论坛智能体最近的需求/答复上下文（模块：Mutual Forum；不含内部凭证）"},
 }
 
 // dumpState 数据导出屏状态

@@ -13,7 +13,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // InspectText 按文本句柄执行一次内容探查
@@ -29,14 +29,14 @@ func InspectText(handle, request string) (string, error) {
 	if request == "" {
 		request = "请概括这个文件讲了什么，并指出关键结构。"
 	}
-	res, err := persistence.ResourceResolve(handle)
+	res, err := resource.Resolve(handle)
 	if err != nil {
 		return "", err
 	}
-	if res.State != persistence.StateActive {
+	if res.State != resource.StateActive {
 		return "", fmt.Errorf("%s 的本体已丢失", handle)
 	}
-	if res.Kind != persistence.KindDocument && res.Kind != persistence.KindTable {
+	if res.Kind != resource.KindDocument && res.Kind != resource.KindTable {
 		return "", fmt.Errorf("%s 不是文本类资源", handle)
 	}
 	doc, err := loadDoc(res)
@@ -101,7 +101,7 @@ func InspectText(handle, request string) (string, error) {
 }
 
 // loadDoc 载入文件正文并建立结构/引用索引
-func loadDoc(res persistence.ArchiveResource) (*docContext, error) {
+func loadDoc(res resource.Resource) (*docContext, error) {
 	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
 	data, err := os.ReadFile(abs)
 	if err != nil {
@@ -163,11 +163,11 @@ func buildBriefing(doc *docContext, rawHandle, request string) string {
 // 带锚点：只取该行区间 / 该章节的正文，并让模型知道本次只看这一段；
 // 锚点解析失败或取不到内容时回退整份文件，不阻断探查。
 func scopedContent(doc *docContext, rawHandle string) (scope, block string) {
-	parsed, ok := persistence.ParseHandle(rawHandle)
+	parsed, ok := resource.ParseHandle(rawHandle)
 	if !ok || (!parsed.HasLine && !parsed.HasSection) {
 		return "整份文件", buildContentBlock(doc)
 	}
-	scoped, err := persistence.ResourceRead(rawHandle, persistence.MaxReadBytes)
+	scoped, err := resource.Read(rawHandle, resource.MaxReadBytes)
 	if err != nil || strings.TrimSpace(scoped.Content) == "" {
 		logger.Warn("CrystalAstral", "描述者：指定范围取回失败，回退整份文件: %v", err)
 		return "整份文件（指定范围未能取回，已回退整份）", buildContentBlock(doc)
@@ -196,17 +196,5 @@ func buildContentBlock(doc *docContext) string {
 
 // resourceKindLabel 类型码中文名
 func resourceKindLabel(kind string) string {
-	switch kind {
-	case persistence.KindDocument:
-		return "文档"
-	case persistence.KindTable:
-		return "表格"
-	case persistence.KindImage:
-		return "图片"
-	case persistence.KindVideo:
-		return "视频"
-	case persistence.KindAudio:
-		return "音频"
-	}
-	return kind
+	return resource.KindLabel(kind)
 }

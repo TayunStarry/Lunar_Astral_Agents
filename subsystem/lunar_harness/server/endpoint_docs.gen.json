@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.299.2217",
+    "version": "2026.302.0648",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -376,8 +376,8 @@
     },
     "/debug/dump/context": {
       "post": {
-        "summary": "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / qq / lunar_matrix 互助论坛）",
-        "description": "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / qq / lunar_matrix 互助论坛）",
+        "summary": "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）",
+        "description": "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）",
         "operationId": "DataDumpContextHandler",
         "x-handler": "DataDumpContextHandler",
         "responses": {

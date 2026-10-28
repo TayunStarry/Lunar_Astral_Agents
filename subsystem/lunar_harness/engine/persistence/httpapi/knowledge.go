@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/knowledge"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -39,7 +39,7 @@ func writeSuccess(w http.ResponseWriter, data interface{}) {
 // 路由：POST /knowledge/
 // 载荷统一为原生 SQL：{"sql": "...", "params": [], "db": "knowledge"}
 // db 可选：空或 "knowledge" → 通用知识库 knowledge.db；
-// "archive" / "media" / "web" / "text" / "character" → 对应领域库（见 persistence/domain_db.go）；
+// "archive" / "media" / "web" / "text" / "character" → 对应领域库（见 engine/knowledge/domain_db.go）；
 // 其他取值 → database 目录内的 *.db 文件（去 .db）
 // 数据操作不再使用结构化 JSON 操作封装，全部回归原生 SQL 语句
 func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +63,7 @@ func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := persistence.ExecuteSQLOn(raw.DB, raw.SQL, raw.Params)
+	result := knowledge.ExecuteOn(raw.DB, raw.SQL, raw.Params)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(result); err != nil {

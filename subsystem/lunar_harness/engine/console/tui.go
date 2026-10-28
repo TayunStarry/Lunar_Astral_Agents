@@ -95,46 +95,46 @@ type menuItem struct {
 	screen screenID // 目标屏幕；值为 screenMenu 时表示退出程序（哨兵）
 }
 
-// menuItems 主菜单条目表：顺序即显示顺序，按「更新发布 / 运行观测 / 系统管理 / 会话」
-// 分组组织，让同类功能聚拢、缩短查找路径。
+// menuItems 主菜单条目表：顺序即显示顺序，按「运行观测 / 系统管理 / 更新与发布 / 会话」
+// 分组组织：先用得上的是观测与运维，发布类动作沉到管理项之后，最后才是退出。
 //
 // 快捷键按显示顺序依次占用 0-9、a-z：用户只需记住「第几个」即可，不必再记
 // 每屏各自的历史助记键。新增条目时按顺序追加，不要插空或跳号。
 var menuItems = []menuItem{
-	{key: "0", title: "资源更新", group: "更新与发布", screen: screenUpdate,
-		desc: "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希），更新含主程序时自动重启"},
-	{key: "1", title: "应用市场", group: "更新与发布", screen: screenMarket,
-		desc: "浏览 / 标签筛选 / 安装 / 发布 LTPX 工具包（Gitee Release 通道）"},
-	{key: "2", title: "授权签发", group: "更新与发布", screen: screenLTP9Auth,
-		desc: "扫描包目录中的 LTP9 包，按颜色区分「已签发 / 未签发 / 需重签」，回车依据脚本现有引用的权限签发 permissions.key"},
-
-	{key: "3", title: "推理实况", group: "运行观测", screen: screenAgent,
+	{key: "0", title: "推理实况", group: "运行观测", screen: screenAgent,
 		desc: "月华思考 / 输出 / 工具调用的流式显示（对话者 · 绘制者 · 演奏者 · 记忆者…）"},
-	{key: "4", title: "运行状态", group: "运行观测", screen: screenStats,
+	{key: "1", title: "运行状态", group: "运行观测", screen: screenStats,
 		desc: "资源占用 / token 消耗总量 / 均次消耗 / 输出速度 / 平均上下文"},
-	{key: "5", title: "原始日志", group: "运行观测", screen: screenRaw,
+	{key: "2", title: "原始日志", group: "运行观测", screen: screenRaw,
 		desc: "终端全量原始行（stdout 拦截 + 结构化日志合流）"},
-	{key: "6", title: "月华日志", group: "运行观测", screen: screenLunarJS,
+	{key: "3", title: "月华日志", group: "运行观测", screen: screenLunarJS,
 		desc: "月华对话链 / 计划表 / 记忆 / 资源的运行日志（模块 LunarCore）"},
-	{key: "7", title: "插件日志", group: "运行观测", screen: screenLTP9,
+	{key: "4", title: "插件日志", group: "运行观测", screen: screenLTP9,
 		desc: "LTP9 沙箱 JavaScript 层日志"},
-	{key: "8", title: "系统警告", group: "运行观测", screen: screenGoWarn,
+	{key: "5", title: "系统警告", group: "运行观测", screen: screenGoWarn,
 		desc: "Go 模块 WARN / ERROR / FATAL 日志"},
-	{key: "9", title: "绘图日志", group: "运行观测", screen: screenDraw,
+	{key: "6", title: "绘图日志", group: "运行观测", screen: screenDraw,
 		desc: "sd.cpp 绘图引擎输出（进度 / 采样速度 / 时间统计），顶部附采样进度"},
-	{key: "a", title: "数据导出", group: "运行观测", screen: screenDump,
-		desc: "导出原始日志、推理实况、核心人格，以及网络搜索 / 哔哩观影 / 桌面操作 / 专项通讯 / 互助论坛 等 Go 智能体上下文"},
+	{key: "7", title: "数据导出", group: "运行观测", screen: screenDump,
+		desc: "导出原始日志、推理实况、以及 Go 智能体上下文"},
 
-	{key: "b", title: "工具列表", group: "系统管理", screen: screenTools,
-		desc: "扫描并展示全部 Go 智能体（对话者 / 绘制者 / 演奏者 / 描述者 / 网络搜索 / 哔哩观影 / 专项通讯 / 桌面操作 / 互助论坛）的工具与说明"},
-	{key: "c", title: "前端页面", group: "系统管理", screen: screenFrontend,
+	{key: "8", title: "工具列表", group: "系统管理", screen: screenTools,
+		desc: "扫描并展示全部 Go 智能体的工具与说明"},
+	{key: "9", title: "前端页面", group: "系统管理", screen: screenFrontend,
 		desc: "月华 / 琉璃桌面窗口状态探测与意外关闭重启"},
-	{key: "d", title: "局域共享", group: "系统管理", screen: screenProxy,
+	{key: "a", title: "局域共享", group: "系统管理", screen: screenProxy,
 		desc: "WSS → WS 反向代理，支持 IP 选择与手机扫码接入"},
-	{key: "e", title: "打包归档", group: "系统管理", screen: screenArchive,
+	{key: "b", title: "打包归档", group: "系统管理", screen: screenArchive,
 		desc: "项目文件 7z 分卷打包，支持进度显示"},
-	{key: "f", title: "端口释放", group: "系统管理", screen: screenPorts,
+	{key: "c", title: "端口释放", group: "系统管理", screen: screenPorts,
 		desc: "扫描指定端口范围，终止占用进程并验证释放"},
+
+	{key: "d", title: "资源更新", group: "更新与发布", screen: screenUpdate,
+		desc: "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希），更新含主程序时自动重启"},
+	{key: "e", title: "应用市场", group: "更新与发布", screen: screenMarket,
+		desc: "浏览 / 标签筛选 / 安装 / 发布 LTPX 工具包（Gitee Release 通道）"},
+	{key: "f", title: "授权签发", group: "更新与发布", screen: screenLTP9Auth,
+		desc: "扫描包目录中的 LTP9 包，可依据脚本现有引用的权限签发 permissions.key"},
 
 	{key: "g", title: "退出程序", group: "会话", screen: screenMenu,
 		desc: "关闭控制台并优雅停止全部子系统（感谢使用「星月智能 · 控制台」）"},
@@ -170,11 +170,11 @@ type appModel struct {
 
 	spinner spinner.Model
 
-	rawView   logsState // [5] 原始日志
-	lunarView logsState // [6] 月华日志
-	ltp9View  logsState // [7] ltp9 插件日志
-	drawView  logsState // [9] sd.cpp 绘图引擎日志
-	warnView  logsState // [8] Go 警告错误
+	rawView   logsState // [2] 原始日志
+	lunarView logsState // [3] 月华日志
+	ltp9View  logsState // [4] ltp9 插件日志
+	drawView  logsState // [6] sd.cpp 绘图引擎日志
+	warnView  logsState // [5] Go 警告错误
 	agent     agentState
 	stats     statsState
 	frontend  frontendState

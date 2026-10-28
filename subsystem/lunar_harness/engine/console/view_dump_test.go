@@ -97,7 +97,7 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 	if got := dumpHotkeyIndex("c"); dumpOptionList[got].key != "core" {
 		t.Fatal("热键 c 应指向核心人格")
 	}
-	if got := dumpHotkeyIndex("m"); dumpOptionList[got].key != "lunar_matrix" {
+	if got := dumpHotkeyIndex("m"); dumpOptionList[got].key != "mutual_forum" {
 		t.Fatal("热键 m 应指向互助论坛")
 	}
 }

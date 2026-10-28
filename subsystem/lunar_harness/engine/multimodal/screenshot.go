@@ -45,7 +45,7 @@ func GetDisplays() []map[string]int {
 }
 
 // firstFrameOfGIF 解码 GIF 首帧为 RGBA
-// 静态图片链路只取首帧；动态图的时序理解由 AnimatedImageToFrames 解码帧序列后交给感知者角色
+// 静态图片链路只取首帧；动态图的时序理解由 AnimatedToWatchSlice 统一抽帧后交给感知者角色
 func firstFrameOfGIF(imgData []byte) (*image.RGBA, error) {
 	gifImg, err := gif.DecodeAll(bytes.NewReader(imgData))
 	if err != nil {
@@ -64,7 +64,7 @@ func firstFrameOfGIF(imgData []byte) (*image.RGBA, error) {
 // ResizeImage 图片预处理：格式验证、非JPG/PNG转码、等比例缩放到1024、编码输出
 // 仅输出JPG或PNG格式的base64数据
 // 动态图（多帧 GIF / APNG / 动态 WebP）在此仅按首帧静态处理：
-// 时序与动作理解由 AnimatedImageToFrames 解码帧序列后走感知者链路
+// 时序与动作理解由 AnimatedToWatchSlice 按统一规则抽帧后走感知者链路
 // 返回单元素数组
 func ResizeImage(imgData []byte) ([]map[string]any, error) {
 	// 1. 输入验证
@@ -89,7 +89,7 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 	// 3. 格式处理：GIF 统一取首帧转 PNG，JPG/PNG 直接使用，其余交给 FFmpeg 转码
 	switch originalFormat {
 	case "gif":
-		// GIF（含动态图）：静态链路只取首帧；动态图理解见 AnimatedImageToFrames 帧序列链路
+		// GIF（含动态图）：静态链路只取首帧；动态图理解见 AnimatedToWatchSlice 统一抽帧链路
 		rgba, err := firstFrameOfGIF(imgData)
 		if err != nil {
 			logger.Error(LogModuleMedia, "ResizeImage: GIF首帧解码失败: %v", err)
@@ -206,7 +206,7 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 // 解码（GIF/APNG 取首帧，WebP 等非 JPG/PNG 经 FFmpeg 转码）→ 宽或高超过 maxDim
 // 时等比缩放（Lanczos）→ 统一编码 JPEG（Q90）/ PNG（PNG 源保留透明）→ 返回完整
 // data URI。供记忆库图片入库前调用，降低存储体积与 vision token 消耗。
-// 动态图的时序理解由 AnimatedImageToFrames 帧序列链路负责，此处仅取首帧静态降级。
+// 动态图的时序理解由 AnimatedToWatchSlice 统一抽帧链路负责，此处仅取首帧静态降级。
 func StandardizeImageForPerception(imgData []byte, maxDim int) (string, error) {
 	if len(imgData) == 0 {
 		return "", fmt.Errorf("图片数据为空")

@@ -1,138 +1,40 @@
 package BilibiliViewer
 
-// 哔哩观影 · B 站真实浏览器版：一次完整观影流程。
+// run.go 评论区与动态接口：读取评论、发布动态、在自己的动态评论区留言。
 //
-// 流程由 flow 决定（standard / watch_comment / share / reply_only）：
-//   打开 B 站首页 → 未登录则点登录并等扫码（10s 一次，60s 放弃）
-//   → 按流程处理未读消息（视频评论追评 / 动态回复 / @月华）
-//   → 首页选一个视频，停留详情页
-//   → 下载 → 60 秒切片 → 逐片抽帧理解（合成“一个视频”的整体感受）
-//   → 滚到评论区读 15 条热门评论 → 每个视频发 1 条评论
-//   → 用看过的视频发动态（「仅在动态中呼叫用户」开启时，动态发布后在评论区发一条 @；
-//     关闭时挑选一个视频发 @分享评论）
-//   → 回复这条动态下的评论（≤5 条）
-//
-// 本模块不经过 goja；由 viewer 工具同步调用，结果作为工具回复返回。
+// 主动发言只发生在自己的动态评论区；他人视频评论区只在被动收到 @/追评时由页面操作回应。
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
-
-	"LunarSubsystem/LunarHarness/prompts"
 )
 
-// lifeSystem 组装生活链文案的系统提示词：生活链精简人设（prompts/lifeRole.md，
-// 从对话者人设提炼）+ 历史记忆 + 本次任务指令。评论/日记/回复共用同一份人设与记忆，
-// 保证 B 站公开内容与对话里月华的说话风格一致，也让上一轮的互动影响这一轮的选择。
-func lifeSystem(task string) (string, error) {
-	system, err := lifeSystemWithoutMemory(task)
-	if err != nil {
-		return "", err
-	}
-	if memory := loadDiaryMemory(); memory != "" {
-		system += "\n\n## 我的观影记忆\n\n" + memory +
-			"\n\n（以上是我之前看视频与互动的记忆，可作为这次判断和说话的背景；不要照抄。）"
-	}
-	return system, nil
-}
-
-// lifeSystemWithoutMemory 只拼人设与任务：日记重写自己管理记忆，避免同一段记忆塞两遍。
-func lifeSystemWithoutMemory(task string) (string, error) {
-	persona, err := prompts.Read("lifeRole.md")
-	if err != nil {
-		return "", fmt.Errorf("读取生活链人设失败: %w", err)
-	}
-	return string(persona) + "\n\n## 本次任务\n\n" + task, nil
-}
-
-func generateComment(info videoInfo, summary string, comments []commentItem) (string, error) {
-	// 评论依据：视频理解 + 本次读到的全部热门评论（调用方已按 commentsReadLimit=15 截断）
-	var hot []string
-	for _, c := range comments {
-		hot = append(hot, fmt.Sprintf("%s：%s", c.User, c.Content))
-	}
-	material := fmt.Sprintf("视频：《%s》\nUP主：%s\n我的观看感受：\n%s\n\n热门评论（%d 条）：\n%s",
-		info.Title, info.Owner, truncate(summary, 800), len(comments), strings.Join(hot, "\n"))
-	system, err := lifeSystem("写一条随手发的B站评论：只说你看完后自己最直接的感受或最想回应的一点（一句吐槽、一个共鸣、一个细节的感想都行），不要复述视频讲了什么。只输出评论正文，1–40 字；不要链接、不要 @。")
-	if err != nil {
-		return "", err
-	}
-	text, err := chatText(system, material)
-	if err != nil {
-		return "", err
-	}
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return "", fmt.Errorf("评论为空")
-	}
-	text = truncate(text, 60)
-	return text, nil
-}
-
-// generateShareComment 生成原本要发在动态里的分享文案；发送时会追加 @目标，
-// 作为这条视频下的一条独立“@分享评论”，不占普通评论额度。
-func generateShareComment(info videoInfo, summary string, comments []commentItem) (string, error) {
-	var hot []string
-	for i, c := range comments {
-		if i >= 5 {
-			break
-		}
-		hot = append(hot, fmt.Sprintf("%s：%s", c.User, c.Content))
-	}
-	material := fmt.Sprintf("视频：《%s》\nUP主：%s\n我的观看感受：\n%s\n\n评论区节选：\n%s",
-		info.Title, info.Owner, truncate(summary, 600), strings.Join(hot, "\n"))
-	system, err := lifeSystem("刚看完这个视频想推荐给朋友：只写一句你自己最想说的感想或推荐语，不复述视频内容。只输出正文，1–30 字；不要 @、不要链接。")
-	if err != nil {
-		return "", err
-	}
-	text, err := chatText(system, material)
-	if err != nil {
-		return "", err
-	}
-	text = strings.TrimSpace(strings.ReplaceAll(text, "@", ""))
-	if text == "" {
-		return "", fmt.Errorf("分享评论为空")
-	}
-	return truncate(text, 40), nil
-}
-
-// wantMoreVideos 在两段视频之间做一次「还要不要继续刷」的判断。
-//
-// 只有看完至少 1 个视频时才会调用（min=1 由调用方保证）；本轮目标是 target 个。
-// 模型只回答「继续」或「停止」，解析失败一律按继续处理——不能因为一次抖动就提前收工。
-func wantMoreVideos(watched []*videoRecord, target int) bool {
-	safe := make([]*videoRecord, 0, len(watched))
-	for _, video := range watched {
-		if video != nil && !video.Risky {
-			safe = append(safe, video)
-		}
-	}
-	if len(safe) == 0 {
-		return true
-	}
-	var material strings.Builder
-	fmt.Fprintf(&material, "这轮最多刷 %d 个视频，已经看了 %d 个：\n", target, len(safe))
-	for i, video := range safe {
-		fmt.Fprintf(&material, "第 %d 个：《%s》｜UP主：%s\n观看感受：%s\n",
-			i+1, video.Info.Title, video.Info.Owner, truncate(video.Summary, 300))
-	}
-	system, err := lifeSystem("你正在刷B站，刚刚看完上面这些视频。按自己的心情决定还要不要接着刷。只回答「继续」或「停止」两个词，不要解释。")
-	if err != nil {
-		return true
-	}
-	text, err := chatText(system, material.String())
-	if err != nil {
-		return true
-	}
-	return !strings.Contains(strings.TrimSpace(text), "停止")
-}
-
-// readCommentsAPI 在页面上下文读视频评论（type=1）。
+// readCommentsAPI 在页面上下文读视频评论第一页（type=1）。
 func (w *webSession) readCommentsAPI(aid int64, max int) ([]commentItem, error) {
-	target := fmt.Sprintf("https://api.bilibili.com/x/v2/reply?type=1&oid=%d&sort=2&ps=20&pn=1", aid)
+	return w.readCommentsAPIPage(1, aid, 1, max, false)
+}
+
+// readCommentsAPIPage 读取指定对象评论的指定页（typ：1=视频，17=纯文字动态）。
+// byTime 为 true 时按时间排序，用于发布后回读自己的评论。
+func (w *webSession) readCommentsAPIPage(typ int, oid int64, page, ps int, byTime bool) ([]commentItem, error) {
+	if typ <= 0 {
+		typ = 1
+	}
+	if page < 1 {
+		page = 1
+	}
+	if ps <= 0 || ps > 20 {
+		ps = 20
+	}
+	sort := 2
+	if byTime {
+		sort = 0
+	}
+	target := fmt.Sprintf("https://api.bilibili.com/x/v2/reply?type=%d&oid=%d&sort=%d&ps=%d&pn=%d", typ, oid, sort, ps, page)
 	text, err := w.pageFetchText("GET", target, "", "", 25*time.Second)
 	if err != nil {
 		return nil, err
@@ -159,9 +61,6 @@ func (w *webSession) readCommentsAPI(aid int64, max int) ([]commentItem, error) 
 	}
 	out := make([]commentItem, 0, len(resp.Data.Replies))
 	for _, r := range resp.Data.Replies {
-		if len(out) >= max {
-			break
-		}
 		if strings.TrimSpace(r.Content.Message) == "" {
 			continue
 		}
@@ -170,21 +69,16 @@ func (w *webSession) readCommentsAPI(aid int64, max int) ([]commentItem, error) 
 	return out, nil
 }
 
-// postComment 在页面上下文发视频评论（type=1）。
-func (w *webSession) postComment(aid int64, message string) error {
-	return w.postCommentWithMentions(aid, message, nil)
-}
-
-// postCommentWithMentions 发视频评论，并在带目标时写入 at_name/at_mid，
-// 让“分享消息 + @ 用户”通过评论构建出真实的 @ 通知。
-func (w *webSession) postCommentWithMentions(aid int64, message string, targets []MentionTarget) error {
+// postCommentOnObject 在指定评论区发一条评论/回复（type：1=视频，11=图文动态，17=纯文字动态）。
+// targets 非空时写入 at_name/at_mid，产生真实的 @ 通知。
+func (w *webSession) postCommentOnObject(typ int, oid, message string, targets []MentionTarget) error {
 	csrf := w.csrf()
 	if csrf == "" {
 		return fmt.Errorf("页面里读不到 bili_jct，无法发评论")
 	}
 	form := url.Values{}
-	form.Set("oid", fmt.Sprintf("%d", aid))
-	form.Set("type", "1")
+	form.Set("oid", oid)
+	form.Set("type", fmt.Sprintf("%d", typ))
 	form.Set("message", message)
 	form.Set("plat", "1")
 	form.Set("csrf", csrf)
@@ -210,15 +104,99 @@ func (w *webSession) postCommentWithMentions(aid int64, message string, targets 
 	return nil
 }
 
-// publishDiary 把这一轮生活的日记作为纯文本动态发布（type=4，不带视频卡、不带 @）。
+// waitDynamicCommentAreaReady 等新动态的评论区真正可读写（刚发布时可能仍在审核/索引）。
+func (w *webSession) waitDynamicCommentAreaReady(typ int, oidText string) error {
+	oid, err := strconv.ParseInt(strings.TrimSpace(oidText), 10, 64)
+	if err != nil || oid <= 0 {
+		return fmt.Errorf("评论区 oid 无法解析: %q", oidText)
+	}
+	deadline := time.Now().Add(dynamicCommentReadyWait)
+	var lastErr error
+	for {
+		if _, err := w.readCommentsAPIPage(typ, oid, 1, 20, false); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("等待 %s 仍不可评论（type=%d oid=%s）: %w", dynamicCommentReadyWait, typ, oidText, lastErr)
+		}
+		w.wait(dynamicCommentReadyPoll)
+	}
+}
+
+// postDynamicCommentVerified 发布一条动态评论，并回读评论区确认是否真的出现。
+//
+// 接口报错时重试；接口已受理但回读未见时不再重发（避免重复评论），只再等一轮后如实报错。
+func (w *webSession) postDynamicCommentVerified(typ int, oidText, message string, targets []MentionTarget) error {
+	var lastErr error
+	for attempt := 1; attempt <= dynamicCommentAttempts; attempt++ {
+		if attempt > 1 {
+			w.wait(dynamicCommentGap)
+		}
+		if err := w.postCommentOnObject(typ, oidText, message, targets); err != nil {
+			lastErr = err
+			continue
+		}
+		w.wait(dynamicCommentReadbackWait)
+		if w.dynamicCommentVisible(typ, oidText, message) {
+			return nil
+		}
+		w.wait(dynamicCommentReadbackWait)
+		if w.dynamicCommentVisible(typ, oidText, message) {
+			return nil
+		}
+		return fmt.Errorf("接口已受理但回读未见（可能仍在审核）")
+	}
+	return lastErr
+}
+
+// dynamicCommentVisible 回读动态评论区（按时间排序首页），确认刚发的评论是否已出现。
+func (w *webSession) dynamicCommentVisible(typ int, oidText, message string) bool {
+	oid, err := strconv.ParseInt(strings.TrimSpace(oidText), 10, 64)
+	if err != nil || oid <= 0 {
+		return false
+	}
+	fingerprint := commentFingerprint(message)
+	if fingerprint == "" {
+		return false
+	}
+	items, err := w.readCommentsAPIPage(typ, oid, 1, 20, true)
+	if err != nil {
+		return false
+	}
+	for _, item := range items {
+		if strings.Contains(normalizeInline(item.Content), fingerprint) {
+			return true
+		}
+	}
+	return false
+}
+
+// commentFingerprint 取评论首行的前 24 个字作为回读指纹（视频评论即 URL）。
+func commentFingerprint(message string) string {
+	line := strings.TrimSpace(strings.SplitN(message, "\n", 2)[0])
+	runes := []rune(line)
+	if len(runes) > 24 {
+		runes = runes[:24]
+	}
+	return normalizeInline(string(runes))
+}
+
+// normalizeInline 去掉空白，避免回读文本的换行/空格导致指纹对不上。
+func normalizeInline(text string) string {
+	return strings.Join(strings.Fields(text), "")
+}
+
+// publishDiary 把这一轮的观影感受作为纯文本动态发布（type=4）。
 func (w *webSession) publishDiary(text string) (string, error) {
 	csrf := w.csrf()
 	if csrf == "" {
-		return "", fmt.Errorf("页面里读不到 bili_jct，无法发日记动态")
+		return "", fmt.Errorf("页面里读不到 bili_jct，无法发动态")
 	}
 	clean := strings.TrimSpace(text)
 	if clean == "" {
-		return "", fmt.Errorf("日记正文为空")
+		return "", fmt.Errorf("动态正文为空")
 	}
 	fields := map[string]string{
 		"dynamic_id":        "0",
@@ -247,21 +225,19 @@ func (w *webSession) publishDiary(text string) (string, error) {
 		return "", err
 	}
 	if resp.Code != 0 {
-		return "", fmt.Errorf("B站拒绝日记动态: code=%d %s", resp.Code, resp.Msg)
+		return "", fmt.Errorf("B站拒绝动态: code=%d %s", resp.Code, resp.Msg)
 	}
 	id := resp.Data.DynamicIDStr
 	if id == "" && resp.Data.DynamicID != 0 {
 		id = fmt.Sprintf("%d", resp.Data.DynamicID)
 	}
 	if id == "" {
-		return "", fmt.Errorf("日记动态已提交但没有返回 dynamic_id")
+		return "", fmt.Errorf("动态已提交但没有返回 dynamic_id")
 	}
 	return id, nil
 }
 
 // mentionAtFields 拆分呼叫目标为评论接口需要的 at_name / at_mid（逗号分隔）。
-//
-// 只有配置了 UID 的目标才会产生真实的 @ 通知；缺 UID 的只在正文里保留 @名字。
 func mentionAtFields(targets []MentionTarget) (names, mids string) {
 	nameList := make([]string, 0, len(targets))
 	midList := make([]string, 0, len(targets))
@@ -275,18 +251,28 @@ func mentionAtFields(targets []MentionTarget) (names, mids string) {
 	return strings.Join(nameList, ","), strings.Join(midList, ",")
 }
 
-func generateReply(user, message string) (string, error) {
-	system, err := lifeSystem("正在回复自己 B 站动态下的评论，只输出一句自然、友好的回复，1–60 字；不争论、不引战、不放链接/@。")
-	if err != nil {
-		return "", err
+// finishComment 收束评论长度，但不从句子中间硬切。
+//
+// 评论宁可短，也要是完整的一句话：超长时退回到最近的一个句末标点收尾；
+// 没有句末标点再退到逗号；只有在整段没有任何标点时才原样截断。
+func finishComment(text string, maxRunes int) string {
+	text = strings.TrimSpace(strings.Trim(text, `"'“”「」『』`))
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
 	}
-	text, err := chatText(system, fmt.Sprintf("对方：%s\n评论：%s", user, message))
-	if err != nil {
-		return "", err
+	cut := runes[:maxRunes]
+	for i := len(cut) - 1; i >= 0; i-- {
+		switch cut[i] {
+		case '。', '！', '？', '!', '?', '…', '~', '～', '\n':
+			return strings.TrimSpace(string(cut[:i+1]))
+		}
 	}
-	text = strings.TrimSpace(strings.ReplaceAll(text, "@", ""))
-	if text == "" {
-		return "", fmt.Errorf("回复为空")
+	for i := len(cut) - 1; i >= 0; i-- {
+		switch cut[i] {
+		case '，', '；', '、', ',', ';':
+			return strings.TrimSpace(string(cut[:i+1]))
+		}
 	}
-	return truncate(text, 60), nil
+	return strings.TrimSpace(string(cut))
 }

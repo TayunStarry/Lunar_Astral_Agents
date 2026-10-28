@@ -10,6 +10,15 @@ import (
 	"strings"
 )
 
+// PreviewMIME 返回预览白名单中该扩展名的 MIME 类型；不在白名单内时返回 false。
+func PreviewMIME(ext string) (string, bool) {
+	entry, ok := previewAllowlist[strings.ToLower(ext)]
+	if !ok || entry.MIME == "" {
+		return "", false
+	}
+	return entry.MIME, true
+}
+
 // PreviewFile 预览指定绝对路径的文件内容，不受本地目录限制
 // 仅允许读取图片、视频、文本三种类型文件
 func PreviewFile(filePath string) (io.ReadCloser, int64, string, string, error) {
@@ -28,7 +37,7 @@ func PreviewFile(filePath string) (io.ReadCloser, int64, string, string, error) 
 
 	// 句柄维护：内容仓库内的文件读取时续期；实体缺失则清除失效句柄
 	if rel, ok := relativeToLocalDir(cleanPath); ok {
-		TouchHandlesForRead(rel)
+		NotifyRead(rel)
 	}
 
 	// 3. 获取文件信息，检查是否为目录

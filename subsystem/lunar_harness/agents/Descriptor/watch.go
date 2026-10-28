@@ -1,39 +1,35 @@
 package Descriptor
 
-// watch.go 动图 / 视频的序列帧观看与摘要
+// watch.go 动图 / 视频的观看
 //
-// 与静态图共用同一条「有描述返回描述、没有描述现场生成」的语义，
-// 区别只在输入形态：动图/视频先抽帧分组，静态图直接走视觉副本。
+// 与哔哩观影共用同一条管线（multimodal/watch.go）：视频按 60 秒切片、动图整体一片、
+// 每片等距抽帧，逐片写第一人称观看感受，多片再合成为一段整体感受。
+// 本文件只负责「模型调用 + 结果收敛 + 写回资源目录」，不再自行实现抽帧与采样。
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/multimodal"
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
-// watchFrameGroups 观看一组序列帧并返回描述（通用观看结论会写回资源目录）
-func watchFrameGroups(res persistence.ArchiveResource, groups []multimodal.MediaFrameGroup, mode, question string) (string, error) {
-	if len(groups) == 0 {
+// watchSlices 观看切片序列，返回整体感受（无定向问题时写回资源目录）
+func watchSlices(res resource.Resource, slices []multimodal.WatchSlice, label, question string) (string, error) {
+	if len(slices) == 0 {
 		return "", fmt.Errorf("未从 %s 中抽取到可用画面", res.Handle)
 	}
-	watched := sampleFrameGroups(groups)
-	if len(watched) < len(groups) {
-		logger.Info("CrystalAstral", "描述者：%s 共 %d 组画面，超过单次上限，等距抽样观看 %d 组",
-			res.Handle, len(groups), len(watched))
+	system := promptText("lifeRole.md")
+	if strings.TrimSpace(question) != "" {
+		return watchQuestion(system, slices, question)
 	}
 
-	system := promptText("descriptorMediaRole.md")
-	parts := make([]string, 0, len(watched))
-	for index, group := range watched {
-		logger.Info("CrystalAstral", "描述者：观看 %s 第 %d/%d 组（%d 帧）",
-			res.Handle, index+1, len(watched), len(group.Frames))
-		text, watchErr := describeFrameGroup(system, mode, group, index+1, len(watched), question)
-		if watchErr != nil {
-			logger.Warn("CrystalAstral", "描述者：%s 第 %d 组理解失败: %v", res.Handle, index+1, watchErr)
+	parts := make([]string, 0, len(slices))
+	for index, slice := range slices {
+		text, err := watchSlice(system, label, slice, index+1, len(slices))
+		if err != nil {
+			logger.Warn("CrystalAstral", "描述者：%s 第 %d/%d 片观看失败: %v", res.Handle, index+1, len(slices), err)
 			continue
 		}
 		if trimmed := strings.TrimSpace(text); trimmed != "" {
@@ -41,83 +37,73 @@ func watchFrameGroups(res persistence.ArchiveResource, groups []multimodal.Media
 		}
 	}
 	if len(parts) == 0 {
-		return "", fmt.Errorf("未能生成 %s 的画面描述", res.Handle)
+		return "", fmt.Errorf("未能生成 %s 的观看感受", res.Handle)
 	}
 
-	result := strings.Join(parts, "\n\n")
-	if question == "" && len([]rune(result)) > summaryThreshold {
-		if summary, summaryErr := summarizeMedia(system, result); summaryErr == nil && strings.TrimSpace(summary) != "" {
-			result = strings.TrimSpace(summary)
+	result := parts[0]
+	if len(parts) > 1 {
+		if merged, mergeErr := mergeImpressions(system, len(slices), strings.Join(parts, "\n\n")); mergeErr == nil {
+			result = merged
 		} else {
-			logger.Warn("CrystalAstral", "描述者：%s 客观摘要失败，退回拼接文本", res.Handle)
-			result = hardCutRunes(result, summaryThreshold)
+			logger.Warn("CrystalAstral", "描述者：%s 整体感受合成失败，退回逐片拼接: %v", res.Handle, mergeErr)
+			result = strings.Join(parts, "\n\n")
 		}
 	}
-	if question == "" {
-		storeResourceSummary(res, result)
-	}
+	storeResourceSummary(res, result)
 	return result, nil
 }
 
-// sampleFrameGroups 等距抽样：最多 maxSegments 组，恒包含首组与末组
-func sampleFrameGroups(groups []multimodal.MediaFrameGroup) []multimodal.MediaFrameGroup {
-	if len(groups) <= maxSegments {
-		return groups
-	}
-	picked := make([]multimodal.MediaFrameGroup, 0, maxSegments)
-	seen := map[int]bool{}
-	for i := 0; i < maxSegments; i++ {
-		index := (i * (len(groups) - 1)) / (maxSegments - 1)
-		if seen[index] {
-			continue
-		}
-		seen[index] = true
-		picked = append(picked, groups[index])
-	}
-	return picked
-}
-
-// describeFrameGroup 观看一组采样帧（失败自动重试一次）
-func describeFrameGroup(system, mode string, group multimodal.MediaFrameGroup, index, total int, question string) (string, error) {
-	parts := make([]contentPart, 0, len(group.Frames)+1)
-	parts = append(parts, contentPart{Type: "text", Text: frameGroupTask(mode, index, total, question)})
-	for _, frame := range group.Frames {
-		if strings.TrimSpace(frame.Image) == "" {
-			continue
-		}
-		parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: frame.Image}})
+// watchSlice 观看一个切片（失败自动重试一次）
+func watchSlice(system, label string, slice multimodal.WatchSlice, index, total int) (string, error) {
+	task := multimodal.WatchTask(index, total, slice, "这是"+label+"画面。")
+	parts := make([]contentPart, 0, len(slice.Images)+1)
+	parts = append(parts, contentPart{Type: "text", Text: task})
+	for _, image := range slice.Images {
+		parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: image}})
 	}
 	messages := []chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: parts},
 	}
-	return chatWithRetry(messages, nil, fmt.Sprintf("%s 第 %d/%d 组", mode, index, total))
+	return chatWithRetry(messages, nil, fmt.Sprintf("%s 第 %d/%d 片", label, index, total))
 }
 
-// frameGroupTask 构建该组的观看任务提示词
-func frameGroupTask(mode string, index, total int, question string) string {
-	indexText := strconv.Itoa(index)
-	totalText := strconv.Itoa(total)
-	if question != "" {
-		return renderPrompt(promptText("descriptorMediaQuestionTask.md"),
-			"{question}", question,
-			"{index}", indexText,
-			"{total}", totalText)
+// watchQuestion 针对整段影像的定向提问：各片采样帧合并后再取一次等距子集，单次调用回答
+func watchQuestion(system string, slices []multimodal.WatchSlice, question string) (string, error) {
+	var images []string
+	for _, slice := range slices {
+		images = append(images, slice.Images...)
 	}
-	name := "descriptorMediaVideoTask.md"
-	if mode == "animation" {
-		name = "descriptorMediaAnimationTask.md"
+	images = multimodal.SampleImages(images, multimodal.WatchFrameMax)
+	if len(images) == 0 {
+		return "", fmt.Errorf("定向提问缺少可用画面")
 	}
-	return renderPrompt(promptText(name),
-		"{index}", indexText,
-		"{total}", totalText)
+	parts := make([]contentPart, 0, len(images)+1)
+	parts = append(parts, contentPart{Type: "text", Text: multimodal.WatchQuestionTask(question)})
+	for _, image := range images {
+		parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: image}})
+	}
+	messages := []chatMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: parts},
+	}
+	return chatWithRetry(messages, nil, "影像定向提问")
 }
 
-// summarizeMedia 把多组理解整合为一份客观摘要
-func summarizeMedia(system, concatenated string) (string, error) {
-	task := renderPrompt(promptText("descriptorMediaSummaryTask.md"), "{content}", concatenated)
-	return chatWithRetry([]chatMessage{
+// mergeImpressions 把多片观看感受合成为一段整体感受
+func mergeImpressions(system string, total int, concatenated string) (string, error) {
+	task := fmt.Sprintf("%s\n\n以上是同一段影像按时间顺序的 %d 段观看记录：\n%s",
+		multimodal.WatchMergeTask(), total, concatenated)
+	merged, err := chatWithRetry([]chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: task},
-	}, nil, "影像摘要")
+	}, nil, "整体感受")
+	if err != nil {
+		return "", err
+	}
+	merged = strings.TrimSpace(merged)
+	if merged == "" {
+		return "", fmt.Errorf("整体感受为空")
+	}
+	return merged, nil
 }

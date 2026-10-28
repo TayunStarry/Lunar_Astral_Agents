@@ -40,7 +40,7 @@ func jsonOK(w http.ResponseWriter, status int, data any) {
 
 // scanAtoaToolchain 扫描包目录，收集「提供 AtoA 能力」的包（metadata.json 含非空 tools 数组）的工具链。
 // 每个包 tools 使用简化格式：仅声明工具名与功能简述（{name, description}），
-// 具体的参数 schema 由 use_the_program 聚合工具统一提供，避免各包重复携带相同的 instruction 参数定义。
+// 具体的参数 schema 由月华侧 use_the_program 聚合工具按清单统一构建，避免各包与两端重复维护同一份参数定义。
 // 返回：原始工具定义列表（含 app_id=包 ID）、工具名→包 ID 映射（供调用路由）
 func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 	defs := []LTPXRemoteToolDef{}
@@ -132,46 +132,6 @@ func appendInternalAtoaTools(defs []LTPXRemoteToolDef, pkgMap map[string]string)
 // Node-LTP 聚合体的工具名（月华侧提示词 use_the_program 必须与此一致）
 const integratedToolsName = "use_the_program"
 
-// buildUseTheProgram 将扫描到的全部 AtoA 工具收敛为单一 use_the_program 聚合工具。
-// 工具名直接写成 tool 参数的 enum：模型启动时即拿到完整枚举，不必先 list 再拼参数，
-// 避免「忘了查清单 / 照清单抄错名字」这条不可靠路径；
-// 参数语义：tool = 要使用的应用名（只填 tool 即打开该应用），instruction = 打开后交给
-// 该应用执行的任务（可省略）；details=true 时只按 tool 回查该应用的详细说明，不执行操作。
-func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
-	names := make([]string, 0, len(defs))
-	for _, d := range defs {
-		if d.Name != "" {
-			names = append(names, d.Name)
-		}
-	}
-	return LTPXRemoteToolDef{
-		Name: integratedToolsName,
-		Description: "调用星月智能的扩展应用：" +
-			"tool 只能取参数枚举中的应用名，填入即表示打开该应用；" +
-			"instruction 填打开后要该应用完成的任务；" +
-			"details=true 时只返回 tool 所指应用的详细说明，不执行任何操作。",
-		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"details": map[string]any{
-					"type":        "boolean",
-					"description": "仅查询 tool 指定应用的详细说明，不执行任何操作；为 true 时仍需传 tool",
-				},
-				"tool": map[string]any{
-					"type":        "string",
-					"enum":        names,
-					"description": "要使用的应用名（只能取枚举值，如 file_manager、file_editor）；只填本项表示打开该应用",
-				},
-				"instruction": map[string]any{
-					"type":        "string",
-					"description": "打开应用后交给它执行的任务，例如：进入 D 盘根目录；查询北京今天的天气。只打开应用时省略",
-				},
-			},
-			"required": []string{"tool"},
-		},
-	}
-}
-
 // ltpxFirstSentence 截取工具描述的首句（按中英文句号/分号切分）
 // 供需要「一句话能力简介」的场景使用（如 Mini-LTP 页面工具描述）
 func ltpxFirstSentence(desc string) string {
@@ -203,11 +163,10 @@ func LTPRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defs, _ := scanAtoaToolchain()
-	// 收敛为单一 use_the_program 聚合工具，避免月华在多工具名间「迷航」
-	aggTool := buildUseTheProgram(defs)
-	logger.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，聚合为 %s（内含 %d 个目标工具）", aggTool.Name, len(defs))
+	logger.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，返回 %d 个目标工具", len(defs))
 	jsonOK(w, http.StatusOK, map[string]any{
-		"tool": aggTool,
+		// 只声明聚合工具名作为「工具链可用」标记：参数 schema 与 tool 枚举由月华按清单统一构建
+		"tool": LTPXRemoteToolDef{Name: integratedToolsName, Description: "调用星月智能的扩展应用"},
 		// 结构化应用清单：月华据此生成 tool 参数枚举，并保留「工具名 → 描述」供 details 查询
 		"tools": defs,
 	})

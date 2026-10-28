@@ -1,6 +1,6 @@
 package BilibiliViewer
 
-// 手动冒烟：真实下载 60 秒并调用一次描述者（影像）理解（会产生一次模型调用）。
+// 手动冒烟：真实下载 60 秒并按统一观看管线理解一个切片（会产生一次模型调用）。
 //   $env:BILI_LIFE_UNDERSTAND_PROBE="1"; go test -run TestManualUnderstandProbe -v ./agents/BilibiliViewer
 
 import (
@@ -27,12 +27,14 @@ func TestManualUnderstandProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("下载失败: %v", err)
 	}
-	summary, slices, err := understandVideo(local, info, 1)
-	for _, one := range slices {
-		t.Logf("slice %d err=%q text=%q", one.Index, one.Error, truncate(one.Text, 120))
+	defer os.Remove(local)
+	segments, err := prepareVideoSegments(local, 1)
+	if err != nil {
+		t.Fatalf("切片失败: %v", err)
 	}
+	text, err := understandOneSlice(local, info, segments[0], 1, len(segments))
 	if err != nil {
 		t.Fatalf("理解失败: %v", err)
 	}
-	t.Logf("summary(%d 字)=%s", len([]rune(summary)), truncate(summary, 400))
+	t.Logf("观影感受(%d 字)=%s", len([]rune(text)), truncate(text, 400))
 }

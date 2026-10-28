@@ -11,11 +11,11 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
 	"LunarSubsystem/LunarHarness/agents/Descriptor"
-	"LunarSubsystem/LunarHarness/agents/LunarMatrix"
-	"LunarSubsystem/LunarHarness/agents/QQMessenger"
+	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/agents/MutualForum"
 	"LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/agents/desktop"
-	"LunarSubsystem/LunarHarness/engine/agentinfo"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
@@ -115,10 +115,10 @@ func WireTUIEngineHooks() {
 	streamEnd := func(role string) { console.StreamEnd(role) }
 	WebSearch.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
 	Descriptor.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
-	// 专项通讯的规划调用同样进实况与计量（投递内容不展示，只展示规划过程）。
-	QQMessenger.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
-	// Lunar Matrix 的论坛规划与工具调用同样进实况与计量。
-	LunarMatrix.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
+	// 通讯桥接的规划调用同样进实况与计量（投递内容不展示，只展示规划过程）。
+	DialogueBridging.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
+	// Mutual Forum 的论坛规划与工具调用同样进实况与计量。
+	MutualForum.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
 	// 桌面操纵各角色的模型调用同样进实况与计量；
 	// 其请求本身受 loopguard 思考监管约束，命中重复会自动中断并重试。
 	desktop.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
@@ -176,11 +176,11 @@ func WireTUIEngineHooks() {
 func buildToolCatalog() []agentinfo.Agent {
 	out := lunar.ToolCatalog()
 	out = append(out, Descriptor.ToolCatalog()...)
-	out = append(out, QQMessenger.ToolCatalog()...)
+	out = append(out, DialogueBridging.ToolCatalog()...)
 	out = append(out, WebSearch.ToolCatalog()...)
 	out = append(out, BilibiliViewer.ToolCatalog()...)
 	out = append(out, desktop.ToolCatalog()...)
-	out = append(out, LunarMatrix.ToolCatalog()...)
+	out = append(out, MutualForum.ToolCatalog()...)
 	return out
 }
 

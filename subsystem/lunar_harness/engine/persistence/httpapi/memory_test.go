@@ -10,7 +10,8 @@ import (
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/memory"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // memoryHTTPFakeVector 4 维语义向量：天气=[1,0,0,0]，开心=[0,1,0,0]，其它=[0,0,0,1]
@@ -61,15 +62,15 @@ func TestMemoryHandlerGlobalTypeAPI(t *testing.T) {
 	config.AgentEmbeddingURL = server.URL + "/v1"
 	config.AgentEmbeddingModel = "test-embedding"
 	t.Cleanup(func() {
-		_ = persistence.CloseArchiveDB()
+		_ = resource.Close()
 		config.LocalDir = origLocal
 		config.ArchiveDBPath = origArchive
 		config.AgentEmbeddingURL = origURL
 		config.AgentEmbeddingModel = origModel
 	})
 
-	persistence.InitMemoryDB(filepath.Join(tmp, "memory"))
-	if err := persistence.MemoryInitInstance(); err != nil {
+	memory.Init(filepath.Join(tmp, "memory"))
+	if err := memory.EnsureReady(); err != nil {
 		t.Fatalf("记忆库初始化失败: %v", err)
 	}
 

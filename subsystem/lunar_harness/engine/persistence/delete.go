@@ -24,7 +24,7 @@ func DeleteFile(filePath string) (string, error) {
 	rel, _ := relativeToLocalDir(fullPath)
 	// 检查文件或目录是否存在：缺失时同步清理失效句柄
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		RemoveHandlesForPath(rel)
+		NotifyDelete(rel)
 		return "", fmt.Errorf("文件未找到")
 	}
 	// 获取文件锁，用于保证文件操作的原子性
@@ -40,7 +40,7 @@ func DeleteFile(filePath string) (string, error) {
 	// 从文件锁映射中删除该文件的锁
 	FileLocks.Delete(fullPath)
 	// 句柄维护：文件或目录下的全部句柄随实体一并移除
-	RemoveHandlesForPath(rel)
+	NotifyDelete(rel)
 	logger.SubInfo("Persistence", "Delete", "成功删除: %s", fullPath)
 	return fullPath, nil
 }

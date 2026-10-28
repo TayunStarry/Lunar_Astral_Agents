@@ -86,6 +86,8 @@ func createZip(w http.ResponseWriter, r *http.Request) {
 			relPath = zipName
 		}
 		relPath = filepath.ToSlash(relPath)
+		// 保存位置若落在内容仓库三棵树内，同样纳入句柄追踪
+		persistence.NotifyWrite(relPath)
 		logger.SubInfo("FileManager", "Archive", "ZIP已保存到服务器: %s (%d 字节)", fullSavePath, len(zipData))
 		// 打包归档产出成品：统一播放完成提示音
 		sound.Notify()
@@ -170,6 +172,8 @@ func CreateZipHandler(w http.ResponseWriter, r *http.Request) {
 		relPath = zipName
 	}
 	relPath = filepath.ToSlash(relPath)
+	// 保存位置若落在内容仓库三棵树内，同样纳入句柄追踪
+	persistence.NotifyWrite(relPath)
 	logger.SubInfo("FileManager", "Archive", "服务端ZIP已保存: %s (%d 字节)", fullSavePath, len(zipData))
 	// 服务端压缩产出成品：统一播放完成提示音
 	sound.Notify()
@@ -528,6 +532,10 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		logger.Info("FileManager", "包导出成功: %s -> %s", req.PackageName, fullSavePath)
+		// 保存位置若落在内容仓库三棵树内，同样纳入句柄追踪
+		if rel, relErr := filepath.Rel(config.LocalDir, fullSavePath); relErr == nil {
+			persistence.NotifyWrite(filepath.ToSlash(rel))
+		}
 		// 包导出（打包归档）产出成品：统一播放完成提示音
 		sound.Notify()
 		w.Header().Set("Content-Type", "application/json")

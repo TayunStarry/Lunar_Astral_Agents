@@ -3,12 +3,12 @@ package Descriptor
 // type.go 描述者（句柄系统）的类型定义
 //
 // 描述者是句柄系统的一部分，不属于月华智能体体系：
-//   - 影像描述：按视频/动态图句柄现场观看采样帧，产出可入库的内容描述；
+//   - 影像描述：按图片/动态图句柄现场观看采样帧，产出可入库的内容描述；
 //   - 文件探查：按文本句柄接收自然语言需求，用查询工具分片探查文件内容。
 //
 // 本文件只放类型定义，全局变量与常量见 variable.go。
 
-import "LunarSubsystem/LunarHarness/engine/persistence"
+import "LunarSubsystem/LunarHarness/engine/resource"
 
 // chatMessage OpenAI v1 协议中的单条对话消息
 type chatMessage struct {
@@ -182,7 +182,7 @@ type fileReference struct {
 // docContext 一次文件探查的上下文
 type docContext struct {
 	// Resource 资源目录条目
-	Resource persistence.ArchiveResource
+	Resource resource.Resource
 	// Handle 规范句柄
 	Handle string
 	// AbsPath 正文绝对路径

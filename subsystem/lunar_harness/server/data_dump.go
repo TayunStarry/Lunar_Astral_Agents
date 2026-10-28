@@ -85,31 +85,9 @@ func DataDumpLogsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 用 bytes.Buffer + 复用一个 Encoder：Encoder.Encode 每行自带换行，正好是 JSONL；
-	// 相比逐行 json.Marshal（每行一次分配）在 1000 行量级下少一轮 GC 压力。
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	/** 实际写出的记录数（清洗后为空的整行会被丢弃，不再等于 lines 长度） */
-	written := 0
-	for _, line := range lines {
-		for _, text := range console.ScrubLogText(line.Text) {
-			rec := map[string]any{
-				"time":   line.Time.Format("2006-01-02 15:04:05.000"),
-				"level":  line.Level,
-				"source": line.Source,
-				"module": line.Module,
-				"sub":    line.Sub,
-				"text":   text,
-			}
-			if err := enc.Encode(rec); err != nil {
-				continue
-			}
-			written++
-		}
-	}
-
-	path, size, err := writeDumpFile("raw-logs", "log", buf.Bytes())
+	// 序列化口径与「开发者调试快照」共用 console.BuildRawLogsJSONL，避免两处导出格式漂移
+	content, written := console.BuildRawLogsJSONL()
+	path, size, err := writeDumpFile("raw-logs", "log", []byte(content))
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, DataDumpResponse{OK: false, Error: err.Error()})
 		return
@@ -165,7 +143,7 @@ func DataDumpTranscriptHandler(w http.ResponseWriter, r *http.Request) {
 // DataDumpContextHandler 导出 Go 智能体上下文/状态为 JSON（POST /debug/dump/context?agent=xxx）。
 //
 // agent 取值来自 engine/agentdump 的注册表：core（核心人格集合）、web_search、
-// bilibili、desktop、qq、lunar_matrix 等。分角色的旧目标已合并到 core。
+// bilibili、desktop、dialogue_bridging、mutual_forum 等。分角色的旧目标已合并到 core。
 // include_images=1 时保留图片原始 base64（体积很大，仅深度排查用）。
 func DataDumpContextHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

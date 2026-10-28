@@ -29,6 +29,23 @@ var (
 	CaptureCooldown int64 = 50 * 1000 * 1000 // 50ms 最小截图间隔（纳秒）
 )
 
+// ==== 视觉观看（切片与抽帧） ====
+//
+// 视频与动图共用同一套规则：视频按 MediaChunkSeconds 秒切片，动图整体为一个切片，
+// 每片等距抽取 WatchFrameMax 帧。数量只在这里定标，视频/动图链路不得各自再定一套。
+const (
+	// MediaChunkSeconds 单个观看切片的最大时长（秒）
+	MediaChunkSeconds = 60.0
+	// WatchMaxSlices 单次观看最多处理的切片数（超出的部分不抽帧、不交给模型）
+	WatchMaxSlices = 8
+	// WatchFrameMax 单个切片送给视觉模型的采样帧数上限
+	WatchFrameMax = 12
+	// MaxMediaWidth 采样帧的最大长边（像素，宽或高均受限）。
+	// llama-server 的多模态批处理要求非因果注意力块整体落入单个 ubatch，
+	// 高分辨率单帧的视觉 token 数会超出 n_ubatch 上限；长边压到 640px 后每帧落在安全范围。
+	MaxMediaWidth = 640
+)
+
 // ==== 日志模块标签 ====
 //
 // 控制台按模块名路由：绘图屏只接收 sd.cpp 绘图链路。视频抽帧、关键帧与

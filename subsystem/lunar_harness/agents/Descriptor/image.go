@@ -6,11 +6,11 @@ package Descriptor
 // 原图字节不出 Go 侧（见 docs/adr/0008）。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // describeStaticImage 观看一张静态图片并返回描述
-func describeStaticImage(res persistence.ArchiveResource, abs, question string) (string, error) {
+func describeStaticImage(res resource.Resource, abs, question string) (string, error) {
 	uri, err := resourceVisionURI(res, abs)
 	if err != nil {
 		return "", err

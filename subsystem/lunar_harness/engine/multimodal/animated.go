@@ -1,12 +1,9 @@
 package multimodal
 
-// 动态图（GIF / APNG / 动态 WebP）检测与帧提取
+// 动态图（GIF / APNG / 动态 WebP）检测与临时落盘
 //
-// 动态图不再视频化：先经分析通道（32×32 缩略网格）做循环裁剪、运动窗口识别与
-// 近重复去重，再按分层自适应规则选出至多 64 帧（长边 ≤ AnimatedFrameMaxDim），
-// 交由多模态模型按序列帧理解。
-// 分析与智能选帧见 animated_analyze.go / animated_smart.go，
-// 数量骨架回退见 animated_select.go，序列帧实现见 video_frame.go。
+// 动态图没有独立的抽帧链路：它按「一个很短的影像片段」交给 watch.go 的
+// 统一等距抽帧（与视频切片同一套规则），此处只负责格式识别与临时文件。
 
 import (
 	"bytes"
@@ -19,14 +16,6 @@ import (
 	"os"
 	"strings"
 	"time"
-)
-
-const (
-	// AnimatedSampleFps 视频采样网格步长（1fps），需与 models.ini 的 --video-fps 保持一致；
-	// 60 秒分组 = 60 帧，长边 ≤640 时单帧 ≤171 token，单组 ≤10.3k，适配 20480 上下文
-	AnimatedSampleFps = 1.0
-	// AnimatedFrameMaxDim 动态图序列帧的最大边长（约束视觉 token 量）
-	AnimatedFrameMaxDim = 640
 )
 
 // maxAnimatedBytes 动态图最大输入字节数（与静态图处理保持一致的上限）

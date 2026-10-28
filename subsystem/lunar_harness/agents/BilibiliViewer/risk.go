@@ -60,12 +60,12 @@ var riskPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`1[3-9]\d{9}`),
 }
 
-// riskRejectLimit 本轮允许的风险拒选次数（观看额度 × 倍数）
-func riskRejectLimit(videosPerRound int) int {
-	if videosPerRound < videoMinCount {
-		videosPerRound = videoMinCount
+// riskRejectLimit 本轮允许的风险拒选次数（候选数 × 倍数）
+func riskRejectLimit(candidates int) int {
+	if candidates < candidateMin {
+		candidates = candidateMin
 	}
-	return videosPerRound * riskRejectQuotaFactor
+	return candidates * riskRejectQuotaFactor
 }
 
 // screenCommentsRisk 读完评论区后的复查：只做规则扫描，命中即不再留言

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,9 +28,6 @@ var (
 
 var presetDailyTasks = []ScheduleItem{
 	{ID: "daily_greeting_morning", Type: "daily", Time: "07:30", Content: "向用户发送早安问候，并提示可以查一下今天的天气"},
-	{ID: "daily_viewer_1100", Type: "daily", Time: "11:00", Content: "打开< 哔哩哔哩 >去刷一会视频吧；"},
-	{ID: "daily_viewer_1700", Type: "daily", Time: "17:00", Content: "打开< 哔哩哔哩 >去刷一会视频吧；"},
-	{ID: "daily_viewer_2000", Type: "daily", Time: "20:00", Content: "打开< 哔哩哔哩 >去刷一会视频吧；"},
 	{ID: "daily_greeting_evening", Type: "daily", Time: "22:00", Content: "向用户发送晚安问候，祝其好眠，并提示可以查看一下今天的新闻"},
 }
 
@@ -239,14 +237,69 @@ func absDuration(value time.Duration) time.Duration {
 	return value
 }
 
-// flushDueScheduleItems 消费到期计划项并推进未读上下文
-func flushDueScheduleItems() {
+// pushDueScheduleItems 消费到期计划项并推进未读上下文，返回入队条数。
+// 只在生活体系运行时调用（计划表判定已从对话 Tick 迁移）。
+func pushDueScheduleItems() int {
 	due := checkDueItems()
 	for _, item := range due {
 		unreadMu.Lock()
-		unreadContext = append(unreadContext, PostMessage{Role: RoleUser, Content: scheduleTriggerPrefix + " 预约时间已到，请执行以下计划：" + item.Content})
+		unreadContext = append(unreadContext, PostMessage{Role: RoleUser, Source: scheduleSource, Content: scheduleTriggerPrefix + " 预约时间已到，请执行以下计划：" + item.Content})
 		unreadMu.Unlock()
 	}
+	if len(due) > 0 {
+		logger.Info(lunarCoreModule, "[计划表] 生活体系推送 %d 条到期计划", len(due))
+	}
+	return len(due)
+}
+
+// upcomingPlanSummary 未来 window 内即将触发的计划摘要；没有则返回空串。
+func upcomingPlanSummary(now time.Time, window time.Duration) string {
+	scheduleMu.Lock()
+	items := append([]ScheduleItem(nil), scheduleCache...)
+	scheduleMu.Unlock()
+	type upcoming struct {
+		due     time.Time
+		content string
+	}
+	list := make([]upcoming, 0, len(items))
+	for _, item := range items {
+		due, ok := nextPlanTime(item, now)
+		if !ok {
+			continue
+		}
+		if !due.After(now) || due.After(now.Add(window)) {
+			continue
+		}
+		list = append(list, upcoming{due: due, content: strings.TrimSpace(item.Content)})
+	}
+	if len(list) == 0 {
+		return ""
+	}
+	sort.SliceStable(list, func(i, j int) bool { return list[i].due.Before(list[j].due) })
+	parts := make([]string, 0, len(list))
+	for _, item := range list {
+		parts = append(parts, item.due.Format("15:04")+" "+truncateRunes(item.content, 40))
+	}
+	return strings.Join(parts, "；")
+}
+
+// nextPlanTime 计算计划项的下一次触发时刻；无法计算或已过期返回 false。
+func nextPlanTime(item ScheduleItem, now time.Time) (time.Time, bool) {
+	if item.Type == "daily" {
+		due, ok := dailyTaskTime(item, now)
+		if !ok {
+			return time.Time{}, false
+		}
+		if item.CompletedDate == formatDate(now) || !due.After(now) {
+			due = due.Add(24 * time.Hour)
+		}
+		return due, true
+	}
+	due, err := time.ParseInLocation("2006-01-02T15:04:05", item.Time, time.Local)
+	if err != nil || !due.After(now) {
+		return time.Time{}, false
+	}
+	return due, true
 }
 
 // ==== 查询 ====

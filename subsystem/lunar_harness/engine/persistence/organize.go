@@ -247,7 +247,7 @@ func executeDelete(basePath, source, localDir string) error {
 		return fmt.Errorf("删除失败: %w", err)
 	}
 	if rel, relErr := filepath.Rel(localDir, srcPath); relErr == nil {
-		RemoveHandlesForPath(rel)
+		NotifyDelete(filepath.ToSlash(rel))
 	}
 
 	logger.SubInfo("Persistence", "Organize", "删除: %s", source)
@@ -264,13 +264,7 @@ func syncMovedHandles(srcPath, tgtPath, localDir string) {
 	if err != nil {
 		return
 	}
-	oldRel, newRel = filepath.ToSlash(oldRel), filepath.ToSlash(newRel)
-	RewriteHandlesForMove(oldRel, newRel)
-	if IsStoragePath(newRel) {
-		if _, handleErr := UpsertHandleForPath(newRel); handleErr != nil {
-			logger.SubWarn("Persistence", "Organize", "句柄登记失败(%s): %v", newRel, handleErr)
-		}
-	}
+	NotifyMove(filepath.ToSlash(oldRel), filepath.ToSlash(newRel))
 }
 
 // copyFile 复制文件（用于跨文件系统移动）

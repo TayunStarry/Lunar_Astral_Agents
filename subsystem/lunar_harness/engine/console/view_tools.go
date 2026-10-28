@@ -3,7 +3,7 @@ package console
 // ==== Go 智能体工具列表屏 ====
 //
 // 扫描宿主汇总的 Go 智能体工具目录，按「智能体 → 工具 → 说明」展示。
-// 目录内容来自 engine/agentinfo：各智能体包描述自己的工具，app 层汇合后注入，
+// 目录内容来自 protocol/agentinfo：各智能体包描述自己的工具，app 层汇合后注入，
 // 控制台不复制任何工具定义。
 
 import (
@@ -11,7 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"LunarSubsystem/LunarHarness/engine/agentinfo"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // toolsState 工具列表屏状态

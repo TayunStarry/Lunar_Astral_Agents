@@ -3,7 +3,6 @@ package WebSearch
 // type.go 全部类型定义（结构体、接口、别名）集中于此。
 
 import (
-	"database/sql"
 	"time"
 )
 
@@ -50,10 +49,9 @@ type reportInput struct {
 	Elapsed        string        // 总耗时（秒）
 }
 
-// PageCache 页面「近期已访问」标记（SQLite）。
+// PageCache 页面「近期已访问」标记（SQLite，读写走 engine/knowledge 接口）。
 // 零值/nil 安全：fresh/put/close 均兼容 nil 接收者，缓存不可用时调用方无需分支处理。
 type PageCache struct {
-	db  *sql.DB       // SQLite 数据库连接，nil 时缓存不可用
 	ttl time.Duration // 近期访问判定窗口
 }
 

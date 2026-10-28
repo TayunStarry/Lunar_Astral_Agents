@@ -7,7 +7,9 @@ import (
 	"LunarSubsystem/LunarHarness/crystal"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	file "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/knowledge"
+	"LunarSubsystem/LunarHarness/engine/memory"
+	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/protocol/ltpx"
 )
 
@@ -15,23 +17,23 @@ import (
 func assembleCrystal() error {
 	// ==== 统一资源目录（SQLite archive.db：句柄 / 元数据 / 段落结构） ====
 	// 必须先于月华智能体运行时启动：入库层在对话链路里即被调用。
-	if err := file.InitArchiveDB(config.ArchiveDBPath); err != nil {
+	if err := resource.Init(config.ArchiveDBPath); err != nil {
 		logger.Warn("LunarHarness", "统一资源目录初始化失败: %v (不影响服务启动)", err)
 	}
 
 	// ==== 知识库（SQLite，仅用户/插件自建表） ====
-	if err := file.InitKnowledgeDB(config.KnowledgeDBPath); err != nil {
+	if err := knowledge.InitKnowledge(config.KnowledgeDBPath); err != nil {
 		logger.Warn("LunarHarness", "知识库初始化失败: %v (不影响服务启动)", err)
 	}
 
 	// ==== 领域数据库（media / web / text / character） ====
 	// 历史版本的内建表在上面两个 Init 中已迁出；这里统一建表并提前暴露打开失败。
-	if err := file.InitDomainDBs(); err != nil {
+	if err := knowledge.Init(); err != nil {
 		logger.Warn("LunarHarness", "领域数据库初始化存在失败项: %v", err)
 	}
 
 	// ==== 记忆库存储目录（仅准备本地存储结构，不产生网络请求） ====
-	file.InitMemoryDB(config.MemoryDBDir)
+	memory.Init(config.MemoryDBDir)
 
 	// ==== 记忆库实例与默认分组（与月华 JS agent 行为对齐） ====
 	initMemoryDatabase()
@@ -51,7 +53,7 @@ func assembleCrystal() error {
 // initMemoryDatabase 初始化记忆库实例：一次性加载全部集合，并补齐默认分组与集合名向量。
 // 模型配置与月华共用 lunar_config.json 的 agent 分组；失败仅告警，不阻断服务启动。
 func initMemoryDatabase() {
-	if err := file.MemoryInitInstance(); err != nil {
+	if err := memory.EnsureReady(); err != nil {
 		logger.Warn("LunarHarness", "记忆库初始化失败: %v（可稍后通过 /memory/init 重试）", err)
 		return
 	}

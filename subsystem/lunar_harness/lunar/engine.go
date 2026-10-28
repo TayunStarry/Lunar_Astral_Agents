@@ -9,10 +9,9 @@ import (
 	"time"
 
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
-	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	proxy "LunarSubsystem/LunarHarness/engine/console/proxy"
-	persistence "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/memory"
 	"LunarSubsystem/LunarHarness/transport/ws"
 )
 
@@ -113,7 +112,7 @@ func matchActionName(query string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	queryVector, err := persistence.EmbedQueryText(ctx, query)
+	queryVector, err := memory.EmbedQuery(ctx, query)
 	if err != nil {
 		return lexicalActionMatch(query, names)
 	}
@@ -150,7 +149,7 @@ func actionVectorsFor(names []string) ([][]float32, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	vectors, err := persistence.EmbedDocumentTexts(ctx, names)
+	vectors, err := memory.EmbedDocuments(ctx, names)
 	if err != nil {
 		return nil, err
 	}
@@ -218,5 +217,3 @@ func synthesizeText(text string) (string, error) {
 		Threads:           4,
 	})
 }
-
-var _ = config.AgentASRModel

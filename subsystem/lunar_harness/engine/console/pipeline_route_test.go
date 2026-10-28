@@ -13,7 +13,7 @@ func TestRouteLogRecordSeparatesMediaFromDraw(t *testing.T) {
 		ClearLogs(SourceDraw)
 	})
 
-	routeLogRecord("INFO", "MediaAnalysis", "", "VideoToFrames: 时长 600s → 1 组 / 60 帧")
+	routeLogRecord("INFO", "MediaAnalysis", "", "VideoToWatchSlices: 时长 600s → 8 片（每片 12 帧）")
 	if got := GetLogs(SourceDraw); len(got) != 0 {
 		t.Fatalf("视频切片日志不应进入绘图屏，实际 %d 条: %q", len(got), got[0].Text)
 	}

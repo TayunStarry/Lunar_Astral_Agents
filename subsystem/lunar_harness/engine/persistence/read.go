@@ -25,7 +25,7 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 	}
 	// 句柄维护：命中内容仓库时续期；实体缺失则清除失效句柄
 	if rel, ok := relativeToLocalDir(fullPath); ok {
-		TouchHandlesForRead(rel)
+		NotifyRead(rel)
 	}
 	// 获取文件信息与错误内容
 	fileInfo, err := os.Stat(fullPath)

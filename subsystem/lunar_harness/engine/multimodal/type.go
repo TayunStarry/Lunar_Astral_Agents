@@ -23,6 +23,29 @@ type engineLogWriter struct {
 	vaeFallbackWarned bool
 }
 
+// WatchSlice 视觉观看管线的一个切片：时间区间与该区间内的等距采样帧。
+//
+// 全项目只有一套切片/抽帧规则（见 watch.go）：
+// 视频按 60 秒分段，动图整体视为一个分段，两者产物都是 WatchSlice。
+type WatchSlice struct {
+	// Index 切片序号（1 基，按时间顺序）
+	Index int `json:"index"`
+	// Start 切片起始时间（秒）
+	Start float64 `json:"start"`
+	// End 切片结束时间（秒）
+	End float64 `json:"end"`
+	// Images 采样帧的 JPEG data URI（按时间顺序，可直接作为 image_url 提交）
+	Images []string `json:"images"`
+}
+
+// MediaSegment 影像切片的时间区间（视频按 60 秒分段，动图整体一段）
+type MediaSegment struct {
+	// Start 片段起始时间（秒）
+	Start float64 `json:"start"`
+	// End 片段结束时间（秒）
+	End float64 `json:"end"`
+}
+
 // KeyFrame 关键帧结构
 type KeyFrame struct {
 	// 关键帧文件名

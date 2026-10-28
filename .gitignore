@@ -27,14 +27,15 @@ local_data/multimedia/
 local_data/documents/
 local_data/models/
 local_data/cache/
-database/
+local_data/database/
+local_data/audios/
 
-## 敏感凭证与平台私有配置（B 站 / QQ / Lunar Matrix；绝不入库、不上传）
+## 敏感凭证与平台私有配置（B 站 / QQ / Mutual Forum；绝不入库、不上传）
 local_data/bilibili_config.json
 local_data/bilibili_account.json
 local_data/bilibili_life.json
 local_data/napcat_config.json
-local_data/lunar_matrix.json
+local_data/mutual_forum.json
 local_data/forum/
 local_data/package/lunar.search-weather/config.json
 docs/plans/cookies*.txt

@@ -4,16 +4,18 @@ import (
 	"fmt"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/crystal"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	file "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/debugsnap"
+	"LunarSubsystem/LunarHarness/engine/knowledge"
+	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/lunar"
 	"LunarSubsystem/LunarHarness/server"
 	"LunarSubsystem/LunarHarness/transport/enginebus"
-	"LunarSubsystem/LunarHarness/transport/napcat"
 	"LunarSubsystem/LunarHarness/transport/ws"
 )
 
@@ -23,6 +25,10 @@ import (
 // 消费层（月华对话链与 LTP9 插件沙箱）排在末段启动，
 // 保证其思考循环/插件加载之时，HTTP、llama 代理、记忆库与 LTPX 协调层均已就绪。
 func Assemble() {
+	// ==== 开发者模式告警快照：日志钩子装配 ====
+	// 必须在其他子系统之前接上：装配期出现的警告也应留下调试快照。
+	wireDebugSnapshot()
+
 	// ==== 传输层：统一 WebSocket 集线器 ====
 	ws.Instance = ws.NewHub()
 	go ws.Instance.Run()
@@ -43,7 +49,7 @@ func Assemble() {
 	// ==== 跨层注入：结构化广播 & 下行桥接 ====
 	// 智能体下行走结构化广播（type/data），QQ 桥接挂在结构化旁路上（原始字节广播不触发）
 	lunar.PushMessageFunc = ws.Instance.BroadcastMessage
-	ws.OnStructuredMessage = napcat.BridgeStructuredMessage
+	ws.OnStructuredMessage = DialogueBridging.BridgeStructuredMessage
 
 	// ==== 前端静态资源：月华消息终端（/）与琉璃桌面（/desktop/） ====
 	StaticRootsProvider = func() server.StaticRoots {
@@ -104,6 +110,16 @@ func Assemble() {
 	logger.Info("LunarHarness", "月华智能体运行时（Go 对话链）已启动")
 }
 
+// wireDebugSnapshot 装配开发者模式下的告警调试快照。
+//
+// 触发条件由日志层把守（developer 模式 + WARN 及以上），本函数只负责接上钩子；
+// 快照实现（engine/debugsnap）只读取日志缓冲 / 实况轮次 / 智能体上下文并落盘，
+// 调用链中不包含任何前端窗口打开逻辑（不弹月华/琉璃界面）。
+func wireDebugSnapshot() {
+	logger.SetDevMode(config.Developer)
+	logger.SetAlertHook(debugsnap.HandleAlert)
+}
+
 // lunarWindowSpec 月华消息终端窗口规格
 func lunarWindowSpec() browser.DesktopWindowSpec {
 	base := fmt.Sprintf("http://127.0.0.1:%d", config.BasicPort)
@@ -159,17 +175,12 @@ func GracefulShutdown(reason string) {
 		crystal.Close()
 		shutdownLunar()
 		// 统一资源目录：关闭 SQLite 连接（内容仓库中的 blob 不动，句柄持久保留）
-		if err := file.CloseArchiveDB(); err != nil {
+		if err := resource.Close(); err != nil {
 			logger.Warn("LunarHarness", "关闭资源目录失败: %v", err)
 		}
 		// 知识库与领域库（media / web / text / character）一并释放
-		if file.KnowledgeDatabase != nil {
-			if err := file.KnowledgeDatabase.Close(); err != nil {
-				logger.Warn("LunarHarness", "关闭知识库失败: %v", err)
-			}
-		}
-		if err := file.CloseDomainDBs(); err != nil {
-			logger.Warn("LunarHarness", "关闭领域数据库失败: %v", err)
+		if err := knowledge.Close(); err != nil {
+			logger.Warn("LunarHarness", "关闭知识库与领域数据库失败: %v", err)
 		}
 		if ws.Instance != nil {
 			ws.Instance.CloseAll()

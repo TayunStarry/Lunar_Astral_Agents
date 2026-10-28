@@ -1,7 +1,6 @@
 package persistence
 
 import (
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"archive/zip"
 	"bytes"
 	"fmt"
@@ -11,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
 // CreateZip 创建 ZIP 压缩文件并返回字节数据
@@ -316,6 +317,8 @@ func ReadZipFileList(zipPath string) ([]ZipEntryInfo, error) {
 // ExtractZipToDir 将 ZIP 文件解压到目标目录
 // zipPath: ZIP 文件绝对路径；targetDir: 目标目录绝对路径（需已校验在 LocalDir 内）
 // 返回解压出的文件数
+//
+// 每个落盘条目都会通知句柄系统：目标位于 documents / audios / multimedia 时自动获得句柄。
 func ExtractZipToDir(zipPath string, targetDir string) (int, error) {
 	zipReader, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -363,6 +366,10 @@ func ExtractZipToDir(zipPath string, targetDir string) (int, error) {
 		rc.Close()
 		if copyErr != nil {
 			return fileCount, fmt.Errorf("写入文件失败 %s: %w", destPath, copyErr)
+		}
+		// 解压落盘同样纳入句柄追踪（仅三棵内容仓库树内生效）
+		if rel, ok := relativeToLocalDir(destPath); ok {
+			NotifyWrite(rel)
 		}
 		fileCount++
 	}

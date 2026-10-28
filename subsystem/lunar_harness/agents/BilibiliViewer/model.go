@@ -21,6 +21,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/model/llama"
 	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
@@ -164,30 +165,104 @@ func chatCompletion(messages []chatMessage) (string, error) {
 // chatCompletionWith 与 chatCompletion 相同，额外支持两项按调用定制：
 //   - display 非空时，正文不逐段推送，流结束后先规整再送入「核心智能 实况」；
 //   - loopOpts 指定重复检测参数（零值字段回退到默认阈值）。
+//
+// 除重复输出外，对模型端的瞬时故障（HTTP 5xx、网络失败）也做有限退避重试：
+// 本地/中转模型偶尔连续 500，直接放弃会让审核、评论整环节点失效。
 func chatCompletionWith(messages []chatMessage, display func(string) string, loopOpts loopguard.Options) (string, error) {
 	for attempt := 0; ; attempt++ {
 		text, err := chatCompletionOnce(messages, display, loopOpts)
 		if err == nil {
 			return text, nil
 		}
-		if !errors.Is(err, loopguard.ErrLoop) {
-			return "", err
+		if errors.Is(err, loopguard.ErrLoop) {
+			if attempt >= lifeLoopMaxRetries {
+				logger.Error("BilibiliViewer", "模型连续 %d 次陷入重复输出，跳过本次调用", attempt+1)
+				return "", fmt.Errorf("模型连续 %d 次陷入重复输出，已跳过本次调用: %w", attempt+1, loopguard.ErrLoop)
+			}
+			logger.Warn("BilibiliViewer", "检测到模型重复输出，已中断并重新生成（重试 %d/%d）", attempt+1, lifeLoopMaxRetries)
+			continue
 		}
-		if attempt >= lifeLoopMaxRetries {
-			logger.Error("BilibiliViewer", "模型连续 %d 次陷入重复输出，跳过本次调用", attempt+1)
-			return "", fmt.Errorf("模型连续 %d 次陷入重复输出，已跳过本次调用: %w", attempt+1, loopguard.ErrLoop)
+		if isTransientModelError(err) {
+			if attempt >= modelHTTPRetries {
+				logger.Error("BilibiliViewer", "模型连续 %d 次瞬时错误，跳过本次调用: %v", attempt+1, err)
+				return "", err
+			}
+			wait := time.Duration(attempt+1) * modelRetryBackoff
+			logger.Warn("BilibiliViewer", "模型瞬时错误（重试 %d/%d，等待 %v）: %v",
+				attempt+1, modelHTTPRetries, wait, err)
+			time.Sleep(wait)
+			continue
 		}
-		logger.Warn("BilibiliViewer", "检测到模型重复输出，已中断并重新生成（重试 %d/%d）", attempt+1, lifeLoopMaxRetries)
+		return "", err
 	}
+}
+
+// isTransientModelError 判断是否为值得重试的瞬时错误：网络失败或 HTTP 5xx。
+// 模型端 4xx（鉴权、参数问题）重试无意义，直接返回。
+func isTransientModelError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "模型请求失败") {
+		return true
+	}
+	return strings.Contains(msg, "模型 HTTP 5")
 }
 
 // chatCompletionOnce 单次模型调用（流式输出受思考监管约束）
 func chatCompletionOnce(messages []chatMessage, display func(string) string, loopOpts loopguard.Options) (string, error) {
+	return chatCompletionOnceModel(modelName, messages, display, loopOpts)
+}
+
+// chatCompletionWithModel 用指定模型执行一次带思考监管的调用。
+//
+// 哔哩观影按阶段切换模型：印象整理用 light_reasoning，审核/评价/动态用
+// primary_reasoning，并在切换时主动卸载另一侧释放显存。
+func chatCompletionWithModel(model string, messages []chatMessage, display func(string) string, loopOpts loopguard.Options) (string, error) {
+	for attempt := 0; ; attempt++ {
+		text, err := chatCompletionOnceModel(model, messages, display, loopOpts)
+		if err == nil {
+			return text, nil
+		}
+		if errors.Is(err, loopguard.ErrLoop) {
+			if attempt >= lifeLoopMaxRetries {
+				return "", fmt.Errorf("模型连续 %d 次陷入重复输出，已跳过本次调用: %w", attempt+1, loopguard.ErrLoop)
+			}
+			logger.Warn("BilibiliViewer", "模型[%s]重复输出，重新生成（%d/%d）", model, attempt+1, lifeLoopMaxRetries)
+			continue
+		}
+		if isTransientModelError(err) {
+			if attempt >= modelHTTPRetries {
+				return "", err
+			}
+			wait := time.Duration(attempt+1) * modelRetryBackoff
+			logger.Warn("BilibiliViewer", "模型[%s]瞬时错误（重试 %d/%d）: %v", model, attempt+1, modelHTTPRetries, err)
+			time.Sleep(wait)
+			continue
+		}
+		return "", err
+	}
+}
+
+// unloadModel 主动卸载指定模型释放显存；失败只告警（下次调用会按需重载）。
+func unloadModel(model string) {
+	if strings.TrimSpace(model) == "" {
+		return
+	}
+	if _, err := llama.UnloadModelByID(model); err != nil {
+		logger.Warn("BilibiliViewer", "卸载模型[%s]失败（不影响流程）: %v", model, err)
+		return
+	}
+}
+
+// chatCompletionOnceModel 指定模型名的单次调用（流式输出受思考监管约束）
+func chatCompletionOnceModel(model string, messages []chatMessage, display func(string) string, loopOpts loopguard.Options) (string, error) {
 	observeBegin()
 	defer observeEnd()
 	resolveModel()
 	body, err := json.Marshal(map[string]any{
-		"model":    modelName,
+		"model":    model,
 		"messages": messages,
 		"stream":   true,
 		// 让服务端在流末回传 usage，模型计量才拿得到真实 token
@@ -344,6 +419,19 @@ func chatText(system, user string) (string, error) {
 		{Role: "system", Content: system},
 		{Role: "user", Content: user},
 	})
+}
+
+// chatTextModel 用指定模型跑一次纯文本对话。
+func chatTextModel(model, system, user string) (string, error) {
+	return chatCompletionWithModel(model, []chatMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: user},
+	}, nil, loopguard.Options{})
+}
+
+// chatWithImagesModel 用指定模型跑一次图像理解（单次，不重试）。
+func chatWithImagesModel(model, system, prompt string, images []string) (string, error) {
+	return chatCompletionOnceModel(model, imageMessages(system, prompt, images), nil, loopguard.Options{})
 }
 
 // chatTextWithDisplay 同 chatText，但正文先按 display 规整再送入实况。

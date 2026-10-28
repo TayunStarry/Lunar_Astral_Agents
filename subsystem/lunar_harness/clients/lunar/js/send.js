@@ -84,16 +84,16 @@ async function handleSend() {
                     }
                     catch (err) { showToast(`无法上传文件 ${pf.name}`, 'error'); }
                     break;
-                // 多模态消息 -> 其他文件（无法归档的二进制类型退化到文件名 + 访问链接）
+                // 多模态消息 -> 其他文件：一律按文档入库拿句柄（解析不了也保留句柄）
                 default:
                     try {
-                        const fileUrl = await saveFile(pf.file);
-                        const block = `${pf.name}（${formatFileSize(pf.file.size)}） 访问链接: ${fileUrl}`;
-                        contentBlocks.push({ type: 'text', text: block });
-                        attachments.push({ type: 'other', src: fileUrl.replace(window.location.origin, ''), label: pf.name });
+                        documentRefs.push(await admitDocumentFile(pf.file));
+                        categories.add('file');
+                    }
+                    catch (err) {
+                        contentBlocks.push({ type: 'text', text: `${pf.name}（${formatFileSize(pf.file.size)}）` });
                         categories.add('text');
                     }
-                    catch (err) { showToast(`无法上传文件 ${pf.name}`, 'error'); }
                     break;
             }
         }

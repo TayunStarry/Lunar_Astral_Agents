@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/agentinfo"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 	"LunarSubsystem/LunarHarness/engine/console/ltpxmarket"
 	"LunarSubsystem/LunarHarness/engine/console/updatepack"
 )

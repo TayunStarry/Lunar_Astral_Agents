@@ -33,4 +33,7 @@ var (
 
 	hookMu      sync.Mutex                           // 保护 logHook 的并发读写
 	logHookFunc func(level, module, sub, msg string) // 外部流式日志钩子（TUI 管线注册；nil 表示未启用）
+
+	alertMu       sync.Mutex                           // 保护 alertHook 的并发读写
+	alertHookFunc func(level, module, sub, msg string) // 告警钩子（开发者模式下警告及以上事件；nil 表示未启用）
 )

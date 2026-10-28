@@ -9,131 +9,11 @@ const (
 	CategoryText  = "text"
 )
 
-// 内容仓库根目录（相对 LocalDir）：句柄体系只维护这三棵树
-const (
-	StorageRootDocuments  = "documents"
-	StorageRootAudios     = "audios"
-	StorageRootMultimedia = "multimedia"
-)
-
-// MemoryMediaSubdir 记忆库图片在 multimedia 下的专属子目录：
-// 图片实体统一落在 multimedia/memory/<集合名>/，与生成图、背景图、截图等隔离，便于清理。
-const MemoryMediaSubdir = "memory"
-
-// StorageRoots 内容仓库扫描根（顺序固定，便于日志与测试）
-var StorageRoots = []string{StorageRootDocuments, StorageRootAudios, StorageRootMultimedia}
-
-// DerivedStorageRoots 内容仓库内的「派生缓存」子树（相对 LocalDir）。
-//
-// 这些目录里的文件由引擎按内容寻址生成、可随时重建，不是用户资料：
-//   - multimedia/vision：视觉读取副本（缩放 + 句柄叠印），按原图内容哈希缓存；
-//   - multimedia/footage：视频解读切片（ffmpeg 按时长分段），按源视频内容哈希缓存。
-//
-// 句柄体系只为「月华需要长期找到并引用的资料」服务；派生缓存既不需要被引用，
-// 又会与源文件形成同内容哈希的重复实体（扫描去重甚至会删掉缓存副本），
-// 因此它们**不进入**句柄索引：不登记、不分配序号，历史遗留的目录行在启动同步时清理。
-var DerivedStorageRoots = []string{
-	StorageRootMultimedia + "/vision",
-	StorageRootMultimedia + "/footage",
-}
-
-// 句柄体系错误语义（调用方与 HTTP 层按同一组文案透出）
-const (
-	ErrHandleInvalid = "句柄无效,文件不存在"
-	ErrFileLost      = "文件损毁或丢失,请更换句柄"
-)
-
-// OriginStorageScan 启动扫描入库的来源标记
-const OriginStorageScan = "storage-scan"
-
-// v5 记忆库配置常量 — 文本/图片/音频混合存储，仅内容嵌入向量
-const (
-	CurrentVersion       = 5    // 当前数据格式版本号（v5: 混合存储 + 仅内容嵌入）
-	DocumentsChunkSize   = 100  // 文档分块大小（条/块，各类型统一；100 条一块）
-	MemoryDedupThreshold = 0.98 // 内容嵌入向量去重阈值（余弦相似度，判定重复记忆）
-	DocRankThreshold     = 0.30 // 文档内容余弦得分门槛（低于此值不返回）
-	MaxTagRetries        = 3    // 图片多模态标签生成最大重试次数
-
-	// MemoryFastSearchCollectionLimit 快速检索的集合范围上限（含最相近的那个）
-	// 首集合命中后只补查第 2~5 近的集合；首集合未命中则回退扫描其余全部集合。
-	MemoryFastSearchCollectionLimit = 5
-)
-
-// 记忆类型 — 查询与列举时按类型过滤，不再按集合名过滤
-const (
-	MemoryTypeText  = "text"  // 文本记忆（对话原文、知识片段）
-	MemoryTypeImage = "image" // 图像记忆（表情包、截图、图片素材）
-	MemoryTypeAudio = "audio" // 音频记忆（语音、音乐、环境声）
-)
-
-// 记忆权重融合（把超高相似度的文本条目合并为一条整合记忆）参数
-const (
-	// MemoryFuseDefaultThreshold 默认相似度阈值（余弦）；同簇条目与该簇代表条目需达到此值
-	MemoryFuseDefaultThreshold = 0.90
-	// MemoryFuseMinThreshold 允许的最小阈值，低于此值会被夹回默认值（避免把无关记忆混在一起）
-	MemoryFuseMinThreshold = 0.50
-	// MemoryFuseAutoModelChars auto 策略下改用模型整合的正文字符数门槛
-	MemoryFuseAutoModelChars = 600
-	// MemoryFuseMaxCandidates 单次融合允许扫描的文本条目上限（O(n²) 相似度比较的保护阈值）
-	MemoryFuseMaxCandidates = 2000
-	// MemoryFuseMaxContentChars 送入模型整合时单条内容的最大字符数
-	MemoryFuseMaxContentChars = 1500
-)
-
-// 记忆融合策略
-const (
-	MemoryFuseStrategyAuto   = "auto"   // 短内容直接拼接，长内容交给模型整合
-	MemoryFuseStrategyConcat = "concat" // 总是拼接去重
-	MemoryFuseStrategyModel  = "model"  // 总是调用模型整合
-)
-
-// MemoryTypes 全部合法记忆类型（顺序固定，便于错误提示与遍历）
-var MemoryTypes = []string{MemoryTypeText, MemoryTypeImage, MemoryTypeAudio}
-
-// DefaultMemoryCollections 默认分组集合名 — 覆盖聊天记忆可能对应的方方面面。
-//
-// 集合不再承担“查询表”职责，只是内容归组：启动时确保这些组存在并逐一用集合名
-// 生成嵌入向量；入库时把内容向量与全部集合名向量比较，归入最相关的一组。
-var DefaultMemoryCollections = []string{
-	// 对话与人物
-	"日常闲聊",
-	"人物信息",
-	"关系互动",
-	"情感心情",
-	"兴趣爱好",
-	"偏好习惯",
-	"观点态度",
-	"动作行为",
-	// 经历与事务
-	"事件经历",
-	"计划日程",
-	"工作学习",
-	"知识见闻",
-	"地点场景",
-	// 媒体分组（按查询类型取用，集合本身只是语义分组）
-	"表情包",
-	"图片素材",
-	"截图",
-	"绘画作品",
-	"语音消息",
-	"音乐音频",
-	"环境声音",
-}
-
-// 图片识别取向常量 — 决定图片标签生成的描述角度与方式
-const (
-	RecognitionAuto       = "auto"       // 自动处理（默认）：综合性系统描述，由多模态模型自主决定重点
-	RecognitionEmotion    = "emotion"    // 情绪表达：专注识别图片所表达的情绪
-	RecognitionText       = "text"       // 文本内容：专注识别图片中的文字信息
-	RecognitionColor      = "color"      // 色彩风格：专注分析主要配色、次要配色及点缀色
-	RecognitionAppearance = "appearance" // 衣着发型：着重人物衣着、发型、身材、发色及瞳色
-	RecognitionSpecies    = "species"    // 物种识别：着重事物种类与关键识别特征
-	RecognitionPosture    = "posture"    // 姿态动作：重点表达肢体动作及人物表情
-	RecognitionCustom     = "custom"     // 自定义：以用户文本作为识别取向参考
-)
-
 // FileLocks 用于存储文件路径对应的互斥锁
 var FileLocks sync.Map
+
+// resourceObserver 资源句柄观察者（由 engine/resource 注册，未注册时为 nil）
+var resourceObserver ResourceObserver
 
 // 允许预览的文件类型白名单（含分类与 MIME 信息，三合一）
 var previewAllowlist = map[string]PreviewEntry{
@@ -172,12 +52,3 @@ var previewAllowlist = map[string]PreviewEntry{
 	".ini":  {MIME: "text/plain", Category: CategoryText},
 	".cfg":  {MIME: "text/plain", Category: CategoryText},
 }
-
-// KnowledgeDatabase 知识库实例（KnowledgeDB）
-var KnowledgeDatabase *KnowledgeDB
-
-// ArchiveDatabase 统一资源目录实例（ArchiveDB，句柄 / 元数据 / 段落结构）
-var ArchiveDatabase *ArchiveDB
-
-// MemoryDatabase 记忆库实例（MemoryDB）
-var MemoryDatabase *MemoryDB

@@ -21,7 +21,7 @@ func describeResource(handle, question string) string {
 	if cached != "" && question == "" {
 		return cached
 	}
-	if parsed.Kind == "I" || parsed.Kind == "V" {
+	if parsed.Kind == "I" {
 		text, err := Descriptor.DescribeMedia(normalized, question)
 		if err != nil {
 			logger.Warn(lunarCoreModule, "[描述者] 影像描述失败: %v", err)
@@ -33,6 +33,16 @@ func describeResource(handle, question string) string {
 		return cached
 	}
 	return cached
+}
+
+// describeVideoURL 本机视频地址（@U 背后的 /file/read/）→ 观看管线
+func describeVideoURL(rawURL, question string) (string, error) {
+	text, err := Descriptor.DescribeVideoURL(rawURL, question)
+	if err != nil {
+		logger.Warn(lunarCoreModule, "[描述者] 视频解读失败: %v", err)
+		return "", err
+	}
+	return strings.TrimSpace(text), nil
 }
 
 // inspectTextResource 文本句柄探查

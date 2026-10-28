@@ -1,6 +1,6 @@
 package BilibiliViewer
 
-// 手动冒烟：下载 60 秒并切段（不调用模型）。
+// 手动冒烟：下载 60 秒并按统一观看管线切片（不调用模型）。
 //   $env:BILI_LIFE_DOWNLOAD_PROBE="1"; go test -run TestManualDownloadProbe -v ./agents/BilibiliViewer
 
 import (
@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	module "LunarSubsystem/LunarHarness/engine/multimodal"
 )
 
 func TestManualDownloadProbe(t *testing.T) {
@@ -24,18 +23,17 @@ func TestManualDownloadProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("playurl 失败: %v", err)
 	}
-	local, err := downloadClip(play, info.Bvid, 60)
+	local, err := downloadClip(play, info.Bvid, 120)
 	if err != nil {
 		t.Fatalf("下载失败: %v", err)
 	}
-	segments, err := module.VideoToMedia(local)
+	defer os.Remove(local)
+	segments, err := prepareVideoSegments(local, 2)
 	if err != nil {
-		_ = os.Remove(local)
-		t.Fatalf("切段失败: %v", err)
+		t.Fatalf("切片失败: %v", err)
 	}
-	t.Logf("下载 %s → %d 个切片，首个=%s", local, len(segments), segments[0].File)
+	t.Logf("下载 %s → %d 个切片", local, len(segments))
 	for _, seg := range segments {
-		_ = os.Remove(config.LocalDir + "/multimedia/" + seg.File)
+		t.Logf("切片 %.2f-%.2fs", seg.Start, seg.End)
 	}
-	_ = os.Remove(local)
 }

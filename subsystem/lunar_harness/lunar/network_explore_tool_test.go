@@ -1,6 +1,6 @@
 package lunar
 
-// network_explore_tool_test.go 钉住「Lunar Matrix 仅在实际可用时暴露」的条件枚举逻辑。
+// network_explore_tool_test.go 钉住「Mutual Forum 仅在实际可用时暴露」的条件枚举逻辑。
 
 import (
 	"encoding/json"
@@ -11,17 +11,17 @@ import (
 	"testing"
 )
 
-func TestNetworkExploreExposesLunarMatrixOnlyWhenReady(t *testing.T) {
+func TestNetworkExploreExposesMutualForumOnlyWhenReady(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing.json")
-	t.Setenv("LUNAR_MATRIX_CONFIG", missing)
-	if enumContains(t, networkExploreEnum(t), "lunar_matrix") {
-		t.Fatal("配置缺失时不应暴露 lunar_matrix")
+	t.Setenv("MUTUAL_FORUM_CONFIG", missing)
+	if enumContains(t, networkExploreEnum(t), "mutual_forum") {
+		t.Fatal("配置缺失时不应暴露 mutual_forum")
 	}
 
-	disabled := writeMatrixConfig(t, map[string]any{"enabled": false, "base_url": "https://example.com"})
-	t.Setenv("LUNAR_MATRIX_CONFIG", disabled)
-	if enumContains(t, networkExploreEnum(t), "lunar_matrix") {
-		t.Fatal("开关关闭时不应暴露 lunar_matrix")
+	disabled := writeForumConfig(t, map[string]any{"enabled": false, "base_url": "https://example.com"})
+	t.Setenv("MUTUAL_FORUM_CONFIG", disabled)
+	if enumContains(t, networkExploreEnum(t), "mutual_forum") {
+		t.Fatal("开关关闭时不应暴露 mutual_forum")
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,19 +40,20 @@ func TestNetworkExploreExposesLunarMatrixOnlyWhenReady(t *testing.T) {
 	}))
 	defer server.Close()
 
-	enabled := writeMatrixConfig(t, map[string]any{
+	enabled := writeForumConfig(t, map[string]any{
 		"enabled": true, "base_url": server.URL,
 		"health_timeout_seconds": 1, "health_cache_seconds": 30,
 	})
-	t.Setenv("LUNAR_MATRIX_CONFIG", enabled)
+	t.Setenv("MUTUAL_FORUM_CONFIG", enabled)
 	enum := networkExploreEnum(t)
-	if !enumContains(t, enum, "lunar_matrix") {
-		t.Fatal("配置开启且论坛可达时应暴露 lunar_matrix")
+	if !enumContains(t, enum, "mutual_forum") {
+		t.Fatal("配置开启且论坛可达时应暴露 mutual_forum")
 	}
-	for _, want := range []string{"web_search", "bilibil_viewer"} {
-		if !enumContains(t, enum, want) {
-			t.Fatalf("基础能力 %s 不应被移除", want)
-		}
+	if !enumContains(t, enum, "web_search") {
+		t.Fatal("基础能力 web_search 不应被移除")
+	}
+	if enumContains(t, enum, "bilibil_viewer") {
+		t.Fatal("哔哩观影已迁入生活体系，不应再暴露给对话者")
 	}
 }
 
@@ -85,9 +86,9 @@ func enumContains(t *testing.T, values []string, target string) bool {
 	return false
 }
 
-func writeMatrixConfig(t *testing.T, cfg map[string]any) string {
+func writeForumConfig(t *testing.T, cfg map[string]any) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "lunar_matrix.json")
+	path := filepath.Join(t.TempDir(), "mutual_forum.json")
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)

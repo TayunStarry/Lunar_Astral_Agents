@@ -6,8 +6,6 @@ package config
 // 迁移为 Go 原生链后统一在配置层解析并导出，避免运行期再各读一遍配置文件。
 
 var (
-	// AgentUserName 用户显示名（前端气泡名与发送前缀共用）
-	AgentUserName string
 	// AgentAppendSettings 追加到「月华 · 对话者」系统提示词末尾的逐行设定
 	AgentAppendSettings []string
 	// DiffusionPixelBudgetMP 参考图比例推导尺寸时的总像素预算上限（百万像素，默认 1.6）

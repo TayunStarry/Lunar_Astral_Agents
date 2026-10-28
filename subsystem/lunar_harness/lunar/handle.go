@@ -1,81 +1,63 @@
 package lunar
 
+// handle.go 句柄的薄适配层
+//
+// 句柄文法、类型码中文名、文本/二进制判定全部由 engine/resource 权威实现；
+// 本文件只把 resource.Handle 转成 lunar 侧面向模型的 ResourceHandle 视图，
+// 不保留第二份正则或标签表。
+
 import (
-	"regexp"
 	"strconv"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
-// ==== 统一资源句柄文法 ====
-
-var (
-	handleExactRegex  = regexp.MustCompile(`^@([DIVAT])\.(\d{3,})(?:\|(?:§(\d+)|L(\d+)-(\d+)))?$`)
-	handleGlobalRegex = regexp.MustCompile(`@([DIVAT])\.(\d{3,})(?:\|(?:§(\d+)|L(\d+)-(\d+)))?`)
-)
-
-// kindLabels 类型码 → 中文类型名
-var kindLabels = map[string]string{
-	"D": "文档",
-	"I": "图片",
-	"V": "视频",
-	"A": "音频",
-	"T": "表格",
+// kindLabel 类型码的中文名
+func kindLabel(kind string) string {
+	return resource.KindLabel(kind)
 }
 
-// isTextKind 判断资源是否为文本类
+// isKnownKind 判断类型码是否为已定义的类型（D/I/V/A/T/U）
+func isKnownKind(kind string) bool {
+	return kind != "" && kindLabel(kind) != kind
+}
+
+// isTextKind 判断资源是否为文本类（链接只含地址与摘要，同样按文本直接取回）
 func isTextKind(kind string) bool {
-	return kind == "D" || kind == "T"
+	return resource.IsTextKind(kind)
 }
 
 // parseHandle 解析句柄文本（容忍首尾空白与方括号包裹）
 func parseHandle(raw string) *ResourceHandle {
-	text := strings.TrimSpace(raw)
-	if text == "" {
+	h, ok := resource.ParseHandle(raw)
+	if !ok || h.Seq <= 0 {
 		return nil
 	}
-	text = strings.TrimPrefix(text, "[")
-	text = strings.TrimPrefix(text, "【")
-	text = strings.TrimSuffix(text, "]")
-	text = strings.TrimSuffix(text, "】")
-	match := handleExactRegex.FindStringSubmatch(text)
-	if match == nil {
-		return nil
-	}
-	seq, err := strconv.Atoi(match[2])
-	if err != nil || seq <= 0 {
-		return nil
-	}
-	handle := &ResourceHandle{Kind: match[1], Seq: seq, Anchor: "none"}
-	if match[3] != "" {
+	handle := &ResourceHandle{Kind: h.Kind, Seq: int(h.Seq), Anchor: "none"}
+	switch {
+	case h.HasSection:
 		handle.Anchor = "section"
-		handle.Section, _ = strconv.Atoi(match[3])
-	} else if match[4] != "" {
+		handle.Section = h.SectionOrdinal
+	case h.HasLine:
 		handle.Anchor = "line"
-		handle.LineStart, _ = strconv.Atoi(match[4])
-		if match[5] != "" {
-			handle.LineEnd, _ = strconv.Atoi(match[5])
-		} else {
+		handle.LineStart = h.LineStart
+		handle.LineEnd = h.LineEnd
+		if handle.LineEnd == 0 {
 			handle.LineEnd = handle.LineStart
 		}
 	}
 	return handle
 }
 
-// padSeq 序号补零（三位起）
-func padSeq(seq int) string {
-	if seq >= 1000 {
-		return strconv.Itoa(seq)
-	}
-	return strings.Repeat("0", 3-len(strconv.Itoa(seq))) + strconv.Itoa(seq)
-}
-
-// formatHandle 按文法格式化句柄
-func formatHandle(handle ResourceHandle) string {
-	text := "@" + handle.Kind + "." + padSeq(handle.Seq)
+// toResourceHandle 把 lunar 侧句柄转回权威句柄类型
+func toResourceHandle(handle ResourceHandle) resource.Handle {
+	out := resource.Handle{Kind: handle.Kind, Seq: int64(handle.Seq)}
 	switch handle.Anchor {
 	case "section":
 		if handle.Section > 0 {
-			text += "|§" + strconv.Itoa(handle.Section)
+			out.HasSection = true
+			out.SectionOrdinal = handle.Section
 		}
 	case "line":
 		if handle.LineStart > 0 {
@@ -83,10 +65,17 @@ func formatHandle(handle ResourceHandle) string {
 			if end == 0 {
 				end = handle.LineStart
 			}
-			text += "|L" + strconv.Itoa(handle.LineStart) + "-" + strconv.Itoa(end)
+			out.HasLine = true
+			out.LineStart = handle.LineStart
+			out.LineEnd = end
 		}
 	}
-	return text
+	return out
+}
+
+// formatHandle 按文法格式化句柄（含锚点）
+func formatHandle(handle ResourceHandle) string {
+	return toResourceHandle(handle).FullText()
 }
 
 // normalizeHandle 规整句柄文本
@@ -100,7 +89,7 @@ func normalizeHandle(raw string) string {
 
 // handleOf 构造不带锚点的句柄
 func handleOf(kind string, seq int) string {
-	return "@" + kind + "." + padSeq(seq)
+	return resource.FormatHandle(kind, int64(seq))
 }
 
 // sectionHandle 构造章节锚点句柄
@@ -110,16 +99,7 @@ func sectionHandle(kind string, seq, ordinal int) string {
 
 // extractHandles 从文本中提取全部句柄
 func extractHandles(text string) []string {
-	if text == "" {
-		return nil
-	}
-	found := make([]string, 0)
-	for _, match := range handleGlobalRegex.FindAllString(text, -1) {
-		if handle := parseHandle(match); handle != nil {
-			found = append(found, formatHandle(*handle))
-		}
-	}
-	return found
+	return resource.ExtractHandles(text)
 }
 
 // describeHandle 面向用户的句柄说明
@@ -128,15 +108,11 @@ func describeHandle(raw string) string {
 	if handle == nil {
 		return strings.TrimSpace(raw)
 	}
-	label := kindLabels[handle.Kind]
-	if label == "" {
-		label = handle.Kind
-	}
-	base := label + " " + handleOf(handle.Kind, handle.Seq)
-	if handle.Anchor == "section" {
+	base := kindLabel(handle.Kind) + " " + handleOf(handle.Kind, handle.Seq)
+	switch handle.Anchor {
+	case "section":
 		return base + " 第 " + strconv.Itoa(handle.Section) + " 节"
-	}
-	if handle.Anchor == "line" {
+	case "line":
 		return base + " 第 " + strconv.Itoa(handle.LineStart) + "-" + strconv.Itoa(handle.LineEnd) + " 行"
 	}
 	return base
@@ -144,7 +120,5 @@ func describeHandle(raw string) string {
 
 // grammarCheatsheet 工具描述拼接用的文法速查
 func grammarCheatsheet() string {
-	return "句柄形如 @D.003（文档）、@I.007（图片）、@V.001（视频）、@A.002（音频）；" +
-		"段落锚点可写 @D.003|§4（第 4 节）或 @D.003|L120-168（第 120-168 行）；" +
-		"需要描述者协助时，把需求填进 use_resource 的 ask 字段（不要拼进句柄）"
+	return "需要快速探查内容时，把需求填进 use_resource 的 ask 字段"
 }

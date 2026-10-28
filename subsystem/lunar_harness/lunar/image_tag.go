@@ -4,8 +4,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
 // 支持的视频文件扩展名
@@ -51,41 +49,6 @@ func handleFromVisionURL(source string) string {
 		return ""
 	}
 	return tag
-}
-
-// attachImageTags 入队赋签：为消息中的每个图片项入库，并把来源改写为视觉读取形态
-func attachImageTags(message *PostMessage) {
-	if message == nil {
-		return
-	}
-	items := asItems(message.Content)
-	if len(items) == 0 {
-		return
-	}
-	for i := range items {
-		if items[i].Type != ContentImageURL || items[i].ImageURL == nil {
-			continue
-		}
-		source := items[i].ImageURL.URL
-		if source == "" {
-			continue
-		}
-		lower := strings.ToLower(source)
-		if strings.HasPrefix(lower, "data:video/") || hasVideoExt(lower) {
-			continue
-		}
-		if strings.Contains(lower, visionReadPath) {
-			continue
-		}
-		admitted := admitImageDataURI(source, "image"+guessImageExt(source))
-		if admitted == nil || admitted.Handle == "" || admitted.BlobPath == "" {
-			logger.Error(lunarCoreModule, "[图片标签] 入库失败，该图片已从思维链剔除: %s", truncateRunes(source, 60))
-			items[i] = ContentItem{Type: ContentText, Text: "[一张图片入库失败，已忽略]"}
-			continue
-		}
-		items[i].ImageURL = &URLPayload{URL: visionReference(admitted.Handle, admitted.BlobPath)}
-	}
-	message.Content = items
 }
 
 func hasVideoExt(source string) bool {

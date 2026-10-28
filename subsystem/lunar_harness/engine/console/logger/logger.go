@@ -36,6 +36,35 @@ func SetLogHook(hook func(level, module, sub, msg string)) {
 	logHookFunc = hook
 }
 
+// SetAlertHook 注册告警钩子：仅开发者模式、且日志级别为警告及以上时回调。
+//
+// 与 SetLogHook（全量流式日志）的区别：
+//   - 触发条件是「开发者模式 + level >= WARN」，非开发者模式不会收到任何回调；
+//   - 回调发生在日志调用路径上，实现必须**轻量且非阻塞**——只做原子判定后把重活交给
+//     后台 goroutine（如调试快照的取数与落盘），否则会拖慢全部日志输出；
+//   - 去重与限流由钩子实现负责（本包只保证每次告警事件都会触发一次回调）。
+//
+// 传 nil 注销钩子。
+func SetAlertHook(hook func(level, module, sub, msg string)) {
+	alertMu.Lock()
+	defer alertMu.Unlock()
+	alertHookFunc = hook
+}
+
+// currentAlertHook 读取已注册的告警钩子（持锁取值，调用方在锁外执行）
+func currentAlertHook() func(level, module, sub, msg string) {
+	alertMu.Lock()
+	defer alertMu.Unlock()
+	return alertHookFunc
+}
+
+// devModeEnabled 读取开发者模式开关
+func devModeEnabled() bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	return devMode
+}
+
 // shouldPrint 判断是否允许输出到底层目标。
 // 底层目标在非 TUI 模式下是真实控制台，TUI 模式下是控制台日志镜像（console.log）。
 // 开发者模式下全部输出；非开发者模式下仅输出警告、错误、致命级别。
@@ -63,6 +92,14 @@ func emit(level, module, sub, format string, v ...any) {
 	hookMu.Unlock()
 	if hook != nil {
 		hook(level, module, sub, msg)
+	}
+
+	// 告警钩子：开发者模式下把警告及以上事件交给宿主（如写入调试快照）。
+	// 只做一次持锁取函数 + 原子状态判定，具体工作由钩子实现异步完成，不阻塞日志输出。
+	if level != levelInfo && devModeEnabled() {
+		if alert := currentAlertHook(); alert != nil {
+			alert(level, module, sub, msg)
+		}
 	}
 
 	// 警告及以上统一播报失败音效：异步且带节流，不会阻塞日志与刷屏；

@@ -36,7 +36,7 @@ func (role *PainterRole) handleImageToImage(args map[string]any) string {
 		return "图生图失败：正向提示词不能为空"
 	}
 	if role.Reference.Image == "" {
-		return "图生图失败：" + role.referenceStatus() + "。图生图基座由对话者经 dispatch_painter 的 reference_tag 指定；当前任务无参考图时请改用 diffusion_generation 进行文生图"
+		return "图生图失败：" + role.referenceStatus() + "。图生图基座由对话者经 dispatch_technique（type=painter）的 reference_tag 指定；当前任务无参考图时请改用 diffusion_generation 进行文生图"
 	}
 	strength := normalizeStrength(numberArg(args, "strength"), "图生图")
 	steps := normalizeSteps(numberArg(args, "steps"))

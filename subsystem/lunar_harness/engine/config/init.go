@@ -69,9 +69,8 @@ type ModelConfig struct {
 	} `json:"models"`
 	// 系统级设置：运行/安全、日志、聊天显存守卫、前端显示共用同一个根对象
 	System SystemSettings `json:"system"`
-	// 月华 Agent：用户显示名 + 模型路由 + 多模态输入方式
+	// 月华 Agent：模型路由 + 多模态输入方式
 	Agent struct {
-		UserName        string `json:"user_name"`        // 用户显示名（前端气泡名与发送前缀）
 		EmbeddingModel  string `json:"embedding_model"`  // 嵌入模型名称
 		EmbeddingURL    string `json:"embedding_url"`    // 嵌入服务 API 地址
 		EmbeddingKey    string `json:"embedding_key"`    // 嵌入服务 API 密钥
@@ -355,8 +354,7 @@ func applyConfig(parameter *ModelConfig) []string {
 	if parameter.Agent.ASRModel != "" {
 		AgentASRModel = parameter.Agent.ASRModel
 	}
-	// Go 原生对话链直接消费的用户显示名与追加设定
-	AgentUserName = parameter.Agent.UserName
+	// Go 原生对话链直接消费的追加设定
 	AgentAppendSettings = append([]string(nil), parameter.Agent.AppendSettings...)
 	// 绘图尺寸预算与图生图 CFG 覆盖
 	if parameter.Diffusion.PixelBudgetMP != nil && *parameter.Diffusion.PixelBudgetMP > 0 {

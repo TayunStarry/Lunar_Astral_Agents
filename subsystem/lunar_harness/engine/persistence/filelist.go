@@ -63,10 +63,10 @@ func GetFileList(path string) ([]FileInfo, error) {
 		// 句柄维护：内容仓库内的文件带上句柄与类型（目录不登记）。
 		// 列出是只读操作，不在此处增删实体；未登记文件由启动扫描或写入路径收敛。
 		if !entry.IsDir {
-			if res, ok := ResourceForPath(filepath.ToSlash(relPath)); ok {
-				entry.Handle = res.Handle
-				entry.Kind = res.Kind
-				entry.ContentHash = res.ContentHash
+			if handle, ok := LookupHandle(filepath.ToSlash(relPath)); ok {
+				entry.Handle = handle.Handle
+				entry.Kind = handle.Kind
+				entry.ContentHash = handle.ContentHash
 			}
 		}
 		fileList = append(fileList, entry)

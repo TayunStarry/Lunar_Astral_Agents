@@ -22,7 +22,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
-	persistence "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 var (
@@ -50,11 +50,11 @@ func visionReadBlob(relPath, tag string, side int) ([]byte, string, error) {
 	if !visionTagPattern.MatchString(tag) {
 		tag = ""
 	}
-	if err := persistence.EnsureArchiveInitialized(); err != nil {
+	if err := resource.EnsureReady(); err != nil {
 		return nil, "", fmt.Errorf("资源目录初始化失败: %w", err)
 	}
 	contentHash := ""
-	if entry, ok := persistence.ArchiveDatabase.FindResourceByBlobPath(clean); ok {
+	if entry, ok := resource.ForPath(clean); ok {
 		if tag == "" {
 			tag = entry.Handle
 		}
@@ -74,17 +74,17 @@ func visionReadBlob(relPath, tag string, side int) ([]byte, string, error) {
 		return nil, "", err
 	}
 	if cached {
-		persistence.VisionCacheTouch(contentHash, side)
+		resource.VisionCacheTouch(contentHash, side)
 		return data, mime, nil
 	}
-	_ = persistence.VisionCachePut(persistence.VisionCacheEntry{
+	_ = resource.VisionCachePut(resource.VisionCacheEntry{
 		ContentHash: contentHash,
 		Side:        side,
 		Tag:         tag,
 		CachePath:   cacheRel,
 		Bytes:       int64(len(data)),
 	})
-	_, _ = persistence.VisionCacheEvict(int64(config.VisionCacheCapMB) << 20)
+	_, _ = resource.VisionCacheEvict(int64(config.VisionCacheCapMB) << 20)
 	return data, mime, nil
 }
 

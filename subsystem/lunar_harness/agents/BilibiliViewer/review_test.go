@@ -39,9 +39,9 @@ func TestParseVideoReviewFallback(t *testing.T) {
 // TestClampReviewSlices 钉住切片数收敛：2-8，且不超过视频实际可用片段数。
 func TestClampReviewSlices(t *testing.T) {
 	cases := []struct{ duration, want, expect int }{
-		{0, 0, defaultSlicesPerVideo},
-		{3600, 99, sliceMaxCount},
-		{3600, 1, sliceMinCount},
+		{0, 0, watchSliceDefault},
+		{3600, 99, watchSliceMax},
+		{3600, 1, watchSliceMin},
 		{90, 8, 2},  // 90 秒只有 2 个可用片段
 		{30, 8, 1},  // 半分钟只有 1 个
 		{300, 5, 5}, // 5 分钟正好 5 个
@@ -50,5 +50,28 @@ func TestClampReviewSlices(t *testing.T) {
 		if got := clampReviewSlices(c.duration, c.want); got != c.expect {
 			t.Fatalf("duration=%d want=%d 应为 %d，实际 %d", c.duration, c.want, c.expect, got)
 		}
+	}
+}
+
+// TestFinishComment 钉住评论长度收束：在句子边界收尾，绝不从词中间硬切。
+func TestFinishComment(t *testing.T) {
+	// 不超长时原样返回
+	if got := finishComment("这个转场好丝滑", 30); got != "这个转场好丝滑" {
+		t.Fatalf("未超长不应改写，实际 %q", got)
+	}
+	// 超长时退到最近的句号，保留完整句子
+	long := "开头铺垫有点长，但中间那段运镜真的绝了。后面节奏又慢下来了，我差点退出。"
+	got := finishComment(long, 25)
+	if got != "开头铺垫有点长，但中间那段运镜真的绝了。" {
+		t.Fatalf("应在句号处收尾，实际 %q", got)
+	}
+	// 没有句末标点时退到逗号
+	got = finishComment("这个UP主讲得特别细，每一步都拆开讲，但我还是没听懂", 15)
+	if got != "这个UP主讲得特别细，" {
+		t.Fatalf("应在逗号处收尾，实际 %q", got)
+	}
+	// 首尾引号会被清理
+	if got := finishComment(`“太真实了”`, 30); got != "太真实了" {
+		t.Fatalf("应清理首尾引号，实际 %q", got)
 	}
 }

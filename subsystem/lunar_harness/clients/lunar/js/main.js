@@ -48,7 +48,7 @@ async function init() {
     loadTheme();
     setupThemeToggle();
     loadVoiceAutoPlay();
-    await loadBackendUserName();
+    await initUserName();
     await loadCharacterRenderer();
     setupVoiceToggle();
     setupTabEvents();

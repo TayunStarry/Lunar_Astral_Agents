@@ -12,20 +12,15 @@ import (
 
 const crystalToolName = "use_the_program"
 
-// syncLTPXRemoteTools 读取进程内工具链并写入缓存
-func syncLTPXRemoteTools() *LTPXRemoteStatusResult {
+// syncLTPXRemoteTools 读取进程内工具链并写入应用清单缓存；返回是否同步成功
+func syncLTPXRemoteTools() bool {
 	broker := ltpx.GetBroker()
 	if broker == nil {
-		return &LTPXRemoteStatusResult{}
+		return false
 	}
 	status := broker.Status()
 	if status.Tool == nil || status.Tool.Name == "" {
-		return &LTPXRemoteStatusResult{}
-	}
-	tool := &LTPXRemoteToolDef{
-		Name:        status.Tool.Name,
-		Description: status.Tool.Description,
-		Parameters:  status.Tool.Parameters,
+		return false
 	}
 	tools := make([]LTPXRemoteToolRef, 0, len(status.Tools))
 	names := make([]string, 0, len(status.Tools))
@@ -37,14 +32,13 @@ func syncLTPXRemoteTools() *LTPXRemoteStatusResult {
 		names = append(names, item.Name)
 	}
 	ltpMu.Lock()
-	ltpTool = tool
 	ltpSubTools = tools
 	if len(names) > 0 && !equalStrings(names, ltpLoggedNames) {
 		ltpLoggedNames = names
 		logger.Info(lunarCoreModule, "已同步 LTPX 工具: \n%s", strings.Join(names, "\n"))
 	}
 	ltpMu.Unlock()
-	return &LTPXRemoteStatusResult{Tool: tool, Tools: tools}
+	return true
 }
 
 func equalStrings(a, b []string) bool {
@@ -114,9 +108,7 @@ func crystalToolDefinition() ToolCall {
 		Type: "function",
 		Function: ToolDefinition{
 			Name: crystalToolName,
-			Description: "调用星月智能的扩展应用（如文件管理、文件编辑、窗口操作）。" +
-				"tool 只能取参数枚举中的应用名，填入即表示「打开这个应用」；instruction 填打开后要该应用完成的任务。" +
-				"只打开应用时只填 tool；需要先了解某个应用的能力时传 details=true 与 tool，此时不执行任何操作。",
+			Description: "调用星月智能的扩展应用。",
 			Parameters: map[string]any{
 				"type":       "object",
 				"properties": properties,
@@ -124,22 +116,6 @@ func crystalToolDefinition() ToolCall {
 			},
 		},
 	}
-}
-
-// refreshCrystalPrograms 重新拉取应用清单
-func refreshCrystalPrograms() bool {
-	latest := syncLTPXRemoteTools()
-	if latest.Tool == nil {
-		return false
-	}
-	names := make([]string, 0, len(latest.Tools))
-	for _, item := range latest.Tools {
-		names = append(names, item.Name)
-	}
-	ltpMu.Lock()
-	changed := len(names) != len(ltpSubTools)
-	ltpMu.Unlock()
-	return changed
 }
 
 // queryCrystalProgramDetails 按工具名返回应用详情
@@ -158,7 +134,7 @@ func queryCrystalProgramDetails(name string) string {
 	}
 	ltpMu.RUnlock()
 	if found == nil {
-		refreshCrystalPrograms()
+		syncLTPXRemoteTools()
 		ltpMu.RLock()
 		for i := range ltpSubTools {
 			if ltpSubTools[i].Name == name {
@@ -249,7 +225,7 @@ func handleUseTheProgram(args map[string]any) ToolResult {
 	}
 	argsJSON := safeJSON(map[string]any{"tool": tool, "instruction": instruction}, "{}")
 	text, err := callLTPXRemoteTool(crystalToolName, argsJSON)
-	refreshCrystalPrograms()
+	syncLTPXRemoteTools()
 	if err != nil {
 		return ToolResult{Text: "【工具调用失败】" + err.Error()}
 	}

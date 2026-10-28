@@ -3,12 +3,13 @@ package WebSearch
 // cache_test.go 页面访问记录落库位置测试：必须写 web.db，不再占 knowledge.db。
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/knowledge"
 )
 
 // TestPageCacheUsesWebDB put/fresh 往返且数据落在 web 领域库
@@ -19,7 +20,7 @@ func TestPageCacheUsesWebDB(t *testing.T) {
 	config.LocalDir = tmp
 	config.WebDBPath = filepath.Join(tmp, "database", "web.db")
 	t.Cleanup(func() {
-		_ = persistence.CloseDomainDBs()
+		_ = knowledge.Close()
 		config.LocalDir = origLocal
 		config.WebDBPath = origWeb
 	})
@@ -42,17 +43,12 @@ func TestPageCacheUsesWebDB(t *testing.T) {
 		t.Fatalf("近期访问判定异常: %s 应命中", url)
 	}
 
-	db, err := persistence.EnsureWebDB()
-	if err != nil {
-		t.Fatalf("打开 web 库失败: %v", err)
+	// 记录必须写在 web 领域库：库文件存在，且经 knowledge 只读接口能取回
+	if _, err := os.Stat(config.WebDBPath); err != nil {
+		t.Errorf("记录应落在 web.db: %v", err)
 	}
-	var n int
-	var gotSummary, gotDomain string
-	if err := db.QueryRow(`SELECT COUNT(*) FROM web_ltp_page_cache WHERE url = ?`, url).Scan(&n); err != nil || n != 1 {
-		t.Errorf("记录应落在 web.db（行数=%d err=%v）", n, err)
-	}
-	err = db.QueryRow(`SELECT summary, domain FROM web_ltp_page_cache WHERE url = ?`, url).Scan(&gotSummary, &gotDomain)
-	if err != nil || gotSummary != summary || gotDomain != "example.com" {
-		t.Errorf("记录内容异常（summary=%q domain=%q err=%v）", gotSummary, gotDomain, err)
+	title, gotSummary := knowledge.WebPageSummary(url)
+	if title != "示例页" || gotSummary != summary {
+		t.Errorf("记录内容异常（title=%q summary=%q）", title, gotSummary)
 	}
 }

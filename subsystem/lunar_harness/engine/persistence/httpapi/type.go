@@ -98,7 +98,6 @@ type memoryQueryData struct {
 // memoryCollectionInfo 集合信息（分组）
 type memoryCollectionInfo struct {
 	Name                   string `json:"name"`
-	EmbeddingModel         string `json:"embedding_model"`
 	Dimension              int    `json:"dimension"`
 	Count                  int    `json:"count"`
 	Version                int    `json:"version"`

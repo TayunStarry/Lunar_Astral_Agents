@@ -29,8 +29,8 @@ import (
 // hostDerivedImageMaxSide 宿主自产图片（截图、采样帧）的固定上限
 const hostDerivedImageMaxSide = 1024
 
-// blockedImagePlaceholder 被拦截图片的替身文本
-const blockedImagePlaceholder = "[图片已拦截：思维链只接受视觉读取产物（/file/miniature/ 或视觉副本）]"
+// blockedImagePlaceholder 被拦截图片的替身文本（不使用「[图片]」式类型占位）
+const blockedImagePlaceholder = "（该图片未走视觉缩影管线，已拦截；如需查看请用图片句柄）"
 
 // guardRequestImages 逐条检查待发送消息里的 image_url，返回改写后的消息与被拦截说明
 func guardRequestImages(messages []PostMessage) ([]PostMessage, []string) {
@@ -77,7 +77,8 @@ func imageBlockReason(raw string, sideCap int) string {
 	}
 	lower := strings.ToLower(raw)
 	if strings.HasPrefix(lower, "data:video/") || hasVideoExt(lower) {
-		return ""
+		// 视频一律走 @U 链接句柄：模型上下文里不应该出现视频本体或直链
+		return "视频资源未经句柄化"
 	}
 	if strings.HasPrefix(lower, "data:image/") {
 		width, height, err := inlineImageSize(raw)

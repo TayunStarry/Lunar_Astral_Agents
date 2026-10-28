@@ -1,13 +1,16 @@
 package lunar
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/life"
+	"LunarSubsystem/LunarHarness/engine/mood"
 	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
-	"LunarSubsystem/LunarHarness/transport/napcat"
 )
 
 const failureReply = "刚才有点走神，你再说一遍好吗？"
@@ -34,6 +37,17 @@ func Start() error {
 		dialogueRole.coverContext(messages)
 	})
 
+	life.Init()
+	life.SetPlanHooks(pushDueScheduleItems, upcomingPlanSummary)
+	life.SetLastUserTextProvider(latestUserUtterance)
+	go func() {
+		if err := mood.Init(context.Background()); err != nil {
+			logger.Warn(lunarCoreModule, "[心情] 启动初始化未完成，将在生活事件中重试: %v", err)
+		}
+	}()
+
+	tickSchedulerInstance = buildTickScheduler()
+
 	agentReady.Store(true)
 	engineMu.Lock()
 	engineStatus.BootedAt = time.Now()
@@ -42,7 +56,7 @@ func Start() error {
 	running.Store(true)
 	loopWG.Add(1)
 	go runLoop()
-	logger.Info(lunarCoreModule, "月华智能体（Go 原生对话链）已启动")
+	logger.Info(lunarCoreModule, "月华智能体（统一 Tick 调度）已启动")
 	return nil
 }
 
@@ -55,6 +69,10 @@ func Stop() {
 	}
 	close(stopCh)
 	loopWG.Wait()
+	if tickSchedulerInstance != nil {
+		tickSchedulerInstance.Stop()
+		tickSchedulerInstance = nil
+	}
 	running.Store(false)
 	agentReady.Store(false)
 }
@@ -62,6 +80,22 @@ func Stop() {
 // IsReady 报告智能体是否已就绪
 func IsReady() bool {
 	return agentReady.Load()
+}
+
+func buildTickScheduler() *tickScheduler {
+	scheduler := newTickScheduler()
+	scheduler.Register(dialogueSystem{})
+	scheduler.Register(viewingSystem{})
+	scheduler.Register(lifeSystem{})
+	return scheduler
+}
+
+// restartTickScheduler 重载时重建调度器：先取消在跑任务，再从持久化状态恢复。
+func restartTickScheduler() {
+	if tickSchedulerInstance != nil {
+		tickSchedulerInstance.Stop()
+	}
+	tickSchedulerInstance = buildTickScheduler()
 }
 
 func runLoop() {
@@ -73,56 +107,28 @@ func runLoop() {
 		case <-stopCh:
 			return
 		case <-ticker.C:
-			dialogueTick()
+			scheduler := tickSchedulerInstance
+			if scheduler != nil {
+				scheduler.Tick()
+			}
 		}
 	}
-}
-
-// dialogueTick 每秒对话链 tick
-func dialogueTick() {
-	stateMu.Lock()
-	if reasoningInProgress {
-		stateMu.Unlock()
-		return
-	}
-	stateMu.Unlock()
-
-	incoming := make([]PostMessage, 0)
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			logger.Error(lunarCoreModule, "[对话链] tick 异常: %v", recovered)
-		}
-		stateMu.Lock()
-		reasoningInProgress = false
-		stateMu.Unlock()
-	}()
-
-	flushDueScheduleItems()
-	incoming = pullContext()
-	unreadMu.Lock()
-	unreadEmpty := len(unreadContext) == 0
-	unreadMu.Unlock()
-	if len(incoming) == 0 && unreadEmpty {
-		return
-	}
-	stateMu.Lock()
-	reasoningInProgress = true
-	stateMu.Unlock()
-	runDialogueTurn(incoming)
 }
 
 // pullContext 拉取统一未读队列
 func pullContext() []PostMessage {
 	messages := TakeUnreadContext()
 	if len(messages) == 0 {
-		napcat.NotifyAgentIdle()
+		DialogueBridging.NotifyAgentIdle()
 		return nil
 	}
 	messages = dispatchBeforeReadingMessage(messages)
 	if len(messages) == 0 {
-		napcat.NotifyAgentIdle()
+		DialogueBridging.NotifyAgentIdle()
+		return nil
 	}
-	return messages
+	// 进入上下文前统一资源化：图片→缩影、动图/视频/URL/BV→句柄、音频→转写+句柄、文件→文档句柄
+	return ResourcesConversionHandle(messages)
 }
 
 // dispatchBeforeReadingMessage 读取消息前事件
@@ -167,9 +173,8 @@ func runDialogueTurn(incoming []PostMessage) {
 			turnFromQQ = true
 			stateMu.Unlock()
 		}
-		writeMessage(message.Role, message.Content)
+		writeMessage(message.Role, message.Source, message.Content)
 	}
-	guardASRUnload()
 
 	unreadMu.Lock()
 	messageLength := len(unreadContext)

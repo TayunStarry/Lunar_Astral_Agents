@@ -185,13 +185,6 @@ func (w *webSession) ensureLogin() error {
 	return fmt.Errorf("60 秒内未完成 B 站登录，放弃本次刷视频")
 }
 
-type videoLink struct {
-	Href   string `json:"href"`
-	Title  string `json:"title"`
-	Score  int    `json:"-"`
-	Source string `json:"-"`
-}
-
 // collectVideoLinks 从当前页面收集视频卡片（首页/搜索结果页通用）。
 func (w *webSession) collectVideoLinks(max int) ([]videoLink, error) {
 	if max <= 0 {
@@ -241,27 +234,25 @@ func (w *webSession) collectVideoLinks(max int) ([]videoLink, error) {
 	return links, nil
 }
 
-// filterAndScore 给候选标题打分：本轮有关键词（指令结合默认偏好生成）时只按它筛选，
-// 避免默认主题把本轮要求盖过去。
+// filterAndScore 给候选标题打分：本轮关键词与配置默认偏好共同参与，
+// 本轮关键词权重更高，但不再硬过滤——预选需要凑够 3 倍候选，过滤过严会直接断粮。
 func filterAndScore(links []videoLink, cfg Config) []videoLink {
 	out := make([]videoLink, 0, len(links))
-	override := len(cfg.DesireKeywords) > 0
 	for _, link := range links {
 		link.Score = titleScore(link.Title, cfg)
-		if override && link.Score == 0 {
-			continue // 只保留命中本轮关键词的候选
-		}
 		out = append(out, link)
 	}
 	return out
 }
 
-// titleScore 标题得分：本轮关键词优先；没有时才用配置默认词
+// titleScore 标题得分：本轮关键词权重为 2 份，配置默认词 1 份。
 func titleScore(title string, cfg Config) int {
+	score := 0
 	if len(cfg.DesireKeywords) > 0 {
-		return scoreOf(title, cfg.DesireKeywords)
+		score += 2 * scoreOf(title, cfg.DesireKeywords)
 	}
-	return scoreOf(title, cfg.PreferenceKeywords)
+	score += scoreOf(title, cfg.PreferenceKeywords)
+	return score
 }
 
 // ==== 选片打分参数 ====
@@ -440,12 +431,6 @@ func bestScore(links []videoLink) int {
 		}
 	}
 	return best
-}
-
-type commentItem struct {
-	User    string `json:"user"`
-	Content string `json:"content"`
-	Like    int    `json:"like"`
 }
 
 // scrollToComments 把页面滚动到评论区；用户明确要求读评论前滚到对应位置。

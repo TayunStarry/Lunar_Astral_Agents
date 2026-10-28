@@ -1,13 +1,21 @@
 package BilibiliViewer
 
-// sideinfo.go 侧面理解：某条视频的画面切片触发思考监管重复时，
-// 放弃全部切片理解，改用标题 + 封面 + 简介 + 热门评论 + 弹幕推测视频内容，
-// 为后续的评论、日记动态与分享评论提供依据。
+// sideinfo.go 视频自身信息的采集与轻量印象：封面转码、弹幕、以及只看标题/标签/
+// 简介/封面时对视频的初步判断。
+//
+// 分层约定：
+//   - 视频印象（composeVideoImpression）只用视频自身信息 + 封面，不注入长期记忆；
+//   - 评论/分享写作（run.go）在此基础上再叠加评论区与弹幕作为参考，同样不注入记忆；
+//   - 长期记忆只用于回复消息与发动态。
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"html"
+	"image"
+	"image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"regexp"
@@ -15,6 +23,9 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/multimodal"
+
+	_ "golang.org/x/image/webp"
 )
 
 // danmakuRe 弹幕 XML 里的单条内容：<d p="...">文本</d>
@@ -62,87 +73,66 @@ func fetchDanmaku(cid int64, max int) []string {
 	return out
 }
 
-// fetchCoverDataURL 下载封面并转成 data URI；失败返回空串（侧面理解退回纯文字材料）。
-// B 站封面地址常带 @ 缩放后缀，去掉后取原图；只接受 jpg/png，避免模型端不支持 webp。
+// fetchCoverDataURL 取封面并统一转码成小尺寸 JPEG data URI。
+//
+// B 站封面原图常见 webp/avif、尺寸动辄数 MB；原样 base64 塞进多模态请求时，
+// 请求体可达数 MB，本地/中转模型端点容易直接返回 500。这里复用 multimodal
+// 已有的解码与缩放能力（ToRGBA / ResizeToFit），把封面统一收敛为：
+// 长边 ≤ coverMaxDim 的 JPEG。格式与体积都稳定，模型端不会再因图片报错。
+//
+// 优先让 CDN 直接输出缩略图（@480w_270h.jpg），失败再取原图自行转码。
 func fetchCoverDataURL(pic string) string {
-	pic = strings.TrimSpace(pic)
-	if pic == "" {
+	base := strings.TrimSpace(pic)
+	if base == "" {
 		return ""
 	}
-	if idx := strings.Index(pic, "@"); idx > 0 {
-		pic = pic[:idx]
+	// B 站图片地址可能自带 @ 缩放后缀，先裁掉，再按需要重新拼
+	if idx := strings.Index(base, "@"); idx > 0 {
+		base = base[:idx]
 	}
-	req, err := http.NewRequest(http.MethodGet, pic, nil)
+	candidates := []string{base + "@480w_270h.jpg", base}
+	for _, candidate := range candidates {
+		if data := downloadCoverJPEG(candidate); data != "" {
+			return data
+		}
+	}
+	return ""
+}
+
+// downloadCoverJPEG 下载一张图片并转成规范化的 JPEG data URI；任何一步失败返回空串。
+func downloadCoverJPEG(target string) string {
+	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
 		return ""
 	}
 	req.Header.Set("User-Agent", biliUA)
 	req.Header.Set("Referer", biliReferer)
+	// 明确只要位图格式，避免 CDN 按 Accept 协商返回 webp/avif
+	req.Header.Set("Accept", "image/jpeg,image/png,image/*;q=0.8")
 	client := &http.Client{Timeout: 25 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Warn("BilibiliViewer", "下载视频封面失败（侧面理解只用文字）: %v", err)
+		logger.Warn("BilibiliViewer", "下载视频封面失败（改用纯文字材料）: %v", err)
 		return ""
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return ""
 	}
-	contentType := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
-	if !strings.Contains(contentType, "image/jpeg") && !strings.Contains(contentType, "image/png") {
-		return ""
-	}
-	if strings.Contains(contentType, "jpeg") {
-		contentType = "image/jpeg"
-	} else {
-		contentType = "image/png"
-	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, fallbackCoverMaxBytes+1))
 	if err != nil || len(data) == 0 || len(data) > fallbackCoverMaxBytes {
 		return ""
 	}
-	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data)
-}
-
-// composeSideUnderstanding 构建侧面理解：优先让模型结合封面与文字材料归纳，
-// 失败（含模型再次陷入重复）时退回纯文字拼装，保证下游写作始终有依据。
-func composeSideUnderstanding(info videoInfo, comments []commentItem, danmaku []string, cover string) string {
-	material := sideMaterial(info, comments, danmaku)
-	task := "这个视频的画面理解失败了（模型在画面描述时反复陷入重复输出），你只能依据标题、封面、简介、热门评论和弹幕推测它大致讲了什么、观众的情绪如何。" +
-		"写 3–6 行侧面理解，供之后写评论、日记和分享使用；不确定的地方用「看起来/大概是」表述，不要编造具体情节。只输出正文。"
-	if system, err := lifeSystem(task); err == nil {
-		var text string
-		var chatErr error
-		if cover != "" {
-			text, chatErr = chatWithImages(system, material, []string{cover})
-		} else {
-			text, chatErr = chatText(system, material)
-		}
-		if text = strings.TrimSpace(text); chatErr == nil && text != "" {
-			return truncate(text, 900)
-		}
-		logger.Warn("BilibiliViewer", "侧面理解归纳失败，改用纯文字材料: %v", chatErr)
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		logger.Warn("BilibiliViewer", "封面解码失败（改用纯文字材料）: %v", err)
+		return ""
 	}
-	return truncate(material, 900)
-}
-
-// sideMaterial 汇总侧面信息（模型归纳与纯文字兜底共用）
-func sideMaterial(info videoInfo, comments []commentItem, danmaku []string) string {
-	var builder strings.Builder
-	fmt.Fprintf(&builder, "视频：《%s》\nUP主：%s\n", info.Title, info.Owner)
-	if desc := strings.TrimSpace(info.Desc); desc != "" {
-		fmt.Fprintf(&builder, "简介：%s\n", truncate(desc, 600))
+	// 复用 multimodal 的图元转换与等比缩放，统一控制长边尺寸
+	rgba := multimodal.ResizeToFit(multimodal.ToRGBA(img), coverMaxDim, coverMaxDim)
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, rgba, &jpeg.Options{Quality: coverJPEGQuality}); err != nil {
+		return ""
 	}
-	if len(comments) > 0 {
-		builder.WriteString("热门评论：\n")
-		for _, comment := range comments {
-			fmt.Fprintf(&builder, "%s：%s\n", comment.User, truncate(comment.Content, 120))
-		}
-	}
-	if len(danmaku) > 0 {
-		builder.WriteString("弹幕：")
-		builder.WriteString(strings.Join(danmaku, " / "))
-		builder.WriteString("\n")
-	}
-	return strings.TrimSpace(builder.String())
+	return "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 }

@@ -19,7 +19,7 @@ import (
 // main 程序唯一入口（Windows 上只有控制台形态）：
 // 先做单实例闸门，再接管 stdout 日志管线，随后走标准装配流程，
 // 最后以全屏 TUI 控制台承载日志视图、运行状态、智能体实况与运维功能，
-// 并由控制台代为打开月华/琉璃两个前端窗口（窗口全关不退出控制台）。
+// 并由控制台代为打开月华/琉璃两个前端窗口（开发者模式下不自动弹出，窗口全关不退出控制台）。
 func main() {
 	flag.Parse()
 
@@ -93,8 +93,15 @@ func main() {
 	// 对话链状态钩子：控制台「月华对话链 管理」屏据此展示 Go 对话链状态并手动重建
 	app.WireTUIEngineHooks()
 
-	// 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）
-	app.OpenFrontendWindows()
+	// 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）。
+	// 开发者模式（system.developer 或 --developer）下**不主动弹出前端**：
+	// 调试时只看控制台即可，避免窗口抢占焦点、遮挡日志；
+	// 需要看页面时仍可在「系统管理 → 前端页面」里手动唤起。
+	if config.Developer {
+		logger.Info("LunarHarness", "开发者模式：跳过自动打开月华/琉璃前端窗口（可在控制台「前端页面」手动唤起）")
+	} else {
+		app.OpenFrontendWindows()
+	}
 
 	// TUI 全屏控制台：阻塞直至用户退出（z / Ctrl+C / 中断信号）
 	if err := console.Run(); err != nil {

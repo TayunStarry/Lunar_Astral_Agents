@@ -11,10 +11,15 @@ import (
 
 // composeReport 输出收口：优先采用模型的摘要提取结果；失败时确定性兜底
 func composeReport(in reportInput) string {
-	if strings.TrimSpace(in.Digest) != "" {
-		return strings.TrimSpace(in.Digest)
+	digest := strings.TrimSpace(in.Digest)
+	if digest != "" && !isNoRelevanceDigest(digest) {
+		return digest
 	}
-	loggerWarn("摘要提取为空，使用确定性兜底输出")
+	if digest != "" {
+		loggerWarn("摘要提取为「未检索到」占位句，改用页面内容兜底")
+	} else {
+		loggerWarn("摘要提取为空，使用确定性兜底输出")
+	}
 	return composeReportFallback(in)
 }
 
@@ -56,6 +61,17 @@ func composeReportFallback(in reportInput) string {
 		b.WriteString("\n◆ 打开的页面：\n")
 		for i, p := range in.Pages {
 			fmt.Fprintf(&b, "%d. 「%s」（%s，正文 %d 字）\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.TextChars)
+		}
+		b.WriteString("\n◆ 页面内容摘要：\n")
+		for i, p := range in.Pages {
+			if i >= 3 {
+				break
+			}
+			text := strings.TrimSpace(p.Text)
+			if text == "" {
+				continue
+			}
+			fmt.Fprintf(&b, "【%s】\n%s\n\n", firstNonEmpty(p.Title, p.Domain), hardCutRunes(text, 800))
 		}
 	} else {
 		b.WriteString("\n◆ 打开的页面：本次未获取到可用的详情页内容。\n")

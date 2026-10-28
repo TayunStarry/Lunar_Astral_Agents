@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // 桌面操纵可观测性：逐角色 trace 日志 + 配图归档。
@@ -69,5 +70,7 @@ func saveAutoShot(data []byte) string {
 	if err := os.WriteFile(p, data, 0644); err != nil {
 		return ""
 	}
+	// 直接落盘的截图同样要进句柄体系：multimedia/ 下的资料必须可被月华按句柄回引
+	_, _, _ = resource.RegisterPath(filepath.ToSlash(filepath.Join("multimedia", "moment", name)))
 	return p
 }

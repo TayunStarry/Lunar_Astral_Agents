@@ -4,12 +4,12 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	persistence "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/knowledge"
 )
 
 // loadKnowledge 读取整表 [key,text] 条目
 func loadKnowledge(table string) map[string]string {
-	entries, err := persistence.KnowledgeLoadEntries(table)
+	entries, err := knowledge.LoadEntries(table)
 	result := make(map[string]string, len(entries))
 	if err != nil {
 		logger.Warn(lunarCoreModule, "[知识库] 读取表 %s 失败: %v", table, err)
@@ -29,12 +29,12 @@ func loadKnowledge(table string) map[string]string {
 
 // loadKnowledgeEntries 读取整表原始二元组
 func loadKnowledgeEntries(table string) ([][]string, error) {
-	return persistence.KnowledgeLoadEntries(table)
+	return knowledge.LoadEntries(table)
 }
 
 // saveKnowledgeEntries 全表替换写入
 func saveKnowledgeEntries(table string, entries [][]string) bool {
-	if err := persistence.KnowledgeReplaceEntries(table, entries); err != nil {
+	if err := knowledge.ReplaceEntries(table, entries); err != nil {
 		logger.Warn(lunarCoreModule, "[知识库] 写入表 %s 失败: %v", table, err)
 		return false
 	}
@@ -47,7 +47,7 @@ func saveKnowledge(table string, values map[string]string) bool {
 	for key, value := range values {
 		entries = append(entries, []string{key, value})
 	}
-	if err := persistence.KnowledgeReplaceEntries(table, entries); err != nil {
+	if err := knowledge.ReplaceEntries(table, entries); err != nil {
 		logger.Warn(lunarCoreModule, "[知识库] 写入表 %s 失败: %v", table, err)
 		return false
 	}

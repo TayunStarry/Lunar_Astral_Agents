@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // buildOutline 生成结构大纲（每项带行区间）
 func buildOutline(doc *docContext) []outlineItem {
 	// 资源目录已有段落表（Markdown 标题等）：直接复用，保证与 use_resource 的章节大纲同源
-	if sections, _, err := persistence.ResourceOutline(doc.Handle); err == nil && len(sections) > 0 {
+	if sections, _, err := resource.Outline(doc.Handle); err == nil && len(sections) > 0 {
 		items := make([]outlineItem, 0, len(sections))
 		for _, section := range sections {
 			label := strings.TrimSpace(section.Path)

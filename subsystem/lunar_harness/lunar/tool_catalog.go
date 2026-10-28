@@ -5,7 +5,7 @@ package lunar
 import (
 	"strings"
 
-	"LunarSubsystem/LunarHarness/engine/agentinfo"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // ToolCatalog 返回 lunar 包内全部 Go 角色的工具清单。

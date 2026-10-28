@@ -1,182 +1,270 @@
 package BilibiliViewer
 
-// memory.go 观影记忆：动态正文与历史记忆都由模型重新生成。
+// memory.go 观影记忆的使用与动态文案。
 //
-// 历史记忆是独属于哔哩观影的上下文：她回应了谁、在哪回应、有没有被 @、看完的感受，
-// 以及下一轮想接着做什么。它会注入后续所有生成调用（选片关键词、流程编排、评论、
-// 回复、@分享），让 B 站里的互动真正影响下一轮行为，而不是每轮都从零开始。
+// 记忆的枚举与增删改查见 memory_entries.go（统一记忆库适配，无独立存储）；
+// 这里只负责把记忆渲染进提示词，以及生成动态正文。
 
 import (
 	"fmt"
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/prompts"
 )
 
-// memoryPromptBlock 把历史记忆附到自定义提示词后面（无记忆时返回空串）
-func memoryPromptBlock() string {
-	memory := strings.TrimSpace(loadDiaryMemory())
-	if memory == "" {
+// recentMemoryText 把最近的记忆条目渲染成提示词材料（最多 limit 条）。
+func recentMemoryText(limit int) string {
+	entries := MemoryEntries()
+	if len(entries) == 0 {
 		return ""
 	}
-	return "\n\n## 我的观影记忆（作为判断背景，不要照抄）\n\n" + memory
+	if limit <= 0 || limit > len(entries) {
+		limit = len(entries)
+	}
+	lines := make([]string, 0, limit)
+	for _, entry := range entries[len(entries)-limit:] {
+		lines = append(lines, fmt.Sprintf("[%s]%s", entry.Kind, entry.Text))
+	}
+	return strings.Join(lines, "\n")
 }
 
-// generateDynamicText 生成本轮要发到 B 站动态的日记正文。
-// 生成失败返回空串，调用方保留上一版动态、不误发脏内容。
-func generateDynamicText(prev diarySections, activities []lifeActivity, watched []*videoRecord, instruction string) string {
-	task := "写这一轮要发到 B 站动态的日记正文：2–6 行，口语化，像随手发的心情；" +
-		"每行一句，可以用一个空行分段；不要标题、不要 markdown、不要列表符号、不要链接、不要 @；总字数 300 以内。" +
-		"只输出正文，不要解释。"
-	system, err := lifeSystemWithoutMemory(task)
+// memoryMaterial 记忆注入的统一格式（无记忆时返回空串）。
+func memoryMaterial(limit int) string {
+	text := recentMemoryText(limit)
+	if text == "" {
+		return ""
+	}
+	return "## 我的观影记忆\n\n" + text + "\n\n（以上是我之前的观影记忆，可作为写作背景；不要照抄。）"
+}
+
+// memoryLooksMechanical 判断一段文本是不是机械过程/运行统计，而不是人格化记忆。
+func memoryLooksMechanical(text string) bool {
+	lower := strings.ToLower(text)
+	for _, marker := range mechanicalMemoryMarkers {
+		if strings.Contains(lower, strings.ToLower(marker)) {
+			return true
+		}
+	}
+	return false
+}
+
+// cleanMemoryText 去掉机械过程行，只保留人格化的正文。
+func cleanMemoryText(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(strings.TrimLeft(line, "-*• "))
+		if line == "" || strings.HasPrefix(line, "```") || strings.HasPrefix(line, "【") {
+			continue
+		}
+		if memoryLooksMechanical(line) {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	out := truncate(strings.Join(kept, " "), memoryTextMaxRunes)
+	if memoryLooksMechanical(out) {
+		return ""
+	}
+	return out
+}
+
+// recordWatchMemory 把单个视频的观影感受写入记忆库（只存人格化印象）。
+func recordWatchMemory(video *videoRecord) {
+	if video == nil {
+		return
+	}
+	summary := cleanMemoryText(video.WatchSummary)
+	if summary == "" {
+		return
+	}
+	text := fmt.Sprintf("看了《%s》。%s", video.Info.Title, summary)
+	if memoryLooksMechanical(text) {
+		logger.Warn("BilibiliViewer", "观影记忆含机械化信息，已拒绝写入")
+		return
+	}
+	if _, err := MemoryAddEntry("印象", text); err != nil {
+		logger.Warn("BilibiliViewer", "写入观看记忆失败: %v", err)
+	}
+}
+
+// recordRoundMemory 把一整轮的体验写成人格化记忆（不写数量、条目等运行信息）。
+func recordRoundMemory(r *runner) {
+	if r == nil {
+		return
+	}
+	material := buildRoundMemoryMaterial(r)
+	if material == "" {
+		return
+	}
+	task := "用第一人称写一段今天刷 B 站的记忆，像日记里的一小段：" +
+		"只写你对看过的视频的印象、情绪和想法，1-4 句，口语化。" +
+		"不要列清单、不要写数量统计，不要出现「这一轮/切片/发了 N 条/回应了 N 条」这类运行信息；" +
+		"不要编造没看过的内容。只输出正文。"
+	system := task
+	if persona, err := prompts.Read("lifeRole.md"); err == nil {
+		system = string(persona) + "\n\n## 本次任务\n\n" + task
+	}
+	text, err := chatTextModel(modelPrimary, system, material)
+	if err != nil {
+		logger.Warn("BilibiliViewer", "生成本轮观影记忆失败: %v", err)
+		return
+	}
+	memory := cleanMemoryText(text)
+	if memory == "" {
+		logger.Warn("BilibiliViewer", "本轮观影记忆为空或含机械化信息，跳过写入")
+		return
+	}
+	if _, err := MemoryAddEntry("感受", memory); err != nil {
+		logger.Warn("BilibiliViewer", "写入本轮记忆失败: %v", err)
+	}
+}
+
+// buildRoundMemoryMaterial 拼本轮记忆素材：只给观影感受与互动内容。
+func buildRoundMemoryMaterial(r *runner) string {
+	var material strings.Builder
+	for _, video := range r.approved {
+		if video == nil {
+			continue
+		}
+		summary := cleanMemoryText(video.WatchSummary)
+		if summary == "" {
+			summary = strings.TrimSpace(video.Impression.Summary)
+		}
+		if summary == "" {
+			continue
+		}
+		fmt.Fprintf(&material, "《%s》：%s\n", video.Info.Title, summary)
+	}
+	for _, activity := range r.activities {
+		if activity.Kind == "watch" || strings.TrimSpace(activity.Reply) == "" {
+			continue
+		}
+		fmt.Fprintf(&material, "%s：%s\n", activityLabel(activity.Kind), activity.Reply)
+	}
+	return strings.TrimSpace(material.String())
+}
+
+// ==== 动态文案 ====
+
+// generateDynamicText 生成本轮观影动态正文。
+//
+// 发布在看切片之前：只写挑中这些视频时的第一印象、期待与想说的一点。
+func generateDynamicText(r *runner) string {
+	persona, err := prompts.Read("lifeRole.md")
 	if err != nil {
 		logger.Warn("BilibiliViewer", "读取人设失败，跳过动态生成: %v", err)
 		return ""
 	}
-	material := buildDiaryMaterial(prev, activities, watched, instruction)
-	if strings.TrimSpace(prev.Dynamic) != "" {
-		material += "\n【上一版动态（只作风格参考，不要照抄）】\n" + prev.Dynamic + "\n"
+	task := "写这一轮要发到 B 站动态的观影感受：根据你对这些视频的初步印象和评价，" +
+		"写你挑中它们时的真实感觉（期待、直觉、想吐槽或想分享的一点），2–6 行，口语化。" +
+		"禁止逐条复述视频内容、时间线或按视频罗列；不要标题、不要 markdown、不要列表符号、不要链接、不要 @；" +
+		"总字数 300 以内。只输出正文，不要解释。"
+	system := string(persona) + "\n\n## 本次任务\n\n" + task
+	if block := memoryMaterial(12); block != "" {
+		system += "\n\n" + block
 	}
-	text, err := chatText(system, material)
+	text, err := chatTextModel(modelPrimary, system, buildDynamicMaterial(r))
 	if err != nil {
-		logger.Warn("BilibiliViewer", "动态日记生成失败: %v", err)
+		logger.Warn("BilibiliViewer", "观影动态生成失败: %v", err)
 		return ""
 	}
 	dynamic := normalizeDynamic(text)
 	if dynamic == "" {
-		logger.Warn("BilibiliViewer", "动态日记为空，保留上一版")
+		logger.Warn("BilibiliViewer", "观影动态为空，本轮不发布动态")
 	}
 	return dynamic
 }
 
-// generateMemory 生成本轮历史记忆：把上一版记忆与本轮全部互动交给模型重写。
-func generateMemory(prev diarySections, activities []lifeActivity, watched []*videoRecord, instruction, dynamicPosted string) string {
-	task := fmt.Sprintf("根据下面的材料更新你的观影日记【历史记忆】：第一人称、意识流，不要流水账；"+
-		"记住这轮看了什么、回应了谁（在视频评论区还是动态区）、说了什么、有没有人 @ 你、"+
-		"你的感受，以及下次想接着做什么；总字数不超过 %d 字，超了要自己提炼，只保留最重要的部分。"+
-		"只输出记忆正文，不要解释。", memoryMaxRunes)
-	system, err := lifeSystemWithoutMemory(task)
-	if err != nil {
-		logger.Warn("BilibiliViewer", "读取人设失败，记忆改用本轮活动摘要: %v", err)
-		return fallbackMemory(prev, activities)
-	}
-	material := buildDiaryMaterial(prev, activities, watched, instruction)
-	if strings.TrimSpace(dynamicPosted) != "" {
-		material += "\n【本轮发到动态的正文】\n" + dynamicPosted + "\n"
-	}
-	text, err := chatText(system, material)
-	if err != nil {
-		logger.Warn("BilibiliViewer", "历史记忆生成失败，改用本轮活动摘要: %v", err)
-		return fallbackMemory(prev, activities)
-	}
-	memory := clampMemory(text)
-	if memory == "" {
-		memory = fallbackMemory(prev, activities)
-	}
-	return memory
-}
-
-// buildDiaryMaterial 拼模型输入：上一版记忆/动态 + 本轮经历与互动
-func buildDiaryMaterial(prev diarySections, activities []lifeActivity, watched []*videoRecord, instruction string) string {
+// buildDynamicMaterial 拼动态输入：视频印象 + 观看感受 + 本轮互动。
+func buildDynamicMaterial(r *runner) string {
 	var material strings.Builder
-	if strings.TrimSpace(prev.Memory) != "" {
-		fmt.Fprintf(&material, "【上一版历史记忆】\n%s\n\n", truncate(prev.Memory, memoryMaxRunes))
-	} else if strings.TrimSpace(prev.Legacy) != "" {
-		// 旧模板日记没有记忆段：把旧文交还给模型，让它一次性提炼出长期记忆
-		fmt.Fprintf(&material, "【旧版日记（用于提炼长期记忆）】\n%s\n\n", truncate(prev.Legacy, 3000))
+	if strings.TrimSpace(r.instruction) != "" {
+		fmt.Fprintf(&material, "【本轮想法】\n%s\n\n", r.instruction)
 	}
-	if strings.TrimSpace(instruction) != "" {
-		fmt.Fprintf(&material, "【本轮指令】\n%s\n\n", instruction)
-	}
-
-	if len(watched) > 0 {
-		material.WriteString("【本轮看过的视频】\n")
-		for i, video := range watched {
+	if len(r.videos) > 0 {
+		material.WriteString("【本轮看的视频】\n")
+		for index, video := range r.videos {
 			if video == nil {
 				continue
 			}
-			fmt.Fprintf(&material, "%d. 《%s》｜UP主：%s｜链接：%s\n观看感受：%s\n",
-				i+1, video.Info.Title, video.Info.Owner, video.Info.URL, truncate(video.Summary, 400))
-			if video.CommentText != "" {
-				fmt.Fprintf(&material, "我在评论区说：%s\n", video.CommentText)
+			summary := strings.TrimSpace(video.WatchSummary)
+			if summary == "" {
+				summary = video.Impression.Summary
 			}
-			if video.ShareText != "" {
-				fmt.Fprintf(&material, "我的 @分享评论：%s\n", video.ShareText)
-			}
+			fmt.Fprintf(&material, "%d. 《%s》｜UP主：%s｜印象：%s\n",
+				index+1, video.Info.Title, video.Info.Owner, truncate(summary, 260))
 		}
 		material.WriteString("\n")
-	} else {
-		material.WriteString("【本轮没有看视频】\n\n")
 	}
-
-	if len(activities) > 0 {
+	if len(r.activities) > 0 {
 		material.WriteString("【本轮互动】\n")
-		for _, activity := range activities {
+		for _, activity := range r.activities {
 			material.WriteString(formatActivity(activity))
 			material.WriteString("\n")
 		}
-		material.WriteString("\n")
-	} else {
-		material.WriteString("【本轮没有新的互动】\n\n")
 	}
 	return material.String()
 }
 
-// fallbackMemory 模型不可用时的记忆兜底：旧记忆 + 本轮活动摘要
-func fallbackMemory(prev diarySections, activities []lifeActivity) string {
-	var builder strings.Builder
-	base := strings.TrimSpace(prev.Memory)
-	if base == "" {
-		base = truncate(strings.TrimSpace(prev.Legacy), 2000)
-	}
-	if base != "" {
-		builder.WriteString(base)
-		builder.WriteString("\n")
-	}
-	for _, activity := range activities {
-		builder.WriteString(formatActivity(activity))
-		builder.WriteString("\n")
-	}
-	return clampMemory(builder.String())
-}
-
-// formatActivity 把一条互动记录排成一行人话（喂给记忆模型）
+// formatActivity 把一条互动记录写成一行材料。
 func formatActivity(activity lifeActivity) string {
+	var builder strings.Builder
 	label := activityLabel(activity.Kind)
-	parts := make([]string, 0, 5)
+	builder.WriteString(label)
 	if activity.Where != "" {
-		parts = append(parts, "位置："+activity.Where)
+		builder.WriteString("｜")
+		builder.WriteString(activity.Where)
 	}
 	if activity.Target != "" {
-		parts = append(parts, "对象："+activity.Target)
+		builder.WriteString("｜对方：")
+		builder.WriteString(activity.Target)
 	}
 	if activity.Content != "" {
-		parts = append(parts, "对方说："+truncate(activity.Content, 120))
+		builder.WriteString("｜对方说：")
+		builder.WriteString(truncate(activity.Content, 80))
 	}
 	if activity.Reply != "" {
-		parts = append(parts, "我说："+truncate(activity.Reply, 120))
+		builder.WriteString("｜我说：")
+		builder.WriteString(truncate(activity.Reply, 120))
 	}
-	if activity.Note != "" {
-		parts = append(parts, "备注："+activity.Note)
-	}
-	if len(parts) == 0 {
-		return "- " + label
-	}
-	return "- " + label + "｜" + strings.Join(parts, "｜")
+	return builder.String()
 }
 
-// activityLabel 互动类型的中文标签
+// activityLabel 互动类型的中文名。
 func activityLabel(kind string) string {
 	switch kind {
 	case "inbox":
-		return "回应未读消息"
-	case "comment":
-		return "发视频评论"
+		return "回应消息"
+	case "watch":
+		return "观看视频"
 	case "share":
-		return "@分享评论"
-	case "dyn_reply":
-		return "回复动态评论"
+		return "分享视频"
+	case "dynamic":
+		return "发动态"
 	default:
 		return "互动"
 	}
+}
+
+// normalizeDynamic 清理动态正文：去掉代码块/列表符号与多余空行，控制长度。
+func normalizeDynamic(text string) string {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, "- ")
+		line = strings.TrimPrefix(line, "* ")
+		if line == "" || strings.HasPrefix(line, "```") {
+			continue
+		}
+		out = append(out, line)
+	}
+	joined := strings.TrimSpace(strings.Join(out, "\n"))
+	return truncate(joined, dynamicMaxRunes)
 }

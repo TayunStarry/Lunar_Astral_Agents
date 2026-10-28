@@ -10,7 +10,7 @@ const WS_URL = `${WS_PROTOCOL}//${window.location.host}/ws?channel=message-termi
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_BASE_DELAY = 1500;
 const ASSISTANT_NAME = '月华';
-const DEFAULT_USER_NAME = '子幽';   // 配置未定义用户名时的默认用户名（气泡名与发送前缀共用）
+const DEFAULT_USER_NAME = '子幽';   // 浏览器缓存缺失且尚未输入称呼时的兜底用户名
 const MESSAGE_FILE_PATH = 'database/messages.json'; // 聊天记录缓存文件（由思维链写入，前端仅刷新时读取）
 const MAX_CACHED_MESSAGES = 48; // 与思维链侧 MAX_CACHE_MESSAGES 保持一致
 
@@ -86,6 +86,6 @@ let referencedFiles = [];     // 已加载到输入框的资源句柄（@D.003 �
 let isSending = false;        // 是否正在发送
 let autoPlayVoice = true;     // 收到语音消息时是否自动播放
 let characterRenderer = 'bedrock'; // 角色渲染器（bedrock=基岩版模型 / live2d=Live2D 引擎层），由 lunar_config.json 的 system.character_renderer 决定
-let backendUserName = DEFAULT_USER_NAME; // 用户气泡名与发送给月华的前缀共用的用户名（来自配置）
+let backendUserName = DEFAULT_USER_NAME; // 用户气泡名与发送给月华的前缀共用的用户名（来自浏览器缓存）
 let captureFile = null;       // 当前截图的 File 对象
 let capturePreviewUrl = null; // 当前截图预览 blob URL

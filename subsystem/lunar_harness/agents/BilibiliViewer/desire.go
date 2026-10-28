@@ -21,36 +21,43 @@ const (
 	desireKeywordMaxRunes = 12
 )
 
-// prepareDesireKeywords 提炼并写入本轮关键词（调用方须在 manager 锁之外调用）
+// prepareDesireKeywords 提炼并写入本轮关键词（调用方须在 manager 锁之外调用）。
+//
+// 第五步要求同时参考「对话者需求 + 配置文件默认关键词 + 长期记忆」：
+// 即使本轮没有明确指令，也要让记忆与默认偏好共同决定选片方向。
 func (r *runner) prepareDesireKeywords() {
-	if r == nil || strings.TrimSpace(r.instruction) == "" {
+	if r == nil {
 		return
 	}
-	words := extractDesireKeywords(r.instruction, r.cfg.PreferenceKeywords)
+	words := extractDesireKeywords(r.instruction, r.cfg.PreferenceKeywords, r.mood)
 	if len(words) == 0 {
 		return
 	}
 	r.cfg.DesireKeywords = words
-	logger.Info("BilibiliViewer", "本轮选片关键词（结合配置默认偏好，仅本次生效）: %s", formatKeywords(words))
+	logger.Info("BilibiliViewer", "本轮选片关键词（结合指令、默认偏好与长期记忆，仅本次生效）: %s", formatKeywords(words))
 }
 
-// extractDesireKeywords 综合提炼本轮关键词：同时参考用户指令与配置默认偏好，
+// extractDesireKeywords 综合提炼本轮关键词：同时参考用户指令、配置默认偏好与长期记忆，
 // 优先让模型归纳，失败时按标点切分并与默认偏好合并兜底。
 // 返回空表示本次没有可用的欲求词，调用方会回退到配置默认偏好。
-func extractDesireKeywords(instruction string, defaults []string) []string {
+func extractDesireKeywords(instruction string, defaults []string, moodLabel string) []string {
 	instruction = strings.TrimSpace(instruction)
-	if instruction == "" {
-		return nil
-	}
 	// 选片也要参考历史记忆：最近看过的主题、想接着看什么，都由记忆决定本轮关键词
-	system := "你是 B 站选片助手。结合用户这句话与配置里的默认偏好，给出本轮 1-3 个适合站内搜索的中文关键词。\n" +
-		"规则：用户明确说了想看的主题时以用户为准，默认偏好只在相关时补充；" +
-		"用户没有明确主题时，从默认偏好里挑合适的词。\n"
+	system := "你是 B 站选片助手。结合用户这句话、配置里的默认偏好、当前心情和我的观影记忆，给出本轮 1-3 个适合站内搜索的中文关键词。\n" +
+		"规则：用户明确说了想看的主题时以用户为准，默认偏好、心情与记忆只在相关时补充；" +
+		"用户没有明确主题时，从默认偏好、心情与记忆里挑合适的词。\n"
 	if len(defaults) > 0 {
 		system += "配置默认偏好：" + strings.Join(defaults, "、") + "。\n"
 	}
-	system += "只输出关键词本身（用顿号分隔），不要解释、不要标点、不要句子。" + memoryPromptBlock()
-	if text, err := chatText(system, instruction); err == nil {
+	if strings.TrimSpace(moodLabel) != "" {
+		system += "当前心情：" + strings.TrimSpace(moodLabel) + "。\n"
+	}
+	system += "只输出关键词本身（用顿号分隔），不要解释、不要标点、不要句子。" + memoryMaterial(10)
+	prompt := instruction
+	if prompt == "" {
+		prompt = "这一轮没有特别要求，按我自己的兴趣和心情挑。"
+	}
+	if text, err := chatTextModel(modelPrimary, system, prompt); err == nil {
 		if words := splitDesireWords(text); len(words) > 0 {
 			return words
 		}

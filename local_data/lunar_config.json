@@ -23,7 +23,7 @@
 		}
 	},
 	"system": {
-		"developer": false,
+		"developer": true,
 		"allow_lan": false,
 		"insecure_tls": false,
 		"console_log": false,
@@ -40,7 +40,6 @@
 		]
 	},
 	"agent": {
-		"user_name": "钛宇星光阁",
 		"embedding_model": "text_embedding",
 		"embedding_url": "http://127.0.0.1:36789/v1",
 		"embedding_key": null,

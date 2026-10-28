@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/memory"
 	"context"
 	"encoding/json"
 	"errors"
@@ -119,7 +119,7 @@ func handleMemoryInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := persistence.MemoryInitInstance(); err != nil {
+	if err := memory.EnsureReady(); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 实例初始化失败: %v", err))
 		return
 	}
@@ -138,16 +138,16 @@ func handleMemoryGlobalStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !persistence.IsMemoryInitialized() {
+	if !memory.Ready() {
 		writeSuccess(w, memoryStatsData{Initialized: false})
 		return
 	}
 
 	totalDocs := 0
 	mismatch := false
-	for _, name := range persistence.MemoryListCollections() {
-		totalDocs += persistence.MemoryGetEntryCount(name)
-		if persistence.MemoryHasSyncMismatch(name) {
+	for _, name := range memory.Collections() {
+		totalDocs += memory.DocCount(name)
+		if memory.HasSyncMismatch(name) {
 			mismatch = true
 		}
 	}
@@ -157,9 +157,9 @@ func handleMemoryGlobalStats(w http.ResponseWriter, r *http.Request) {
 		Initialized:   true,
 		EntryCount:    totalDocs,
 		SyncMismatch:  mismatch,
-		TextCount:     persistence.MemoryCountEntries(persistence.MemoryTypeText),
-		ImageCount:    persistence.MemoryCountEntries(persistence.MemoryTypeImage),
-		AudioCount:    persistence.MemoryCountEntries(persistence.MemoryTypeAudio),
+		TextCount:     memory.Count(memory.TypeText),
+		ImageCount:    memory.Count(memory.TypeImage),
+		AudioCount:    memory.Count(memory.TypeAudio),
 	})
 }
 
@@ -170,16 +170,15 @@ func handleMemoryListCollections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	names := persistence.MemoryListCollections()
+	names := memory.Collections()
 	infos := make([]memoryCollectionInfo, 0, len(names))
 	for _, name := range names {
-		info := persistence.MemoryGetCollectionInfo(name)
+		info := memory.CollectionInfo(name)
 		if info == nil {
 			continue
 		}
 		infos = append(infos, memoryCollectionInfo{
 			Name:                   name,
-			EmbeddingModel:         getStringField(info, "embedding_model"),
 			Dimension:              getIntField(info, "embedding_dimension"),
 			Count:                  getIntField(info, "document_count"),
 			Version:                getIntField(info, "version"),
@@ -215,8 +214,8 @@ func handleMemoryCreateCollection(w http.ResponseWriter, r *http.Request, collec
 		return
 	}
 
-	if !persistence.IsMemoryInitialized() {
-		if err := persistence.MemoryInitInstance(); err != nil {
+	if !memory.Ready() {
+		if err := memory.EnsureReady(); err != nil {
 			writeError(w, http.StatusServiceUnavailable, fmt.Sprintf("记忆库请求[ERROR] -> 记忆库初始化失败: %v", err))
 			return
 		}
@@ -224,18 +223,17 @@ func handleMemoryCreateCollection(w http.ResponseWriter, r *http.Request, collec
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	if err := persistence.CollectionInit(ctx, collectionName); err != nil {
+	if err := memory.InitCollection(ctx, collectionName); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 集合创建失败: %v", err))
 		return
 	}
 
-	info := persistence.MemoryGetCollectionInfo(collectionName)
+	info := memory.CollectionInfo(collectionName)
 	logger.Info("FileManager", "集合 [%s] 创建成功, 集合名向量维度: %d",
 		collectionName, getIntField(info, "name_embedding_dimension"))
 
 	writeSuccess(w, memoryCollectionInfo{
 		Name:                   collectionName,
-		EmbeddingModel:         getStringField(info, "embedding_model"),
 		Dimension:              getIntField(info, "embedding_dimension"),
 		Count:                  getIntField(info, "document_count"),
 		Version:                getIntField(info, "version"),
@@ -252,14 +250,14 @@ func handleMemoryCollectionStats(w http.ResponseWriter, r *http.Request, collect
 		return
 	}
 
-	info := persistence.MemoryGetCollectionInfo(collectionName)
+	info := memory.CollectionInfo(collectionName)
 	if info == nil {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 集合 '%s' 不存在", collectionName))
 		return
 	}
 
 	count := getIntField(info, "document_count")
-	mismatch := persistence.MemoryHasSyncMismatch(collectionName)
+	mismatch := memory.HasSyncMismatch(collectionName)
 
 	writeSuccess(w, memoryStatsData{
 		DocumentCount: count,
@@ -285,8 +283,8 @@ func handleMemoryMessages(w http.ResponseWriter, r *http.Request) {
 
 // handleMemoryAddMessage POST /memory/messages — 添加记忆（内容自动归组）
 func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request) {
-	if !persistence.IsMemoryInitialized() {
-		if err := persistence.MemoryInitInstance(); err != nil {
+	if !memory.Ready() {
+		if err := memory.EnsureReady(); err != nil {
 			writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 			return
 		}
@@ -302,12 +300,12 @@ func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request) {
 	if mediaType == "" {
 		// 未指定类型：带 base64 视为图片，否则按文本
 		if req.Base64 != "" {
-			mediaType = persistence.MemoryTypeImage
+			mediaType = memory.TypeImage
 		} else {
-			mediaType = persistence.MemoryTypeText
+			mediaType = memory.TypeText
 		}
 	}
-	mediaType, err := persistence.NormalizeMemoryType(mediaType)
+	mediaType, err := memory.NormalizeType(mediaType)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> %v", err))
 		return
@@ -315,24 +313,24 @@ func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.Background()
 	switch mediaType {
-	case persistence.MemoryTypeImage:
+	case memory.TypeImage:
 		if req.Base64 == "" {
 			writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 图片记忆需要 base64 字段")
 			return
 		}
-		id, err := persistence.MemoryAddImage(ctx, req.Base64, req.RecognitionOrientation, req.RecognitionCustom)
+		id, err := memory.AddImage(ctx, req.Base64, req.RecognitionOrientation, req.RecognitionCustom)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加图片失败: %v", err))
 			return
 		}
 		logger.Info("FileManager", "添加图片记忆成功, ID: %s, 识别取向: %s", id, req.RecognitionOrientation)
 		writeSuccess(w, map[string]string{"id": id, "type": mediaType})
-	case persistence.MemoryTypeAudio:
+	case memory.TypeAudio:
 		if req.Base64 == "" {
 			writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 音频记忆需要 base64 字段")
 			return
 		}
-		id, err := persistence.MemoryAddAudio(ctx, req.Base64, req.Description)
+		id, err := memory.AddAudio(ctx, req.Base64, req.Description)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加音频失败: %v", err))
 			return
@@ -354,9 +352,9 @@ func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request) {
 		var id string
 		var err error
 		if len(req.Tags) > 0 {
-			id, err = persistence.MemoryAddMessageWithTags(ctx, req.Role, req.Content, req.Tags, req.Source)
+			id, err = memory.AddTextWithTags(ctx, req.Role, req.Content, req.Tags, req.Source)
 		} else {
-			id, err = persistence.MemoryAddMessage(ctx, req.Role, req.Content)
+			id, err = memory.AddText(ctx, req.Role, req.Content)
 		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加消息失败: %v", err))
@@ -369,7 +367,7 @@ func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request) {
 
 // handleMemoryQueryMessages GET /memory/messages — 全局检索（只指定返回类型）
 func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request) {
-	if !persistence.IsMemoryInitialized() {
+	if !memory.Ready() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
@@ -380,7 +378,7 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mediaType, err := persistence.NormalizeMemoryType(r.URL.Query().Get("type"))
+	mediaType, err := memory.NormalizeType(r.URL.Query().Get("type"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> %v", err))
 		return
@@ -399,8 +397,8 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request) {
 		forceGlobal = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
 	}
 	ctx := context.Background()
-	messages, err := persistence.MemoryQueryWithOptions(ctx, queryText, mediaType, topK,
-		persistence.MemoryQueryOptions{ForceGlobal: forceGlobal})
+	messages, err := memory.Query(ctx, queryText, mediaType, topK,
+		memory.QueryOptions{ForceGlobal: forceGlobal})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 查询失败: %v", err))
 		return
@@ -437,7 +435,7 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request) {
 
 // handleMemoryDeleteMessage DELETE /memory/messages — 按 id 全局删除
 func handleMemoryDeleteMessage(w http.ResponseWriter, r *http.Request) {
-	if !persistence.IsMemoryInitialized() {
+	if !memory.Ready() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
@@ -456,8 +454,8 @@ func handleMemoryDeleteMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	if err := persistence.MemoryDeleteMessage(ctx, req.ID); err != nil {
-		if errors.Is(err, persistence.ErrMemoryEntryNotFound) {
+	if err := memory.Delete(ctx, req.ID); err != nil {
+		if errors.Is(err, memory.ErrNotFound) {
 			writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 未找到 ID 为 %s 的记忆", req.ID))
 			return
 		}
@@ -478,9 +476,9 @@ func handleMemoryEntries(w http.ResponseWriter, r *http.Request) {
 
 	// 按 ID 返回单条
 	if id := strings.TrimSpace(r.URL.Query().Get("id")); id != "" {
-		entry, err := persistence.MemoryGetEntry(id)
+		entry, err := memory.Get(id)
 		if err != nil {
-			if errors.Is(err, persistence.ErrMemoryEntryNotFound) {
+			if errors.Is(err, memory.ErrNotFound) {
 				writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 未找到 ID 为 %s 的记忆", id))
 				return
 			}
@@ -494,7 +492,7 @@ func handleMemoryEntries(w http.ResponseWriter, r *http.Request) {
 	// 逐条列举：type 为空表示全部类型；limit=0 表示全部
 	mediaType := strings.TrimSpace(r.URL.Query().Get("type"))
 	if mediaType != "" {
-		normalized, err := persistence.NormalizeMemoryType(mediaType)
+		normalized, err := memory.NormalizeType(mediaType)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> %v", err))
 			return
@@ -514,7 +512,7 @@ func handleMemoryEntries(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	entries, total := persistence.MemoryListEntries(mediaType, offset, limit)
+	entries, total := memory.List(mediaType, offset, limit)
 	list := make([]memoryMessageData, 0, len(entries))
 	for i := range entries {
 		list = append(list, memoryMessageData{
@@ -540,7 +538,7 @@ func handleMemoryEntries(w http.ResponseWriter, r *http.Request) {
 }
 
 // memoryEntryOf 单条结果 → 端点响应结构
-func memoryEntryOf(entry *persistence.MemoryQueryResult) memoryMessageData {
+func memoryEntryOf(entry *memory.Entry) memoryMessageData {
 	if entry == nil {
 		return memoryMessageData{}
 	}
@@ -580,7 +578,7 @@ func handleMemoryFuse(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 
-	result, err := persistence.MemoryFuseEntries(ctx, req.Collection, req.IDs, persistence.MemoryFuseOptions{
+	result, err := memory.Fuse(ctx, req.Collection, req.IDs, memory.FuseOptions{
 		Threshold: float32(req.Threshold),
 		Strategy:  req.Strategy,
 		Role:      req.Role,
@@ -616,7 +614,7 @@ func handleMemoryDocuments(w http.ResponseWriter, r *http.Request, collectionNam
 		}
 	}
 
-	entries, total := persistence.MemoryGetDocuments(collectionName, offset, limit)
+	entries, total := memory.Documents(collectionName, offset, limit)
 
 	docList := make([]memoryMessageData, 0, len(entries))
 	for _, entry := range entries {
@@ -648,18 +646,18 @@ func handleMemoryRebuild(w http.ResponseWriter, r *http.Request, collectionName 
 		return
 	}
 
-	if !persistence.IsMemoryInitialized() {
+	if !memory.Ready() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
 
 	ctx := context.Background()
-	if err := persistence.MemoryRebuildEntries(ctx, collectionName, "", nil); err != nil {
+	if err := memory.Rebuild(ctx, collectionName, "", nil); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 重建条目失败: %v", err))
 		return
 	}
 
-	count := persistence.MemoryGetEntryCount(collectionName)
+	count := memory.DocCount(collectionName)
 	logger.Info("FileManager", "集合 [%s] rebuild 完成, 剩余 %d 条文档", collectionName, count)
 
 	writeSuccess(w, map[string]interface{}{
@@ -674,11 +672,11 @@ func handleMemoryReloadCollection(w http.ResponseWriter, r *http.Request, collec
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
 		return
 	}
-	if !persistence.IsMemoryInitialized() {
+	if !memory.Ready() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
-	if err := persistence.MemoryReloadCollection(collectionName); err != nil {
+	if err := memory.Reload(collectionName); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 重新加载分组失败: %v", err))
 		return
 	}
@@ -694,12 +692,12 @@ func handleMemoryDeleteCollection(w http.ResponseWriter, r *http.Request, collec
 		return
 	}
 
-	if !persistence.IsMemoryInitialized() {
+	if !memory.Ready() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
 
-	if err := persistence.MemoryDeleteCollection(collectionName); err != nil {
+	if err := memory.DeleteCollection(collectionName); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 删除集合失败: %v", err))
 		return
 	}
@@ -717,12 +715,12 @@ func handleMemoryClearCollection(w http.ResponseWriter, r *http.Request, collect
 		return
 	}
 
-	if !persistence.IsMemoryInitialized() {
+	if !memory.Ready() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
 
-	if err := persistence.MemoryClearCollection(collectionName); err != nil {
+	if err := memory.ClearCollection(collectionName); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 清空集合失败: %v", err))
 		return
 	}

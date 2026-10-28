@@ -7,7 +7,7 @@ package desktop
 import (
 	"sort"
 
-	"LunarSubsystem/LunarHarness/engine/agentinfo"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // ToolCatalog 返回桌面操作的 function calling 工具清单（按名称排序）。

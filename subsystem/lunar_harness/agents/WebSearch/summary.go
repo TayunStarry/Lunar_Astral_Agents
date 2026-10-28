@@ -24,10 +24,60 @@ func composeDigest(instruction, query string, sources []digestSource, profile su
 		"{instruction}", instruction,
 		"{query}", query,
 		"{longtext}", encodeSources(sources))
-	return chatWithOptions([]chatMessage{
+	text, err := chatWithOptions([]chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: user},
 	}, profileChatOptions(profile))
+	if err != nil {
+		return "", err
+	}
+	if isNoRelevanceDigest(text) {
+		// 模型仍可能退回「未检索到」占位句；直接改用页面正文摘要，
+		// 保证调用方拿到的是内容而不是一句否定说明。
+		return pageContentDigest(sources), nil
+	}
+	return text, nil
+}
+
+// isNoRelevanceDigest 判断摘要是否为「没有相关内容」的否定占位句。
+func isNoRelevanceDigest(text string) bool {
+	compact := strings.Join(strings.Fields(text), "")
+	if compact == "" {
+		return false
+	}
+	for _, marker := range []string{
+		"未检索到与问题直接相关的信息",
+		"未检索到相关信息",
+		"没有检索到与问题直接相关的信息",
+		"未找到与问题直接相关的信息",
+		"没有找到与问题直接相关的信息",
+	} {
+		if strings.Contains(compact, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// pageContentDigest 页面正文兜底摘要：按来源顺序摘取每页正文前 800 字。
+func pageContentDigest(sources []digestSource) string {
+	var builder strings.Builder
+	for index, source := range sources {
+		if index >= 3 {
+			break
+		}
+		body := strings.TrimSpace(source.Text)
+		if body == "" {
+			continue
+		}
+		fmt.Fprintf(&builder, "【%s】\n%s\n\n",
+			firstNonEmpty(source.Title, source.URL), hardCutRunes(body, 800))
+	}
+	out := strings.TrimSpace(builder.String())
+	if out == "" {
+		return "页面正文为空，未获取到可摘要的内容。"
+	}
+	return out
 }
 
 // encodeSources 把全部来源页正文拼接为一个带来源标记的长文

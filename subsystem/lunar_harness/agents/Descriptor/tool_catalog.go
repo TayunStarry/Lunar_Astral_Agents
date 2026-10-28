@@ -2,7 +2,7 @@ package Descriptor
 
 // tool_catalog.go 描述者的工具目录（供控制台「工具列表」屏展示）。
 
-import "LunarSubsystem/LunarHarness/engine/agentinfo"
+import "LunarSubsystem/LunarHarness/protocol/agentinfo"
 
 // ToolCatalog 返回描述者的文件查询工具清单。
 func ToolCatalog() []agentinfo.Agent {

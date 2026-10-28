@@ -1,11 +1,12 @@
 package lunar
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
 
-	persistence "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // ==== 消息与内容 ====
@@ -55,6 +56,28 @@ type PostMessage struct {
 	Source     string         `json:"source,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
 	ToolCalls  []ToolCallItem `json:"tool_calls,omitempty"`
+}
+
+// ResourceAudioTask 统一资源转换中的音频批处理单元：
+// 先登记句柄并转写，全部转写完成后再统一卸载 ASR 模型并回填文本。
+type ResourceAudioTask struct {
+	// Source 音频来源（data URI / 本地地址 / 远程地址）
+	Source string
+	// Name 展示文件名
+	Name string
+	// Origin 来源语义
+	Origin string
+	// Message 所属消息下标
+	Message int
+	// Slot 文本回填位置（该消息内容项数组的下标）
+	Slot int
+}
+
+// urlExtractBudget 一次未读转换内的链接提炼配额：同一条消息里多条陌生链接时，
+// 只对前几条现场提炼，其余保留句柄与地址，等月华按需用 use_resource 取回。
+type urlExtractBudget struct {
+	// used 已提炼次数
+	used int
 }
 
 // ==== 工具调用 ====
@@ -226,13 +249,13 @@ type MemorySearchOptions struct {
 	ForceGlobal bool
 }
 
-// ==== 统一资源归档层类型别名 ====
+// ==== 统一资源句柄系统类型别名 ====
 
-type ResourceEntry = persistence.ArchiveResource
-type ResourceReadResult = persistence.ReadResult
-type ResourceSection = persistence.ArchiveSection
-type ResourceSearchHit = persistence.ArchiveSearchHit
-type ResourceStats = persistence.ArchiveStats
+type ResourceEntry = resource.Resource
+type ResourceReadResult = resource.ReadResult
+type ResourceSection = resource.Section
+type ResourceSearchHit = resource.SearchHit
+type ResourceStats = resource.StatsReport
 
 // ==== 句柄 ====
 
@@ -462,23 +485,10 @@ type AgentPositionData struct {
 
 // ==== LTPX 工具链 ====
 
-// LTPXRemoteToolDef 聚合工具定义
-type LTPXRemoteToolDef struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Parameters  any    `json:"parameters"`
-}
-
 // LTPXRemoteToolRef 可调用应用（名称 + 能力描述）
 type LTPXRemoteToolRef struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-}
-
-// LTPXRemoteStatusResult 工具链同步结果
-type LTPXRemoteStatusResult struct {
-	Tool  *LTPXRemoteToolDef  `json:"tool,omitempty"`
-	Tools []LTPXRemoteToolRef `json:"tools,omitempty"`
 }
 
 // ==== 数据导出 ====
@@ -487,6 +497,47 @@ type LTPXRemoteStatusResult struct {
 type DumpRoleEntry struct {
 	Label   string
 	Builder *ModelBuilder
+}
+
+// ==== Tick 调度 ====
+
+// TickSnapshot 一次 Tick 判定所需的只读快照。
+type TickSnapshot struct {
+	Now            time.Time
+	IdleTicks      int
+	Unread         int
+	ViewingPending bool
+}
+
+// TickSystem 可注册的 Tick 体系。
+//
+// 新增体系只需实现该接口并注册，主调度逻辑不需要改动：
+//   - Priority 越大越先判定（对话 300 / 观影 200 / 生活 100）；
+//   - Ready 只读判定，不得消费消息或改状态；
+//   - Run 执行一个原子工作单元，返回即表示释放 Tick。
+type TickSystem interface {
+	ID() string
+	Priority() int
+	Ready(TickSnapshot) (bool, string)
+	Run(ctx context.Context) error
+}
+
+// TickState 调度器持久化状态。
+type TickState struct {
+	Version       int    `json:"version"`
+	IdleTicks     int    `json:"idle_ticks"`
+	LastSystem    string `json:"last_system"`
+	LastReason    string `json:"last_reason"`
+	LastTriggerAt int64  `json:"last_trigger_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+}
+
+// RuntimeGlobalMessage 对话者运行时消息的全局共享数据。
+type RuntimeGlobalMessage struct {
+	Timestamp   int64  `json:"timestamp"`
+	MoodLabel   string `json:"mood_label"`
+	LifeRecord  string `json:"life_record"`
+	PlanSummary string `json:"plan_summary"`
 }
 
 // ==== 引擎自愈状态 ====

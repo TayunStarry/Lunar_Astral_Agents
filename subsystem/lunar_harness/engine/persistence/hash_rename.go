@@ -82,6 +82,12 @@ func HashRenameDir(localDir string, relPath string) (HashRenameResponse, error) 
 			response.Error = fmt.Sprintf("重命名失败: %s -> %s: %v", entry.Name(), newName, err)
 			return response, err
 		}
+		// 改名同样纳入句柄追踪：旧路径映射改写到新位置
+		if oldRel, ok := relativeToLocalDir(fullPath); ok {
+			if newRel, ok := relativeToLocalDir(filepath.Join(dirPath, newName)); ok {
+				NotifyMove(oldRel, newRel)
+			}
+		}
 		usedNames[newName] = true
 		response.Renamed++
 		response.Results = append(response.Results, HashRenameItem{

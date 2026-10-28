@@ -6,13 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
 	"LunarSubsystem/LunarHarness/lunar"
-	"LunarSubsystem/LunarHarness/transport/napcat"
 )
 
 // assembleLunar 装配月华人格局的生产者部分：模型代理、绘图协处理器与 QQ 桥接。
@@ -62,7 +62,7 @@ func startLunarAgent() error {
 // shutdownLunar 关闭月华人格局持有的资源
 func shutdownLunar() {
 	lunar.Stop()
-	napcat.StopBridge()
+	DialogueBridging.StopBridge()
 	llama.Close()
 }
 
@@ -86,13 +86,13 @@ func initNapcatBridge() {
 		configPath = filepath.Join(exeDir, config.LocalDir, "lunar_config.json")
 	}
 
-	if err := napcat.LoadBridgingConfig(configPath); err != nil {
+	if err := DialogueBridging.LoadBridgingConfig(configPath); err != nil {
 		logger.Error("LunarHarness", "加载桥接配置失败: %v", err)
 		return
 	}
 
 	// QQ 消息（OpenAI 格式）按到达顺序推送到智能体统一未读队列
-	napcat.SendMessageToAgent = func(messages []map[string]any) {
+	DialogueBridging.SendMessageToAgent = func(messages []map[string]any) {
 		for _, msg := range messages {
 			lunar.EnqueueMessage(lunar.PostMessage{
 				Role:    "user",
@@ -103,12 +103,12 @@ func initNapcatBridge() {
 	}
 
 	// 语音/音频地址包装为媒体URL内容项，按到达顺序写入统一未读队列
-	napcat.SendAudioToAgent = func(urls []string) {
+	DialogueBridging.SendAudioToAgent = func(urls []string) {
 		for _, url := range urls {
 			lunar.EnqueueAudioURL(url, "qq")
 		}
 	}
 
 	// 启动桥接连接（内部阻塞读取 WebSocket 消息，必须放到独立 goroutine）
-	go napcat.StartBridgeScanner()
+	go DialogueBridging.StartBridgeScanner()
 }

@@ -1,9 +1,6 @@
 package persistence
 
 import (
-	"database/sql"
-	"net/http"
-	"sync"
 	"time"
 )
 
@@ -38,214 +35,35 @@ type SaveResult struct {
 	Size    int64  `json:"size"`     // 文件字节数
 }
 
-// OperationResult 单个操作结果
-type OperationResult struct {
-	Success      bool             `json:"success"`                  // 是否成功执行
-	Error        string           `json:"error,omitempty"`          // 错误信息
-	Operation    string           `json:"operation"`                // 操作类型
-	Rows         []map[string]any `json:"rows,omitempty"`           // 受影响的行数据
-	AffectedRows int64            `json:"affected_rows,omitempty"`  // 受影响的行数
-	LastInsertID int64            `json:"last_insert_id,omitempty"` // 最后插入的行ID
-	Table        string           `json:"table,omitempty"`          // 受影响的表名
-	Structure    []map[string]any `json:"structure,omitempty"`      // 受影响的表结构定义
-	Tables       []string         `json:"tables,omitempty"`         // 受影响的表名列表
-	Count        int64            `json:"count,omitempty"`          // 受影响的行数
-}
-
-// BatchResult 批量操作结果
-type BatchResult struct {
-	Success    bool              `json:"success"`         // 是否所有成功执行
-	Error      string            `json:"error,omitempty"` // 错误信息
-	Results    []OperationResult `json:"results"`         // 操作结果列表
-	TotalTime  int64             `json:"total_time_ms"`   // 总耗时（毫秒）
-	Operations int               `json:"operations"`      // 操作次数
-}
-
-// =============================================================================
-// v5 记忆库类型定义 — 文本/图片混合存储，仅内容嵌入向量
-// 核心变更：
-//   - 移除标签向量（TagVector）与 LLM 文本标签生成机制，仅图片入库时用多模态生成标签用于嵌入
-//   - 文本与图片记忆混合存储在同一个集合，不再区分"文本集合"/"图片集合"
-//   - Document 统一以 content（文本）与 base64（图片）字段区分记忆类型，
-//     客户端根据两个字段的存在情况自行判定取用哪种内容
-// =============================================================================
-
-// MemoryQueryResult 记忆库查询结果（含相似度分数）
-// Type 为记忆类型（text/image/audio）；Collection 为内容自动归入的分组集合名。
-// 客户端依据 type 取用对应内容，不再按集合名查询。
-type MemoryQueryResult struct {
-	ID         string  `json:"id"`                   // 文档 ID
-	Type       string  `json:"type"`                 // 记忆类型：text / image / audio
-	Role       string  `json:"role"`                 // 消息角色，图片记忆为 "image"
-	Content    string  `json:"content"`              // 文本内容，文本记忆使用；图片记忆为空
-	URL        string  `json:"url,omitempty"`        // 媒体读取地址（multimedia|audios/<集合名> 下的文件）
-	Base64     string  `json:"base64,omitempty"`     // 旧版图片内联数据（仅历史数据兼容）
-	Collection string  `json:"collection,omitempty"` // 内容所属分组集合名
-	Source     string  `json:"source,omitempty"`     // 写入来源标记（插件 / 内部调用；普通对话为空）
-	Similarity float32 `json:"similarity"`           // 内容向量余弦相似度
-	Timestamp  int64   `json:"timestamp,omitempty"`  // 入库时间 Unix 秒级时间戳，旧数据无此字段
-}
-
-// DocumentEntry 文档条目 — 用于前端分页列表（不含嵌入向量，避免传输开销）
-type DocumentEntry struct {
-	ID         string `json:"id"`                   // 文档条目 ID
-	Type       string `json:"type"`                 // 记忆类型：text / image / audio
-	Role       string `json:"role"`                 // 文档条目角色，"image" 表示图片记忆
-	Content    string `json:"content"`              // 文本内容，文本记忆使用；图片记忆为空
-	URL        string `json:"url,omitempty"`        // 媒体读取地址
-	Base64     string `json:"base64,omitempty"`     // 旧版图片内联数据（仅历史数据兼容）
-	Collection string `json:"collection,omitempty"` // 所属分组集合名
-	Source     string `json:"source,omitempty"`     // 写入来源标记
-	Timestamp  int64  `json:"timestamp,omitempty"`  // 入库时间 Unix 秒级时间戳，旧数据无此字段
-}
-
-// MemoryQueryOptions 记忆向量检索选项
-type MemoryQueryOptions struct {
-	// ForceGlobal 强制全局检索：跳过「集合名向量」快速路由，扫描全部集合。
-	//
-	// 默认 false（快速检索）：先查与查询含义最接近的集合；命中则再查第 2~5 近的
-	// 集合，首集合未命中则回退扫描其余全部集合。集合越多，快速检索省下的全量
-	// 向量比较越多；需要“确保不漏”时（如表情包等稀疏媒体）显式打开本项。
-	ForceGlobal bool
-}
-
-// MemoryFuseOptions 权重融合参数（仅作用于文本记忆）
-type MemoryFuseOptions struct {
-	// Threshold 同簇相似度阈值（余弦，0~1）；<=0 或低于下限时用默认值
-	Threshold float32
-	// Strategy 合并策略：auto（短拼接/长模型）、concat（拼接去重）、model（模型整合）
-	Strategy string
-	// Role 合并后条目的角色；为空时取簇内出现最多的角色
-	Role string
-}
-
-// MemoryFuseGroup 一组被合并的条目
-type MemoryFuseGroup struct {
-	// IDs 被合并（并删除）的原条目 ID
-	IDs []string `json:"ids"`
-	// Similarity 簇内最低相似度（相对簇代表条目）
-	Similarity float32 `json:"similarity"`
-	// Content 合并后的正文
-	Content string `json:"content"`
-	// Role 合并后条目角色
-	Role string `json:"role"`
-	// NewID 新建的整合条目 ID
-	NewID string `json:"new_id"`
-	// Strategy 实际使用的合并方式：concat / model
-	Strategy string `json:"strategy"`
-}
-
-// MemoryFuseResult 权重融合结果
-type MemoryFuseResult struct {
-	Collection     string            `json:"collection"`
-	CandidateCount int               `json:"candidate_count"` // 参与扫描的文本条目数
-	GroupCount     int               `json:"group_count"`     // 实际合并的簇数
-	CreatedCount   int               `json:"created_count"`   // 新建整合条目数
-	RemovedCount   int               `json:"removed_count"`   // 删除的原条目数
-	SkippedMedia   int               `json:"skipped_media"`   // 因非文本/无正文被跳过的条目数
-	Threshold      float32           `json:"threshold"`
-	Groups         []MemoryFuseGroup `json:"groups"`
-}
-
-// Document 统一文档结构（文本 / 图片 / 音频记忆共用，混合存储在同一个集合）
-// content 与 url 二选一：文本记忆 content 存储文本内容、url 为空；
-// 媒体记忆 url 指向 multimedia|audios/<集合名>/ 下的实体文件、content 通常为空。
-// base64 仅用于兼容历史数据，新写入不再产生。Embedding 为内容嵌入向量：
-// 文本记忆为正文（或预设标签拼接文本）的向量，媒体记忆为标签/描述文本的向量。
-type Document struct {
-	ID        string `json:"id"`                  // 文档 UUID v4
-	Type      string `json:"type,omitempty"`      // 记忆类型：text / image / audio（旧数据为空，按字段推断）
-	Role      string `json:"role,omitempty"`      // 消息角色，文本记忆使用
-	Content   string `json:"content,omitempty"`   // 文本内容，文本记忆使用
-	URL       string `json:"url,omitempty"`       // 媒体读取地址（multimedia|audios/<集合名> 下的文件）
-	Base64    string `json:"base64,omitempty"`    // 旧版图片内联数据（仅历史数据兼容）
-	Source    string `json:"source,omitempty"`    // 写入来源标记（插件 / 内部调用），仅作溯源信息
-	Timestamp int64  `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳
-	// Embedding 文档内容嵌入向量，json:"-" 使其不随文档持久化，
-	// 单独存储于 embeddings_NNNN.json 切片文件（见 embeddingRecord）
-	Embedding []float32 `json:"-"`
-}
-
-// embeddingRecord 嵌入向量切片条目 — 与文档切片一一对应（按相同索引对齐）
-// 由于 Document.Embedding 为 json:"-"，向量单独以 ID 关联持久化，
-// 避免文档切片文件体积过大。
-type embeddingRecord struct {
-	ID        string    `json:"id"`        // 对应文档的 UUID
-	Embedding []float32 `json:"embedding"` // 文档内容嵌入向量
-}
-
-// collectionMeta 集合元数据，持久化到 metadata.json
-type collectionMeta struct {
-	EmbeddingModel       string    `json:"embedding_model"`                // 锁定的嵌入模型名
-	EmbeddingDimension   int       `json:"embedding_dimension"`            // 锁定的向量维度
-	NameEmbedding        []float32 `json:"name_embedding,omitempty"`       // 集合名嵌入向量（内容归组路由用）
-	NameEmbeddingModel   string    `json:"name_embedding_model,omitempty"` // 集合名嵌入所用模型
-	Version              int       `json:"version"`                        // 数据格式版本号（v5 = 5）
-	DocumentsChunkCount  int       `json:"documents_chunk_count"`          // 文档分块数
-	EmbeddingsChunkCount int       `json:"embeddings_chunk_count"`         // 嵌入向量分块数
-}
-
-// Collection 单个记忆集合 — 内容按语义自动归入的分组
-// 集合本身也有一份「集合名嵌入向量」：入库时把内容的嵌入向量与所有集合名向量比较，
-// 归入最相关的一组；查询则在全部集合中检索，不再由调用方指定集合。
-// 存储布局：
-//
-//	<collDir>/metadata.json
-//	<collDir>/documents_NNNN.json   (文本/图片/音频统一分块存储，不含向量，100 条/块)
-//	<collDir>/embeddings_NNNN.json  (内容嵌入向量分块存储，100 条/块)
-type Collection struct {
-	Name                 string       // 集合名
-	Model                string       // 锁定的嵌入模型名
-	Dimension            int          // 锁定的向量维度
-	NameEmbedding        []float32    // 集合名嵌入向量
-	NameEmbeddingModel   string       // 集合名嵌入所用模型
-	Documents            []Document   // 统一文档列表（文本/图片/音频混合，含内存嵌入向量）
-	mu                   sync.RWMutex // 数据读写锁
-	collDir              string       // 集合目录绝对路径
-	metaPath             string       // metadata.json 路径
-	documentsChunkCount  int          // 文档分块数
-	embeddingsChunkCount int          // 嵌入向量分块数
-	lastFileModTime      time.Time    // metadata.json 最近加载时间，用于跨进程一致性检测
-}
-
 // PreviewEntry 文件预览条目，包含 MIME 类型和文件类别
 type PreviewEntry struct {
 	MIME     string // MIME 类型
 	Category string // 文件类别: image / video / text
 }
 
-// KnowledgeDB 知识库结构体（SQLite）
-// 职责：SQL 连接管理、批量操作、表结构管理、信息查询
-// 通用知识库（knowledge.db）只存用户/插件自建表；内建缓存与索引按领域落到
-// media / web / text / character 库（见 domain_db.go）。
-// 另支持懒打开 database 目录内任意 *.db（含子目录），作为 /knowledge/ 端点的可选数据源
-type KnowledgeDB struct {
-	knowledgeDB          *sql.DB            // 知识库 SQL 连接
-	knowledgeInitialized bool               // 知识库是否初始化完成
-	fileDBs              map[string]*sql.DB // 任意 *.db 懒打开连接缓存（键为数据库文件名去 .db）
-	fileDBsMu            sync.Mutex         // fileDBs 并发打开互斥锁
+// FileHandle 句柄映射的只读视图（文件列表等展示用）
+type FileHandle struct {
+	Handle      string
+	Kind        string
+	ContentHash string
 }
 
-// ArchiveDB 统一资源目录结构体（SQLite archive.db，见 docs/adr/0001）
-// 职责：句柄分配与解析、资源元数据、段落结构表、跨资源搜索。
-// 不存正文（在内容仓库）、不存向量（在记忆库）、不存媒体派生缓存（在 media.db）。
-type ArchiveDB struct {
-	db          *sql.DB // 资源目录 SQL 连接
-	initialized bool    // 是否初始化完成
-}
-
-// MemoryDB 记忆库结构体（多集合分组架构）
-// 职责：嵌入服务连接、LLM 标签生成、集合管理、记忆 CRUD、维度锁定、持久化
-// 模型配置与智能体共用 agent.embedding_* / agent.multimodal_*（不再有独立记忆库模型配置）
-// 存储布局：<baseDir>/<collectionName>/{metadata.json, documents_*.json, embeddings_*.json}
-type MemoryDB struct {
-	initMu            sync.Mutex             // 实例初始化互斥锁（启动/懒加载并发保护）
-	memoryInitialized bool                   // 记忆库实例是否初始化完成
-	httpClient        *http.Client           // HTTP 客户端（嵌入 + LLM 共享）
-	llmMu             sync.Mutex             // LLM 调用互斥锁（严格单线程）
-	baseDir           string                 // 记忆存储根目录绝对路径
-	collections       map[string]*Collection // 集合名 → 集合实例
-	collectionsMu     sync.RWMutex           // collections map 读写锁
+// ResourceObserver 资源句柄观察者：底层写 / 移 / 删 / 读原语完成后回调，
+// 由 engine/resource 在初始化成功后注册。
+//
+// 依赖方向为 persistence ← resource（resource 引用本包的文件原语），
+// 因此本包只定义接口，不 import resource。
+type ResourceObserver interface {
+	// AfterWrite 写盘完成后回调，返回最终保留路径与句柄（句柄为空表示未登记）
+	AfterWrite(rel string) (canonicalRel, handle string)
+	// AfterMove 移动 / 改名完成后回调
+	AfterMove(oldRel, newRel string)
+	// AfterDelete 删除完成后回调
+	AfterDelete(rel string)
+	// AfterRead 读取命中后回调（续期 / 清理失效映射）
+	AfterRead(rel string)
+	// Lookup 按路径查询句柄映射（只读）
+	Lookup(rel string) (FileHandle, bool)
 }
 
 // OrganizeOperation 单个整理操作

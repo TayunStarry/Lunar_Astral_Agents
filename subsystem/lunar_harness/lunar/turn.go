@@ -1,24 +1,22 @@
 package lunar
 
 import (
-	"bytes"
-	"encoding/json"
 	"math/rand"
-	"net/http"
 	"strings"
-	"time"
 
-	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
 // writeMessage 写入消息（文本或多模态内容）
-func writeMessage(role string, content any) {
+//
+// source 为宿主侧来源标记：计划表到期触发的上下文只进入模型上下文，
+// 不写入前端可见的对话缓存，避免「系统内部提醒」以用户气泡出现在聊天界面。
+func writeMessage(role, source string, content any) {
 	normalized := normalizeIncomingContent(content)
 	message := PostMessage{Role: role, Content: normalized}
-	attachImageTags(&message)
-	if role == RoleUser {
+	if role == RoleUser && source != scheduleSource {
 		appendUserMessage(message.Content)
+		rememberUserUtterance(message.Content)
 	}
 	unreadMu.Lock()
 	unreadContext = append(unreadContext, message)
@@ -71,39 +69,6 @@ func normalizeIncomingContent(content any) any {
 		return items
 	}
 	return content
-}
-
-// guardASRUnload 本轮无语音时卸载 ASR 模型
-func guardASRUnload() {
-	unreadMu.Lock()
-	messages := append([]PostMessage(nil), unreadContext...)
-	unreadMu.Unlock()
-	hasAudio := false
-	for _, message := range messages {
-		for _, item := range asItems(message.Content) {
-			if item.Type == ContentInputAudio || item.Type == ContentAudioURL {
-				hasAudio = true
-				break
-			}
-		}
-	}
-	if hasAudio || len(messages) == 0 {
-		return
-	}
-	body := map[string]any{"model": config.AgentASRModel}
-	data, _ := json.Marshal(body)
-	req, err := http.NewRequest(http.MethodPost, config.LocalBaseURL()+"/vram/unload", bytes.NewReader(data))
-	if err != nil {
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Warn(lunarCoreModule, "ASR 卸载执行失败: %v", err)
-		return
-	}
-	resp.Body.Close()
 }
 
 // updatePreviousMemories 更新远期记忆摘要
@@ -161,15 +126,14 @@ func executeToolCalls(messages *[]PostMessage, cache *ChatCache) bool {
 		result := handler(args)
 		*messages = append(*messages, PostMessage{Role: RoleTool, Content: result.Text, ToolCallID: call.ID})
 		if image := normalizeToolImage(result.Image); image != "" {
-			imageMessage := PostMessage{
-				Role: RoleUser,
-				Content: []ContentItem{
-					{Type: ContentText, Text: "【工具返回的图片】" + result.Text},
-					{Type: ContentImageURL, ImageURL: &URLPayload{URL: image}},
-				},
+			content := make([]ContentItem, 0, 2)
+			if result.Text != "" {
+				content = append(content, ContentItem{Type: ContentText, Text: result.Text})
 			}
-			attachImageTags(&imageMessage)
-			*messages = append(*messages, imageMessage)
+			if converted := convertImageResource(image, "tool-output", nil, ""); converted.Type != "" {
+				content = append(content, converted)
+			}
+			*messages = append(*messages, PostMessage{Role: RoleUser, Content: content})
 			logger.Info(lunarCoreModule, "[工具调用] %s 返回图片数据，长度=%d 字节", name, len(result.Image))
 		}
 		hasToolCalls = true
@@ -291,7 +255,10 @@ func slowTaskAckText(functionName string, args map[string]any) string {
 // slowAckActions 按工具给出正文候选；空串表示这次不说正文，返回 nil 表示该工具不需要快速应答
 func slowAckActions(functionName string, args map[string]any) []string {
 	switch functionName {
-	case "dispatch_painter":
+	case techniqueToolName:
+		if strings.ToLower(strings.TrimSpace(stringArg(args, "type"))) != techniquePainter {
+			return nil
+		}
 		return []string{
 			"这就动笔", "这就开画", "马上开工", "先起个稿", "我先构图", "我调下画笔",
 			"先铺个底色", "这就安排画面", "先把色稿打出来", "马上开始画", "让我先想想构图",
@@ -308,14 +275,6 @@ func slowAckActions(functionName string, args map[string]any) []string {
 				"我去网上问问", "这就去找找看", "我先搜一遍", "这题我查查", "我这就去搜",
 				"让我翻翻看", "去检索一下", "先看看网上怎么说", "这就去核实一下",
 				"我先去检索", "马上收集资料", "去查查最新消息", "我上网翻翻", "", "",
-			}
-		case networkBilibilViewerTool:
-			return []string{
-				"这就去看会儿", "那我去逛逛B站", "我去刷一会儿", "这就去挑个视频",
-				"我去B站看看", "这就打开B站", "我去刷两个", "让我先刷刷看", "这就去逛一圈",
-				"去看看有没有好玩的", "马上开刷", "我去B站转一圈", "这就给你挑", "我去瞅瞅",
-				"我这就去刷", "去B站找找乐子", "先随便刷两下", "去看看热门", "我去翻翻推荐",
-				"找个视频看看", "", "",
 			}
 		case networkQQSendTool:
 			return []string{

@@ -8,6 +8,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // 源文件丢失/损坏时的固定提示
@@ -17,30 +18,53 @@ const lostFileNotice = "文件损毁或丢失,请更换句柄"
 const handleInvalidNotice = "句柄无效,文件不存在"
 
 // admitResource 统一入库：归一来源 → 落盘 → 登记资源目录 → 返回句柄
-func admitResource(input persistence.AdmitInput) *persistence.AdmitResult {
-	result, err := persistence.ResourceAdmit(input)
+//
+// 图片入库失败属于可预期的资源缺失（历史消息里的旧地址、渠道临时文件等），
+// 按系统规范直接跳过并销毁可能残留的句柄，不把错误级别抛到日志面板。
+func admitResource(input resource.AdmitInput) *resource.AdmitResult {
+	result, err := resource.Admit(input)
 	if err != nil {
-		logger.Error(lunarCoreModule, "[资源] 入库失败: %v", err)
+		if input.KindHint == "I" {
+			forgetResourceSource(input.Source)
+			logger.Info(lunarCoreModule, "[资源] 图片入库失败，已跳过并销毁句柄: %v", err)
+		} else {
+			logger.Error(lunarCoreModule, "[资源] 入库失败: %v", err)
+		}
 		return nil
 	}
 	return &result
 }
 
-// admitDataURI 入库 data URI（工具产出、内联图片）
-func admitDataURI(dataURI, name, origin string) *persistence.AdmitResult {
-	return admitResource(persistence.AdmitInput{
-		SourceKind: "data",
-		Source:     dataURI,
-		Name:       name,
-		Origin:     origin,
-	})
+// forgetResourceSource 资源入库失败时销毁来源对应的句柄映射。
+//
+// 接受两类来源：已经是 @X.nnn 句柄，或 /file/read/<rel>、multimedia/<rel> 形式的本机路径。
+// 只清句柄与目录行，不删除可能仍被其它资源引用的物理实体。
+func forgetResourceSource(source string) {
+	raw := strings.TrimSpace(source)
+	if raw == "" {
+		return
+	}
+	if parsed := parseHandle(raw); parsed != nil {
+		_ = resource.Delete(formatHandle(*parsed))
+		return
+	}
+	rel := ""
+	if index := strings.Index(raw, fileReadPath); index >= 0 {
+		rel = raw[index+len(fileReadPath):]
+	} else if strings.HasPrefix(raw, "multimedia/") || strings.HasPrefix(raw, "audios/") {
+		rel = raw
+	}
+	rel = strings.TrimPrefix(strings.TrimSpace(rel), "/")
+	if rel != "" {
+		resource.ForgetPath(rel)
+	}
 }
 
 // admitImageDataURI 入库图片来源：同类型同内容哈希复用既有资源
 //
 // 来源形态不止 data URI：前端可能给 /file/read/ 路径，QQ 渠道可能给远程图床地址。
 // 一律按取值推断来源类型，避免把 URL 当 data URI 解码而整张图入库失败。
-func admitImageDataURI(source, name string) *persistence.AdmitResult {
+func admitImageDataURI(source, name string) *resource.AdmitResult {
 	if source == "" {
 		return nil
 	}
@@ -52,7 +76,7 @@ func admitImageDataURI(source, name string) *persistence.AdmitResult {
 	case strings.HasPrefix(lower, "http://"), strings.HasPrefix(lower, "https://"):
 		sourceKind = "url"
 	}
-	return admitResource(persistence.AdmitInput{
+	return admitResource(resource.AdmitInput{
 		SourceKind: sourceKind,
 		Source:     source,
 		Name:       name,
@@ -63,7 +87,7 @@ func admitImageDataURI(source, name string) *persistence.AdmitResult {
 }
 
 // admitMedia 把媒体收进资源目录
-func admitMedia(source, name, origin, kindHint string) *persistence.AdmitResult {
+func admitMedia(source, name, origin, kindHint string) *resource.AdmitResult {
 	if source == "" {
 		return nil
 	}
@@ -74,7 +98,7 @@ func admitMedia(source, name, origin, kindHint string) *persistence.AdmitResult 
 	} else if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
 		sourceKind = "url"
 	}
-	return admitResource(persistence.AdmitInput{
+	return admitResource(resource.AdmitInput{
 		SourceKind: sourceKind,
 		Source:     source,
 		Name:       name,
@@ -92,22 +116,22 @@ func readResource(handle string, maxBytes int) *ResourceReadResult {
 	}
 	normalized := formatHandle(*parsed)
 	if maxBytes <= 0 {
-		maxBytes = persistence.MaxReadBytes
+		maxBytes = resource.MaxReadBytes
 	}
-	result, err := persistence.ResourceRead(normalized, maxBytes)
+	result, err := resource.Read(normalized, maxBytes)
 	if err != nil {
 		logger.Warn(lunarCoreModule, "[资源] 取回失败（%s）: %v", normalized, err)
 		return nil
 	}
 	if result.Lost {
-		_ = persistence.ResourceDelete(normalized)
+		_ = resource.Delete(normalized)
 		return &result
 	}
 	if result.Kind == "I" && result.BlobPath != "" {
 		data, mime, width, height, visionErr := visionCopy(result.BlobPath, result.Handle, 0)
 		if visionErr != nil {
-			if res, resolveErr := persistence.ResourceResolve(result.Handle); resolveErr == nil {
-				_ = persistence.ResourceMarkLost(res.ID)
+			if res, resolveErr := resource.Resolve(result.Handle); resolveErr == nil {
+				_ = resource.MarkLost(res.ID)
 			}
 			result.Lost = true
 			result.Base64 = ""
@@ -128,7 +152,7 @@ func outlineResource(handle string) []ResourceSection {
 	if parsed == nil {
 		return nil
 	}
-	sections, _, err := persistence.ResourceOutline(formatHandle(*parsed))
+	sections, _, err := resource.Outline(formatHandle(*parsed))
 	if err != nil {
 		return nil
 	}
@@ -140,7 +164,7 @@ func listResources(kind string, limit int) []ResourceEntry {
 	if limit <= 0 {
 		limit = 50
 	}
-	entries, err := persistence.ResourceList(kind, limit)
+	entries, err := resource.List(kind, limit)
 	if err != nil {
 		logger.Warn(lunarCoreModule, "[资源] 列目录失败: %v", err)
 		return nil
@@ -157,7 +181,7 @@ func searchResources(query, kind string, limit int) []ResourceSearchHit {
 	if limit <= 0 {
 		limit = 10
 	}
-	hits, err := persistence.ResourceSearch(query, kind, limit)
+	hits, err := resource.Search(query, kind, limit)
 	if err != nil {
 		logger.Warn(lunarCoreModule, "[资源] 搜索失败: %v", err)
 		return nil
@@ -167,7 +191,7 @@ func searchResources(query, kind string, limit int) []ResourceSearchHit {
 
 // resourceStatistics 资源目录统计
 func resourceStatistics() *ResourceStats {
-	stats, err := persistence.ResourceStats()
+	stats, err := resource.Stats()
 	if err != nil {
 		return nil
 	}
@@ -176,7 +200,7 @@ func resourceStatistics() *ResourceStats {
 
 // setResourceSummary 写入资源摘要/描述
 func setResourceSummary(id int64, summary string, tags []string) {
-	if err := persistence.ResourceSetSummary(id, summary, tags); err != nil {
+	if err := resource.SetSummary(id, summary, tags); err != nil {
 		logger.Warn(lunarCoreModule, "[资源] 写摘要失败: %v", err)
 	}
 }
@@ -187,7 +211,7 @@ func deleteResource(handle string) bool {
 	if parsed == nil {
 		return false
 	}
-	if err := persistence.ResourceDelete(formatHandle(*parsed)); err != nil {
+	if err := resource.Delete(formatHandle(*parsed)); err != nil {
 		logger.Warn(lunarCoreModule, "[资源] 删除失败: %v", err)
 		return false
 	}
