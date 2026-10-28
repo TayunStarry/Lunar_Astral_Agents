@@ -55,7 +55,6 @@ func (r *runner) startup() (text string, err error) {
 	candidates := r.preselect()
 	if len(candidates) == 0 {
 		r.setProgress("本轮没有预选到候选视频，结束")
-		r.chargeQuota()
 		r.finished = true
 		r.cleanup()
 		recordRoundMemory(r)
@@ -98,7 +97,6 @@ func (r *runner) startup() (text string, err error) {
 
 	if len(r.approved) == 0 {
 		r.setProgress("候选视频都没有通过审核，结束")
-		r.chargeQuota()
 		r.finished = true
 		r.cleanup()
 		recordRoundMemory(r)

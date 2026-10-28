@@ -31,11 +31,11 @@ var defaultEvents = map[string]struct {
 	Weight int
 	Quota  int
 }{
-	"watch":  {Weight: 8, Quota: 6},
+	"watch":  {Weight: 14, Quota: 6},
 	"daze":   {Weight: 50, Quota: 99999},
-	"forum":  {Weight: 8, Quota: 6},
-	"mood":   {Weight: 6, Quota: 12},
-	"memory": {Weight: 2, Quota: 2},
+	"forum":  {Weight: 18, Quota: 6},
+	"mood":   {Weight: 12, Quota: 12},
+	"memory": {Weight: 4, Quota: 2},
 }
 
 // eventParams 单个事件的权重与额度。

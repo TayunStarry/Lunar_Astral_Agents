@@ -27,13 +27,10 @@ import (
 const (
 	// defaultRepliesPerRound 默认一轮回应 5 次被动消息（@ 与追评共用这一份额度）
 	defaultRepliesPerRound = 5
-	// defaultDailyWatchLimit 默认每天最多调用 6 次刷视频流程
-	defaultDailyWatchLimit = 6
 )
 
 func defaultConfig() Config {
 	return Config{
-		DailyLimit:         defaultDailyWatchLimit,
 		RepliesPerRound:    defaultRepliesPerRound,
 		PreferenceKeywords: []string{"AI", "人工智能", "Qwen", "DeepSeek", "GLM", "Kimi", "Gemma", "肥鱼", "本地部署"},
 	}
@@ -77,9 +74,6 @@ func LoadConfig() Config {
 	}
 	if len(saved.PreferenceKeywords) > 0 {
 		cfg.PreferenceKeywords = saved.PreferenceKeywords
-	}
-	if saved.DailyLimit > 0 {
-		cfg.DailyLimit = saved.DailyLimit
 	}
 	if saved.RepliesPerRound > 0 {
 		cfg.RepliesPerRound = saved.RepliesPerRound

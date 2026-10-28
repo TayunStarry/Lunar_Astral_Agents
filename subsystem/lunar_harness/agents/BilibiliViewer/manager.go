@@ -46,12 +46,11 @@ type runner struct {
 	stepIndex int
 	stepRetry int
 
-	activities   []lifeActivity
-	replied      int
-	dynamicText  string
-	dynID        string
-	quotaCharged bool
-	finished     bool
+	activities  []lifeActivity
+	replied     int
+	dynamicText string
+	dynID       string
+	finished    bool
 }
 
 // reloadConfigLocked 重新读取 bilibili_life.json（调用方需持有 m.mu）。
@@ -90,12 +89,7 @@ func runInstruction(instruction, mood string) (string, error) {
 	}
 	manager.reloadConfigLocked()
 	cfg := manager.cfg
-	if watchQuotaExhausted(cfg) {
-		manager.mu.Unlock()
-		return "今天已经刷了很多视频了，不适合再看了", nil
-	}
 	if allow, reason := dispatchBeforeLifeStarts(cfg); !allow {
-		consumeWatchQuota(cfg)
 		manager.mu.Unlock()
 		if strings.TrimSpace(reason) == "" {
 			reason = "插件未给出原因"
@@ -239,15 +233,6 @@ func (r *runner) setProgress(text string) {
 	}
 	r.progress = text
 	logger.Info("BilibiliViewer", "%s", text)
-}
-
-// chargeQuota 扣除一次今日观影额度（整轮只扣一次）。
-func (r *runner) chargeQuota() {
-	if r == nil || r.quotaCharged {
-		return
-	}
-	r.quotaCharged = true
-	consumeWatchQuota(r.cfg)
 }
 
 // watchedTitles 本轮已观看的视频标题（写记忆用）。

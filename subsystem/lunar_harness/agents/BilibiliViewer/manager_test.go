@@ -73,37 +73,3 @@ func containsText(text, part string) bool {
 	}
 	return false
 }
-
-// TestWatchQuota 钉住每日刷视频额度：按自然日计数，用完后拒绝。
-func TestWatchQuota(t *testing.T) {
-	tmp := t.TempDir()
-	orig := config.LocalDir
-	config.LocalDir = tmp
-	t.Cleanup(func() { config.LocalDir = orig })
-
-	cfg := defaultConfig()
-	cfg.DailyLimit = 2
-	if watchQuotaExhausted(cfg) {
-		t.Fatal("初始不应判定为额度用尽")
-	}
-	consumeWatchQuota(cfg)
-	consumeWatchQuota(cfg)
-	if !watchQuotaExhausted(cfg) {
-		t.Fatal("用满 2 次后应判定为额度用尽")
-	}
-}
-
-// TestChargeQuotaOnce 钉住一轮流程只扣一次额度。
-func TestChargeQuotaOnce(t *testing.T) {
-	tmp := t.TempDir()
-	orig := config.LocalDir
-	config.LocalDir = tmp
-	t.Cleanup(func() { config.LocalDir = orig })
-
-	r := newRunner(defaultConfig(), "")
-	r.chargeQuota()
-	r.chargeQuota()
-	if got := todayWatchCount(); got != 1 {
-		t.Fatalf("一轮只应扣 1 次额度，实际 %d", got)
-	}
-}

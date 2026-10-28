@@ -2,7 +2,7 @@ package BilibiliViewer
 
 // events.go 哔哩观影事件：把「开始前 / 结束前」推到 LTP9 引擎域。
 //
-//   - before_life_starts：可取消本次观影；取消仍消耗一次本日额度；
+//   - before_life_starts：可取消本次观影；取消由生活体系的额度统一计数；
 //   - before_life_ends：纯触发通知（正常完成或中途失败），返回值不被使用。
 
 import (
@@ -20,8 +20,6 @@ func dispatchBeforeLifeStarts(cfg Config) (bool, string) {
 		"candidates":      candidateMax,
 		"slicesPerVideo":  watchSliceDefault,
 		"repliesPerRound": replies,
-		"dailyCount":      todayWatchCount(),
-		"dailyLimit":      dailyWatchLimit(cfg),
 	}, "")
 	feedback, ok := res.Return.(map[string]any)
 	if !res.Returned || !ok {

@@ -26,8 +26,6 @@ type MentionTarget struct {
 type Config struct {
 	// PreferenceKeywords 更倾向看的主题词（标题/标签命中即加分）
 	PreferenceKeywords []string `json:"preference_keywords"`
-	// DailyLimit 每日可调用哔哩观影刷视频的次数上限
-	DailyLimit int `json:"daily_limit"`
 	// RepliesPerRound 一轮可回应几次被动消息（@ 与追评共享）
 	RepliesPerRound int `json:"replies_per_round"`
 

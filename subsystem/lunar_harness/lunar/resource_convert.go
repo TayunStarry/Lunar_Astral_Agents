@@ -223,7 +223,7 @@ func urlHandleText(source, fallbackExt, origin string, budget *urlExtractBudget,
 }
 
 // animatedHandleText 动图 → @I 句柄；有理解缓存时把感受一并带上
-func animatedHandleText(source, origin string) string {
+func animatedHandleText(source, _ string) string {
 	tag := handleFromVisionURL(source)
 	if tag == "" {
 		if admitted := admitImageDataURI(source, "image"+guessImageExt(source)); admitted != nil {
@@ -250,7 +250,7 @@ func documentHandleText(source, name, origin string) string {
 }
 
 // mediaURLForSource 把媒体来源整理成可直接登记的地址（本地地址补全为服务地址）
-func mediaURLForSource(source, fallbackExt string) string {
+func mediaURLForSource(source, _ string) string {
 	raw := strings.TrimSpace(source)
 	if raw == "" {
 		return ""

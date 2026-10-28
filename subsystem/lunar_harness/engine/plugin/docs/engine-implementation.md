@@ -435,7 +435,7 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 |------|--------|---------|--------|
 | `before_reading_message` | `lunar` 包的 `pullContext`（交付未读队列前） | `{ messages }` | `{ messages? }`（空数组=清空本轮） |
 | `before_sending_amessage` | `lunar` 包的 `pushContext`（推送消息前） | `{ messages }` | `{ messages?, cancel? }` |
-| `before_life_starts` | `agents/BilibiliViewer` 每次生活启动前（自动 / TUI 强制） | `{ forced, videosPerRound, slicesPerVideo, repliesPerRound, dailyCount, dailyLimit }` | `{ cancel?, reason? }`（取消仍消耗一次本日额度并计为完成） |
+| `before_life_starts` | `agents/BilibiliViewer` 每次生活启动前（自动 / TUI 强制） | `{ forced, videosPerRound, slicesPerVideo, repliesPerRound }` | `{ cancel?, reason? }`（取消由生活体系统一计数） |
 | `before_life_ends` | `agents/BilibiliViewer` 正常完成 / 中途失败时 | `{ result, forced, videosWatched, repliesUsed, reason? }` | 纯触发器，返回值不被使用 |
 
 ---

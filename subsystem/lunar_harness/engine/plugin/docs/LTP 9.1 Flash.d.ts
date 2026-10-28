@@ -154,10 +154,6 @@ interface EventContract {
 			slicesPerVideo: number
 			/** 本轮可回应消息次数 */
 			repliesPerRound: number
-			/** 今日已消耗的自动生活次数 */
-			dailyCount: number
-			/** 每日自动生活上限 */
-			dailyLimit: number
 		}
 		/** cancel=true 取消本次生活；reason 仅用于日志 */
 		return: {
