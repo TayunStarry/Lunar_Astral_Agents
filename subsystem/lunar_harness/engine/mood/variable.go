@@ -6,11 +6,14 @@ import (
 	"LunarSubsystem/LunarHarness/engine/memory"
 )
 
-// 5 种基础情绪，顺序固定，用于标签匹配与兜底。
-var labels = []string{"开心", "愤怒", "伤心", "好奇", "无聊"}
+// 基础情绪词表：顺序固定，用于嵌入锚点、标签匹配与兜底。
+var labels = []string{
+	"开心", "愤怒", "伤心", "好奇", "无聊",
+	"平静", "厌倦", "担忧", "恐慌", "满足", "元气",
+}
 
 const (
-	// stateFile 心情状态文件（相对 LocalDir）：5 类基准情绪向量 + 当前多维心情
+	// stateFile 心情状态文件（相对 LocalDir）：基础情绪向量 + 当前多维心情
 	stateFile = "database/life_chain/mood_state.json"
 	// defaultLabel 未初始化时的兜底标签
 	defaultLabel = "开心"

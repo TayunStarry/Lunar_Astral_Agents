@@ -631,7 +631,8 @@ func resolveImageURL(imageData ImageData) string {
 			return raw
 		}
 		if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
-			return raw
+			// 腾讯图床只接受 https：NapCat 有时下发 http 直链，裸 GET 会被边缘节点拒绝（400）。
+			return resource.UpgradeCDNScheme(raw)
 		}
 		if dataURI := localImageDataURI(raw); dataURI != "" {
 			return dataURI
@@ -864,10 +865,11 @@ func processFileSegment(fileData FileData) (string, bool, string) {
 	if resource.KindOfExt(ext) == resource.KindVideo {
 		if url := saveVideoFileURL(fileName, data); url != "" {
 			if res, err := resource.AdmitURL(resource.URLAdmitInput{
-				URL:    url,
-				Name:   fileName,
-				Title:  fileName,
-				Origin: resource.OriginChannel,
+				URL:      url,
+				KindHint: resource.KindVideo,
+				Name:     fileName,
+				Title:    fileName,
+				Origin:   resource.OriginChannel,
 			}); err == nil && res.Handle != "" {
 				return "[" + res.Handle + "] " + fileName + " ", false, ""
 			}

@@ -19,10 +19,6 @@ func RegisterFlags() {
 	flag.StringVar(&InferEngine, "infer-engine", InferEngine, "推理引擎路径，用于图文推理")
 	flag.StringVar(&VisualEngine, "visual-engine", VisualEngine, "绘图引擎路径，用于图像生成")
 
-	// ==== 台词链自愈 ====
-	flag.BoolVar(&EngineAutoReload, "engine-auto-reload", EngineAutoReload, "月华台词链连续失败时自动重建状态")
-	flag.IntVar(&EngineAutoReloadFailures, "engine-auto-reload-failures", EngineAutoReloadFailures, "触发自动重建的连续应答失败次数")
-
 	// ==== 目录与数据库 ====
 	flag.StringVar(&LocalDir, "local-dir", LocalDir, "本地目录路径，用于存储资源文件")
 	flag.StringVar(&CertFile, "cert-file", CertFile, "证书文件路径, 用于HTTPS加密通信")
@@ -48,7 +44,6 @@ func RegisterFlags() {
 	flag.IntVar(&SyncFetchTimeout, "sync-fetch-timeout", SyncFetchTimeout, "内部模型请求超时时间(秒)")
 	flag.BoolVar(&AllowLAN, "allow-lan", AllowLAN, "允许局域网访问引擎服务（默认仅本机回环可访问）")
 	flag.BoolVar(&InsecureTLS, "insecure-tls", InsecureTLS, "插件网络请求跳过 TLS 证书校验（不推荐）")
-	flag.BoolVar(&ConsoleLogEnabled, "console-log", ConsoleLogEnabled, "将控制台输出镜像到 local_data/logs/console.log（默认关闭）")
 
 	// ==== 图像与视觉 ====
 	flag.IntVar(&MaxWidth, "max-width", MaxWidth, "最大宽度")

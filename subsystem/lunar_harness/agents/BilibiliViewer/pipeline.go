@@ -41,9 +41,19 @@ func (r *runner) startup() (text string, err error) {
 		logger.Info("BilibiliViewer", "已清理 %d 条机械化视频摘要", removed)
 	}
 
-	// 第一步：本轮专属搜索关键词（启动时首先确定本轮要看什么）
-	r.setProgress("正在结合指令、记忆与配置生成本轮搜索关键词…")
-	r.prepareDesireKeywords()
+	// 指令里点名了某条 B 站视频时，本轮直接看这一条；否则按关键词选片。
+	direct, hasDirect := directVideoLink(r.instruction)
+	if hasDirect {
+		r.direct = true
+		r.setProgress("正在打开指定的 B 站视频…")
+		if record := r.collectOne(direct); record != nil {
+			r.videos = append(r.videos, record)
+		}
+	} else {
+		// 第一步：本轮专属搜索关键词（启动时首先确定本轮要看什么）
+		r.setProgress("正在结合指令、记忆与配置生成本轮搜索关键词…")
+		r.prepareDesireKeywords()
+	}
 
 	// 被动消息：只有收到 @ 或追评时才回应，不主动去视频评论区留言
 	r.handleNotifications()
@@ -51,17 +61,27 @@ func (r *runner) startup() (text string, err error) {
 	// 立即卸载主推理模型，给后面的轻量印象整理腾显存
 	unloadModel(modelPrimary)
 
-	// 预选与采集
-	candidates := r.preselect()
-	if len(candidates) == 0 {
-		r.setProgress("本轮没有预选到候选视频，结束")
+	// 预选与采集（指定视频时已完成采集）
+	if !hasDirect {
+		candidates := r.preselect()
+		if len(candidates) == 0 {
+			r.setProgress("本轮没有预选到候选视频，结束")
+			r.finished = true
+			r.cleanup()
+			recordRoundMemory(r)
+			dispatchBeforeLifeEnds(r, "finished", "")
+			return r.resultText(), nil
+		}
+		r.collectVideos(candidates)
+	}
+	if len(r.videos) == 0 {
+		r.setProgress("没有采集到可看的视频，结束")
 		r.finished = true
 		r.cleanup()
 		recordRoundMemory(r)
 		dispatchBeforeLifeEnds(r, "finished", "")
 		return r.resultText(), nil
 	}
-	r.collectVideos(candidates)
 
 	// 视频印象（轻量模型）
 	if len(r.videos) > 0 {
@@ -108,6 +128,18 @@ func (r *runner) startup() (text string, err error) {
 	logger.Info("BilibiliViewer", "启动阶段完成：通过 %d 个视频，共 %d 个 Tick 步骤",
 		len(r.approved), len(r.steps))
 	return r.resultText(), nil
+}
+
+// directVideoLink 从指令里提取指定观看的 B 站视频。
+//
+// use_resource 取到「从未看过、也没有摘要」的 B 站链接时会安排强制观影事件，
+// 指令里带着该视频地址；这里按 BV 号直接观看，而不是把它当搜索关键词再随机选片。
+func directVideoLink(instruction string) (videoLink, bool) {
+	bvid := bvidRe.FindString(instruction)
+	if bvid == "" {
+		return videoLink{}, false
+	}
+	return videoLink{Href: "https://www.bilibili.com/video/" + bvid, Source: "direct"}, true
 }
 
 // buildSteps 生成 Tick 计划表。

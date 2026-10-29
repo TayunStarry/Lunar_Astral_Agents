@@ -107,7 +107,7 @@ func crystalToolDefinition() ToolCall {
 	return ToolCall{
 		Type: "function",
 		Function: ToolDefinition{
-			Name: crystalToolName,
+			Name:        crystalToolName,
 			Description: "调用星月智能的扩展应用。",
 			Parameters: map[string]any{
 				"type":       "object",

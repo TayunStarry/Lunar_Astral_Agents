@@ -179,6 +179,8 @@ func (w *webSession) uiReplyToComment(targetText, user, message string) error {
 		raw, err := w.commentUIRun(`
 			var needle = `+string(textJSON)+`;
 			var who = `+string(userJSON)+`;
+			// B 站把 @昵称 渲染成独立节点，正文匹配前先去掉提及，避免开头就是 @ 时永远定位不到
+			needle = needle.replace(/@[^\s@]+/g, ' ').replace(/\s+/g, ' ').trim();
 			var probe = needle.length > 20 ? needle.slice(0, 20) : needle;
 			var nodes = __lunarFindAll('bili-comment-renderer, bili-comment-thread-renderer, .reply-item, .sub-reply-item');
 			for (var i = 0; i < nodes.length; i++) {

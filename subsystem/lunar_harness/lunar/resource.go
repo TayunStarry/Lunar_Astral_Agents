@@ -26,7 +26,7 @@ func admitResource(input resource.AdmitInput) *resource.AdmitResult {
 	if err != nil {
 		if input.KindHint == "I" {
 			forgetResourceSource(input.Source)
-			logger.Info(lunarCoreModule, "[资源] 图片入库失败，已跳过并销毁句柄: %v", err)
+			logger.Info(lunarCoreModule, "[资源] 图片入库失败，已跳过并销毁句柄（%s）: %v", resource.ShortURLForLog(input.Source), err)
 		} else {
 			logger.Error(lunarCoreModule, "[资源] 入库失败: %v", err)
 		}
@@ -68,6 +68,8 @@ func admitImageDataURI(source, name string) *resource.AdmitResult {
 	if source == "" {
 		return nil
 	}
+	// 腾讯图床只接受 https：历史消息里的 http 直链会直接 400，入库前统一升级。
+	source = resource.UpgradeCDNScheme(source)
 	lower := strings.ToLower(source)
 	sourceKind := "path"
 	switch {
@@ -218,19 +220,13 @@ func deleteResource(handle string) bool {
 	return true
 }
 
-// getResourceEntry 按句柄取资源目录条目
+// getResourceEntry 按句柄取资源记录（句柄表点查，O(1)）
 func getResourceEntry(handle string) *ResourceEntry {
-	parsed := parseHandle(handle)
-	if parsed == nil {
+	entry, ok := resource.Lookup(handle)
+	if !ok {
 		return nil
 	}
-	entries := listResources(parsed.Kind, 1000)
-	for i := range entries {
-		if int(entries[i].Seq) == parsed.Seq {
-			return &entries[i]
-		}
-	}
-	return nil
+	return &entry
 }
 
 // resourceSource 取资源本体的相对 LocalDir 路径（仅 Go 侧管线使用）

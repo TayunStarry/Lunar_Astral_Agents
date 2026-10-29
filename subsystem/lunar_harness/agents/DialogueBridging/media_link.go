@@ -35,10 +35,11 @@ func mediaLinkText(source, name string) string {
 		if data, err := fetchFileBytes(raw); err == nil && len(data) > 0 {
 			if localURL := saveVideoFileURL(name, data); localURL != "" {
 				if res, admitErr := resource.AdmitURL(resource.URLAdmitInput{
-					URL:    localURL,
-					Name:   name,
-					Title:  name,
-					Origin: resource.OriginChannel,
+					URL:      localURL,
+					Name:     name,
+					Title:    name,
+					Origin:   resource.OriginChannel,
+					KindHint: resource.KindVideo,
 				}); admitErr == nil && res.Handle != "" {
 					return "[" + res.Handle + "] " + name + " "
 				}
@@ -51,9 +52,10 @@ func mediaLinkText(source, name string) string {
 	lower := strings.ToLower(raw)
 	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
 		if res, err := resource.AdmitURL(resource.URLAdmitInput{
-			URL:    raw,
-			Name:   name,
-			Origin: resource.OriginChannel,
+			URL:      raw,
+			KindHint: resource.KindVideo,
+			Name:     name,
+			Origin:   resource.OriginChannel,
 		}); err == nil && res.Handle != "" {
 			return "[" + res.Handle + "] " + name + " "
 		}

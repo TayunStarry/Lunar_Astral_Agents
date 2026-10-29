@@ -1,53 +1,71 @@
 package lunar
 
-// resource_audio.go 音频资源的统一处理：登记句柄 → 转写 → 批量卸载 ASR → 回填文本
+// resource_audio.go 音频句柄的转写：解析文本优先，缺失才调用 audio_transcriber
 //
-// 音频是唯一需要「模型解析」的资源类型：转写本身要占用 audio_transcriber 的显存，
-// 因此在同一批未读上下文里应当先全部转写、再统一卸载，避免逐条加载/卸载来回抖动。
+// 规范三：音频解读在 use_resource 时发生；同一批次的音频全部转写完成后统一卸载 ASR，
+// 避免逐条加载/卸载来回抖动。接入阶段只下载建句柄，不转写。
 
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
-// resourceAudioText 音频 → 「句柄 + 转写」文本；句柄优先，入库失败退化为纯转写
-func resourceAudioText(source, name, origin string) string {
-	media := admitMedia(source, name, origin, "A")
-	if media != nil {
-		if entry := getResourceEntry(media.Handle); entry != nil && entry.Summary != "" {
-			return media.Handle + " " + entry.Summary
-		}
+// ASRFallbackText 转写失败时的中性提示
+const ASRFallbackText = "（这段音频没有转写出可用文本）"
+
+// errASRSourceMissing 音频本体不在本地且无法下载
+var errASRSourceMissing = errors.New("音频本体缺失")
+
+// audioParseTextOf 读取音频句柄的解析文本；缺失返回空串
+func audioParseTextOf(handle string) string {
+	res, ok := resource.Lookup(handle)
+	if !ok || res.ParseState != resource.ParseReady {
+		return ""
 	}
-	transcript, err := understandAudio(source)
-	if err != nil || strings.TrimSpace(transcript) == "" {
-		if media != nil {
-			return media.Handle + " " + asrFallbackText
-		}
-		return name
-	}
-	if media != nil {
-		setResourceSummary(media.ID, transcript, nil)
-		return media.Handle + " " + transcript
-	}
-	return transcript
+	return strings.TrimSpace(res.ParseText)
 }
 
-// understandAudio 理解音频（ASR 转写），可缓存来源按来源地址复用结果
-func understandAudio(source string) (string, error) {
-	cacheable := !strings.HasPrefix(source, "data:")
-	if cacheable {
-		if cached := getPromptFromKnowledge(source); cached != "" {
-			return cached, nil
+// transcribeAudioResource 转写一个音频句柄并写回唯一解析文本
+func transcribeAudioResource(handle string) (string, error) {
+	res, err := resource.Resolve(handle)
+	if err != nil {
+		return "", err
+	}
+	if res.ParseState == resource.ParseReady && strings.TrimSpace(res.ParseText) != "" {
+		return strings.TrimSpace(res.ParseText), nil
+	}
+	if res.Kind != resource.KindAudio {
+		return "", nil
+	}
+	sourcePath := ""
+	if res.BlobPath != "" {
+		sourcePath = filepath.Join(config.LocalDir, filepath.FromSlash(res.BlobPath))
+	} else if resource.IsRemoteURL(res.URL) {
+		// 接入时下载失败的远程音频：解读阶段补下载一次
+		if admitted, err := resource.Admit(resource.AdmitInput{
+			SourceKind: resource.SourceKindURL,
+			Source:     res.URL,
+			Name:       res.Name,
+			KindHint:   resource.KindAudio,
+			Origin:     res.Origin,
+		}); err == nil && admitted.BlobPath != "" {
+			sourcePath = filepath.Join(config.LocalDir, filepath.FromSlash(admitted.BlobPath))
 		}
 	}
-	wav, err := multimodal.AudioToWavBase64(source)
+	if sourcePath == "" {
+		return "", errASRSourceMissing
+	}
+	wav, err := multimodal.AudioToWavBase64(sourcePath)
 	if err != nil || wav == "" {
 		logger.Warn(lunarCoreModule, "[语音] 音频转换失败: %v", err)
 		return "", err
@@ -56,12 +74,12 @@ func understandAudio(source string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	text := "【语音转写】" + strings.TrimSpace(transcript)
 	if strings.TrimSpace(transcript) == "" {
-		return "", nil
+		text = ASRFallbackText
 	}
-	text := "【语音转写】" + transcript
-	if cacheable {
-		savePromptToKnowledge(source, text)
+	if err := resource.SetParseText(res.URL, text); err != nil {
+		logger.Warn(lunarCoreModule, "[语音] 转写写入解析文本失败: %v", err)
 	}
 	return text, nil
 }

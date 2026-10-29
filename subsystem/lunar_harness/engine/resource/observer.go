@@ -10,9 +10,19 @@ package resource
 // 登记失败只记 WARN，不回滚已完成的落盘结果。
 
 import (
+	"sync"
+
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 )
+
+// persistenceObserverOnce 保证落盘观察者只注册一次
+var persistenceObserverOnce sync.Once
+
+// registerObserver 把本包的落盘观察者注册给 persistence
+func registerObserver() {
+	persistence.SetResourceObserver(observer{})
+}
 
 // observer 落盘观察者
 type observer struct{}

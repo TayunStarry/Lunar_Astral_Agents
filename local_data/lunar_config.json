@@ -26,7 +26,6 @@
 		"developer": true,
 		"allow_lan": false,
 		"insecure_tls": false,
-		"console_log": false,
 		"chat_vram_guard": true,
 		"chat_vram_guard_mib": 1024,
 		"chat_vram_guard_interval": 16,
@@ -99,12 +98,9 @@
 		"gitee_owner": "TayunStarry",
 		"gitee_repo": "Lunar-Astral-Agents",
 		"include": [
-			"local_data/audios",
 			"local_data/multimedia/background",
-			"local_data/multimedia/icon",
-			"local_data/multimedia/placeholder",
 			"local_data/package",
-			"local_data/lunar_config.json"
+			"local_data/audios"
 		],
 		"program_files": [
 			"Lunar_Astral_Agents.exe",

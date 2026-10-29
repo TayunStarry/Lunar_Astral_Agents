@@ -128,7 +128,7 @@ func TestExtractSegmentTextAdmitsMedia(t *testing.T) {
 		"url":  "data:video/mp4;base64," + base64.StdEncoding.EncodeToString([]byte("fake-mp4-bytes")),
 	})
 	videoText := extractSegmentText(0, 0, []MessageSegment{{Type: "video", Data: videoData}})
-	if !strings.Contains(videoText, "[@U.") || !strings.Contains(videoText, "clip.mp4") {
+	if !strings.Contains(videoText, "[@V.") || !strings.Contains(videoText, "clip.mp4") {
 		t.Fatalf("视频应输出链接句柄 + 文件名，实际 %q", videoText)
 	}
 	// 同一内容重复发送必须复用同一句柄，不能每次累加新句柄。

@@ -14,7 +14,7 @@ type Config struct {
 	MaxResults      int    // 结果页元素提取条数上限
 	SummaryMaxChars int    // 统一摘要的硬切断字符数（≤4096）
 	MaxRunSeconds   int    // 单次运行的总时长软上限（秒），超时后以已采集信息收尾
-	CacheEnabled    *bool  // 是否启用「近期已访问」缓存（SQLite，web.db 的 web_ltp_page_cache 表）
+	CacheEnabled    *bool  // 是否启用「近期已访问」缓存（统一句柄库 url_master）
 	CacheTTLDays    int    // 近期访问判定窗口（天），窗口内的页面跳过不重复访问
 
 	TextTotalChars int // 全部页面正文的总提取硬上限（由所有页面均分，默认 30000）

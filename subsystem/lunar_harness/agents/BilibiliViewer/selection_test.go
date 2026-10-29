@@ -2,6 +2,20 @@ package BilibiliViewer
 
 import "testing"
 
+// TestDirectVideoLinkFromInstruction 指令里点名 B 站视频时按 BV 号直接观看，不再随机选片。
+func TestDirectVideoLinkFromInstruction(t *testing.T) {
+	link, ok := directVideoLink("观看这条 B 站视频：https://www.bilibili.com/video/BV1DLpF6r6pH（BV1DLpF6r6pH）\n标题：分享一个视频")
+	if !ok {
+		t.Fatal("指令里带 BV 号时应识别为指定视频")
+	}
+	if got := bvidOf(link.Href); got != "BV1DLpF6r6pH" {
+		t.Fatalf("指定视频 BV 号应为 BV1DLpF6r6pH，实际 %s", got)
+	}
+	if _, ok := directVideoLink("随便看看猫咪视频"); ok {
+		t.Fatal("没有 BV 号时不应进入指定视频模式")
+	}
+}
+
 // TestPickSearchKeywords 钉住「随机挑几个参考词去搜索」：去空、去重、数量受控。
 func TestPickSearchKeywords(t *testing.T) {
 	keywords := []string{"AI", " ", "Qwen", "AI", "DeepSeek", "GLM", "Kimi"}

@@ -4,10 +4,11 @@ package lunar
 //
 // 规则：
 //  1. 任一体系运行中（busy=true）→ 当前 Tick 直接跳过，不计数；
-//  2. 无未读、无待处理视频切片、生活冷却未完成 → 空闲计数 +1；
-//  3. 未读消息 → 对话体系，计数清零；
-//  4. 待处理视频切片 → 观影体系，计数清零；
-//  5. 空闲计数达到生活阈值 → 生活体系，计数清零。
+//  2. 存在工具触发的强制生活事件 → 跳过其他体系，下一 Tick 直接进入生活链；
+//  3. 无未读、无待处理视频切片、生活冷却未完成 → 空闲计数 +1；
+//  4. 未读消息 → 对话体系，计数清零；
+//  5. 待处理视频切片 → 观影体系，计数清零；
+//  6. 空闲计数达到生活阈值 → 生活体系，计数清零。
 //
 // 体系通过 TickSystem 接口注册，主调度逻辑不感知具体实现。
 
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/life"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
 
@@ -61,6 +63,9 @@ func (s *tickScheduler) Register(system TickSystem) {
 
 // Tick 每秒调用一次；非阻塞，长任务在独立 goroutine 中执行。
 func (s *tickScheduler) Tick() {
+	// 工具触发的生活事件在下一 Tick 抢占执行：即使有未读消息也先进入生活链，
+	// 进入后先推进心情/情感，再按强制事件跳过权重选择。
+	forcedLife := life.HasPendingEvent()
 	s.mu.Lock()
 	if s.busy {
 		s.mu.Unlock()
@@ -73,12 +78,15 @@ func (s *tickScheduler) Tick() {
 		ViewingPending: viewingPendingHook(),
 	}
 	for _, system := range s.systems {
+		if forcedLife && system.ID() != "life" {
+			continue
+		}
 		ready, reason := system.Ready(snap)
 		if !ready {
 			continue
 		}
 		s.busy = true
-		s.state.IdleTicks = 0
+		s.state.IdleTicks = system.IdleReset()
 		s.state.LastSystem = system.ID()
 		s.state.LastReason = reason
 		s.state.LastTriggerAt = snap.Now.Unix()
@@ -87,13 +95,13 @@ func (s *tickScheduler) Tick() {
 		seq := s.tickSeq
 		s.persistLocked()
 		s.mu.Unlock()
-		logger.Info(tickModule, "[Tick#%d] 触发 %s（%s），空闲计数清零", seq, system.ID(), reason)
+		logger.Info(tickModule, "[Tick#%d] 触发 %s（%s），空闲进度重置为 %d", seq, system.ID(), reason, s.state.IdleTicks)
 		s.run(seq, system, snap.Now)
 		return
 	}
 	s.state.IdleTicks++
-	if s.state.IdleTicks%60 == 0 {
-		logger.Info(tickModule, "[Tick] 空闲计数 %d/%d", s.state.IdleTicks, tickIdleThreshold)
+	if s.state.IdleTicks > 0 && s.state.IdleTicks%60 == 0 {
+		logger.Info(tickModule, "[Tick] 空闲计数 %d/%d", s.state.IdleTicks, life.IdleThreshold())
 	}
 	s.persistEveryNLocked()
 	s.mu.Unlock()
@@ -146,9 +154,6 @@ func (s *tickScheduler) loadState() {
 	}
 	if state.Version == 0 {
 		state.Version = 1
-	}
-	if state.IdleTicks < 0 {
-		state.IdleTicks = 0
 	}
 	s.state = state
 	logger.Info(tickModule, "[Tick] 已恢复空闲计数 %d，上次触发 %s", state.IdleTicks, state.LastSystem)

@@ -23,7 +23,7 @@ const CATEGORY_META = {
  * @returns plain：去掉引用标记后的正文；refs：按出现顺序的引用条目
  */
 function extractUserRefs(content) {
-    const pattern = /@[DIVATU]\.\d{3,}(?:\|(?:§\d+|L\d+-\d+))?/g;
+    const pattern = /@[DIVAGTU]\.\d{3,}(?:\|(?:§\d+|L\d+-\d+))?/g;
     const refs = [];
     const plain = String(content || '').replace(pattern, match => {
         refs.push({ id: match, label: match.slice(1).replace(/\|\S+$/, '') });

@@ -1,16 +1,13 @@
 package resource
 
-// search.go 跨资源目录搜索（标题 / 摘要 / 标签 / 文件名 / 段落标题）。
+// search.go 跨资源搜索（标题 / 解析文本 / 标签 / 文件名 / 段落标题）
 
 import (
 	"fmt"
 	"strings"
 )
 
-// SearchResources 跨资源目录搜索：标题 / 摘要 / 标签 / 文件名 / 段落标题 子串匹配
-//
-// 说明：刻意不使用 FTS5 —— 中文无空格分词在 unicode61 下切分不可用，
-// 且资源目录规模有限（千级），子串匹配的召回率与确定性优于虚表。
+// SearchResources 跨资源搜索：标题 / 解析文本 / 标签 / 文件名 / 段落标题 子串匹配
 func (d *store) SearchResources(query string, kind string, limit int) ([]SearchHit, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -20,9 +17,9 @@ func (d *store) SearchResources(query string, kind string, limit int) ([]SearchH
 		limit = 10
 	}
 	like := "%" + query + "%"
-	cond := `(title LIKE ? OR summary LIKE ? OR tags LIKE ? OR name LIKE ?)`
+	cond := `bound_handle <> '' AND (title LIKE ? OR parse_text LIKE ? OR tags LIKE ? OR name LIKE ?)`
 	args := []any{like, like, like, like}
-	sqlText := `SELECT ` + archiveResourceColumns + ` FROM resources WHERE ` + cond
+	sqlText := `SELECT ` + urlMasterColumns + ` FROM url_master WHERE ` + cond
 	if kind != "" {
 		sqlText += ` AND kind = ?`
 		args = append(args, kind)
@@ -36,60 +33,61 @@ func (d *store) SearchResources(query string, kind string, limit int) ([]SearchH
 	}
 	defer rows.Close()
 	hits := []SearchHit{}
-	seen := map[int64]bool{}
+	seen := map[string]bool{}
 	for rows.Next() {
-		res, err := scanResource(rows)
-		if err != nil {
-			return nil, err
+		res, scanErr := scanURLRecord(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-		seen[res.ID] = true
+		seen[res.URL] = true
 		hits = append(hits, SearchHit{
 			Handle: res.Handle, Kind: res.Kind, Title: displayTitle(res),
-			Summary: res.Summary, MatchedIn: "card",
+			Summary: res.ParseText, MatchedIn: "card",
 		})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	// 段落标题命中：文档按章节补齐（同一资源聚合到一条命中上）
-	secSQL := `SELECT s.resource_id, s.id, s.resource_id, s.ordinal, s.level, s.title, s.path,
-		s.line_start, s.line_end, s.chars FROM resource_sections s WHERE s.title LIKE ? OR s.path LIKE ?`
+	// 段落标题命中：按 URL 聚合到一条命中上
+	secSQL := `SELECT s.url, s.ordinal, s.level, s.title, s.path, s.line_start, s.line_end, s.chars
+		FROM doc_sections s WHERE s.title LIKE ? OR s.path LIKE ?`
 	secArgs := []any{like, like}
 	if kind != "" {
-		secSQL += ` AND s.resource_id IN (SELECT id FROM resources WHERE kind = ?)`
+		secSQL += ` AND s.url IN (SELECT url FROM url_master WHERE kind = ?)`
 		secArgs = append(secArgs, kind)
 	}
-	secSQL += ` ORDER BY s.resource_id DESC, s.ordinal LIMIT ?`
+	secSQL += ` ORDER BY s.url DESC, s.ordinal LIMIT ?`
 	secArgs = append(secArgs, limit*4)
 	secRows, err := d.db.Query(secSQL, secArgs...)
 	if err != nil {
 		return hits, nil
 	}
 	defer secRows.Close()
-	byResource := map[int64][]Section{}
-	order := []int64{}
+	byURL := map[string][]Section{}
+	order := []string{}
 	for secRows.Next() {
-		var resID int64
+		var rawURL string
 		var s Section
-		if err := secRows.Scan(&resID, &s.ID, &s.Resource, &s.Ordinal, &s.Level, &s.Title,
-			&s.Path, &s.LineStart, &s.LineEnd, &s.Chars); err != nil {
+		if scanErr := secRows.Scan(&rawURL, &s.Ordinal, &s.Level, &s.Title, &s.Path,
+			&s.LineStart, &s.LineEnd, &s.Chars); scanErr != nil {
 			continue
 		}
-		if !seen[resID] {
-			seen[resID] = true
-			order = append(order, resID)
+		s.ID = int64(s.Ordinal)
+		if !seen[rawURL] {
+			seen[rawURL] = true
+			order = append(order, rawURL)
 		}
-		byResource[resID] = append(byResource[resID], s)
+		byURL[rawURL] = append(byURL[rawURL], s)
 	}
-	for _, resID := range order {
-		res, ok := d.GetResourceByID(resID)
-		if !ok {
+	for _, rawURL := range order {
+		res, ok := d.findURLRecord(rawURL)
+		if !ok || res.Handle == "" {
 			continue
 		}
 		hits = append(hits, SearchHit{
 			Handle: res.Handle, Kind: res.Kind, Title: displayTitle(res),
-			Summary: res.Summary, Sections: byResource[resID], MatchedIn: "section",
+			Summary: res.ParseText, Sections: byURL[rawURL], MatchedIn: "section",
 		})
 	}
 	if len(hits) > limit {

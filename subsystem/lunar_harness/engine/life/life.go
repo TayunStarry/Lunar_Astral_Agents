@@ -9,14 +9,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/engine/affection"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/mood"
 )
 
 // Step 由 Tick 调度器调用：每次只执行一个原子步骤。
 func Step(ctx context.Context) error {
 	now := time.Now()
+	// 生活体系启动的第一步：无需模型地推进心情与对用户的情感取向。
+	refreshMood(ctx)
 	summary := judgePlans(now)
 
 	mu.Lock()
@@ -30,7 +35,11 @@ func Step(ctx context.Context) error {
 	var run EventRun
 	var stepNo int
 	if state.Active == nil {
-		event = pickLocked()
+		// 工具触发的强制事件：跳过权重选取，直接进入指定流程。
+		event = takeForcedEventLocked(&env)
+		if event == nil {
+			event = pickLocked()
+		}
 		if event == nil {
 			mu.Unlock()
 			logger.Warn(Module, "[生活] 没有可用事件，本次跳过")
@@ -107,6 +116,25 @@ func Step(ctx context.Context) error {
 	return nil
 }
 
+// takeForcedEventLocked 取出并清空强制事件；无强制事件时返回 nil（调用方回退权重选择）。
+func takeForcedEventLocked(env *Env) Event {
+	if strings.TrimSpace(state.PendingEvent) == "" {
+		return nil
+	}
+	id := state.PendingEvent
+	env.Instruction = state.PendingInstruction
+	state.PendingEvent = ""
+	state.PendingInstruction = ""
+	saveStateLocked()
+	event := eventByIDLocked(id)
+	if event == nil {
+		logger.Warn(Module, "[生活] 强制事件 %s 未注册，回退到权重选择", id)
+		return nil
+	}
+	logger.Info(Module, "[生活] 跳过权重选择，优先执行事件 %s", id)
+	return event
+}
+
 func failActive(eventID string, err error) {
 	mu.Lock()
 	state.LastRecord = failureRecord(eventID)
@@ -114,6 +142,48 @@ func failActive(eventID string, err error) {
 	saveStateLocked()
 	mu.Unlock()
 	logger.Warn(Module, "[生活] 事件 %s 失败，已按「%s」记录: %v", eventID, failureRecord(eventID), err)
+}
+
+// refreshMood 无模型地推进心情与对用户的情感认知；
+// 输入未变化时跳过，避免生活续跑步骤重复调用嵌入服务。
+func refreshMood(ctx context.Context) {
+	mu.Lock()
+	textHook, nameHook, replyHook := lastUserTextHook, lastUserNameHook, lastReplyTextHook
+	mu.Unlock()
+
+	var userText, userName, replyText string
+	if textHook != nil {
+		userText = textHook()
+	}
+	if nameHook != nil {
+		userName = nameHook()
+	}
+	if replyHook != nil {
+		replyText = replyHook()
+	}
+
+	mu.Lock()
+	moodChanged := userText != lastMoodInput
+	if moodChanged {
+		lastMoodInput = userText
+	}
+	emotionKey := userName + "\x00" + userText + "\x00" + replyText
+	emotionChanged := emotionKey != lastEmotionInput
+	if emotionChanged {
+		lastEmotionInput = emotionKey
+	}
+	mu.Unlock()
+
+	if moodChanged {
+		if err := mood.UpdateFromText(ctx, userText); err != nil {
+			logger.Warn(Module, "[生活] 心情更新失败: %v", err)
+		}
+	}
+	if emotionChanged {
+		if err := affection.Update(ctx, userName, userText, replyText); err != nil {
+			logger.Warn(Module, "[生活] 情感认知更新失败: %v", err)
+		}
+	}
 }
 
 func failureRecord(eventID string) string {
@@ -124,11 +194,7 @@ func failureRecord(eventID string) string {
 		return "逛了论坛（未完成）"
 	case "memory":
 		return "小憩了片刻（未完成）"
-	case "mood":
-		return "出门转了转（未完成）"
 	default:
 		return "发呆中"
 	}
 }
-
-

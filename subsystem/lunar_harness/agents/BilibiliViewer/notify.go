@@ -95,7 +95,7 @@ func (r *runner) replyNotification(item inboxItem) bool {
 		return false
 	}
 	if err := r.publishReply(item, text); err != nil {
-		logger.Warn("BilibiliViewer", "回应%s失败 → %s: %v", item.Category, item.User, err)
+		logger.Warn("BilibiliViewer", "回应%s失败 → %s: %v（%s）", item.Category, item.User, err, inboxBrief(item))
 		return false
 	}
 	markInboxSeen(item)
@@ -147,13 +147,13 @@ func (r *runner) publishReply(item inboxItem, text string) error {
 		return nil
 	}
 	if nested {
-		return fmt.Errorf("接口回复失败（%v），页面回复也失败: %w", apiErr, pageErr)
+		return fmt.Errorf("接口回复失败（%v），页面回复也失败: %w（%s）", apiErr, pageErr, inboxBrief(item))
 	}
-	logger.Info("BilibiliViewer", "页面未定位到目标评论，改用接口回复 → %s: %v", item.User, pageErr)
+	logger.Info("BilibiliViewer", "页面未定位到目标评论，改用接口回复 → %s: %v（%s）", item.User, pageErr, inboxBrief(item))
 	if err := r.browser.replyByAPI(item, text); err != nil {
-		return fmt.Errorf("页面回复失败（%v），接口回复失败: %w", pageErr, err)
+		return fmt.Errorf("页面回复失败（%v），接口回复失败: %w（%s）", pageErr, err, inboxBrief(item))
 	}
-	logger.Info("BilibiliViewer", "接口回复已发布并回读确认 → %s", item.User)
+	logger.Info("BilibiliViewer", "接口回复已发布 → %s", item.User)
 	return nil
 }
 
@@ -187,6 +187,12 @@ func replyPageURL(item inboxItem) string {
 	default:
 		return ""
 	}
+}
+
+// inboxBrief 通知条目的关键字段摘要（失败日志排查用）
+func inboxBrief(item inboxItem) string {
+	return fmt.Sprintf("type=%d oid=%s src=%s root=%s target=%s uri=%s",
+		item.Type, item.Oid, item.SourceID, item.RootID, item.TargetID, item.URI)
 }
 
 // generateInboxReply 按场景生成一句自然回应（注入人设与长期记忆）。

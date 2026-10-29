@@ -12,8 +12,9 @@ import (
 
 type dialogueSystem struct{}
 
-func (dialogueSystem) ID() string    { return "dialogue" }
-func (dialogueSystem) Priority() int { return 300 }
+func (dialogueSystem) ID() string     { return "dialogue" }
+func (dialogueSystem) Priority() int  { return 300 }
+func (dialogueSystem) IdleReset() int { return dialogueIdleReset }
 
 func (dialogueSystem) Ready(snapshot TickSnapshot) (bool, string) {
 	if snapshot.Unread > 0 {
@@ -41,8 +42,9 @@ func (dialogueSystem) Run(ctx context.Context) error {
 
 type viewingSystem struct{}
 
-func (viewingSystem) ID() string    { return "viewing" }
-func (viewingSystem) Priority() int { return 200 }
+func (viewingSystem) ID() string     { return "viewing" }
+func (viewingSystem) Priority() int  { return 200 }
+func (viewingSystem) IdleReset() int { return viewingIdleReset }
 
 func (viewingSystem) Ready(snapshot TickSnapshot) (bool, string) {
 	if snapshot.ViewingPending {
@@ -57,10 +59,14 @@ func (viewingSystem) Run(ctx context.Context) error {
 
 type lifeSystem struct{}
 
-func (lifeSystem) ID() string    { return "life" }
-func (lifeSystem) Priority() int { return 100 }
+func (lifeSystem) ID() string     { return "life" }
+func (lifeSystem) Priority() int  { return 100 }
+func (lifeSystem) IdleReset() int { return lifeIdleReset }
 
 func (lifeSystem) Ready(snapshot TickSnapshot) (bool, string) {
+	if life.HasPendingEvent() {
+		return true, "工具触发的强制生活事件"
+	}
 	if life.HasActiveRun() {
 		return true, "续跑未完成生活事件"
 	}

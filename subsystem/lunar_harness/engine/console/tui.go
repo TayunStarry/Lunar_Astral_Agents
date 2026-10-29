@@ -240,12 +240,12 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// 首帧尺寸自检落盘：远端报「界面一直向上滚 / 显示混乱」时，
+		// 首帧尺寸自检写入原始日志：远端报「界面一直向上滚 / 显示混乱」时，
 		// 这一行直接说明「程序以为终端多大、打算画几行」——是判断尺寸失配还是字形宽度失配的关键。
 		if !m.sizeLogged {
 			m.sizeLogged = true
-			AppendConsoleLog(fmt.Sprintf(
-				"[TUI] 首帧尺寸自检: 终端报 %d×%d，框体渲染 %d 行（≤%d 列，末列留空）",
+			pushScrubbedLog(SourceRaw, "RAW", "TUI", "", fmt.Sprintf(
+				"首帧尺寸自检: 终端报 %d×%d，框体渲染 %d 行（≤%d 列，末列留空）",
 				msg.Width, msg.Height, msg.Height, maxInt(1, msg.Width-1)))
 		}
 
@@ -262,10 +262,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statsTickMsg:
 		m.stats.snap = GetSnapshot()
 		return m, tickStats()
-
-	case engineDoneMsg:
-		// 重建可能在用户切屏后完成：在顶层收尾，避免状态永远停在「重建中」。
-		return m.updateEngine(msg)
 
 	case progressMsg:
 		m.applyProgress(int(msg))
@@ -617,10 +613,10 @@ func Run() error {
 		restoreEncoding, fingerprint := ensureConsoleEncoding(f)
 		defer restoreEncoding()
 		widths := calibrateGlyphWidths(f)
-		// 环境指纹先落盘：判断「乱码 / 错位 / 滚动」时，第一手证据就是
+		// 环境指纹先写入原始日志：判断「乱码 / 错位 / 滚动」时，第一手证据就是
 		// 「跑在哪个终端、代码页是多少、字形实测多宽」
 		if fingerprint != "" {
-			AppendConsoleLog("[TUI] " + fingerprint)
+			pushScrubbedLog(SourceRaw, "RAW", "TUI", "", fingerprint)
 		}
 		if len(widths) > 0 {
 			wide := make([]string, 0, 6)
@@ -642,10 +638,9 @@ func Run() error {
 				summary = append(summary, "  无更宽字形（终端与本程序宽度表一致）")
 			}
 			msg := strings.Join(summary, "\n")
-			AppendConsoleLog(msg)
 			pushScrubbedLog(SourceRaw, "RAW", "", "", msg)
 		} else {
-			AppendConsoleLog("[TUI] 终端字形校准失败：未能取得控制台信息，已退回内置宽度表（中文控制台字体下可能错位）")
+			pushScrubbedLog(SourceRaw, "WARN", "TUI", "", "终端字形校准失败：未能取得控制台信息，已退回内置宽度表（中文控制台字体下可能错位）")
 		}
 	}
 
@@ -653,7 +648,6 @@ func Run() error {
 	// 这一步看着琐碎，却是「界面一片纯白」的根治点——见 renderer.go 的说明。
 	// 顺序也要紧：颜色档位取决于「控制台是否已启用 ANSI 处理」，反了就永远退化为无色。
 	if diag := activateTheme(renderTarget); diag != "" {
-		AppendConsoleLog("[TUI] 配色档位: " + diag)
 		pushScrubbedLog(SourceRaw, "RAW", "", "", "[TUI] 配色档位: "+diag)
 	}
 
@@ -699,11 +693,8 @@ func Run() error {
 	}
 
 	// 功能子包钩子注入：日志并入统一管线，进度推送到 TUI。
-	// 同时落盘到 console.log：这些是「发布/拉取/代理/端口释放」等操作的唯一过程记录，
-	// 用户报障时（例如 HTTPS 代理端口冲突）没有它就只能靠现场复现。
 	taskLog := func(msg string) {
 		PushTaskLog(msg)
-		AppendConsoleLog(msg)
 		prog.Send(taskLogMsg(msg))
 	}
 	archive.SetLogHook(taskLog)
@@ -810,7 +801,7 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 	case screenAgent:
 		return "核心智能 实况", "", agentKeys(m.agent)
 	case screenStats:
-		return "运行状态", "采样 1s · Go 对话链", engineKeys(m.engine)
+		return "运行状态", "采样 1s · 运行观测", engineKeys(m.engine)
 	case screenRaw:
 		return "原始日志", "全量 stdout + 结构化日志", logsKeys()
 	case screenLunarJS:

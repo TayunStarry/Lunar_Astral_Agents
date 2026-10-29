@@ -57,15 +57,15 @@ var memoryTools = []ToolCall{
 }
 
 var resourceTools = []ToolCall{
-	functionTool("use_resource", "按句柄读取或探查资源。规则：不填 ask 时，文档/表格直接返回原文，链接返回完整地址、站点、标题与缓存摘要；图片/动图返回描述；音频返回已有转写；视频统一使用 @U 链接句柄；"+grammarCheatsheet(),
+	functionTool("use_resource", "按句柄读取或探查资源。规则：已有解析文本直接返回；文件直接返回原文（带 ask 时交给描述者探查）；图片/动图返回描述；音频返回转写；视频按本地副本走观看管线、B 站链接走视频印象；网页链接走现场读取。"+grammarCheatsheet(),
 		map[string]any{
 			"handles": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "资源句柄数组"},
 			"ask":     map[string]any{"type": "string", "description": "可选：交给描述者的自然语言需求"},
 		}, []string{"handles"}),
-	functionTool("browse_resources", "浏览资源目录或跨资源检索。不传 query 时按 kind 列出句柄 + 类型 + 标题/描述 + 内容状态；传 query 时在标题、摘要、标签与段落标题中匹配。",
+	functionTool("browse_resources", "浏览资源目录或跨资源检索。不传 query 时按 kind 列出句柄 + 类型 + 标题/描述 + 内容状态；传 query 时在标题、解析文本、标签与段落标题中匹配。",
 		map[string]any{
 			"query": map[string]any{"type": "string", "description": "可选：搜索关键词"},
-			"kind":  map[string]any{"type": "string", "description": "可选：D 文档 / I 图片 / A 音频 / T 表格 / U 链接"},
+			"kind":  map[string]any{"type": "string", "description": "可选：D 文件 / I 图片 / G 动图 / A 音频 / V 视频 / U 网页"},
 			"limit": map[string]any{"type": "number", "description": "返回条目数量上限"},
 		}, []string{}),
 }
@@ -292,28 +292,15 @@ func findVideoSummaries(keys []string) []string {
 	if len(keys) == 0 {
 		return nil
 	}
-	values := loadKnowledge("video_summary")
 	found := make([]string, 0)
-	// 同一视频可能同时按 URL 与 BV 号入库，按内容去重，避免记忆检索返回重复摘要
 	seenText := map[string]bool{}
-	for key, text := range values {
-		upperKey := strings.ToUpper(key)
-		matched := false
-		for _, id := range keys {
-			if strings.Contains(upperKey, strings.ToUpper(id)) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
+	for _, res := range resource.RecallParsedText(keys, 8) {
+		text := strings.TrimSpace(res.ParseText)
+		if text == "" || seenText[text] {
 			continue
 		}
-		trimmed := strings.TrimSpace(text)
-		if trimmed == "" || seenText[trimmed] {
-			continue
-		}
-		seenText[trimmed] = true
-		found = append(found, "[已看视频摘要] "+key+"\n"+previewText(text, 400))
+		seenText[text] = true
+		found = append(found, "[已看视频摘要] "+res.URL+"\n"+previewText(text, 400))
 	}
 	return found
 }
@@ -343,7 +330,7 @@ func findResourceMemories(keywords []string) []string {
 				if title == "" {
 					title = res.Name
 				}
-				add(res.Handle, title, res.Summary)
+				add(res.Handle, title, res.ParseText)
 			}
 		}
 		for _, hit := range searchResources(keyword, "", 5) {
@@ -474,6 +461,37 @@ func handleUseResource(args map[string]any) ToolResult {
 		return ToolResult{Text: "请提供资源句柄，例如 [\"@D.003\"]；需要描述者协助时把需求写进 ask 字段"}
 	}
 	ask := strings.TrimSpace(stringArg(args, "ask"))
+
+	// 音频直出模式的触发点：月华主动读过任何一个音频句柄后，
+	// 后续语音进入上下文时直接给转写正文。
+	for _, raw := range handles {
+		if parsed := parseHandle(raw); parsed != nil && parsed.Kind == resource.KindAudio {
+			audioDirectTextEnabled = true
+			break
+		}
+	}
+
+	// 音频：先检查解析文本，缺失的在本批全部转写完成后统一卸载 ASR
+	transcribed := false
+	for _, raw := range handles {
+		parsed := parseHandle(raw)
+		if parsed == nil || parsed.Kind != resource.KindAudio {
+			continue
+		}
+		normalized := formatHandle(*parsed)
+		if audioParseTextOf(normalized) != "" {
+			continue
+		}
+		if _, err := transcribeAudioResource(normalized); err != nil {
+			logger.Warn(lunarCoreModule, "[语音] %s 转写失败: %v", normalized, err)
+			continue
+		}
+		transcribed = true
+	}
+	if transcribed {
+		unloadASRModel()
+	}
+
 	blocks := make([]string, 0)
 	missing := make([]string, 0)
 	for _, raw := range handles {
@@ -484,6 +502,10 @@ func handleUseResource(args map[string]any) ToolResult {
 	return finishResourceBlocks(blocks, missing)
 }
 
+// readHandleBlock 单个句柄的取回 / 解读
+//
+// 顺序严格遵循规范三：已有解析文本直接返回；否则按类型分流到 Descriptor /
+// audio_transcriber / WebSearch 直驱 / B 站直驱。
 func readHandleBlock(raw, ask string, missing *[]string) string {
 	parsed := parseHandle(raw)
 	if parsed == nil {
@@ -498,67 +520,164 @@ func readHandleBlock(raw, ask string, missing *[]string) string {
 	}
 	if entry.State == "lost" {
 		deleteResource(normalized)
-		return "【" + normalized + "】\n" + lostFileNotice
+		return resourceBlockHeader(normalized, entry) + lostFileNotice
 	}
-	if parsed.Kind == "V" {
-		// @V 已废弃：视频统一走 @U 链接句柄。
-		return "【" + normalized + "】\n视频已统一使用 @U 链接句柄，请改用对应的链接句柄"
+	// 1. 解析文本优先（文件类直接读原文，不在此短路）
+	if parsed.Kind != resource.KindDocument &&
+		entry.ParseState == resource.ParseReady && strings.TrimSpace(entry.ParseText) != "" {
+		return resourceBlockHeader(normalized, entry) + entry.ParseText
 	}
-	if parsed.Kind == "I" || parsed.Kind == "A" {
-		desc := describeResource(normalized, ask)
-		if desc == "" && getResourceEntry(normalized) == nil {
-			return "【" + normalized + "】\n" + lostFileNotice
-		}
-		if desc == "" {
-			desc = "（暂无描述，且本体不可直接解读）"
-		}
-		return "【" + normalized + "｜" + kindLabel(parsed.Kind) + "｜" + entry.Title + "】\n" + desc
+
+	switch parsed.Kind {
+	case resource.KindImage, resource.KindAnimated:
+		return imageHandleBlock(normalized, entry, ask)
+	case resource.KindAudio:
+		return audioHandleBlock(normalized, entry)
+	case resource.KindVideo:
+		return videoHandleBlock(normalized, entry, ask)
+	case resource.KindURL:
+		return webHandleBlock(normalized, entry, ask)
+	default:
+		return documentHandleBlock(normalized, entry, ask, missing)
 	}
-	// 链接句柄：取回站点、标题与缓存摘要。链接没有正文可供探查，ask 对它是空操作，
-	// 直接返回已登记内容即可（绝不能再转给描述者做「文本探查」）。
-	if parsed.Kind == "U" {
-		// 本机视频 URL：走观看管线解读画面，不再只返回链接摘要。
-		if entry.URL != "" && (resource.IsVideoURL(entry.URL) || resource.KindOfExt(strings.ToLower(filepath.Ext(entry.Title))) == resource.KindVideo) {
-			if ask == "" && strings.TrimSpace(entry.Summary) != "" {
-				return "【" + normalized + "｜" + kindLabel(parsed.Kind) + "｜" + entry.Title + "】\n" + entry.Summary
+}
+
+// imageHandleBlock 图片 / 动图：本地已有副本直接解读；远程直链先下载再解读
+func imageHandleBlock(handle string, entry *ResourceEntry, ask string) string {
+	originalURL := entry.URL
+	if entry.BlobPath == "" && resource.IsRemoteURL(entry.URL) {
+		if admitted := admitMedia(entry.URL, mediaName(entry.URL, ".gif"), entry.Origin, entry.Kind); admitted != nil && admitted.Handle != "" {
+			if local := getResourceEntry(admitted.Handle); local != nil {
+				handle, entry = admitted.Handle, local
 			}
-			desc, err := describeVideoURL(entry.URL, ask)
-			if err != nil {
-				if errors.Is(err, Descriptor.ErrVideoExpired) {
-					return "【" + normalized + "｜" + entry.Title + "】\n这段视频的远程地址已经失效，本地也没有可复用的副本；请对方重新发送一次视频。"
+		}
+	}
+	desc := describeResource(handle, ask)
+	if desc == "" {
+		if getResourceEntry(handle) == nil {
+			return resourceBlockHeader(handle, entry) + lostFileNotice
+		}
+		desc = "（暂无描述，且本体不可直接解读）"
+	}
+	// 远程来源的解析文本同时写回原 URL，保证同一链接下次直接命中
+	if originalURL != "" && resource.IsRemoteURL(originalURL) {
+		_ = resource.SetParseText(originalURL, desc)
+	}
+	return resourceBlockHeader(handle, entry) + desc
+}
+
+// audioHandleBlock 音频：本批转写已完成，读取解析文本
+func audioHandleBlock(handle string, entry *ResourceEntry) string {
+	text := audioParseTextOf(handle)
+	if text == "" {
+		if transcribed, err := transcribeAudioResource(handle); err == nil {
+			text = transcribed
+		}
+	}
+	if strings.TrimSpace(text) == "" {
+		text = ASRFallbackText
+	}
+	return resourceBlockHeader(handle, entry) + text
+}
+
+// videoHandleBlock 视频：B 站走直驱印象；本地或远程直链走 Descriptor
+func videoHandleBlock(handle string, entry *ResourceEntry, ask string) string {
+	rawURL := entry.URL
+	if resource.BilibiliBvid(rawURL) != "" {
+		impression, err := bilibiliImpressionHook(rawURL, ask)
+		if err != nil {
+			return resourceBlockHeader(handle, entry) + "视频印象获取失败：" + err.Error()
+		}
+		if strings.TrimSpace(impression) != "" {
+			_ = resource.SetParseText(rawURL, impression)
+		}
+		return resourceBlockHeader(handle, entry) + impression
+	}
+	source := rawURL
+	if entry.BlobPath == "" || !resource.IsLocalURL(rawURL) {
+		admitted := admitMedia(rawURL, mediaName(rawURL, ".mp4"), entry.Origin, resource.KindVideo)
+		if admitted == nil || admitted.Handle == "" {
+			return resourceBlockHeader(handle, entry) + "视频读取失败：本地副本未能下载落盘"
+		}
+		source = admitted.URL
+	}
+	desc, err := describeVideoURL(source, ask)
+	if err != nil {
+		if errors.Is(err, Descriptor.ErrVideoExpired) {
+			// 远程地址失效且本地无副本：重新下载一次
+			if admitted := admitMedia(rawURL, mediaName(rawURL, ".mp4"), entry.Origin, resource.KindVideo); admitted != nil {
+				if retry, retryErr := describeVideoURL(admitted.URL, ask); retryErr == nil {
+					return resourceBlockHeader(handle, entry) + retry
 				}
-				return "【" + normalized + "｜" + entry.Title + "】\n视频读取失败：" + err.Error()
 			}
-			if desc == "" {
-				desc = "（视频暂无可用描述）"
-			}
-			return "【" + normalized + "｜" + kindLabel(parsed.Kind) + "｜" + entry.Title + "】\n" + desc
+			return resourceBlockHeader(handle, entry) + "这段视频的远程地址已经失效，本地也没有可复用的副本；请对方重新发送一次视频。"
 		}
-		result := readResource(normalized, 12000)
-		if result == nil {
-			*missing = append(*missing, normalized)
-			return ""
-		}
-		if result.Lost {
-			return "【" + normalized + "｜" + result.Title + "】\n" + lostFileNotice
-		}
-		return "【" + normalized + "｜" + kindLabel(parsed.Kind) + "｜" + entry.Title + "】\n" + result.Content
+		return resourceBlockHeader(handle, entry) + "视频读取失败：" + err.Error()
 	}
+	if desc == "" {
+		desc = "（视频暂无可用描述）"
+	}
+	if entry.URL != "" {
+		_ = resource.SetParseText(entry.URL, desc)
+	}
+	return resourceBlockHeader(handle, entry) + desc
+}
+
+// webHandleBlock 网页：本地已有视频/动图副本走 Descriptor；否则 WebSearch 直驱
+func webHandleBlock(handle string, entry *ResourceEntry, ask string) string {
+	rawURL := entry.URL
+	if resource.BilibiliBvid(rawURL) != "" {
+		impression, err := bilibiliImpressionHook(rawURL, ask)
+		if err != nil {
+			return resourceBlockHeader(handle, entry) + "视频印象获取失败：" + err.Error()
+		}
+		if strings.TrimSpace(impression) != "" {
+			_ = resource.SetParseText(rawURL, impression)
+		}
+		return resourceBlockHeader(handle, entry) + impression
+	}
+	ext := strings.ToLower(filepath.Ext(pathPartOf(rawURL)))
+	if resource.KindOfExt(ext) == resource.KindVideo || (resource.MayBeAnimated(ext) && resource.KindOfExt(ext) == resource.KindImage) {
+		admitted := admitMedia(rawURL, mediaName(rawURL, ext), entry.Origin, "")
+		if admitted != nil && admitted.URL != "" {
+			desc, err := describeVideoURL(admitted.URL, ask)
+			if err == nil && strings.TrimSpace(desc) != "" {
+				_ = resource.SetParseText(rawURL, desc)
+				return resourceBlockHeader(handle, entry) + desc
+			}
+		}
+	}
+	title, summary, err := readPageHook(rawURL, ask)
+	if err != nil {
+		return resourceBlockHeader(handle, entry) + "这个链接现在打不开：" + err.Error()
+	}
+	if strings.TrimSpace(summary) == "" {
+		return resourceBlockHeader(handle, entry) + "（这个链接没有读取出可用内容）"
+	}
+	_ = resource.SetParseText(rawURL, summary)
+	if strings.TrimSpace(title) != "" {
+		_, _ = resource.AdmitURL(resource.URLAdmitInput{URL: rawURL, Title: title, Origin: entry.Origin})
+	}
+	return resourceBlockHeader(handle, entry) + summary
+}
+
+// documentHandleBlock 文件：直接取原文；带 ask 时交给 Descriptor 探查
+func documentHandleBlock(handle string, entry *ResourceEntry, ask string, missing *[]string) string {
 	if ask != "" {
-		answer := inspectTextResource(normalized, ask)
+		answer := inspectTextResource(handle, ask)
 		if answer == "" {
-			return "【" + normalized + "｜" + entry.Title + "】\n探查失败：描述者没有给出答复，可去掉 ask 直接取原文"
+			return resourceBlockHeader(handle, entry) + "探查失败：描述者没有给出答复，可去掉 ask 直接取原文"
 		}
-		return "【" + normalized + "｜" + entry.Title + "】\n" + answer
+		return resourceBlockHeader(handle, entry) + answer
 	}
-	result := readResource(normalized, 12000)
+	result := readResource(handle, 12000)
 	if result == nil {
-		*missing = append(*missing, normalized)
+		*missing = append(*missing, handle)
 		return ""
 	}
 	if result.Lost {
-		deleteResource(normalized)
-		return "【" + normalized + "｜" + result.Title + "】\n" + lostFileNotice
+		deleteResource(handle)
+		return resourceBlockHeader(handle, entry) + lostFileNotice
 	}
 	rangeNote := ""
 	if result.LineStart > 0 && result.LineEnd > 0 {
@@ -572,7 +691,28 @@ func readHandleBlock(raw, ask string, missing *[]string) string {
 	if result.Truncated {
 		truncated = "\n（内容较长已截断；可带 |L起-止 或 |§n 定向读取）"
 	}
-	return fmt.Sprintf("【%s%s%s｜共 %d 行】\n%s%s", normalized, sectionNote, rangeNote, result.TotalLines, result.Content, truncated)
+	return fmt.Sprintf("【%s%s%s｜共 %d 行】\n%s%s", handle, sectionNote, rangeNote, result.TotalLines, result.Content, truncated)
+}
+
+// resourceBlockHeader 统一的资源块标题
+func resourceBlockHeader(handle string, entry *ResourceEntry) string {
+	kind := kindFromNormalized(handle)
+	title := strings.TrimSpace(entry.Title)
+	if title == "" {
+		title = strings.TrimSpace(entry.Name)
+	}
+	if title == "" {
+		title = handle
+	}
+	return "【" + handle + "｜" + kindLabel(kind) + "｜" + title + "】\n"
+}
+
+// kindFromNormalized 从规范句柄取类型码
+func kindFromNormalized(handle string) string {
+	if parsed := parseHandle(handle); parsed != nil {
+		return parsed.Kind
+	}
+	return ""
 }
 
 func finishResourceBlocks(blocks, missing []string) ToolResult {
@@ -589,7 +729,7 @@ func finishResourceBlocks(blocks, missing []string) ToolResult {
 func handleBrowseResources(args map[string]any) ToolResult {
 	kind := strings.ToUpper(strings.TrimSpace(stringArg(args, "kind")))
 	if !isKnownKind(kind) && kind != "" {
-		return ToolResult{Text: "类型码无效：" + kind + "。可用类型码：D 文档 / I 图片 / A 音频 / T 表格 / U 链接"}
+		return ToolResult{Text: "类型码无效：" + kind + "。可用类型码：D 文件 / I 图片 / G 动图 / A 音频 / V 视频 / U 网页"}
 	}
 	query := strings.TrimSpace(stringArg(args, "query"))
 	limit := int(numberArg(args, "limit"))

@@ -14,9 +14,6 @@ var AllowLAN = false
 // InsecureTLS 插件沙箱网络是否跳过 TLS 证书校验。
 var InsecureTLS = false
 
-// ConsoleLogEnabled 是否把控制台输出镜像落盘到 local_data/logs/console.log。
-var ConsoleLogEnabled = false
-
 // 模型重复输出检测（loopguard）参数覆盖：0 表示沿用 loopguard 包的默认值
 // （1024 字节点 / 每节点 8 个 128 字段 / 平均相似度 0.65）。
 // 放在 system 下是为了不改代码即可按实际运行效果调阈值。

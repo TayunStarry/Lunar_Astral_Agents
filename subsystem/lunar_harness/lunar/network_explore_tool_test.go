@@ -1,59 +1,60 @@
 package lunar
 
-// network_explore_tool_test.go 钉住「Mutual Forum 仅在实际可用时暴露」的条件枚举逻辑。
+// network_explore_tool_test.go 钉住联网探索分类与生活链触发响应。
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
+	"strings"
 	"testing"
+
+	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/life"
 )
 
-func TestNetworkExploreExposesMutualForumOnlyWhenReady(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "missing.json")
-	t.Setenv("MUTUAL_FORUM_CONFIG", missing)
-	if enumContains(t, networkExploreEnum(t), "mutual_forum") {
-		t.Fatal("配置缺失时不应暴露 mutual_forum")
-	}
-
-	disabled := writeForumConfig(t, map[string]any{"enabled": false, "base_url": "https://example.com"})
-	t.Setenv("MUTUAL_FORUM_CONFIG", disabled)
-	if enumContains(t, networkExploreEnum(t), "mutual_forum") {
-		t.Fatal("开关关闭时不应暴露 mutual_forum")
-	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"ok": true,
-			"data": map[string]any{
-				"enabled": true, "api_version": "v1", "enroll_mode": "open",
-				"poll_interval_seconds": 60, "round_ttl_seconds": 600,
-				"server_time": "2026-10-25T12:00:00+08:00",
-			},
-			"meta": map[string]any{
-				"request_id": "test", "server_time": "2026-10-25T12:00:00+08:00", "api_version": "v1",
-			},
-		})
-	}))
-	defer server.Close()
-
-	enabled := writeForumConfig(t, map[string]any{
-		"enabled": true, "base_url": server.URL,
-		"health_timeout_seconds": 1, "health_cache_seconds": 30,
-	})
-	t.Setenv("MUTUAL_FORUM_CONFIG", enabled)
+func TestNetworkExploreExposesLifeCategories(t *testing.T) {
 	enum := networkExploreEnum(t)
-	if !enumContains(t, enum, "mutual_forum") {
-		t.Fatal("配置开启且论坛可达时应暴露 mutual_forum")
+	for _, want := range []string{"web_search", "bilibili_viewer", "mutual_forum"} {
+		if !enumContains(t, enum, want) {
+			t.Fatalf("联网探索应始终暴露 %s，实际 %v", want, enum)
+		}
 	}
-	if !enumContains(t, enum, "web_search") {
-		t.Fatal("基础能力 web_search 不应被移除")
+}
+
+func TestNetworkExploreLifeTriggersFixedReply(t *testing.T) {
+	oldDir := config.LocalDir
+	config.LocalDir = t.TempDir()
+	life.Init()
+	t.Cleanup(func() {
+		// 用全新目录重新载入生活状态，清掉测试留下的待执行事件，避免污染其他用例。
+		config.LocalDir = t.TempDir()
+		life.Init()
+		config.LocalDir = oldDir
+	})
+
+	cases := []struct {
+		tool  string
+		reply string
+	}{
+		{networkBilibiliTool, bilibiliFixedReply},
+		{networkMutualForumTool, forumFixedReply},
 	}
-	if enumContains(t, enum, "bilibil_viewer") {
-		t.Fatal("哔哩观影已迁入生活体系，不应再暴露给对话者")
+	for _, tc := range cases {
+		result := handleNetworkExplore(map[string]any{
+			"tool":        tc.tool,
+			"instruction": "想看点猫咪视频",
+		})
+		if result.Text != tc.reply {
+			t.Fatalf("%s 应返回固定响应 %q，实际 %q", tc.tool, tc.reply, result.Text)
+		}
+		if !life.HasPendingEvent() {
+			t.Fatalf("%s 触发后应登记强制生活事件", tc.tool)
+		}
+	}
+}
+
+func TestNetworkExploreUnknownTool(t *testing.T) {
+	result := handleNetworkExplore(map[string]any{"tool": "unknown", "instruction": "随便看看"})
+	if !strings.Contains(result.Text, "web_search") {
+		t.Fatalf("未知工具应给出可选分类，实际 %q", result.Text)
 	}
 }
 
@@ -84,17 +85,4 @@ func enumContains(t *testing.T, values []string, target string) bool {
 		}
 	}
 	return false
-}
-
-func writeForumConfig(t *testing.T, cfg map[string]any) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "mutual_forum.json")
-	raw, err := json.Marshal(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return path
 }

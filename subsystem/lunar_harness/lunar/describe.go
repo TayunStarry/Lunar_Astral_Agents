@@ -16,12 +16,12 @@ func describeResource(handle, question string) string {
 	normalized := formatHandle(*parsed)
 	cached := ""
 	if entry := getResourceEntry(normalized); entry != nil {
-		cached = entry.Summary
+		cached = entry.ParseText
 	}
 	if cached != "" && question == "" {
 		return cached
 	}
-	if parsed.Kind == "I" {
+	if parsed.Kind == "I" || parsed.Kind == "G" {
 		text, err := Descriptor.DescribeMedia(normalized, question)
 		if err != nil {
 			logger.Warn(lunarCoreModule, "[描述者] 影像描述失败: %v", err)

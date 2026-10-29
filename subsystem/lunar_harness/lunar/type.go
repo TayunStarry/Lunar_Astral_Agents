@@ -49,6 +49,32 @@ type ContentItem struct {
 	AudioURL   *URLPayload   `json:"audio_url,omitempty"`
 }
 
+// MarshalJSON 序列化内容项：文本项必须始终带 text 键。
+// 严格解析的 OpenAI 兼容服务端（如 llama.cpp）会对缺失的 text 键直接报错，
+// 空文本项若因 omitempty 省略该键，整次请求都会 500。
+func (c ContentItem) MarshalJSON() ([]byte, error) {
+	type contentItemJSON struct {
+		Type       string        `json:"type"`
+		Text       *string       `json:"text,omitempty"`
+		ImageURL   *URLPayload   `json:"image_url,omitempty"`
+		InputAudio *AudioPayload `json:"input_audio,omitempty"`
+		VideoURL   *URLPayload   `json:"video_url,omitempty"`
+		AudioURL   *URLPayload   `json:"audio_url,omitempty"`
+	}
+	out := contentItemJSON{
+		Type:       c.Type,
+		ImageURL:   c.ImageURL,
+		InputAudio: c.InputAudio,
+		VideoURL:   c.VideoURL,
+		AudioURL:   c.AudioURL,
+	}
+	if c.Type == ContentText {
+		text := c.Text
+		out.Text = &text
+	}
+	return json.Marshal(out)
+}
+
 // PostMessage 模型消息（content 为 string 或 []ContentItem）
 type PostMessage struct {
 	Role       string         `json:"role"`
@@ -514,11 +540,13 @@ type TickSnapshot struct {
 // 新增体系只需实现该接口并注册，主调度逻辑不需要改动：
 //   - Priority 越大越先判定（对话 300 / 观影 200 / 生活 100）；
 //   - Ready 只读判定，不得消费消息或改状态；
+//   - IdleReset 本次运行结束后把空闲进度重置到该值（决定下一次生活冷却）；
 //   - Run 执行一个原子工作单元，返回即表示释放 Tick。
 type TickSystem interface {
 	ID() string
 	Priority() int
 	Ready(TickSnapshot) (bool, string)
+	IdleReset() int
 	Run(ctx context.Context) error
 }
 
@@ -534,28 +562,11 @@ type TickState struct {
 
 // RuntimeGlobalMessage 对话者运行时消息的全局共享数据。
 type RuntimeGlobalMessage struct {
-	Timestamp   int64  `json:"timestamp"`
-	MoodLabel   string `json:"mood_label"`
-	LifeRecord  string `json:"life_record"`
-	PlanSummary string `json:"plan_summary"`
-}
-
-// ==== 引擎自愈状态 ====
-
-// EngineStatus 引擎自愈状态（TUI 展示用）
-type EngineStatus struct {
-	RuntimeReady        bool
-	AgentReady          bool
-	BootedAt            time.Time
-	ReloadCount         int
-	LastReloadAt        time.Time
-	LastReloadReason    string
-	LastReloadResult    string
-	ConsecutiveFailures int
-	LastFailure         string
-	LastFailureAt       time.Time
-	AutoReload          bool
-	AutoReloadThreshold int
+	Timestamp    int64    `json:"timestamp"`
+	MoodLabel    string   `json:"mood_label"`
+	LifeRecord   string   `json:"life_record"`
+	PlanSummary  string   `json:"plan_summary"`
+	EmotionMarks []string `json:"emotion_marks,omitempty"`
 }
 
 // ActionDefinition 渲染引擎上报的可用动作

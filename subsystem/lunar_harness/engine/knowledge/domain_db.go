@@ -4,12 +4,10 @@ package knowledge
 //
 // 分域规则（见 docs/adr/0009-数据库按领域分文件.md）：
 //
-//	archive.db    统一资源名录   resources / resource_sections（由 persistence 登记）
-//	media.db      媒体派生数据   video_summary（动图/视频/音频理解摘要）/ vision_cache
-//	web.db        网络检索缓存   web_ltp_page_cache
 //	text.db       文本内容索引   file_mapping（文件 → 分块集合）
 //	character.db  自定义角色库   painter_characters
 //	knowledge.db  通用知识库     用户/插件自建表（/knowledge/ 与 LTP9 database.*）
+//	handles.db    统一句柄库     url_master / handle_* / doc_sections / cache（由 engine/resource 登记）
 //
 // 约束：
 //   - 一张表只属于一个领域库，不再把内建缓存塞进 knowledge.db；
@@ -137,9 +135,6 @@ func (d *domainDB) close() error {
 	d.openedPath = ""
 	return err
 }
-
-// EnsureWeb 打开网络检索缓存库（web.db）；供 WebSearch 等上层模块复用同一连接与表结构。
-func EnsureWeb() (*sql.DB, error) { return webDB.open() }
 
 // Init 启动时统一打开各领域库并建表（幂等）。
 // 打开失败不阻断启动：调用方记录告警，具体读写路径再次按需懒打开。

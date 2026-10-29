@@ -133,8 +133,15 @@ func initialize(ctx context.Context) error {
 		}
 		base[label] = normalize(vecs[i])
 	}
-	// 初始权重偏向开心：开心 70%，其余四类各 7.5%。
-	initWeights := []float64{0.70, 0.075, 0.075, 0.075, 0.075}
+	// 初始权重偏向开心：开心 70%，其余基础情绪均分剩下的 30%。
+	initWeights := make([]float64, len(labels))
+	for i := range initWeights {
+		if i == 0 {
+			initWeights[i] = 0.70
+			continue
+		}
+		initWeights[i] = 0.30 / float64(len(labels)-1)
+	}
 	vector := normalize(weightedVector(base, initWeights))
 	weights := make(map[string]float64, len(labels))
 	for i, label := range labels {

@@ -6,6 +6,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -29,9 +30,11 @@ var (
 	unreadContext []PostMessage
 	// unreadRecords 对话者淘汰的历史消息（待记忆流程写入记忆库）
 	unreadRecords []PostMessage
+	// unreadEmotionMarks 本轮未读消息命中的情感标识（用户名 → 情感标签）
+	unreadEmotionMarks = map[string]string{}
 	// lastUserTextMu 保护最新用户发言
 	lastUserTextMu sync.Mutex
-	// lastUserText 最新用户发言（供生活事件更新心情）
+	// lastUserText 最新用户发言（供生活体系更新心情/情感取向）
 	lastUserText string
 
 	// reasoningInProgress 对话模型是否正在跑（为 true 时下一个 tick 直接跳过）
@@ -161,17 +164,6 @@ var (
 	scheduleCache []ScheduleItem
 )
 
-// ==== 引擎自愈 ====
-
-var (
-	// engineMu 保护引擎状态
-	engineMu sync.RWMutex
-	// engineStatus 自愈状态
-	engineStatus = EngineStatus{}
-	// reloadRunning 是否有重载正在执行
-	reloadRunning atomic.Bool
-)
-
 // ==== 常量 ====
 
 const (
@@ -219,10 +211,16 @@ const (
 	tickModule = "TickLoop"
 	// tickStateFile 调度器状态文件（相对 LocalDir）
 	tickStateFile = "database/tick_state.json"
-	// tickIdleThreshold 生活体系冷却阈值：连续 905 个空闲 Tick 后触发
-	tickIdleThreshold = 905
 	// tickPersistEveryN 空闲计数每 N 个 Tick 落盘一次（触发/释放时立即落盘）
 	tickPersistEveryN = 10
+
+	// 各体系启动时的空闲进度重置值（阈值为 life.IdleThreshold，默认 600）：
+	//   - 对话结束 → 600 剩余 = 10 分钟空闲后进入生活；
+	//   - 观影结束 → 600-300 = 5 分钟空闲后进入生活；
+	//   - 生活（休息）结束 → 600-(-300) = 15 分钟空闲后再次进入生活。
+	dialogueIdleReset = 0
+	viewingIdleReset  = 300
+	lifeIdleReset     = -300
 )
 
 // tickSchedulerInstance 全局 Tick 调度器（Start 时创建）
@@ -230,6 +228,19 @@ var tickSchedulerInstance *tickScheduler
 
 // viewingPendingHook 观影待办探测；测试可替换，生产默认走 BilibiliViewer。
 var viewingPendingHook = BilibiliViewer.HasPendingWork
+
+// readPageHook 指定网页的现场读取入口；测试可替换，生产默认走 WebSearch.ReadURL。
+var readPageHook = WebSearch.ReadURL
+
+// bilibiliDigestHook B 站视频的速览入口；测试可替换，生产默认走 BilibiliViewer.QuickDigest。
+var bilibiliDigestHook = BilibiliViewer.QuickDigest
+
+// bilibiliImpressionHook B 站 URL 直驱印象（规范三：跳过选片/动态/评论/切片）
+var bilibiliImpressionHook = BilibiliViewer.DirectImpression
+
+// audioDirectTextEnabled 音频直出模式：一旦月华主动用 use_resource 读过音频，
+// 后续语音进入上下文时就直接给转写正文，不再退化为待解读的句柄。
+var audioDirectTextEnabled bool
 
 // notifyIdleHook 空闲 Tick 通知 QQ 桥接推进队列；测试可替换。
 var notifyIdleHook = DialogueBridging.NotifyAgentIdle

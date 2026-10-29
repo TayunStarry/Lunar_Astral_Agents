@@ -5,6 +5,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // loadKnowledge 读取整表 [key,text] 条目
@@ -54,28 +55,34 @@ func saveKnowledge(table string, values map[string]string) bool {
 	return true
 }
 
-// getPromptFromKnowledge 从知识库获取媒体理解缓存
+// getPromptFromKnowledge 读取某来源 URL 的唯一解析文本（媒体理解缓存）
 func getPromptFromKnowledge(key string) string {
-	return loadKnowledge("video_summary")[key]
+	raw := strings.TrimSpace(key)
+	if raw == "" || strings.HasPrefix(strings.ToLower(raw), "data:") {
+		return ""
+	}
+	return resource.ParseTextOf(raw)
 }
 
 // getPromptFromKnowledgeAny 按多个候选键查找媒体理解缓存
 func getPromptFromKnowledgeAny(keys []string) string {
-	if len(keys) == 0 {
-		return ""
-	}
-	values := loadKnowledge("video_summary")
 	for _, key := range keys {
-		if value := strings.TrimSpace(values[key]); value != "" {
+		if value := getPromptFromKnowledge(key); value != "" {
 			return value
 		}
 	}
 	return ""
 }
 
-// savePromptToKnowledge 保存媒体理解缓存
+// savePromptToKnowledge 写入某来源 URL 的唯一解析文本
 func savePromptToKnowledge(key, prompt string) bool {
-	values := loadKnowledge("video_summary")
-	values[key] = prompt
-	return saveKnowledge("video_summary", values)
+	raw := strings.TrimSpace(key)
+	if raw == "" || strings.HasPrefix(strings.ToLower(raw), "data:") {
+		return false
+	}
+	if err := resource.SetParseText(raw, prompt); err != nil {
+		logger.Warn(lunarCoreModule, "[知识库] 写入解析文本失败: %v", err)
+		return false
+	}
+	return true
 }

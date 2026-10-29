@@ -9,11 +9,11 @@ var (
 	KeyFile = LocalDir + "/cert/localhost-key.pem"
 	// KnowledgeDBPath 通用知识库文件路径（用户 / 插件自建表；内建缓存在各自领域库）
 	KnowledgeDBPath = LocalDir + "/database/knowledge.db"
-	// ArchiveDBPath 统一资源目录文件路径（句柄 / 元数据 / 段落结构，见 docs/adr/0001）
-	ArchiveDBPath = LocalDir + "/database/archive.db"
-	// MediaDBPath 媒体派生数据（动图/视频/音频理解摘要、视觉副本簿记）
+	// ArchiveDBPath 统一句柄库文件路径（URL 主表 / 六类句柄 / 段落 / 缓存）
+	ArchiveDBPath = LocalDir + "/database/handles.db"
+	// MediaDBPath 历史媒体派生库路径（新体系不再使用，启动时会被清除）
 	MediaDBPath = LocalDir + "/database/media.db"
-	// WebDBPath 网络检索缓存（页面摘要缓存）
+	// WebDBPath 历史网络检索缓存路径（新体系不再使用，启动时会被清除）
 	WebDBPath = LocalDir + "/database/web.db"
 	// TextDBPath 文本内容索引（文件 → 分块集合映射）
 	TextDBPath = LocalDir + "/database/text.db"

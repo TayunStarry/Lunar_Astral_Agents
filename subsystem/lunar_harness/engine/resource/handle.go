@@ -112,7 +112,7 @@ func KindOfExt(ext string) string {
 	case "wav", "mp3", "flac", "ogg", "m4a", "aac", "opus", "wma":
 		return KindAudio
 	case "csv", "tsv", "xlsx", "xls":
-		return KindTable
+		return KindDocument
 	case "txt", "md", "markdown", "json", "xml", "yaml", "yml", "toml", "ini", "cfg",
 		"log", "go", "ts", "tsx", "js", "jsx", "py", "rs", "java", "c", "h", "cpp", "cxx",
 		"hpp", "cs", "rb", "sh", "ps1", "bat", "sql", "html", "htm", "css", "vue", "kt",
@@ -137,6 +137,15 @@ func IsTextKind(kind string) bool {
 	return kind == KindDocument || kind == KindTable || kind == KindURL
 }
 
+// IsHandleKind 判断类型码是否属于新体系（D/I/V/A/G/U）
+func IsHandleKind(kind string) bool {
+	switch kind {
+	case KindDocument, KindImage, KindVideo, KindAudio, KindAnimated, KindURL:
+		return true
+	}
+	return false
+}
+
 // DefaultRetain 按来源推断默认保留等级
 func DefaultRetain(origin string) string {
 	switch origin {
@@ -149,6 +158,11 @@ func DefaultRetain(origin string) string {
 	default:
 		return RetainSoft
 	}
+}
+
+// MayBeAnimated 判断扩展名是否可能承载动图（最终以字节探针为准）
+func MayBeAnimated(ext string) bool {
+	return animatedExtensions[strings.ToLower(ext)]
 }
 
 // IsMediaExtension 判断扩展名是否属媒体类（图片 / 视频 / 音频）

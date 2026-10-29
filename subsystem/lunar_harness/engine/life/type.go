@@ -10,13 +10,17 @@ import (
 
 // State 生活体系持久化状态。
 type State struct {
-	Version   int            `json:"version"`
-	Date      string         `json:"date"`
-	Used      map[string]int `json:"used"`
-	Active    *ActiveRun     `json:"active,omitempty"`
-	LastRecord  string       `json:"last_record"`
-	PlanSummary string       `json:"plan_summary"`
-	UpdatedAt int64          `json:"updated_at"`
+	Version     int            `json:"version"`
+	Date        string         `json:"date"`
+	Used        map[string]int `json:"used"`
+	Active      *ActiveRun     `json:"active,omitempty"`
+	LastRecord  string         `json:"last_record"`
+	PlanSummary string         `json:"plan_summary"`
+	// PendingEvent 工具触发的强制事件：下一 Tick 跳过权重选择直接执行
+	PendingEvent string `json:"pending_event,omitempty"`
+	// PendingInstruction 强制事件的自然语言要求，用于引导智能体流程
+	PendingInstruction string `json:"pending_instruction,omitempty"`
+	UpdatedAt          int64  `json:"updated_at"`
 }
 
 // ActiveRun 未完成的事件运行。
@@ -40,6 +44,8 @@ type Env struct {
 	MoodLabel    string
 	LastRecord   string
 	LastUserText string
+	// Instruction 工具触发的自然语言要求；普通权重事件为空。
+	Instruction string
 }
 
 // Event 可注册的生活事件。

@@ -22,6 +22,20 @@ func SetLastUserTextProvider(provider func() string) {
 	lastUserTextHook = provider
 }
 
+// SetLastUserNameProvider 注入最新用户发言的发送者名读取能力（由 lunar 包提供）。
+func SetLastUserNameProvider(provider func() string) {
+	mu.Lock()
+	defer mu.Unlock()
+	lastUserNameHook = provider
+}
+
+// SetLastReplyTextProvider 注入上一轮月华回应读取能力（由 lunar 包提供）。
+func SetLastReplyTextProvider(provider func() string) {
+	mu.Lock()
+	defer mu.Unlock()
+	lastReplyTextHook = provider
+}
+
 // RegisterEvent 注册生活事件；重复 ID 忽略。
 func RegisterEvent(event Event) {
 	if event == nil || event.ID() == "" {
@@ -40,10 +54,10 @@ func RegisterEvent(event Event) {
 func registerBuiltinLocked() {
 	builtins := []Event{
 		newDazeEvent(),
-		newMoodEvent(),
 		newForumEvent(),
 		newWatchEvent(),
 		newMemoryEvent(),
+		newCreativeEvent(),
 	}
 	for _, event := range builtins {
 		if eventByIDLocked(event.ID()) != nil {

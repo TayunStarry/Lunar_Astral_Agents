@@ -4,7 +4,7 @@ package mood
 
 // State 心情持久化状态。
 //
-// Base 保存 5 种基础情绪的标准嵌入向量；Vector 是当前多维心情。
+// Base 保存各基础情绪的标准嵌入向量；Vector 是当前多维心情。
 // 两者必须在同一嵌入模型、同一向量空间下，因此一起持久化 Model / Dim。
 type State struct {
 	Version   int                  `json:"version"`

@@ -15,10 +15,10 @@ import (
 
 // assembleCrystal 装配琉璃人格格：知识库/记忆库、LTP9 插件引擎与前端总线消费。
 func assembleCrystal() error {
-	// ==== 统一资源目录（SQLite archive.db：句柄 / 元数据 / 段落结构） ====
+	// ==== 统一句柄库（SQLite handles.db：URL 主表 / 六类句柄 / 段落 / 缓存） ====
 	// 必须先于月华智能体运行时启动：入库层在对话链路里即被调用。
 	if err := resource.Init(config.ArchiveDBPath); err != nil {
-		logger.Warn("LunarHarness", "统一资源目录初始化失败: %v (不影响服务启动)", err)
+		logger.Warn("LunarHarness", "统一句柄库初始化失败: %v (不影响服务启动)", err)
 	}
 
 	// ==== 知识库（SQLite，仅用户/插件自建表） ====
@@ -26,8 +26,8 @@ func assembleCrystal() error {
 		logger.Warn("LunarHarness", "知识库初始化失败: %v (不影响服务启动)", err)
 	}
 
-	// ==== 领域数据库（media / web / text / character） ====
-	// 历史版本的内建表在上面两个 Init 中已迁出；这里统一建表并提前暴露打开失败。
+	// ==== 领域数据库（text / character） ====
+	// 句柄相关数据全部落在 handles.db；这里只建剩余领域库并提前暴露打开失败。
 	if err := knowledge.Init(); err != nil {
 		logger.Warn("LunarHarness", "领域数据库初始化存在失败项: %v", err)
 	}

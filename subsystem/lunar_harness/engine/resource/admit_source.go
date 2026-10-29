@@ -218,6 +218,8 @@ func writeTemp(data []byte, name string) (string, func(), error) {
 
 // downloadToTemp 下载远程地址到临时文件，返回路径与清理函数
 func downloadToTemp(raw string, name string) (string, func(), error) {
+	// 腾讯图床只接受 https：http 直链会被边缘节点直接拒绝（400）。
+	raw = UpgradeCDNScheme(raw)
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Get(raw)
 	if err != nil {

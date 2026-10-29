@@ -552,14 +552,12 @@ type statsState struct {
 	snap Snapshot
 }
 
-// updateStats 运行状态屏事件：采样刷新 + 对话链重建 + 桌面操纵入口
+// updateStats 运行状态屏事件：采样刷新 + 桌面操纵入口
 func (m appModel) updateStats(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case statsTickMsg:
 		m.stats.snap = GetSnapshot()
 		return m, tickStats()
-	case engineDoneMsg:
-		return m.updateEngine(msg)
 	case tea.KeyMsg:
 		if m.engine.inputMode {
 			return m.updateEngine(msg)
@@ -570,19 +568,19 @@ func (m appModel) updateStats(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.screen = screenMenu
 			return m, nil
-		case "r", "R", "i", "I", "x", "X":
+		case "i", "I", "x", "X":
 			return m.updateEngine(msg)
 		}
 	}
 	return m, nil
 }
 
-// viewStats 运行状态屏：运行环境 / 模型计量 + 对话链 / 桌面操纵 + 手动重建入口。
+// viewStats 运行状态屏：运行环境 / 模型计量 + 桌面操纵入口。
 //
-// 布局取舍：宽屏用两栏，左栏「机器与模型」、右栏「月华链路与桌面操纵」；
-// 窄屏退化为顺序堆叠。手动重建与桌面任务输入作为底部全宽区块，避免表单被挤成窄条。
+// 布局取舍：宽屏用两栏，左栏「机器与模型」、右栏「桌面操纵」；
+// 窄屏退化为顺序堆叠。桌面任务输入作为底部全宽区块，避免表单被挤成窄条。
 func (m appModel) viewStats() string {
-	f := m.frameFor("运行状态", "采样 1s · Go 对话链", engineKeys(m.engine))
+	f := m.frameFor("运行状态", "采样 1s · 运行观测", engineKeys(m.engine))
 	w, h := f.bodySize()
 
 	s := m.stats.snap
@@ -626,13 +624,12 @@ func (m appModel) viewStats() string {
 		labelValue("平均输出", fmt.Sprintf("%.0f token", stats.AvgCompletionPerCall()), keyW),
 	}
 
-	chain := append([]string{sectionRule("对话链状态", rightW), ""}, viewEngineChainState(rightW)...)
 	desktop := append([]string{sectionRule("桌面操纵智能体", rightW), ""}, m.viewDesktopOperatorState(rightW)...)
 
 	var body []string
 	if wide {
 		left := fitLines(append(append([]string{}, env...), append([]string{""}, model...)...), contentH)
-		right := fitLines(append(append([]string{}, chain...), append([]string{""}, desktop...)...), contentH)
+		right := fitLines(desktop, contentH)
 		separator := ruleStyle.Render(" │ ")
 		body = make([]string, 0, contentH)
 		for i := 0; i < contentH; i++ {
@@ -642,8 +639,6 @@ func (m appModel) viewStats() string {
 		stacked := append(append([]string{}, env...), "")
 		stacked = append(stacked, model...)
 		stacked = append(stacked, "")
-		stacked = append(stacked, chain...)
-		stacked = append(stacked, "")
 		stacked = append(stacked, desktop...)
 		body = fitLines(stacked, contentH)
 	}
@@ -652,10 +647,10 @@ func (m appModel) viewStats() string {
 	return f.render(fitLines(body, h))
 }
 
-// statsFooter 底部：手动重建与桌面任务入口（输入态时显示表单）
+// statsFooter 底部：桌面任务入口（输入态时显示表单）
 func (m appModel) statsFooter(w int) []string {
 	const labelW = 12
-	lines := []string{"", sectionRule("手动重建与桌面任务", w), ""}
+	lines := []string{"", sectionRule("桌面任务", w), ""}
 
 	if m.engine.inputMode {
 		lines = append(lines, formBox([]string{
@@ -668,16 +663,13 @@ func (m appModel) statsFooter(w int) []string {
 	}
 
 	for _, one := range []string{
-		"按 " + keyStyle.Render("r") + " 清空并重建 Go 对话链（上下文会重置，模型服务若已停止会一并拉起）；",
 		"按 " + keyStyle.Render("i") + " 输入桌面任务并启动；按 " + keyStyle.Render("x") + " 中断，停止中再按 x 强制结束。",
 	} {
 		for _, seg := range wrapPlain(one, maxInt(20, w-4)) {
 			lines = append(lines, "  "+dimStyle.Render(seg))
 		}
 	}
-	if m.engine.busy {
-		lines = append(lines, "", "  "+selectStyle.Render(m.spinner.View()+" 正在重建…"))
-	} else if m.engine.msg != "" {
+	if m.engine.msg != "" {
 		lines = append(lines, "")
 		if m.engine.err {
 			lines = append(lines, "  "+errStyle.Render("✗ "+m.engine.msg))

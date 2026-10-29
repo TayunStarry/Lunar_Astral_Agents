@@ -40,6 +40,10 @@ type Resource struct {
 	SectionCount int      `json:"section_count"` // 段落数（文档）
 	CreatedAt    int64    `json:"created_at"`
 	UsedAt       int64    `json:"used_at"`
+	// ParseText 该 URL 的唯一解析文本（use_resource 命中即直接返回）
+	ParseText string `json:"-"`
+	// ParseState 解析状态：none / ready / failed
+	ParseState string `json:"-"`
 	// BlobOwned 实体是否为「归档私有副本」：true = 归档自己写入、配额回收可清理；
 	// false = 前端/引擎写入的实体，回收器不得删除（防止误删用户可见文件）
 	BlobOwned bool `json:"blob_owned"`
@@ -185,6 +189,8 @@ type AdmitResult struct {
 	ContentHash string `json:"content_hash"`
 	// BlobPath 相对 LocalDir 的物理路径（内容仓库位置，斜杠分隔）
 	BlobPath string `json:"blob_path"`
+	// URL 该资源的目标 URL（本地资源为 /file/read/<rel>）
+	URL string `json:"url"`
 	// MIME 规范化 MIME
 	MIME string `json:"mime"`
 	// SizeBytes 字节数
@@ -209,26 +215,36 @@ type URLAdmitInput struct {
 	Name string
 	// Origin 来源语义（channel / tool-output / ...）
 	Origin string
+	// KindHint 类型码建议值（可空：按 URL 形态推断 V / G / U）
+	KindHint string
 }
 
-// VisionCacheEntry 视觉副本缓存条目
+// VisionCacheEntry 图片缩影缓存条目（统一缓存表中的 image-thumbnail 一类）
 type VisionCacheEntry struct {
-	// 源图内容哈希（sha16）
-	ContentHash string
-	// 副本最大边长（像素）
+	// SourceURL 源图片对应的本地 URL（/file/read/<rel>）
+	SourceURL string
+	// Side 副本最大边长（像素）
 	Side int
-	// 叠印的句柄文本（@I.003）
+	// Tag 叠印的句柄文本（@I.003）
 	Tag string
-	// 副本相对 LocalDir 路径
+	// CachePath 副本相对 LocalDir 路径
 	CachePath string
-	// 副本字节数
+	// Bytes 副本字节数
 	Bytes int64
 }
 
-// store 统一资源目录（SQLite archive.db）
-// 职责：句柄分配与解析、资源元数据、段落结构表、跨资源搜索。
-// 不存正文（在内容仓库）、不存向量（在记忆库）、不存媒体派生缓存（在 media.db）。
+// CacheEntry 统一缓存表的一行（视频切片 / 图片缩影）
+type CacheEntry struct {
+	Kind      string
+	SourceURL string
+	Variant   string
+	Path      string
+	Bytes     int64
+}
+
+// store 统一句柄库（SQLite handles.db）
+// 职责：URL 主表（URL ⇄ 解析文本唯一绑定）、六类句柄映射、段落结构、统一缓存。
 type store struct {
-	db          *sql.DB // 资源目录 SQL 连接
+	db          *sql.DB // 句柄库 SQL 连接
 	initialized bool    // 是否初始化完成
 }

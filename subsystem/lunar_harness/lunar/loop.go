@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/engine/affection"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/life"
 	"LunarSubsystem/LunarHarness/engine/mood"
@@ -40,18 +41,20 @@ func Start() error {
 	life.Init()
 	life.SetPlanHooks(pushDueScheduleItems, upcomingPlanSummary)
 	life.SetLastUserTextProvider(latestUserUtterance)
+	life.SetLastUserNameProvider(latestUserName)
+	life.SetLastReplyTextProvider(latestAssistantUtterance)
 	go func() {
 		if err := mood.Init(context.Background()); err != nil {
 			logger.Warn(lunarCoreModule, "[心情] 启动初始化未完成，将在生活事件中重试: %v", err)
+		}
+		if err := affection.Init(context.Background()); err != nil {
+			logger.Warn(lunarCoreModule, "[情感] 启动初始化未完成，将在生活事件中重试: %v", err)
 		}
 	}()
 
 	tickSchedulerInstance = buildTickScheduler()
 
 	agentReady.Store(true)
-	engineMu.Lock()
-	engineStatus.BootedAt = time.Now()
-	engineMu.Unlock()
 	stopCh = make(chan struct{})
 	running.Store(true)
 	loopWG.Add(1)
@@ -90,14 +93,6 @@ func buildTickScheduler() *tickScheduler {
 	return scheduler
 }
 
-// restartTickScheduler 重载时重建调度器：先取消在跑任务，再从持久化状态恢复。
-func restartTickScheduler() {
-	if tickSchedulerInstance != nil {
-		tickSchedulerInstance.Stop()
-	}
-	tickSchedulerInstance = buildTickScheduler()
-}
-
 func runLoop() {
 	defer loopWG.Done()
 	ticker := time.NewTicker(time.Second)
@@ -127,7 +122,8 @@ func pullContext() []PostMessage {
 		DialogueBridging.NotifyAgentIdle()
 		return nil
 	}
-	// 进入上下文前统一资源化：图片→缩影、动图/视频/URL/BV→句柄、音频→转写+句柄、文件→文档句柄
+	// 进入上下文前统一资源化：图片→缩影链接；动图/视频/音频/URL/BV→句柄文本；
+	// 文件→句柄。资源在接入阶段已完成下载、校验与句柄绑定，解析留到 use_resource。
 	return ResourcesConversionHandle(messages)
 }
 
@@ -160,6 +156,8 @@ func dispatchBeforeReadingMessage(messages []PostMessage) []PostMessage {
 func runDialogueTurn(incoming []PostMessage) {
 	// 对话者即将推理：先终止外部桌面智能体（桌面操纵），避免它继续操作桌面干扰本轮响应
 	stopDesktopActor()
+	// 本轮情感标识只跟随本轮到达的用户消息，先清掉上一轮遗留。
+	resetEmotionMarks()
 
 	stateMu.Lock()
 	fastAckSent = false

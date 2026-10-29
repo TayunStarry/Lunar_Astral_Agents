@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/life"
 )
 
 type fakeTickSystem struct {
-	id       string
-	priority int
-	ready    bool
-	reason   string
+	id        string
+	priority  int
+	idleReset int
+	ready     bool
+	reason    string
 
 	mu      sync.Mutex
 	runs    int
@@ -21,8 +23,9 @@ type fakeTickSystem struct {
 	block   chan struct{}
 }
 
-func (f *fakeTickSystem) ID() string    { return f.id }
-func (f *fakeTickSystem) Priority() int { return f.priority }
+func (f *fakeTickSystem) ID() string     { return f.id }
+func (f *fakeTickSystem) Priority() int  { return f.priority }
+func (f *fakeTickSystem) IdleReset() int { return f.idleReset }
 func (f *fakeTickSystem) Ready(TickSnapshot) (bool, string) {
 	return f.ready, f.reason
 }
@@ -75,12 +78,12 @@ func TestSchedulerPriorityAndIdleReset(t *testing.T) {
 	s := newTestTickScheduler(t)
 	dialogue := &fakeTickSystem{id: "dialogue", priority: 300, ready: true, reason: "unread"}
 	viewing := &fakeTickSystem{id: "viewing", priority: 200, ready: true, reason: "slices"}
-	life := &fakeTickSystem{id: "life", priority: 100, ready: true, reason: "cooldown"}
-	s.Register(life)
+	lifeSys := &fakeTickSystem{id: "life", priority: 100, ready: true, reason: "cooldown"}
+	s.Register(lifeSys)
 	s.Register(viewing)
 	s.Register(dialogue)
 
-	s.state.IdleTicks = 905
+	s.state.IdleTicks = life.IdleThreshold()
 	s.Tick()
 	if s.state.LastSystem != "dialogue" {
 		t.Fatalf("应优先触发对话，实际 %s", s.state.LastSystem)
@@ -89,7 +92,7 @@ func TestSchedulerPriorityAndIdleReset(t *testing.T) {
 		t.Fatalf("触发后空闲计数应清零，实际 %d", s.state.IdleTicks)
 	}
 	s.wg.Wait()
-	if dialogue.runCount() != 1 || viewing.runCount() != 0 || life.runCount() != 0 {
+	if dialogue.runCount() != 1 || viewing.runCount() != 0 || lifeSys.runCount() != 0 {
 		t.Fatal("同一 Tick 只允许一个体系运行")
 	}
 }
@@ -143,26 +146,54 @@ func TestSchedulerDoesNotNotifyBridgeWhenTriggering(t *testing.T) {
 
 func TestSchedulerIdleCounterAndThreshold(t *testing.T) {
 	s := newTestTickScheduler(t)
-	life := &fakeTickSystem{id: "life", priority: 100, ready: false}
+	lifeSys := &fakeTickSystem{id: "life", priority: 100, idleReset: lifeIdleReset, ready: false}
 	s.Register(&fakeTickSystem{id: "dialogue", priority: 300, ready: false})
 	s.Register(&fakeTickSystem{id: "viewing", priority: 200, ready: false})
-	s.Register(life)
+	s.Register(lifeSys)
 
-	for i := 0; i < tickIdleThreshold; i++ {
+	target := life.IdleThreshold()
+	for i := 0; i < target; i++ {
 		s.Tick()
 	}
-	if s.state.IdleTicks != tickIdleThreshold {
-		t.Fatalf("空闲计数应为 %d，实际 %d", tickIdleThreshold, s.state.IdleTicks)
+	if s.state.IdleTicks != target {
+		t.Fatalf("空闲计数应为 %d，实际 %d", target, s.state.IdleTicks)
 	}
-	if life.runCount() != 0 {
+	if lifeSys.runCount() != 0 {
 		t.Fatal("达到阈值前不应触发生活")
 	}
-	life.ready = true
+	lifeSys.ready = true
 	s.Tick()
 	if s.state.LastSystem != "life" {
 		t.Fatalf("达到阈值后应触发生活，实际 %s", s.state.LastSystem)
 	}
 	s.wg.Wait()
+	if s.state.IdleTicks != lifeIdleReset {
+		t.Fatalf("生活结束后进度应重置为 %d，实际 %d", lifeIdleReset, s.state.IdleTicks)
+	}
+}
+
+// TestSchedulerUsesPerSystemIdleReset 各体系启动时按自己的重置值回写空闲进度：
+// 对话 0（10 分钟后进生活）、观影 300（5 分钟后）、生活 -300（15 分钟后）。
+func TestSchedulerUsesPerSystemIdleReset(t *testing.T) {
+	cases := []struct {
+		id    string
+		reset int
+	}{
+		{"dialogue", dialogueIdleReset},
+		{"viewing", viewingIdleReset},
+		{"life", lifeIdleReset},
+	}
+	for _, tc := range cases {
+		s := newTestTickScheduler(t)
+		system := &fakeTickSystem{id: tc.id, priority: 300, idleReset: tc.reset, ready: true, reason: "test"}
+		s.Register(system)
+		s.state.IdleTicks = 900
+		s.Tick()
+		s.wg.Wait()
+		if s.state.IdleTicks != tc.reset {
+			t.Fatalf("%s 结束后进度应为 %d，实际 %d", tc.id, tc.reset, s.state.IdleTicks)
+		}
+	}
 }
 
 func TestSchedulerRegisterExtension(t *testing.T) {

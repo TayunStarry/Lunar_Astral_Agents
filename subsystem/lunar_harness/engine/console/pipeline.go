@@ -2,6 +2,7 @@ package console
 
 import (
 	"bufio"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -30,10 +31,6 @@ const (
 // 必须在宿主程序启动最早期（任何子系统装配前）调用，确保启动期日志不逃逸到终端。
 func Install() {
 	pipelineOnce.Do(func() {
-		// 控制台日志镜像单例：stdout 管道扫描与 logger 直写共用一份
-		// （console_log 关闭时为 nil，两条路径的写入都静默）
-		sharedConsole := openConsoleLog()
-
 		// ==== stdout/stderr 管道接管 ====
 		stdoutR, stdoutW, err := os.Pipe()
 		if err == nil {
@@ -44,9 +41,9 @@ func Install() {
 			realStderr = os.Stderr
 			os.Stdout = stdoutW
 			os.Stderr = stdoutW
-			// logger 直写日志镜像而非管道：结构化日志由下面的钩子单一供源进入
-			// 「原始日志」视图，经管道再走一遍会重复；镜像落盘仍受 shouldPrint 级别过滤
-			logger.SetOutput(consoleLogWriter{cl: sharedConsole})
+			// logger 的结构化日志由下面的钩子单一供源进入「原始日志」视图，
+			// 底层输出丢弃，避免同一行经管道再走一遍造成重复。
+			logger.SetOutput(io.Discard)
 			// 标准库 log 也必须改道：它内部持有的是「init 时的 os.Stderr 文件对象」
 			// （即真实控制台），只替换 os.Stderr 变量对它无效。漏掉这一步时，
 			// httputil / net/http 等库用 log.Printf 打的错误会直接糊在 TUI 界面上
@@ -60,15 +57,15 @@ func Install() {
 			// maskgit-tts.h 的逐步骤 fprintf(stderr, "[MaskGIT-Step] 25/32 demask=12 …")
 			// 与 backend.h 的 ggml 日志桥 fputs(text, stderr) 就这样一帧帧打在 TUI 界面上
 			// （实测故障：合成语音时整屏被进度行刷乱）。把标准句柄槽与 CRT 的 fd 1/2 一并接到
-			// 本管道后，原生输出与 Go 输出同一口径：只进「原始日志」视图与 console.log。
+			// 本管道后，原生输出与 Go 输出同一口径：只进「原始日志」视图。
 			// 仅在渲染目标已是自取句柄时执行——否则接管会把界面正在用的句柄关掉（见 console.go）。
 			if f, ok := realStdout.(*os.File); ok && f != inheritedStdout {
 				if note := captureNativeStdio(stdoutW); note != "" {
-					AppendConsoleLog("[TUI] 进程级标准流接管不完整（" + note + "），原生库诊断可能仍直写终端")
+					pushScrubbedLog(SourceRaw, "WARN", "TUI", "", "进程级标准流接管不完整（"+note+"），原生库诊断可能仍直写终端")
 				}
 			}
 
-			go scanPipeLines(stdoutR, sharedConsole)
+			go scanPipeLines(stdoutR)
 		}
 
 		// ==== logger 结构化日志钩子 ====
@@ -148,24 +145,17 @@ func scrubSingleLine(raw string) string {
 }
 
 // scanPipeLines 逐行扫描管道内容并送入原始日志缓冲。
-// 同时把每一行镜像到 {程序根}/local_data/logs/console.log：进程退出后仍有据可查
-// （含 Go 运行时的 panic 栈——它们同样经 stderr 进入本管道）。
-// 镜像写入器由 Install 传入（与 logger 直写共用同一份；可为 nil，WriteLine 自行静默）。
-func scanPipeLines(r *os.File, consoleLog *consoleLog) {
+func scanPipeLines(r *os.File) {
 	defer r.Close()
-	defer consoleLog.Close()
 
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		// 正文清洗统一走 scrubLogText：落盘与入缓冲共用同一份结果，
-		// 避免"文件里干净、界面/导出里带转义码"这种两套口径。
 		lines := scrubLogText(scanner.Text())
 		if len(lines) == 0 {
 			continue
 		}
 		for _, line := range lines {
-			consoleLog.WriteLine(line)
 			pushLog(LogLine{
 				Time:   time.Now(),
 				Source: "stdout",
@@ -175,7 +165,6 @@ func scanPipeLines(r *os.File, consoleLog *consoleLog) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		consoleLog.WriteLine("stdout 管道扫描异常: " + err.Error())
 		pushLog(LogLine{
 			Time:   time.Now(),
 			Source: "stdout",

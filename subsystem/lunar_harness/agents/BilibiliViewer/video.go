@@ -17,8 +17,8 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/knowledge"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/prompts"
 )
 
@@ -229,7 +229,7 @@ func understandOneSlice(localPath string, info videoInfo, seg module.MediaSegmen
 // summarizeWatch 把各切片理解合成为第一人称观影感受。
 //
 // 切片理解与时间轴只当输入材料，输出必须是人格化的印象/感受；
-// 机械化的过程文本既不进记忆库，也不进 media.db。
+// 机械化的过程文本既不进记忆库，也不进 URL 主表。
 func summarizeWatch(video *videoRecord, summaries []string) string {
 	if video == nil || len(summaries) == 0 {
 		return ""
@@ -262,52 +262,32 @@ func summarizeWatch(video *videoRecord, summaries []string) string {
 	return cleanMemoryText(text)
 }
 
-// storeVideoSummary 把人格化的观影感受写入视频摘要库（media.db 的 video_summary，key = URL）。
+// storeVideoSummary 把人格化的观影感受写入 URL 主表的唯一解析文本。
 //
-// 同一视频重复观看时按键覆盖；不存切片、时间轴等机械过程文本。
+// 只按完整页面 URL 存一份；不再按 BV 号或分片地址另存（规范一.3）。
 func storeVideoSummary(info videoInfo, summary string) {
-	key := strings.TrimSpace(info.URL)
+	key := resource.NormalizeURL(info.URL)
 	summary = cleanMemoryText(summary)
 	if key == "" || summary == "" {
 		return
 	}
-	result := knowledge.ExecuteOn("media",
-		"INSERT OR REPLACE INTO video_summary (key, value) VALUES (?, ?)", []any{key, summary})
-	if !result.Success || len(result.Results) == 0 || !result.Results[0].Success {
-		logger.Warn("BilibiliViewer", "观影感受写入摘要库失败(%s): %s", key, result.Error)
+	// 确保该完整 URL 已绑定视频句柄，再写入唯一解析文本
+	if _, err := resource.AdmitURL(resource.URLAdmitInput{
+		URL: key, Title: info.Title, Origin: resource.OriginChannel,
+	}); err != nil {
+		logger.Warn("BilibiliViewer", "观影感受登记句柄失败(%s): %v", key, err)
 		return
 	}
-	// 同时按 BV 号存一份：月华用 BV 号或带 BV 号的 URL 查询都能命中
-	if bvid := strings.TrimSpace(info.Bvid); bvid != "" && !strings.EqualFold(bvid, key) {
-		_ = knowledge.ExecuteOn("media",
-			"INSERT OR REPLACE INTO video_summary (key, value) VALUES (?, ?)", []any{bvid, summary})
+	if err := resource.SetParseText(key, summary); err != nil {
+		logger.Warn("BilibiliViewer", "观影感受写入解析文本失败(%s): %v", key, err)
+		return
 	}
-	logger.Info("BilibiliViewer", "观影感受已写入摘要库: %s", key)
+	logger.Info("BilibiliViewer", "观影感受已写入 URL 主表: %s", key)
 }
 
-// cleanupMechanicalVideoSummaries 清理 media.db 里历史的机械化视频摘要。
-//
-// 只处理 B 站来源的 key（URL 或 BV 号），且只删命中机械特征词的 value；返回删除条数。
+// cleanupMechanicalVideoSummaries 新体系不再保留历史摘要库，直接返回 0。
 func cleanupMechanicalVideoSummaries() int {
-	result := knowledge.ExecuteOn("media", "SELECT key, value FROM video_summary", nil)
-	if !result.Success || len(result.Results) == 0 || !result.Results[0].Success {
-		return 0
-	}
-	removed := 0
-	for _, row := range result.Results[0].Rows {
-		key, _ := row["key"].(string)
-		value, _ := row["value"].(string)
-		if !isBilibiliSummaryKey(key) || !memoryLooksMechanical(value) {
-			continue
-		}
-		del := knowledge.ExecuteOn("media", "DELETE FROM video_summary WHERE key = ?", []any{key})
-		if !del.Success || len(del.Results) == 0 || !del.Results[0].Success {
-			logger.Warn("BilibiliViewer", "清理机械化视频摘要失败(%s): %s", key, del.Error)
-			continue
-		}
-		removed++
-	}
-	return removed
+	return 0
 }
 
 // isBilibiliSummaryKey 判断摘要库的 key 是否来自 B 站（视频 URL 或 BV 号）。

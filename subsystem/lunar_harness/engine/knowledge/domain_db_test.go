@@ -2,9 +2,8 @@ package knowledge
 
 // domain_db_test.go 知识库与领域库测试
 //
-// 覆盖：内建表按领域路由（video_summary → media、file_mapping → text、
-// painter_characters → character）、历史 knowledge.db 内建表迁移、
-// 域库注册后 ExecuteOn 可用 / 未注册时明确报错。
+// 覆盖：内建表按领域路由（file_mapping → text、painter_characters → character）、
+// 历史 knowledge.db 内建表迁移、域库注册后 ExecuteOn 可用 / 未注册时明确报错。
 
 import (
 	"database/sql"
@@ -64,7 +63,6 @@ func TestKnowledgeBuiltinTableRouting(t *testing.T) {
 		table  string
 		target *domainDB
 	}{
-		{"video_summary", mediaDB},
 		{"file_mapping", textDB},
 		{"painter_characters", characterDB},
 	}
@@ -104,9 +102,9 @@ func TestKnowledgeBuiltinTableRouting(t *testing.T) {
 // TestExecuteOnDomainDB 领域库 SQL 数据源不依赖 knowledge.db 初始化
 func TestExecuteOnDomainDB(t *testing.T) {
 	setupKnowledgeTest(t)
-	result := ExecuteOn("media", "SELECT COUNT(*) AS n FROM video_summary", nil)
+	result := ExecuteOn("text", "SELECT COUNT(*) AS n FROM file_mapping", nil)
 	if !result.Success {
-		t.Fatalf("media 数据源查询失败: %s", result.Error)
+		t.Fatalf("text 数据源查询失败: %s", result.Error)
 	}
 	if len(result.Results) != 1 || len(result.Results[0].Rows) != 1 {
 		t.Fatalf("查询结果异常: %#v", result.Results)
@@ -128,17 +126,10 @@ func TestLegacyKnowledgeTablesMigrate(t *testing.T) {
 		t.Fatalf("打开历史库失败: %v", err)
 	}
 	stmts := []string{
-		`CREATE TABLE video_summary (key TEXT PRIMARY KEY, value TEXT)`,
-		`INSERT INTO video_summary (key, value) VALUES ('gif-1', '动图理解')`,
 		`CREATE TABLE file_mapping (key TEXT PRIMARY KEY, value TEXT)`,
 		`INSERT INTO file_mapping (key, value) VALUES ('@D.001', '{"chunkCount":3}')`,
 		`CREATE TABLE painter_characters (key TEXT PRIMARY KEY, value TEXT)`,
 		`INSERT INTO painter_characters (key, value) VALUES ('小月', '{"name":"小月"}')`,
-		`CREATE TABLE web_ltp_page_cache (
-			url TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', domain TEXT NOT NULL DEFAULT '',
-			summary TEXT NOT NULL DEFAULT '', query_hint TEXT NOT NULL DEFAULT '', fetched_at INTEGER NOT NULL)`,
-		`INSERT INTO web_ltp_page_cache (url, title, domain, summary, query_hint, fetched_at)
-			VALUES ('https://example.com', '示例', 'example.com', '摘要内容', '', 1000)`,
 		`CREATE TABLE notes (key TEXT PRIMARY KEY, value TEXT)`,
 		`INSERT INTO notes (key, value) VALUES ('keep', '保留')`,
 	}

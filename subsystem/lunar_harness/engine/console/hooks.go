@@ -4,9 +4,9 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 	"LunarSubsystem/LunarHarness/engine/console/ltpxmarket"
 	"LunarSubsystem/LunarHarness/engine/console/updatepack"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // SetFrontendHooks 注入前端管理能力（宿主在 TUI 启动前调用）：
@@ -217,81 +217,10 @@ func SignLTP9Auth(dir string) (LTP9AuthStatus, error) {
 	return hook(dir)
 }
 
-// ==== 月华对话链自愈钩子 ====
-//
-// 为什么要有这一屏：goja 运行时是一整块进程内状态（角色实例、对话上下文、思考中标记、
-// 每秒 tick 的 setInterval）。它走进死路时——实测一次 llama-server 崩溃即可——
-// 进程内没有任何自愈入口，用户只能重启整个程序（连带前端窗口与全部子系统）。
-// 这里给它一个"最小代价的恢复手段"：手动重载 + 状态可见，自动重载则由宿主侧兜底。
-
-// EngineStatus 月华对话链状态摘要（渲染数据源，由宿主注入的 status 钩子提供）
-type EngineStatus struct {
-	// RuntimeReady 对话链循环是否在运行
-	RuntimeReady bool
-	// AgentReady 智能体是否已就绪
-	AgentReady bool
-	// BootedAt 最近一次成功启动的时刻
-	BootedAt time.Time
-	// ReloadCount 累计重建次数
-	ReloadCount int
-	// LastReloadAt / LastReloadReason / LastReloadResult 最近一次重载的时刻、原因与结果
-	LastReloadAt     time.Time
-	LastReloadReason string
-	LastReloadResult string
-	// ConsecutiveFailures 连续应答失败次数；LastFailure 为最近一次失败原因
-	ConsecutiveFailures int
-	LastFailure         string
-	LastFailureAt       time.Time
-	// AutoReload / AutoReloadThreshold 自动重载策略
-	AutoReload          bool
-	AutoReloadThreshold int
-	// Reloading 是否有重载正在执行
-	Reloading bool
-}
-
-var (
-	// engineHookMu 保护引擎自愈钩子
-	engineHookMu sync.RWMutex
-	// engineStatusHook 读取引擎状态
-	engineStatusHook func() EngineStatus
-	// engineReloadHook 触发一次重载（阻塞到重载完成）
-	engineReloadHook func(reason string) error
-)
-
-// SetEngineHooks 注入引擎自愈能力（宿主在 TUI 启动前调用；nil 表示不支持）
-func SetEngineHooks(status func() EngineStatus, reload func(reason string) error) {
-	engineHookMu.Lock()
-	defer engineHookMu.Unlock()
-	engineStatusHook = status
-	engineReloadHook = reload
-}
-
-// getEngineStatus 读取引擎状态；宿主未注入时返回空状态（界面会提示"宿主未接入"）
-func getEngineStatus() (EngineStatus, bool) {
-	engineHookMu.RLock()
-	hook := engineStatusHook
-	engineHookMu.RUnlock()
-	if hook == nil {
-		return EngineStatus{}, false
-	}
-	return hook(), true
-}
-
-// reloadMoonEngine 触发宿主重载引擎（未注入时返回 errNotWired）
-func reloadMoonEngine(reason string) error {
-	engineHookMu.RLock()
-	hook := engineReloadHook
-	engineHookMu.RUnlock()
-	if hook == nil {
-		return errNotWired
-	}
-	return hook(reason)
-}
-
 // ==== 桌面操纵钩子 ====
 //
 // 桌面操纵直接操作真实桌面键鼠，存在安全风险：不从月华 LTPX 工具链暴露，
-// 只能在「月华链路」屏由人工输入要求后启动，并支持随时中断。
+// 只能在「运行状态」屏由人工输入要求后启动，并支持随时中断。
 
 // DesktopOperatorStatus 桌面操纵运行状态摘要（渲染数据源，由宿主注入的 status 钩子提供）
 type DesktopOperatorStatus struct {

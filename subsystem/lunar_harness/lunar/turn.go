@@ -17,6 +17,7 @@ func writeMessage(role, source string, content any) {
 	if role == RoleUser && source != scheduleSource {
 		appendUserMessage(message.Content)
 		rememberUserUtterance(message.Content)
+		rememberEmotionMark(message.Content)
 	}
 	unreadMu.Lock()
 	unreadContext = append(unreadContext, message)

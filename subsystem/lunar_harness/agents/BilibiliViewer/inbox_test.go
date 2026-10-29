@@ -65,6 +65,7 @@ func TestReplyIDs(t *testing.T) {
 		{"子回复", inboxItem{Oid: "111", RootID: "555", TargetID: "666", SourceID: "777"}, "555", "777", true},
 		{"我的根评论被回复", inboxItem{Oid: "111", TargetID: "222", SourceID: "333"}, "222", "333", true},
 		{"根级评论直接回复", inboxItem{Oid: "444", SourceID: "888"}, "888", "888", true},
+		{"@消息只有对象 ID", inboxItem{Oid: "444"}, "", "", true},
 		{"缺少对象 ID", inboxItem{SourceID: "888"}, "", "", false},
 	}
 	for _, c := range cases {
@@ -115,8 +116,11 @@ func TestParseMsgFeedOpusBusinessID(t *testing.T) {
 	if item.Type != 11 {
 		t.Fatalf("图片动态应以 business_id=11 作为评论区类型，实际 %d", item.Type)
 	}
-	if item.Oid != "413077136" {
-		t.Fatalf("oid 应取 subject_id，实际 %q", item.Oid)
+	if item.Oid != "1262374137649692673" {
+		t.Fatalf("opus 的评论区 oid 应取 URI 页面 ID，实际 %q", item.Oid)
+	}
+	if item.SourceID != "317943121233" {
+		t.Fatalf("source_id 应保留，实际 %q", item.SourceID)
 	}
 }
 

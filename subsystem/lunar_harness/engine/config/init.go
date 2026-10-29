@@ -34,8 +34,6 @@ type SystemSettings struct {
 	AllowLAN *bool `json:"allow_lan,omitempty"`
 	// 插件沙箱网络是否跳过 TLS 证书校验：未配置默认开启校验；置 true 恢复旧的跳过行为
 	InsecureTLS *bool `json:"insecure_tls,omitempty"`
-	// 是否把控制台输出镜像到 local_data/logs/console.log；未配置默认关闭
-	ConsoleLog *bool `json:"console_log,omitempty"`
 	// 聊天（LLM）显存守卫：可用显存不足时卸载本地模型释放 KV 缓存
 	ChatVRAMGuard         *bool `json:"chat_vram_guard,omitempty"`          // 守卫开关
 	ChatVRAMGuardMiB      *int  `json:"chat_vram_guard_mib,omitempty"`      // 触发阈值（MiB）
@@ -88,10 +86,6 @@ type ModelConfig struct {
 		VisionMaxSide int `json:"vision_max_side"`
 		// 视觉副本缓存池容量上限（MB），超限按最久未用淘汰，默认 512
 		VisionCacheCapMB int `json:"vision_cache_cap_mb"`
-		// 引擎自愈：应答连续失败达阈值时自动重建月华对话链状态
-		// 指针语义：未配置时保持默认（开启、阈值 2 次）
-		AutoReload         *bool `json:"auto_reload,omitempty"`
-		AutoReloadFailures *int  `json:"auto_reload_failures,omitempty"`
 		// 追加设定：逐行附加到「月华 · 对话者」系统提示词末尾（由 Go 对话链读取；
 		// 未配置或空数组时不追加任何内容）
 		AppendSettings []string `json:"append_settings"`
@@ -395,14 +389,6 @@ func applyConfig(parameter *ModelConfig) []string {
 	if parameter.Agent.VisionCacheCapMB > 0 {
 		VisionCacheCapMB = parameter.Agent.VisionCacheCapMB
 	}
-	// ==== 对话链自愈（自动重建月华对话链状态）====
-	// 仅在配置显式给出时覆盖默认值（开启 / 连续失败 2 次）
-	if parameter.Agent.AutoReload != nil {
-		EngineAutoReload = *parameter.Agent.AutoReload
-	}
-	if parameter.Agent.AutoReloadFailures != nil && *parameter.Agent.AutoReloadFailures > 0 {
-		EngineAutoReloadFailures = *parameter.Agent.AutoReloadFailures
-	}
 	// ==== 月华语音合成（tts） ====
 	// 引擎枚举：仅接受 Qwen / Kokoro / OmniVoice，未配置保持默认 Qwen，非法取值告警并保留默认
 	switch parameter.TTS.Engine {
@@ -628,11 +614,6 @@ func applyConfig(parameter *ModelConfig) []string {
 	}
 	if parameter.System.InsecureTLS != nil {
 		InsecureTLS = *parameter.System.InsecureTLS
-	}
-	// ==== 控制台日志（system.console_log） ====
-	// 控制台日志镜像：仅在配置中显式开启时落盘，未配置保持默认关闭
-	if parameter.System.ConsoleLog != nil {
-		ConsoleLogEnabled = *parameter.System.ConsoleLog
 	}
 	// ==== 模型重复输出检测（system.loop_*） ====
 	// 只接受合法取值，非法项保持默认（由 loopguard 包兜底），避免把检测关死。

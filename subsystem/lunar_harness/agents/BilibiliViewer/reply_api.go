@@ -36,7 +36,9 @@ func replyIDs(item inboxItem) (root, parent string, ok bool) {
 	if parent == "" {
 		parent = root
 	}
-	if root == "" || parent == "" || strings.TrimSpace(item.Oid) == "" {
+	// @ 消息可能只有对象 ID（没有 root/target/source）：按根评论发布，
+	// 只要 oid 可用就不应判定为「缺 ID」而放弃回应。
+	if strings.TrimSpace(item.Oid) == "" {
 		return "", "", false
 	}
 	return root, parent, true
@@ -63,8 +65,13 @@ func (w *webSession) replyByAPI(item inboxItem, message string) error {
 	form.Set("message", message)
 	form.Set("plat", "1")
 	form.Set("csrf", csrf)
-	form.Set("root", root)
-	form.Set("parent", parent)
+	// 有 root/parent 时挂到对方评论下；两者为空表示发布一条新的根评论
+	if root != "" {
+		form.Set("root", root)
+	}
+	if parent != "" {
+		form.Set("parent", parent)
+	}
 
 	raw, err := w.pageFetchText("POST", "https://api.bilibili.com/x/v2/reply/add",
 		"application/x-www-form-urlencoded", form.Encode(), 25*time.Second)
@@ -82,9 +89,12 @@ func (w *webSession) replyByAPI(item inboxItem, message string) error {
 		return fmt.Errorf("B站拒绝回复: code=%d %s", resp.Code, resp.Msg)
 	}
 
-	w.wait(3 * time.Second)
-	if !w.replyVisible(item, root, message) {
-		return fmt.Errorf("接口已受理但回读未见（可能仍在审核）")
+	// 只有挂在根评论下才需要回读子评论；根评论发布以接口 code=0 为准
+	if root != "" {
+		w.wait(3 * time.Second)
+		if !w.replyVisible(item, root, message) {
+			return fmt.Errorf("接口已受理但回读未见（可能仍在审核）")
+		}
 	}
 	return nil
 }

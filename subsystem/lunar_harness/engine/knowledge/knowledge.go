@@ -22,9 +22,7 @@ import (
 
 func init() {
 	logger.SetDevMode(config.Developer)
-	// 内建领域库随包登记；archive 由 persistence 在资源目录就绪时登记
-	RegisterDomain("media", mediaDB.open)
-	RegisterDomain("web", webDB.open)
+	// 内建领域库随包登记；archive（统一句柄库）由 engine/resource 在初始化时登记
 	RegisterDomain("text", textDB.open)
 	RegisterDomain("character", characterDB.open)
 }

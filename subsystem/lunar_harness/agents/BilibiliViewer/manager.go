@@ -34,8 +34,10 @@ type runner struct {
 	cfg         Config
 	browser     *webSession
 	instruction string
-	mood        string
-	startedAt   time.Time
+	// direct 本轮由指定视频触发：跳过关键词选片，只看指令里点名的那一条
+	direct    bool
+	mood      string
+	startedAt time.Time
 
 	mid      int64
 	progress string
@@ -198,20 +200,30 @@ func (r *runner) resultText() string {
 		return "[系统提示]哔哩观影已完成本次流程"
 	}
 	approved := 0
+	firstTitle := ""
 	thoughts := make([]string, 0, 2)
 	for _, video := range r.approved {
 		if video == nil {
 			continue
 		}
 		approved++
+		if firstTitle == "" {
+			firstTitle = truncate(video.Info.Title, 30)
+		}
 		if len(thoughts) < 2 && strings.TrimSpace(video.Impression.Summary) != "" {
 			thoughts = append(thoughts, truncate(video.Impression.Summary, 40))
 		}
 	}
 	if approved == 0 {
+		if r.direct {
+			return "这条视频没能读出来，可能是地址失效了。"
+		}
 		return "这次没找到合适的视频，已经先记下来了。"
 	}
 	summary := fmt.Sprintf("这次挑了 %d 个视频，准备慢慢看", approved)
+	if r.direct && firstTitle != "" {
+		summary = "找到《" + firstTitle + "》，准备慢慢看"
+	}
 	if r.replied > 0 {
 		summary += fmt.Sprintf("，顺手回了 %d 条消息", r.replied)
 	}

@@ -15,11 +15,11 @@ import (
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
 	"LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/agents/desktop"
-	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/lunar"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 	"LunarSubsystem/LunarHarness/server"
 	"LunarSubsystem/LunarHarness/transport/ws"
 )
@@ -75,12 +75,13 @@ func WireTUIDataDumpHooks() {
 	)
 }
 
-// WireTUIEngineHooks 把「月华对话链状态」能力注入控制台：
-//   - status：读取对话链状态（就绪、重建次数、连续失败、自动重建策略）；
-//   - reload：手动重建 Go 对话链状态（宿主侧还会顺手把崩掉的 llama-server 拉起来）。
+// WireTUIEngineHooks 把控制台需要的观测与人工入口注入宿主：
+//   - 工具列表：汇总全部 Go 智能体的工具目录（控制台只负责展示）；
+//   - 核心智能实况与模型计量：各 Go 智能体的模型调用统一进实况与计量；
+//   - 桌面操纵：唯一人工入口在「运行状态」屏（输入要求启动 / 随时中断）。
 //
-// Go 对话链不再依赖整块可替换的脚本运行时；重建入口用于逻辑坏死或上下文损坏时
-// 以最小代价恢复，避免重启整个程序与全部子系统。
+// 对话链状态重建（自动/手动）已整体移除：实测无法真正恢复正常运行，
+// 控制台不再提供该入口。
 func WireTUIEngineHooks() {
 	// 「工具列表」屏：宿主汇总全部 Go 智能体的工具目录（控制台只负责展示）。
 	console.SetToolCatalogHook(buildToolCatalog)
@@ -126,29 +127,6 @@ func WireTUIEngineHooks() {
 	desktop.SetToolObserver(func(role, name, args string) {
 		console.StreamTool(role, name, args)
 	})
-	console.SetEngineHooks(
-		func() console.EngineStatus {
-			state := lunar.EngineState()
-			return console.EngineStatus{
-				RuntimeReady:        state.RuntimeReady,
-				AgentReady:          state.AgentReady,
-				BootedAt:            state.BootedAt,
-				ReloadCount:         state.ReloadCount,
-				LastReloadAt:        state.LastReloadAt,
-				LastReloadReason:    state.LastReloadReason,
-				LastReloadResult:    state.LastReloadResult,
-				ConsecutiveFailures: state.ConsecutiveFailures,
-				LastFailure:         state.LastFailure,
-				LastFailureAt:       state.LastFailureAt,
-				AutoReload:          state.AutoReload,
-				AutoReloadThreshold: state.AutoReloadThreshold,
-				Reloading:           lunar.ReloadRunning(),
-			}
-		},
-		func(reason string) error {
-			return lunar.ReloadMoonEngine(reason)
-		},
-	)
 
 	// 桌面操纵智能体：唯一入口在控制台「运行状态」屏（人工输入要求启动、随时中断）。
 	// 同时把中断器注入对话者：对话者开始推理与应答前会自动终止桌面操纵，

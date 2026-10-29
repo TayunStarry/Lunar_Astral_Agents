@@ -9,7 +9,10 @@ import (
 )
 
 func fakeEmbedDocuments(_ context.Context, texts []string) ([][]float32, error) {
-	index := map[string]int{"开心": 0, "愤怒": 1, "伤心": 2, "好奇": 3, "无聊": 4}
+	index := make(map[string]int, len(labels))
+	for i, label := range labels {
+		index[label] = i
+	}
 	out := make([][]float32, len(texts))
 	for i, text := range texts {
 		pos, ok := index[text]
@@ -92,6 +95,25 @@ func TestUpdateBlendsTowardsAngry(t *testing.T) {
 	}
 	if label := Snapshot().Label; label != "愤怒" {
 		t.Fatalf("更新后标签应为愤怒，实际 %s", label)
+	}
+}
+
+// TestUpdateSupportsExpandedLabels 新增的细分情绪都能作为独立标签参与匹配。
+func TestUpdateSupportsExpandedLabels(t *testing.T) {
+	for _, label := range []string{"平静", "厌倦", "担忧", "恐慌", "满足", "元气"} {
+		t.Run(label, func(t *testing.T) {
+			resetMood(t)
+			if err := Init(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			currentAlpha = 0
+			if err := UpdateFromText(context.Background(), label); err != nil {
+				t.Fatal(err)
+			}
+			if got := Snapshot().Label; got != label {
+				t.Fatalf("标签应为 %s，实际 %s", label, got)
+			}
+		})
 	}
 }
 

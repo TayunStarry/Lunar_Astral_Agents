@@ -1,8 +1,8 @@
 package resource
 
-// api.go 句柄系统的对外门面：大纲 / 解析 / 列表 / 搜索 / 摘要 / 删除。
+// api.go 句柄系统的对外门面：解析 / 大纲 / 列表 / 搜索 / 摘要 / 删除
 //
-// 这些接口只做「初始化检查 + 目录操作编排」，具体 SQL 在 query.go / search.go。
+// 这些接口只做「初始化检查 + 编排」，具体 SQL 在 url_master.go / handles.go / query.go。
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 )
 
-// FindByURL 按链接地址查找已登记的 @U 资源。
+// FindByURL 按链接地址查找已登记资源（不要求已绑定句柄）
 func FindByURL(rawURL string) (Resource, bool) {
 	if err := EnsureReady(); err != nil {
 		return Resource{}, false
@@ -21,7 +21,7 @@ func FindByURL(rawURL string) (Resource, bool) {
 	return archiveDB.FindResourceByURL(strings.TrimSpace(rawURL))
 }
 
-// LocalPathURL 把本机 /file/read/ 地址（裸路径或完整 http 地址）解析为本地绝对路径。
+// LocalPathURL 把 /file/read/ 地址（相对路由或完整 http 地址）解析为本地绝对路径
 func LocalPathURL(rawURL string) (string, bool) {
 	abs, err := resolveLocalSource(rawURL)
 	if err != nil {
@@ -30,7 +30,7 @@ func LocalPathURL(rawURL string) (string, bool) {
 	return abs, true
 }
 
-// IsLocalVideoURL 判断 @U 地址是否指向本机视频文件。
+// IsLocalVideoURL 判断地址是否指向本机视频文件
 func IsLocalVideoURL(rawURL string) bool {
 	abs, ok := LocalPathURL(rawURL)
 	if !ok {
@@ -39,23 +39,21 @@ func IsLocalVideoURL(rawURL string) bool {
 	return KindOfExt(filepath.Ext(abs)) == KindVideo
 }
 
-// IsVideoURL 判断链接是否为本机或远程视频地址（按路径扩展名）。
+// IsVideoURL 判断链接是否为本机或远程视频地址（按路径扩展名与 B 站域名）
 func IsVideoURL(rawURL string) bool {
 	if IsLocalVideoURL(rawURL) {
 		return true
 	}
-	raw := strings.TrimSpace(rawURL)
-	if !strings.HasPrefix(strings.ToLower(raw), "http://") && !strings.HasPrefix(strings.ToLower(raw), "https://") {
+	if BilibiliBvid(rawURL) != "" {
+		return true
+	}
+	if !IsRemoteURL(rawURL) {
 		return false
 	}
-	path := raw
-	if cut := strings.IndexAny(path, "?#"); cut >= 0 {
-		path = path[:cut]
-	}
-	return KindOfExt(filepath.Ext(path)) == KindVideo
+	return KindOfExt(extOfURL(rawURL)) == KindVideo
 }
 
-// Outline 返回资源的大纲（段落表 + 每节的规范锚点句柄）
+// Outline 返回资源大纲（段落表 + 规范句柄）
 func Outline(rawHandle string) ([]Section, string, error) {
 	if err := EnsureReady(); err != nil {
 		return nil, "", err
@@ -68,23 +66,25 @@ func Outline(rawHandle string) ([]Section, string, error) {
 	if !found {
 		return nil, "", fmt.Errorf("%s", ErrHandleInvalid)
 	}
-	// 句柄存在但实体不可读：移除失效句柄并返回统一提示
-	if abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath)); res.BlobPath != "" && !fileExists(abs) {
-		_ = archiveDB.DeleteResource(res.ID)
-		return nil, "", fmt.Errorf("%s", ErrFileLost)
+	if res.BlobPath != "" {
+		abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
+		if !fileExists(abs) {
+			_ = archiveDB.DeleteResource(res.ID)
+			return nil, "", fmt.Errorf("%s", ErrFileLost)
+		}
 	}
-	sections, err := archiveDB.ListSections(res.ID)
+	sections, err := archiveDB.ListSectionsByURL(res.URL)
 	if err != nil {
 		return nil, "", err
 	}
-	// 段落表为空但 blob 在位：现场按标题解析并回填（迁移/历史资源首次访问时补建）
-	if len(sections) == 0 && res.Kind == KindDocument && res.State == StateActive {
+	// 段落表为空但实体在位：现场解析并回填
+	if len(sections) == 0 && res.Kind == KindDocument && res.State == StateActive && res.BlobPath != "" {
 		abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
-		if data, err := os.ReadFile(abs); err == nil {
+		if data, readErr := os.ReadFile(abs); readErr == nil {
 			drafts := ParseMarkdownSections(stripBOM(string(data)))
 			if len(drafts) > 0 {
 				if err := archiveDB.ReplaceSections(res.ID, drafts); err == nil {
-					sections, _ = archiveDB.ListSections(res.ID)
+					sections, _ = archiveDB.ListSectionsByURL(res.URL)
 				}
 			}
 		}
@@ -92,9 +92,7 @@ func Outline(rawHandle string) ([]Section, string, error) {
 	return sections, res.Handle, nil
 }
 
-// Resolve 按句柄解析资源目录条目（前端按句柄定位文件时使用）
-//
-// 只解析目录行，不读取正文；调用方可用返回的 BlobPath/Name 定位实际文件。
+// Resolve 按句柄解析资源条目（不读取正文）
 func Resolve(rawHandle string) (Resource, error) {
 	if err := EnsureReady(); err != nil {
 		return Resource{}, err
@@ -107,16 +105,17 @@ func Resolve(rawHandle string) (Resource, error) {
 	if !found {
 		return Resource{}, fmt.Errorf("%s", ErrHandleInvalid)
 	}
-	if abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath)); res.BlobPath != "" && !fileExists(abs) {
-		_ = archiveDB.DeleteResource(res.ID)
-		return Resource{}, fmt.Errorf("%s", ErrFileLost)
+	if res.BlobPath != "" {
+		abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
+		if !fileExists(abs) {
+			_ = archiveDB.DeleteResource(res.ID)
+			return Resource{}, fmt.Errorf("%s", ErrFileLost)
+		}
 	}
 	return res, nil
 }
 
-// Lookup 只读取资源目录行，不校验本体、不删除失效句柄。
-//
-// 供记忆检索使用：记忆查询只应读取已登记的资料与摘要，不应因为本体不在位而改动目录。
+// Lookup 只读取资源记录，不校验实体、不删除失效句柄
 func Lookup(rawHandle string) (Resource, bool) {
 	if err := EnsureReady(); err != nil {
 		return Resource{}, false
@@ -128,12 +127,12 @@ func Lookup(rawHandle string) (Resource, bool) {
 	return archiveDB.GetResourceByHandle(handle.Kind, handle.Seq)
 }
 
-// List 列出资源目录（kind 为空表示全部）
+// List 列出资源（kind 为空表示全部）
 func List(kind string, limit int) ([]Resource, error) {
 	if err := EnsureReady(); err != nil {
 		return nil, err
 	}
-	return archiveDB.ListResources(kind, limit)
+	return archiveDB.ListResources(trimKind(kind), limit)
 }
 
 // Search 跨资源搜索
@@ -141,10 +140,10 @@ func Search(query, kind string, limit int) ([]SearchHit, error) {
 	if err := EnsureReady(); err != nil {
 		return nil, err
 	}
-	return archiveDB.SearchResources(query, kind, limit)
+	return archiveDB.SearchResources(query, trimKind(kind), limit)
 }
 
-// HandleOf 由类型码与序号构造规范句柄（供 Go 侧调用方使用）
+// HandleOf 由类型码与序号构造规范句柄
 func HandleOf(kind string, seq int64) string {
 	return FormatHandle(kind, seq)
 }
@@ -157,7 +156,7 @@ func ByHash(kind, hash string) (Resource, bool) {
 	return archiveDB.FindResourceByHash(kind, hash)
 }
 
-// SetSummary 写入资源摘要/描述（图片视觉描述、文档概要）
+// SetSummary 写入资源解析文本 / 标题标签
 func SetSummary(id int64, summary string, tags []string) error {
 	if err := EnsureReady(); err != nil {
 		return err
@@ -172,7 +171,7 @@ func SetSummary(id int64, summary string, tags []string) error {
 	return archiveDB.UpdateResourceExtras(id, res.Title, summary, tags)
 }
 
-// MarkLost 标记资源 blob 已丢失（GC 回收后调用）
+// MarkLost 标记资源实体已丢失（GC 回收后调用）
 func MarkLost(id int64) error {
 	if err := EnsureReady(); err != nil {
 		return err
@@ -188,7 +187,7 @@ func Stats() (StatsReport, error) {
 	return archiveDB.Stats()
 }
 
-// ReplaceSections 全量替换资源段落表（阅读者入库与迁移重建使用）
+// ReplaceSections 全量替换资源段落表
 func ReplaceSections(id int64, drafts []SectionDraft) error {
 	if err := EnsureReady(); err != nil {
 		return err
@@ -196,7 +195,7 @@ func ReplaceSections(id int64, drafts []SectionDraft) error {
 	return archiveDB.ReplaceSections(id, drafts)
 }
 
-// Delete 显式删除资源（目录行 + blob 一并移除）
+// Delete 显式删除资源（解除句柄绑定；归档私有副本一并移除）
 func Delete(rawHandle string) error {
 	if err := EnsureReady(); err != nil {
 		return err
@@ -209,22 +208,51 @@ func Delete(rawHandle string) error {
 	if !found {
 		return fmt.Errorf("%s", ErrHandleInvalid)
 	}
-	if res.BlobPath != "" {
+	// 只有归档自己写入的副本可以删；前端/用户文件必须保留
+	if res.BlobOwned && res.BlobPath != "" && requiresBlobRemoval(res) {
 		abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
-		// 显式删除：仅当没有其它目录行引用同一实体时才移除物理文件（共享实体保留）
-		referenced, refErr := archiveDB.blobReferencedByOthers(res.BlobPath, res.ID)
-		if refErr == nil && !referenced {
-			if !fileExists(abs) {
-				_ = archiveDB.DeleteResource(res.ID)
-				return fmt.Errorf("%s", ErrFileLost)
-			}
-			_ = os.Remove(abs)
-		}
+		_ = os.Remove(abs)
 	}
 	return archiveDB.DeleteResource(res.ID)
 }
 
-// ForgetPath 移除某实体路径对应的全部句柄映射（实体已被外部删除时使用）
+// requiresBlobRemoval 是否允许删除实体（派生缓存永不由句柄层删除）
+func requiresBlobRemoval(res Resource) bool {
+	return IsStoragePath(res.BlobPath) && !IsDerivedStoragePath(res.BlobPath)
+}
+
+// ForgetPath 移除某实体路径对应的全部句柄映射
 func ForgetPath(rel string) {
 	RemoveHandlesForPath(rel)
+}
+
+// ParseTextOfResource 读取资源记录上的解析文本（未解析返回空串）
+func ParseTextOfResource(rawHandle string) string {
+	res, ok := Lookup(rawHandle)
+	if !ok || res.ParseState != ParseReady {
+		return ""
+	}
+	return strings.TrimSpace(res.ParseText)
+}
+
+// RefreshDocumentSections 重新解析文档段落（阅读者导入后调用）
+func RefreshDocumentSections(handle string) {
+	res, err := Resolve(handle)
+	if err != nil || res.Kind != KindDocument || res.BlobPath == "" {
+		return
+	}
+	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
+	refreshDocumentSections(res, abs)
+}
+
+// RecallParsedText 按关键词检索已有解析文本（记忆检索 / 已看视频回忆使用）
+func RecallParsedText(keywords []string, limit int) []Resource {
+	if EnsureReady() != nil {
+		return nil
+	}
+	rows, err := archiveDB.findURLWithParseText(keywords, limit)
+	if err != nil {
+		return nil
+	}
+	return rows
 }

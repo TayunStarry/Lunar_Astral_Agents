@@ -27,9 +27,13 @@ func resourceVisionURI(res resource.Resource, abs string) (string, error) {
 	if side <= 0 {
 		side = 1080
 	}
+	sourceURL := strings.TrimSpace(res.URL)
+	if sourceURL == "" {
+		sourceURL = resource.FileReadURL(res.BlobPath)
+	}
 	hash := strings.TrimSpace(res.ContentHash)
 	if hash == "" {
-		sum := sha256.Sum256([]byte(res.BlobPath))
+		sum := sha256.Sum256([]byte(sourceURL))
 		hash = hex.EncodeToString(sum[:8])
 	}
 	cacheRel := filepath.ToSlash(filepath.Join("multimedia", "vision", hash+"_s"+strconv.Itoa(side)+".jpg"))
@@ -40,14 +44,14 @@ func resourceVisionURI(res resource.Resource, abs string) (string, error) {
 		return "", fmt.Errorf("生成视觉副本失败: %w", err)
 	}
 	if cached {
-		resource.VisionCacheTouch(hash, side)
+		resource.VisionCacheTouch(sourceURL, side)
 	} else {
 		_ = resource.VisionCachePut(resource.VisionCacheEntry{
-			ContentHash: hash,
-			Side:        side,
-			Tag:         res.Handle,
-			CachePath:   cacheRel,
-			Bytes:       int64(len(data)),
+			SourceURL: sourceURL,
+			Side:      side,
+			Tag:       res.Handle,
+			CachePath: cacheRel,
+			Bytes:     int64(len(data)),
 		})
 		if removed, freed := resource.VisionCacheEvict(int64(config.VisionCacheCapMB) << 20); removed > 0 {
 			logger.Info("CrystalAstral", "描述者：视觉副本缓存淘汰 %d 个（释放 %d 字节）", removed, freed)

@@ -9,7 +9,6 @@ package resource
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/base64"
 	"image"
 	"image/color"
@@ -21,7 +20,6 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
-	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 )
 
 // setupArchiveTest 在临时目录中准备隔离的资源目录、媒体派生库与内容仓库
@@ -109,8 +107,8 @@ func TestArchiveAdmitURLHandle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("链接入仓失败: %v", err)
 	}
-	if first.Handle != "@U.001" || first.Kind != KindURL {
-		t.Fatalf("首个链接应为 @U.001，实际 %s / %s", first.Handle, first.Kind)
+	if first.Handle != "@V.001" || first.Kind != KindVideo {
+		t.Fatalf("B 站链接应为视频句柄 @V.001，实际 %s / %s", first.Handle, first.Kind)
 	}
 	second, err := AdmitURL(URLAdmitInput{
 		URL:    "https://www.bilibili.com/video/BV1xx411c7mD",
@@ -136,79 +134,6 @@ func TestArchiveAdmitURLHandle(t *testing.T) {
 	}
 	if read.Title != "一段视频" {
 		t.Errorf("有标题时应保留标题，实际 %q", read.Title)
-	}
-}
-
-// TestArchiveLegacySchemaMigratesURL 老库升级：没有 url 列的既有库必须能补齐列并正常登记链接
-//
-// 这里刻意先造一个「只有 blob_owned、没有 url」的旧表：若迁移顺序写错（先建 url 索引再 ALTER），
-// 整个资源目录初始化都会失败，表现为所有资源句柄退化。
-func TestArchiveLegacySchemaMigratesURL(t *testing.T) {
-	tmp := t.TempDir()
-	origLocal, origArchive := config.LocalDir, config.ArchiveDBPath
-	config.LocalDir = tmp
-	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
-	archiveDB = nil
-	archiveSeqLoaded = false
-	archiveSeqCache = map[string]int64{}
-	t.Cleanup(func() {
-		_ = Close()
-		_ = knowledge.Close()
-		config.LocalDir, config.ArchiveDBPath = origLocal, origArchive
-		archiveDB = nil
-		archiveSeqLoaded = false
-		archiveSeqCache = map[string]int64{}
-	})
-	if err := os.MkdirAll(filepath.Dir(config.ArchiveDBPath), 0755); err != nil {
-		t.Fatalf("准备目录失败: %v", err)
-	}
-
-	// 1) 造一个老版本表结构（没有 url 列）
-	legacy, err := sql.Open("sqlite3", config.ArchiveDBPath)
-	if err != nil {
-		t.Fatalf("打开老库失败: %v", err)
-	}
-	if _, err := legacy.Exec(`CREATE TABLE resources (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		kind TEXT NOT NULL DEFAULT '',
-		seq INTEGER NOT NULL DEFAULT 0,
-		name TEXT NOT NULL DEFAULT '',
-		ext TEXT NOT NULL DEFAULT '',
-		mime TEXT NOT NULL DEFAULT '',
-		content_hash TEXT NOT NULL DEFAULT '',
-		blob_path TEXT NOT NULL DEFAULT '',
-		size_bytes INTEGER NOT NULL DEFAULT 0,
-		width INTEGER NOT NULL DEFAULT 0,
-		height INTEGER NOT NULL DEFAULT 0,
-		duration_ms INTEGER NOT NULL DEFAULT 0,
-		title TEXT NOT NULL DEFAULT '',
-		summary TEXT NOT NULL DEFAULT '',
-		tags TEXT NOT NULL DEFAULT '[]',
-		origin TEXT NOT NULL DEFAULT '',
-		retain TEXT NOT NULL DEFAULT 'normal',
-		state TEXT NOT NULL DEFAULT 'active',
-		section_count INTEGER NOT NULL DEFAULT 0,
-		created_at INTEGER NOT NULL DEFAULT 0,
-		used_at INTEGER NOT NULL DEFAULT 0,
-		blob_owned INTEGER NOT NULL DEFAULT 0
-	)`); err != nil {
-		t.Fatalf("创建老表失败: %v", err)
-	}
-	_ = legacy.Close()
-
-	// 2) 用当前代码初始化：迁移必须成功，链接登记必须可用
-	if err := Init(config.ArchiveDBPath); err != nil {
-		t.Fatalf("老库迁移失败: %v", err)
-	}
-	result, err := AdmitURL(URLAdmitInput{
-		URL:    "https://www.bilibili.com/video/BV1xx411c7mD",
-		Origin: OriginChannel,
-	})
-	if err != nil {
-		t.Fatalf("迁移后链接入仓失败: %v", err)
-	}
-	if result.Handle != "@U.001" {
-		t.Errorf("迁移后首个链接应为 @U.001，实际 %s", result.Handle)
 	}
 }
 
@@ -767,8 +692,11 @@ func TestStorageScanRegistersAndCleans(t *testing.T) {
 	}
 }
 
-// TestStorageScanDedupesRootCopy 启动扫描同哈希的根目录副本与生成目录实体：保留生成目录
-func TestStorageScanDedupesRootCopy(t *testing.T) {
+// TestStorageScanKeepsDistinctPaths 同一内容的两个路径各占一条 URL、各得一个句柄
+//
+// 新体系的唯一性约束针对 URL，而不是内容哈希：不同路径就是不同 URL，
+// 都应当被扫描登记，不删除任何实体。
+func TestStorageScanKeepsDistinctPaths(t *testing.T) {
 	tmp := setupArchiveTest(t)
 	png := []byte{
 		0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a,
@@ -791,82 +719,19 @@ func TestStorageScanDedupesRootCopy(t *testing.T) {
 	if err := SyncStorageHandles(); err != nil {
 		t.Fatalf("同步失败: %v", err)
 	}
-	if _, err := os.Stat(rootPath); !os.IsNotExist(err) {
-		t.Errorf("根目录重复副本应被扫描清理")
+	if _, err := os.Stat(rootPath); err != nil {
+		t.Errorf("两份实体都应保留: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(generatedDir, "pic.png")); err != nil {
-		t.Errorf("生成目录实体应保留: %v", err)
-	}
-	res, ok := ForPath("multimedia/generated/pic.png")
-	if !ok || res.Handle == "" {
+	generated, ok := ForPath("multimedia/generated/pic.png")
+	if !ok || generated.Handle == "" {
 		t.Errorf("生成目录实体应获得句柄")
 	}
-	if _, ok := ForPath("multimedia/pic.png"); ok {
-		t.Errorf("根目录重复件不应保留目录行")
+	root, ok := ForPath("multimedia/pic.png")
+	if !ok || root.Handle == "" {
+		t.Errorf("根目录实体也应获得句柄")
 	}
-}
-
-// TestHashUniquenessPrefersGeneratedDir 同哈希只保留一份实体：生成目录优先于根目录
-func TestHashUniquenessPrefersGeneratedDir(t *testing.T) {
-	tmp := setupArchiveTest(t)
-	png := []byte{
-		0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a,
-		0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R',
-		0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04,
-		0x08, 0x02, 0x00, 0x00, 0x00,
-	}
-
-	// 场景 1：生成目录先有实体，随后根目录收到同内容副本 → 根目录副本被舍弃
-	generated, err := persistence.SaveFileEx("multimedia/generated/pic.png", persistence.SaveOptions{Overwrite: true, MustStore: true}, bytes.NewReader(png))
-	if err != nil {
-		t.Fatalf("生成目录写入失败: %v", err)
-	}
-	copied, err := persistence.SaveFileEx("multimedia/pic.png", persistence.SaveOptions{Overwrite: true, MustStore: true}, bytes.NewReader(png))
-	if err != nil {
-		t.Fatalf("根目录副本写入失败: %v", err)
-	}
-	if copied.RelPath != generated.RelPath || copied.Handle != generated.Handle || !copied.Deduped {
-		t.Errorf("应复用生成目录实体: generated=%s/%s copied=%s/%s", generated.Handle, generated.RelPath, copied.Handle, copied.RelPath)
-	}
-	if _, statErr := os.Stat(filepath.Join(tmp, "multimedia", "pic.png")); !os.IsNotExist(statErr) {
-		t.Errorf("根目录重复副本应被舍弃")
-	}
-	if _, statErr := os.Stat(filepath.Join(tmp, "multimedia", "generated", "pic.png")); statErr != nil {
-		t.Errorf("生成目录实体应保留: %v", statErr)
-	}
-
-	// 场景 2：根目录先有实体，随后生成目录出现同内容 → 根目录被删除，句柄迁移到生成目录
-	png2 := append(append([]byte{}, png...), 0x00)
-	root, err := persistence.SaveFileEx("multimedia/root2.png", persistence.SaveOptions{Overwrite: true, MustStore: true}, bytes.NewReader(png2))
-	if err != nil {
-		t.Fatalf("根目录写入失败: %v", err)
-	}
-	migrated, err := persistence.SaveFileEx("multimedia/generated/pic2.png", persistence.SaveOptions{Overwrite: true, MustStore: true}, bytes.NewReader(png2))
-	if err != nil {
-		t.Fatalf("生成目录迁移写入失败: %v", err)
-	}
-	if migrated.RelPath != "multimedia/generated/pic2.png" || migrated.Handle != root.Handle {
-		t.Errorf("句柄应迁移到生成目录: root=%s/%s migrated=%s/%s", root.Handle, root.RelPath, migrated.Handle, migrated.RelPath)
-	}
-	if _, statErr := os.Stat(filepath.Join(tmp, "multimedia", "root2.png")); !os.IsNotExist(statErr) {
-		t.Errorf("根目录旧实体应被删除")
-	}
-
-	// 每个内容哈希在目录中只能有一行
-	rows, err := archiveDB.ListAllResources()
-	if err != nil {
-		t.Fatalf("列目录失败: %v", err)
-	}
-	byHash := map[string]int{}
-	for _, row := range rows {
-		if row.ContentHash != "" {
-			byHash[row.Kind+"\x00"+row.ContentHash]++
-		}
-	}
-	for key, count := range byHash {
-		if count != 1 {
-			t.Errorf("内容哈希 %s 存在 %d 条目录行，应唯一", key, count)
-		}
+	if generated.URL == root.URL || generated.Handle == root.Handle {
+		t.Errorf("不同路径应是不同 URL / 句柄: %s vs %s", generated.Handle, root.Handle)
 	}
 }
 

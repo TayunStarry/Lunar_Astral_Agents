@@ -1,9 +1,10 @@
 package lunar
 
-// runtime_message.go 对话者运行时消息：全局共享的时间/心情/生活/计划。
+// runtime_message.go 对话者运行时消息：全局共享的时间/心情/生活/计划/情感标识。
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/life"
@@ -14,10 +15,11 @@ func currentGlobalMessage() RuntimeGlobalMessage {
 	moodSnapshot := mood.Snapshot()
 	lifeSnapshot := life.Snapshot()
 	return RuntimeGlobalMessage{
-		Timestamp:   time.Now().Unix(),
-		MoodLabel:   moodSnapshot.Label,
-		LifeRecord:  lifeSnapshot.LastRecord,
-		PlanSummary: lifeSnapshot.PlanSummary,
+		Timestamp:    time.Now().Unix(),
+		MoodLabel:    moodSnapshot.Label,
+		LifeRecord:   lifeSnapshot.LastRecord,
+		PlanSummary:  lifeSnapshot.PlanSummary,
+		EmotionMarks: emotionMarks(),
 	}
 }
 
@@ -30,6 +32,9 @@ func buildRuntimeGlobalMessage() PostMessage {
 		emptyAsText(message.LifeRecord, "无"),
 		emptyAsText(message.PlanSummary, "无"),
 	)
+	if len(message.EmotionMarks) > 0 {
+		text += "\n" + strings.Join(message.EmotionMarks, "\n")
+	}
 	return PostMessage{Role: RoleUser, Content: text}
 }
 

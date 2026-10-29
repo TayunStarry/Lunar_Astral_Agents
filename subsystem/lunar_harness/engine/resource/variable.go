@@ -1,9 +1,17 @@
 package resource
 
-// variable.go 资源句柄系统的全局常量与变量
+// variable.go 句柄系统的全局常量与变量
 //
-// 本包是句柄文法、类型码、目录布局、段落表与 GC 规则在 Go 侧的**唯一权威实现**：
+// 本包是句柄文法、类型码、目录布局、段落表与缓存规则的**唯一权威实现**：
 // 智能体与前端只引用这里导出的接口，不再各自维护第二份判定。
+//
+// 新体系（单库 handles.db，见 store.go）：
+//   - url_master  统一 URL 主表：URL ⇄ 解析文本唯一绑定，兼作网页检索缓存
+//   - handle_file / handle_image / handle_audio / handle_video / handle_animated / handle_web
+//     六张纯映射表：句柄 ⇄ 目标 URL（本地资源统一指向 /file/read/ 路由）
+//   - doc_sections 文档段落（按 URL 关联）
+//   - cache       统一缓存表：视频抽帧 / 图片缩影 → 源文件 URL
+//   - 派生缓存目录（multimedia/vision、multimedia/footage、audios/cache）不入句柄索引
 
 import (
 	"regexp"
@@ -12,20 +20,32 @@ import (
 
 // 资源类型码
 const (
-	KindDocument = "D" // 文档（文本类文件：源码 / Markdown / 纯文本 / 配置）
-	KindImage    = "I" // 图片
+	KindDocument = "D" // 文件（文本类：源码 / Markdown / 纯文本 / 配置 / 表格）
+	KindImage    = "I" // 图片（静态图）
 	KindVideo    = "V" // 视频
 	KindAudio    = "A" // 音频
-	KindTable    = "T" // 表格（预留）
-	KindURL      = "U" // 链接（网页 / 网络视频 / BV 号：只记录地址与缓存摘要，不下载本体）
+	KindAnimated = "G" // 动图（多帧 GIF / APNG / 动态 WebP）
+	KindURL      = "U" // 网页（链接：只记录地址与解析文本）
+	// KindTable 历史表格类型码（新体系并入 KindDocument，仅保留常量供旧代码编译判断）
+	KindTable = "T"
 )
 
-// 资源生命周期状态（blob 存在性）
+// 资源生命周期状态（本地实体存在性）
 const (
-	// StateActive blob 在位，可直接取回本体
+	// StateActive 实体在位，可直接取回本体
 	StateActive = "active"
-	// StateLost blob 已被回收或缺失，句柄仍可解析，取用时降级为描述/大纲
+	// StateLost 实体已被回收或缺失，句柄仍可解析，取用时降级为描述
 	StateLost = "lost"
+)
+
+// 解析文本状态
+const (
+	// ParseNone 尚未解析（use_resource 时才触发解读流程）
+	ParseNone = "none"
+	// ParseReady 已存在有效解析文本（直接返回，不再触发模型）
+	ParseReady = "ready"
+	// ParseFailed 解析失败（保留失败标记，允许人工重试）
+	ParseFailed = "failed"
 )
 
 // 保留等级（决定 GC 顺序，等级相同再按最久未用）
@@ -34,7 +54,7 @@ const (
 	RetainNormal = "normal"
 	// RetainSoft B 级：引擎产出，可被回收（回收后降级为描述）
 	RetainSoft = "soft"
-	// RetainEphemeral C 级：临时参考物（视频抽帧、GIF 中间帧），最优先回收
+	// RetainEphemeral C 级：临时参考物，最优先回收
 	RetainEphemeral = "ephemeral"
 )
 
@@ -43,21 +63,22 @@ const (
 	OriginClientUpload = "client-upload" // 前端上传（已落盘，只登记不复制）
 	OriginChannel      = "channel"       // QQ 等外部渠道（仅 URL，需下载落盘）
 	OriginToolOutput   = "tool-output"   // 工具产出（截图 / 绘图 / 超分）
-	OriginEngineTemp   = "engine-temp"   // 引擎临时媒体（视频分段 / 抽帧）
+	OriginEngineTemp   = "engine-temp"   // 引擎临时媒体
+	OriginStorageScan  = "storage-scan"  // 启动扫描入库
 )
 
-// OriginStorageScan 启动扫描入库的来源标记
-const OriginStorageScan = "storage-scan"
-
-// 句柄文法正则：唯一权威定义，TypeScript 与前端通过 resourceGrammar 取用，禁止各处自写
+// 句柄文法正则：唯一权威定义
 const (
 	// HandlePattern 完整句柄（含可选锚点）
-	HandlePattern = `@([DIVATU])\.(\d{3,})(?:\|(?:§(\d+)|L(\d+)-(\d+)))?`
+	HandlePattern = `@([DIVAGTU])\.(\d{3,})(?:\|(?:§(\d+)|L(\d+)-(\d+)))?`
 	// SeqPadWidth 句柄序号最小宽度（不足补零）
 	SeqPadWidth = 3
-	// seqOverflowWidth 序号超出三位后的宽度（999 之后自然变为四位）
+	// seqOverflowWidth 序号超出三位后的宽度
 	seqOverflowWidth = 4
 )
+
+// FileReadPrefix 本地资源的目标 URL 前缀（相对路由，不带主机与端口）
+const FileReadPrefix = "/file/read/"
 
 // 句柄体系错误语义（调用方与 HTTP 层按同一组文案透出）
 const (
@@ -68,7 +89,7 @@ const (
 // URLMIME 链接资源在目录中的 MIME 标记（便于前端识别，无实际字节）
 const URLMIME = "text/uri-list"
 
-// MaxReadBytes 单次取回内容的字节上限（防止一次读入超大文件撑爆上下文）
+// MaxReadBytes 单次取回内容的字节上限
 const MaxReadBytes = 256 * 1024
 
 // SectionBlockLines 无标题文本退化为段落时的行块大小
@@ -76,41 +97,40 @@ const SectionBlockLines = 60
 
 // 来源类型
 const (
-	SourceKindPath      = "path"      // 本地文件路径（相对 LocalDir 或绝对路径或 file:// 或本机 http(s):// 服务地址）
-	SourceKindURL       = "url"       // 远程地址
-	SourceKindData      = "data"      // data URI
-	SourceKindBytes     = "bytes"     // 原始字节
-	SourceKindWorkspace = "workspace" // 工作区文件（用户直接引用的项目内文件，按只读方式收录）
+	SourceKindPath      = "path"
+	SourceKindURL       = "url"
+	SourceKindData      = "data"
+	SourceKindBytes     = "bytes"
+	SourceKindWorkspace = "workspace"
 )
 
-// workspaceMaxBytes 单个工作区文件收录的体积上限（100MB，与工作区大文件留出余量）
+// workspaceMaxBytes 单个工作区文件收录的体积上限
 const workspaceMaxBytes = 100 * 1024 * 1024
 
-// 内容仓库根目录（相对 LocalDir）：句柄体系只维护这三棵树
+// 内容仓库根目录（相对 LocalDir）
 const (
 	StorageRootDocuments  = "documents"
 	StorageRootAudios     = "audios"
 	StorageRootMultimedia = "multimedia"
 )
 
-// DerivedStorageRoots 内容仓库内的「派生缓存」子树（相对 LocalDir）。
-//
-// 这些目录里的文件由引擎按内容寻址生成、可随时重建，不是用户资料：
-//   - multimedia/vision：视觉读取副本（缩放 + 句柄叠印），按原图内容哈希缓存；
-//   - multimedia/footage：视频解读切片（ffmpeg 按时长分段），按源视频内容哈希缓存；
-//   - audios/cache：TTS 合成语音的缓存（按文本与音色键可重建）。
-//
-// 句柄体系只为「月华需要长期找到并引用的资料」服务；派生缓存既不需要被引用，
-// 又会与源文件形成同内容哈希的重复实体（扫描去重甚至会删掉缓存副本），
-// 因此它们**不进入**句柄索引：不登记、不分配序号，历史遗留的目录行在启动同步时清理。
+// DerivedStorageRoots 内容仓库内的派生缓存子树（不进入句柄索引）
 var DerivedStorageRoots = []string{
 	StorageRootMultimedia + "/vision",
 	StorageRootMultimedia + "/footage",
 	StorageRootAudios + "/cache",
 }
 
-// StorageRoots 内容仓库扫描根（顺序固定，便于日志与测试）
+// StorageRoots 内容仓库扫描根
 var StorageRoots = []string{StorageRootDocuments, StorageRootAudios, StorageRootMultimedia}
+
+// 缓存类型
+const (
+	// CacheKindVideoSlice 视频切片抽帧缓存（变体为 segN）
+	CacheKindVideoSlice = "video-slice"
+	// CacheKindImageThumb 图片缩影缓存（变体为边长）
+	CacheKindImageThumb = "image-thumbnail"
+)
 
 // handleExactRegexp 整串句柄匹配（解析用）
 var handleExactRegexp = regexp.MustCompile("^" + HandlePattern + "$")
@@ -120,15 +140,15 @@ var handleGlobalRegexp = regexp.MustCompile(HandlePattern)
 
 // kindLabels 类型码 → 中文类型名
 var kindLabels = map[string]string{
-	KindDocument: "文档",
+	KindDocument: "文件",
 	KindImage:    "图片",
 	KindVideo:    "视频",
 	KindAudio:    "音频",
-	KindTable:    "表格",
-	KindURL:      "链接",
+	KindAnimated: "动图",
+	KindURL:      "网页",
 }
 
-// mediaExtensions 媒体类扩展名（决定归档副本落在媒体树还是文档树）
+// mediaExtensions 媒体类扩展名
 var mediaExtensions = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".webp": true, ".gif": true, ".bmp": true,
 	".tiff": true, ".tif": true, ".svg": true, ".ico": true, ".apng": true,
@@ -138,7 +158,12 @@ var mediaExtensions = map[string]bool{
 	".opus": true, ".wma": true,
 }
 
-// workspaceTextExtensions 允许按需收录的工作区文本类扩展名（白名单，防止把可执行文件等读入归档）
+// animatedExtensions 可能承载动图的扩展名（真实是否动图由字节探针判定）
+var animatedExtensions = map[string]bool{
+	".gif": true, ".webp": true, ".apng": true, ".png": true,
+}
+
+// workspaceTextExtensions 允许按需收录的工作区文本类扩展名（白名单）
 var workspaceTextExtensions = map[string]bool{
 	".md": true, ".markdown": true, ".txt": true, ".json": true, ".xml": true,
 	".yaml": true, ".yml": true, ".toml": true, ".ini": true, ".cfg": true, ".conf": true,
@@ -154,17 +179,27 @@ var workspaceTextExtensions = map[string]bool{
 // bvIDPattern B 站视频号（BV + 10 位字母数字）
 var bvIDPattern = regexp.MustCompile(`BV[0-9A-Za-z]{10}`)
 
+// qqCDNHosts 腾讯图床 / 媒体域名（只接受 https）
+var qqCDNHosts = []string{"gchat.qpic.cn", "multimedia.nt.qq.com.cn"}
+
+// urlTrackingParams 入库规范化时要剔除的跟踪参数
+var urlTrackingParams = []string{
+	"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+	"spm_id_from", "vd_source", "from_source", "share_source", "share_medium",
+	"share_plat", "share_session_id", "share_tag", "unique_k", "buvid",
+}
+
 var (
-	// archiveInitMu 串行化资源目录初始化（HTTP 服务先于人格层启动，存在并发首访）
+	// archiveInitMu 串行化资源目录初始化
 	archiveInitMu sync.Mutex
-	// archiveMu 串行化序号分配与目录写入，避免并发下句柄重号
+	// archiveMu 串行化序号分配与目录写入
 	archiveMu sync.Mutex
-	// archiveSeqCache 各类型码的下一个可用序号缓存（启动时从 resources 表重建）
+	// archiveSeqCache 各类型码的下一个可用序号缓存
 	archiveSeqCache = map[string]int64{}
 	// archiveSeqLoaded 序号缓存是否已从库中重建
 	archiveSeqLoaded bool
-	// storageScanMu 串行化启动同步，避免并发初始化重复建行
+	// storageScanMu 串行化启动同步
 	storageScanMu sync.Mutex
-	// archiveDB 统一资源目录实例（句柄 / 元数据 / 段落结构）
+	// archiveDB 统一句柄库实例
 	archiveDB *store
 )

@@ -27,6 +27,11 @@ type forumRunData struct {
 type forumRun struct{ data forumRunData }
 
 func (r *forumRun) Start(_ context.Context, env Env) error {
+	// 工具触发的强制事件：直接采用对话者的自然语言要求引导论坛流程。
+	if strings.TrimSpace(env.Instruction) != "" {
+		r.data.Instruction = strings.TrimSpace(env.Instruction)
+		return nil
+	}
 	r.data.Instruction = fmt.Sprintf(
 		"以「%s」的状态去互助论坛逛一圈：先看看最近的新话题，挑一个感兴趣的读一读；"+
 			"如果有能接话或能帮上忙的，就礼貌回一条；不要发广告、不要争论、不要暴露自己是程序。"+
@@ -50,7 +55,7 @@ func (r *forumRun) Next(ctx context.Context, _ Env) (EventStep, error) {
 	}
 	return EventStep{
 		Done:   true,
-		Record: "逛了论坛：" + truncateRunes(text, 200),
+		Record: "逛了论坛：" + truncateAtSentence(text, 200),
 		Detail: "论坛返回 " + fmt.Sprintf("%d 字", len([]rune(text))),
 	}, nil
 }

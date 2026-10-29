@@ -14,8 +14,8 @@ const (
 	memoryPlanFile = "database/life_chain/memory_plan.json"
 	// memoryJournalDir 记忆整理批次意图日志目录（相对 LocalDir）
 	memoryJournalDir = "database/life_chain/memory_journal"
-	// defaultIdleThreshold 默认生活冷却：905 个空闲 Tick
-	defaultIdleThreshold = 905
+	// defaultIdleThreshold 默认生活冷却：600 个空闲 Tick（10 分钟）
+	defaultIdleThreshold = 600
 	// planWindow 未来计划摘要窗口
 	planWindow = time.Hour
 	// batchMaxRunes 记忆整理单批最大字符数
@@ -31,11 +31,11 @@ var defaultEvents = map[string]struct {
 	Weight int
 	Quota  int
 }{
-	"watch":  {Weight: 14, Quota: 6},
-	"daze":   {Weight: 50, Quota: 99999},
-	"forum":  {Weight: 18, Quota: 6},
-	"mood":   {Weight: 12, Quota: 12},
-	"memory": {Weight: 4, Quota: 2},
+	"watch":    {Weight: 14, Quota: 6},
+	"daze":     {Weight: 50, Quota: 99999},
+	"forum":    {Weight: 18, Quota: 6},
+	"memory":   {Weight: 4, Quota: 2},
+	"creative": {Weight: 10, Quota: 32},
 }
 
 // eventParams 单个事件的权重与额度。
@@ -62,6 +62,14 @@ var (
 	planUpcomingHook func(time.Time, time.Duration) string
 	// lastUserTextHook 最新用户发言（由 lunar 注入）
 	lastUserTextHook func() string
+	// lastUserNameHook 最新用户发言的发送者名（由 lunar 注入）
+	lastUserNameHook func() string
+	// lastReplyTextHook 上一轮月华回应文本（由 lunar 注入）
+	lastReplyTextHook func() string
+	// lastMoodInput 上次已用于更新心情的最新发言，避免同一发言重复嵌入
+	lastMoodInput string
+	// lastEmotionInput 上次已用于更新情感认知的「用户名+发言+回应」组合
+	lastEmotionInput string
 	// idleThreshold 可通过配置覆盖（当前先用默认值）
 	idleThreshold = defaultIdleThreshold
 )

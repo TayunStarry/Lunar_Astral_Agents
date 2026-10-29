@@ -54,14 +54,18 @@ func visionReadBlob(relPath, tag string, side int) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("资源目录初始化失败: %w", err)
 	}
 	contentHash := ""
+	sourceURL := resource.FileReadURL(clean)
 	if entry, ok := resource.ForPath(clean); ok {
 		if tag == "" {
 			tag = entry.Handle
 		}
+		if strings.TrimSpace(entry.URL) != "" {
+			sourceURL = entry.URL
+		}
 		contentHash = entry.ContentHash
 	}
 	if contentHash == "" {
-		sum := sha256.Sum256([]byte(clean))
+		sum := sha256.Sum256([]byte(sourceURL))
 		contentHash = hex.EncodeToString(sum[:8])
 	}
 	cacheRel := "multimedia/vision/" + contentHash + "_s" + strconv.Itoa(side) + ".jpg"
@@ -74,15 +78,15 @@ func visionReadBlob(relPath, tag string, side int) ([]byte, string, error) {
 		return nil, "", err
 	}
 	if cached {
-		resource.VisionCacheTouch(contentHash, side)
+		resource.VisionCacheTouch(sourceURL, side)
 		return data, mime, nil
 	}
 	_ = resource.VisionCachePut(resource.VisionCacheEntry{
-		ContentHash: contentHash,
-		Side:        side,
-		Tag:         tag,
-		CachePath:   cacheRel,
-		Bytes:       int64(len(data)),
+		SourceURL: sourceURL,
+		Side:      side,
+		Tag:       tag,
+		CachePath: cacheRel,
+		Bytes:     int64(len(data)),
 	})
 	_, _ = resource.VisionCacheEvict(int64(config.VisionCacheCapMB) << 20)
 	return data, mime, nil
@@ -139,6 +143,8 @@ func resolveImageBytes(source string) ([]byte, error) {
 		rel = rel[:cut]
 	}
 	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		// 腾讯图床只接受 https：以 http 直链 GET 会被边缘节点直接拒绝（400）。
+		source = resource.UpgradeCDNScheme(source)
 		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Get(source)
 		if err != nil {

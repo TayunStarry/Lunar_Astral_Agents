@@ -1,21 +1,22 @@
 package resource
 
-// gc.go 配额回收与目录统计的查询原语（GC 判据 / 引用计数 / 运维视图）。
+// gc.go 配额回收与目录统计的查询原语（GC 判据 / 运维视图）
 
-// totalActiveBytes 统计 state=active 的资源总体积（GC 配额判据）
+// totalActiveBytes 统计 state=active 且已绑定句柄的资源总体积
 func (d *store) totalActiveBytes() (int64, error) {
 	var total int64
-	err := d.db.QueryRow(`SELECT COALESCE(SUM(size_bytes),0) FROM resources WHERE state = ?`, StateActive).Scan(&total)
+	err := d.db.QueryRow(`SELECT COALESCE(SUM(size_bytes),0) FROM url_master
+		WHERE state = ? AND bound_handle <> ''`, StateActive).Scan(&total)
 	return total, err
 }
 
-// collectCandidates 取指定保留等级的回收候选：state=active，按 used_at 升序（最久未用优先）
+// collectCandidates 取指定保留等级的回收候选：active，按 used_at 升序（最久未用优先）
 func (d *store) collectCandidates(retain string, limit int) ([]Resource, error) {
 	if limit <= 0 {
 		limit = 200
 	}
-	rows, err := d.db.Query(`SELECT `+archiveResourceColumns+
-		` FROM resources WHERE state = ? AND retain = ? ORDER BY used_at ASC, id ASC LIMIT ?`,
+	rows, err := d.db.Query(`SELECT `+urlMasterColumns+` FROM url_master
+		WHERE state = ? AND retain = ? AND bound_handle <> '' ORDER BY used_at ASC, id ASC LIMIT ?`,
 		StateActive, retain, limit)
 	if err != nil {
 		return nil, err
@@ -23,51 +24,30 @@ func (d *store) collectCandidates(retain string, limit int) ([]Resource, error) 
 	defer rows.Close()
 	out := []Resource{}
 	for rows.Next() {
-		res, err := scanResource(rows)
-		if err != nil {
-			return nil, err
+		res, scanErr := scanURLRecord(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
 		out = append(out, res)
 	}
 	return out, rows.Err()
 }
 
-// blobReferencedByOthers 判断同一实体是否仍被其它目录行引用（共享去重保护）
+// blobReferencedByOthers 一条 URL 只绑定一个句柄，实体不存在共享引用
 func (d *store) blobReferencedByOthers(blobPath string, selfID int64) (bool, error) {
-	if blobPath == "" {
-		return false, nil
-	}
-	var count int64
-	err := d.db.QueryRow(`SELECT COUNT(*) FROM resources WHERE blob_path = ? AND id <> ?`,
-		blobPath, selfID).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
+	return false, nil
 }
 
-// blobReferencedByUnowned 判断同一实体是否被「非归档所有」的目录行引用
-//
-// 内容寻址下同内容共用实体：若任一行标记该实体归前端/引擎所有（blob_owned=0），
-// 那么它就是用户可见文件，回收器一律不得删除 —— 归属按最保守的一侧处理。
+// blobReferencedByUnowned 实体归属由 blob_owned 表达；共享引用已不存在
 func (d *store) blobReferencedByUnowned(blobPath string, selfID int64) (bool, error) {
-	if blobPath == "" {
-		return false, nil
-	}
-	var count int64
-	err := d.db.QueryRow(`SELECT COUNT(*) FROM resources WHERE blob_path = ? AND id <> ? AND blob_owned = 0`,
-		blobPath, selfID).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
+	return false, nil
 }
 
-// Stats 目录统计
+// Stats 目录统计（只统计已绑定句柄的资源）
 func (d *store) Stats() (StatsReport, error) {
 	stats := StatsReport{ByKind: map[string]int64{}, ByState: map[string]int64{}, ByRetain: map[string]int64{}}
-	if err := d.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM resources`).
-		Scan(&stats.Total, &stats.Bytes); err != nil {
+	if err := d.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM url_master
+		WHERE bound_handle <> ''`).Scan(&stats.Total, &stats.Bytes); err != nil {
 		return stats, err
 	}
 	for _, group := range []struct {
@@ -78,7 +58,8 @@ func (d *store) Stats() (StatsReport, error) {
 		{"state", stats.ByState},
 		{"retain", stats.ByRetain},
 	} {
-		rows, err := d.db.Query(`SELECT ` + group.column + `, COUNT(*) FROM resources GROUP BY ` + group.column)
+		rows, err := d.db.Query(`SELECT ` + group.column + `, COUNT(*) FROM url_master
+			WHERE bound_handle <> '' GROUP BY ` + group.column)
 		if err != nil {
 			continue
 		}

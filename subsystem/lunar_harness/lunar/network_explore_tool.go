@@ -1,19 +1,20 @@
 package lunar
 
-// network_explore_tool.go 联网探索工具：聚合网页检索、互助论坛与通讯桥接。
+// network_explore_tool.go 联网探索工具：聚合网页检索、哔哩观影、互助论坛与通讯桥接。
 //
 // 参数风格与 LTPX 聚合工具一致：只接收 tool（目标能力）与 instruction（自然语言任务）。
-// 具体流程、是否分享、看几个视频等编排由对应智能体自行决定，对话者只表达需求。
-//
-// 哔哩观影不再作为对话者可直接调用的子工具：它已迁入生活体系，由生活事件自主触发。
+// 网页检索与通讯桥接直接执行；哔哩观影与互助论坛已迁入生活链：
+// 工具只登记强制事件，下一 Tick 由调度器跳过其他体系直接进入生活流程，
+// instruction 会交给对应智能体引导关键词生成与运行流程。
 
 import (
 	"fmt"
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
-	"LunarSubsystem/LunarHarness/agents/MutualForum"
 	"LunarSubsystem/LunarHarness/agents/WebSearch"
+	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/life"
 )
 
 const (
@@ -21,25 +22,30 @@ const (
 	networkExploreToolName = "network_explore"
 	// networkWebSearchTool 网页检索子工具
 	networkWebSearchTool = "web_search"
+	// networkBilibiliTool 哔哩观影子工具（触发生活链观影事件）
+	networkBilibiliTool = "bilibili_viewer"
+	// networkMutualForumTool 互助论坛子工具（触发生活链论坛事件）
+	networkMutualForumTool = "mutual_forum"
 	// networkQQSendTool 通讯桥接子工具（仅在桥接器就绪时暴露）
 	networkQQSendTool = "qq_send"
-	// networkMutualForumTool Mutual Forum 论坛子工具（仅在论坛可达且配置开启时暴露）
-	networkMutualForumTool = "mutual_forum"
+
+	// bilibiliFixedReply 哔哩观影触发后的固定响应
+	bilibiliFixedReply = "月华等下就去B站逛逛"
+	// forumFixedReply 互助论坛触发后的固定响应
+	forumFixedReply = "月华等下就去论坛逛逛"
 )
 
 // networkExploreToolCalls 联网探索工具定义（tool + instruction，与 LTPX 参数风格一致）。
 //
-// qq_send 只在 QQ 桥接器连接成功、且能解析出群/好友信息时加入枚举；
-// mutual_forum 只在独立配置开启、地址有效且论坛健康检查通过时加入枚举。
-// 未就绪时模型根本看不到这个能力，避免它把需求发给一个不存在的通道。
+// 哔哩观影与互助论坛始终暴露：它们现在只登记生活事件，不再依赖智能体即时可用；
+// qq_send 仍只在 QQ 桥接器连接成功时加入枚举。
 func networkExploreToolCalls() []ToolCall {
-	subTools := []string{networkWebSearchTool}
-	summaryParts := []string{"web_search"}
-	descriptionParts := []string{"web_search=网页检索"}
-	if MutualForum.Ready() {
-		subTools = append(subTools, networkMutualForumTool)
-		summaryParts = append(summaryParts, "mutual_forum")
-		descriptionParts = append(descriptionParts, "mutual_forum=互助论坛（查话题/搜索/发帖求助/回帖/管理自己发起的话题）")
+	subTools := []string{networkWebSearchTool, networkBilibiliTool, networkMutualForumTool}
+	summaryParts := []string{"web_search", "bilibili_viewer", "mutual_forum"}
+	descriptionParts := []string{
+		"web_search=网页检索",
+		"bilibili_viewer=哔哩观影（安排下一轮去 B 站看视频，可用 instruction 引导选片方向）",
+		"mutual_forum=互助论坛（安排下一轮去论坛逛逛，可用 instruction 引导话题与行动）",
 	}
 	if DialogueBridging.Ready() {
 		subTools = append(subTools, networkQQSendTool)
@@ -57,7 +63,7 @@ func networkExploreToolCalls() []ToolCall {
 				},
 				"instruction": map[string]any{
 					"type":        "string",
-					"description": "例如: 查一下今天的 AI 新闻；去 B 站看看有趣的游戏视频；在互助论坛发帖问问 WebView 超时怎么排查；把这个文件 @D.012 发给群「测试群」",
+					"description": "例如: 查一下今天的 AI 新闻；去 B 站看看有趣的猫咪视频；在互助论坛发帖问问 WebView 超时怎么排查；把这个文件 @D.012 发给群「测试群」",
 				},
 			}, []string{"tool", "instruction"}),
 	}
@@ -81,9 +87,12 @@ func handleNetworkExplore(args map[string]any) (result ToolResult) {
 	case networkWebSearchTool:
 		text, err := WebSearch.Run(instruction)
 		return networkExploreResult("网页检索", text, err)
+	case networkBilibiliTool:
+		scheduleLifeEvent("watch", instruction)
+		return ToolResult{Text: bilibiliFixedReply}
 	case networkMutualForumTool:
-		text, err := MutualForum.Run(instruction)
-		return networkExploreResult("互助论坛", text, err)
+		scheduleLifeEvent("forum", instruction)
+		return ToolResult{Text: forumFixedReply}
 	case networkQQSendTool:
 		if !DialogueBridging.Ready() {
 			return ToolResult{Text: "QQ 未就绪：暂时无法向 QQ 发送数据"}
@@ -91,7 +100,14 @@ func handleNetworkExplore(args map[string]any) (result ToolResult) {
 		text, err := DialogueBridging.Run(instruction)
 		return networkExploreResult("通讯桥接", text, err)
 	default:
-		return ToolResult{Text: "tool 只能取 web_search / mutual_forum / qq_send"}
+		return ToolResult{Text: "tool 只能取 web_search / bilibili_viewer / mutual_forum / qq_send"}
+	}
+}
+
+// scheduleLifeEvent 登记强制生活事件；调度器会在下一 Tick 跳过权重与其他体系直接执行它。
+func scheduleLifeEvent(eventID, instruction string) {
+	if !life.RequestEvent(eventID, instruction) {
+		logger.Warn(lunarCoreModule, "[联网探索] 强制事件 %s 登记失败", eventID)
 	}
 }
 

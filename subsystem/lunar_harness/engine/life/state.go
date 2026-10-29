@@ -2,11 +2,39 @@ package life
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
+
+// RequestEvent 登记一次强制生活事件：下一 Tick 跳过权重选择，直接执行指定事件。
+// instruction 是对话者/用户传入的自然语言要求，会随环境交给事件智能体。
+func RequestEvent(eventID, instruction string) bool {
+	eventID = strings.TrimSpace(eventID)
+	if eventID == "" {
+		return false
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if eventByIDLocked(eventID) == nil {
+		logger.Warn(Module, "[生活] 请求的强制事件 %s 未注册", eventID)
+		return false
+	}
+	state.PendingEvent = eventID
+	state.PendingInstruction = strings.TrimSpace(instruction)
+	saveStateLocked()
+	logger.Info(Module, "[生活] 已登记强制事件 %s，下一 Tick 跳过权重选择", eventID)
+	return true
+}
+
+// HasPendingEvent 是否有等待执行的强制事件。
+func HasPendingEvent() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	return strings.TrimSpace(state.PendingEvent) != ""
+}
 
 // Init 载入生活状态并注册内置事件；可重复调用。
 func Init() {

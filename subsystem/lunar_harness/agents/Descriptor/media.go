@@ -49,11 +49,11 @@ func DescribeMedia(handle, question string) (string, error) {
 	if res.State != resource.StateActive {
 		return "", fmt.Errorf("%s 的本体已丢失", handle)
 	}
-	if res.Kind != resource.KindImage {
+	if res.Kind != resource.KindImage && res.Kind != resource.KindAnimated {
 		return "", fmt.Errorf("%s 不是图片或动图", handle)
 	}
-	// 已有描述且无定向问题：直接命中
-	if cached := strings.TrimSpace(res.Summary); cached != "" && question == "" {
+	// 已有解析文本且无定向问题：直接命中
+	if cached := strings.TrimSpace(res.ParseText); cached != "" && question == "" {
 		return cached, nil
 	}
 

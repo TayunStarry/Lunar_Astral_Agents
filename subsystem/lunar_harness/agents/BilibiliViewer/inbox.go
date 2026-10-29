@@ -102,7 +102,16 @@ func (it inboxItem) keys() []string {
 var (
 	inboxDynamicOidRe = regexp.MustCompile(`(?:/opus/|/dynamic/|t\.bilibili\.com/|h\.bilibili\.com/ywh/|bilibili://(?:opus|dynamic|album)/)(\d+)`)
 	inboxVideoAidRe   = regexp.MustCompile(`(?:bilibili://video/|/video/av)(\d+)`)
+	inboxReplyIDRe    = regexp.MustCompile(`#reply(\d+)`)
 )
+
+// replyIDFromURI 从消息中心 URI 的 #replyNNN 片段提取对方评论 rpid。
+func replyIDFromURI(uri string) string {
+	if m := inboxReplyIDRe.FindStringSubmatch(uri); len(m) == 2 {
+		return m[1]
+	}
+	return ""
+}
 
 func dynamicOidFromURI(uri string) string {
 	if m := inboxDynamicOidRe.FindStringSubmatch(uri); len(m) == 2 {
@@ -162,7 +171,14 @@ func (m msgFeedItem) toInboxItem(kind string) (inboxItem, bool) {
 		}
 	}
 
-	oid := p.SubjectID.String()
+	// 动态/图片动态的 subject_id 不是评论区 oid：优先用 URI 里的页面 ID
+	oid := ""
+	if typ == 11 || typ == 17 {
+		oid = dynamicOidFromURI(p.URI)
+	}
+	if oid == "" {
+		oid = p.SubjectID.String()
+	}
 	if oid == "" {
 		oid = dynamicOidFromURI(p.URI)
 	}
@@ -181,9 +197,17 @@ func (m msgFeedItem) toInboxItem(kind string) (inboxItem, bool) {
 		venue = "article"
 	}
 
-	source := p.SourceID.String()
+	// @ 消息在部分场景只给 source_id，甚至有缺项：从 URI 的 #replyNNN 兜底
+	sourceID := p.SourceID.String()
+	if sourceID == "" {
+		sourceID = replyIDFromURI(p.URI)
+	}
+	source := sourceID
 	if source == "" || source == oid {
 		source = p.TargetID.String()
+	}
+	if source == "" {
+		source = replyIDFromURI(p.URI)
 	}
 
 	when := m.ReplyTime
@@ -200,7 +224,7 @@ func (m msgFeedItem) toInboxItem(kind string) (inboxItem, bool) {
 		Venue:     venue,
 		Type:      typ,
 		Oid:       oid,
-		SourceID:  p.SourceID.String(),
+		SourceID:  sourceID,
 		RootID:    p.RootID.String(),
 		TargetID:  p.TargetID.String(),
 		MessageID: m.ID.String(),

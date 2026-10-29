@@ -35,10 +35,6 @@ func main() {
 	// 预绑定监听器交由 HTTP 服务复用（避免预检与正式绑定之间的竞态窗口）
 	server.SetPreboundListener(ln)
 
-	// 控制台日志镜像默认关闭：日志仍进 TUI 的「原始日志」视图与「数据导出」，
-	// 只有 lunar_config.json 的 system.console_log=true 时才额外落盘 local_data/logs/console.log。
-	console.SetConsoleLogEnabled(config.ConsoleLogEnabled)
-
 	// 日志管线安装必须最早期：接管 stdout/stderr，启动期日志不逃逸到终端
 	console.Install()
 
@@ -90,7 +86,7 @@ func main() {
 	// LTP9 授权钩子：控制台「LTP9 授权签发」屏据此扫描包目录、读取授权现状并签发 permissions.key
 	app.WireTUILTP9AuthHooks()
 
-	// 对话链状态钩子：控制台「月华对话链 管理」屏据此展示 Go 对话链状态并手动重建
+	// 控制台观测与人工入口钩子：工具列表、核心智能实况计量、桌面操纵入口
 	app.WireTUIEngineHooks()
 
 	// 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）。

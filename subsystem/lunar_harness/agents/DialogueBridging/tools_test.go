@@ -3,7 +3,6 @@ package DialogueBridging
 import (
 	"strings"
 	"testing"
-
 )
 
 func testDirectory() ([]QQGroup, []QQFriend) {
