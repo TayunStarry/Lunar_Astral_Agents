@@ -134,10 +134,15 @@ func (d *store) markGCCurrentCall(handle string) {
 		WHERE handle = ?`, gcCurrentCallUsed, time.Now().Unix(), handle)
 }
 
-// upsertGCMediaScoreLocked 在入库 / 扫描登记时确保可清理媒体进入 GC 表 2。
-// 已有记录只刷新类型与路径，积分与当前调用保持不变。
+// upsertGCMediaScoreLocked 在入库 / 扫描登记 / 路径变化时同步 GC 表 2。
+//   - 目标路径属于可清理范围：新增或刷新类型与路径，已有积分保持不变；
+//   - 目标路径不在可清理范围：删除该句柄的追踪记录（移出即不再计数）。
 func (d *store) upsertGCMediaScoreLocked(res *Resource) {
+	if res.Handle == "" {
+		return
+	}
 	if !gcTrackablePath(res.BlobPath, res.Kind) {
+		d.removeGCScoreLocked(res.Handle)
 		return
 	}
 	now := time.Now().Unix()
@@ -149,12 +154,25 @@ func (d *store) upsertGCMediaScoreLocked(res *Resource) {
 		res.Handle, res.Kind, res.BlobPath, GCPointsInit, now, now)
 }
 
-// removeGCScoreLocked 资源被显式删除时同步移除 GC 表 2 记录。
+// removeGCScoreLocked 资源被显式删除 / 移出追踪范围时同步移除 GC 表 2 记录。
 func (d *store) removeGCScoreLocked(handle string) {
 	if handle == "" {
 		return
 	}
 	_, _ = d.db.Exec(`DELETE FROM gc_media_score WHERE handle = ?`, handle)
+}
+
+// syncGCMediaScoreAfterPathLocked 文件移动 / 改路径后的实时同步：
+// 进入追踪范围且实体在位的补登记；离开范围或实体缺失的退表。
+func (d *store) syncGCMediaScoreAfterPathLocked(res *Resource) {
+	if res.Handle == "" {
+		return
+	}
+	if !gcTrackablePath(res.BlobPath, res.Kind) || !fileExists(localAbs(res.BlobPath)) {
+		d.removeGCScoreLocked(res.Handle)
+		return
+	}
+	d.upsertGCMediaScoreLocked(res)
 }
 
 // gcTrackablePath 是否属于 GC 表 2 的可清理范围：

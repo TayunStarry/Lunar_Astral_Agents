@@ -60,7 +60,16 @@ func (d *store) UpdateResourceBlobPath(id int64, blobPath string) error {
 		rollbackTx(tx)
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	// GC 表 2 跟随路径实时迁移：进入 multimedia/audios 根 → 建档；
+	// 移出根目录 → 退表，后续不再累计引用积分。
+	moved := res
+	moved.BlobPath = normalizeRel(blobPath)
+	moved.URL = newURL
+	d.syncGCMediaScoreAfterPathLocked(&moved)
+	return nil
 }
 
 // DeleteResourcesByBlobPath 删除实体路径精确匹配的全部资源

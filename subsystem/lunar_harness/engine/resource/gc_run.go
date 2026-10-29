@@ -7,7 +7,8 @@ package resource
 //  2. 扫描全库，把「源丢失且无文本描述」的句柄补登进表 1（有描述的一律保留）；
 //  3. 建立 / 校准 GC 表 2：只覆盖 multimedia 根图片视频、audios 根哈希音频；
 //  4. 结算调用积分：上一轮未用 -1、用过 +1，硬限制 [-20, 20]，归零当前调用；
-//  5. 积分达到 -20 时删除句柄记录与全部关联物理文件；
+//  5. 积分达到 -20 时清退：无描述者删除句柄与全部关联物理文件；
+//     有描述者只删物理本体与派生缓存，句柄保留并降级为 lost；
 //  6. 最后执行原有配额回收（保留等级 + 最久未用），与新机制叠加而非替换。
 
 import (
@@ -224,10 +225,19 @@ func (d *store) applyGCScoringLocked() int {
 	return removed
 }
 
-// purgeScoredResourceLocked 删除句柄记录、GC 表 2 记录与全部关联物理文件。
+// purgeScoredResourceLocked 积分达到 -20 时的清退：
+//   - 无文本描述：删除句柄记录 + GC 表记录 + 全部关联物理文件；
+//   - 有文本描述：只删除物理本体与派生缓存，保留句柄并降级为 lost。
 func (d *store) purgeScoredResourceLocked(handle, kind, blobPath string) error {
 	if res, found := d.GetResourceByHandle(kind, handleSeq(kind, handle)); found {
 		d.purgeResourceArtifactsLocked(res)
+		if hasTextDescription(res) {
+			// 描述仍在：句柄必须保留，仅把本体标记为已回收，并停止继续累计积分。
+			_, _ = d.db.Exec(`DELETE FROM cache WHERE source_url = ?`, res.URL)
+			_, err := d.db.Exec(`UPDATE url_master SET state = ? WHERE id = ?`, StateLost, res.ID)
+			d.removeGCScoreLocked(handle)
+			return err
+		}
 		if err := d.deleteResourceLocked(res.ID); err != nil {
 			return err
 		}
