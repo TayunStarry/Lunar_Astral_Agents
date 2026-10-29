@@ -63,21 +63,23 @@ func Execute(configPath string, cfg *Config) error {
 	logf("  分卷大小: %d MB", params.Config.Size)
 	logf("  压缩级别: %d", params.Config.Level)
 
-	cleanOldParts(params.Config.Output)
+	// 打包 / 压缩属于重资源操作：交给宿主注入的维护钩子暂停思维链并卸载对话模型，
+	// 避免 7z 压缩期间 Tick 突然拉起模型抢占 CPU / 磁盘。
+	return runMaintenance(func() error {
+		cleanOldParts(params.Config.Output)
+		if err := createVolume(sources, params.Config.Output, params.Config.Size, params.Config.Level); err != nil {
+			return fmt.Errorf("创建分卷失败: %v", err)
+		}
 
-	if err := createVolume(sources, params.Config.Output, params.Config.Size, params.Config.Level); err != nil {
-		return fmt.Errorf("创建分卷失败: %v", err)
-	}
-
-	elapsed := sinceTime(params.StartTime)
-	logf("========================================")
-	logf("  打包完成！")
-	logf("  总耗时: %s", elapsed)
-	logf("========================================")
-	// 打包归档属于资源产出：由 Go 层统一播放完成提示音
-	sound.Notify()
-
-	return nil
+		elapsed := sinceTime(params.StartTime)
+		logf("========================================")
+		logf("  打包完成！")
+		logf("  总耗时: %s", elapsed)
+		logf("========================================")
+		// 打包归档属于资源产出：由 Go 层统一播放完成提示音
+		sound.Notify()
+		return nil
+	})
 }
 
 // GetSources 将配置中的 import 路径列表解析为绝对路径，过滤不存在的路径

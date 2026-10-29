@@ -29,6 +29,8 @@ type tickScheduler struct {
 	systems []TickSystem
 	state   TickState
 	busy    bool
+	// paused 维护态：为 true 时 Tick 不再触发任何体系（打包 / 压缩期间使用）
+	paused  bool
 	ctx     context.Context
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
@@ -63,6 +65,14 @@ func (s *tickScheduler) Register(system TickSystem) {
 
 // Tick 每秒调用一次；非阻塞，长任务在独立 goroutine 中执行。
 func (s *tickScheduler) Tick() {
+	// 维护态（打包 / 压缩）期间不触发任何体系
+	s.mu.Lock()
+	if s.paused {
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Unlock()
+
 	// 工具触发的生活事件在下一 Tick 抢占执行：即使有未读消息也先进入生活链，
 	// 进入后先推进心情/情感，再按强制事件跳过权重选择。
 	forcedLife := life.HasPendingEvent()
@@ -131,6 +141,37 @@ func (s *tickScheduler) run(seq int64, system TickSystem, started time.Time) {
 			logger.Warn(tickModule, "[Tick#%d] %s 执行失败: %v", seq, system.ID(), err)
 		}
 	}()
+}
+
+// Pause 进入维护态：后续 Tick 不再触发任何体系（正在运行的一轮不受影响）。
+func (s *tickScheduler) Pause() {
+	s.mu.Lock()
+	s.paused = true
+	s.mu.Unlock()
+}
+
+// Resume 退出维护态，恢复 Tick 调度。
+func (s *tickScheduler) Resume() {
+	s.mu.Lock()
+	s.paused = false
+	s.mu.Unlock()
+}
+
+// WaitIdle 等待当前运行中的一轮结束；超时返回 false。
+func (s *tickScheduler) WaitIdle(timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		s.mu.Lock()
+		busy := s.busy
+		s.mu.Unlock()
+		if !busy {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(maintenanceIdlePoll)
+	}
 }
 
 // Stop 取消在跑任务并等待退出。

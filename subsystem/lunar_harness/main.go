@@ -89,6 +89,9 @@ func main() {
 	// 控制台观测与人工入口钩子：工具列表、核心智能实况计量、桌面操纵入口
 	app.WireTUIEngineHooks()
 
+	// 打包维护钩子：压缩期间暂停思维链 Tick 并卸载对话模型，避免与 7z 抢资源
+	app.WireTUIMaintenanceHook()
+
 	// 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）。
 	// 开发者模式（system.developer 或 --developer）下**不主动弹出前端**：
 	// 调试时只看控制台即可，避免窗口抢占焦点、遮挡日志；

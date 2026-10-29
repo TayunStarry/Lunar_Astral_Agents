@@ -17,6 +17,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/desktop"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
+	"LunarSubsystem/LunarHarness/engine/console/archive"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/lunar"
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
@@ -52,6 +53,19 @@ func WireTUIFrontendHooks() {
 			return browser.RestartDesktopWindow(crystalWindowSpec())
 		},
 	)
+}
+
+// WireTUIMaintenanceHook 把「打包期间暂停思维链」注入打包归档 / 更新包发布：
+//
+// 7z 压缩会长时间占用 CPU 与磁盘，若 Tick 同时推进生活链/对话链，会突然拉起
+// primary_reasoning / light_reasoning / text_embedding。这里在压缩前后暂停 Tick 并卸载模型，
+// 压缩完成后再恢复调度。
+func WireTUIMaintenanceHook() {
+	archive.SetMaintenanceHook(func(fn func() error) error {
+		resume := lunar.BeginMaintenance()
+		defer resume()
+		return fn()
+	})
 }
 
 // WireTUIDataDumpHooks 把「数据导出」能力注入控制台：控制台只负责触发与展示回执，

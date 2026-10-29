@@ -97,6 +97,41 @@ func TestSchedulerPriorityAndIdleReset(t *testing.T) {
 	}
 }
 
+// TestSchedulerPauseBlocksTickAndWaitsIdle 维护态下 Tick 不触发；WaitIdle 能等到运行中的一轮结束
+func TestSchedulerPauseBlocksTickAndWaitsIdle(t *testing.T) {
+	s := newTestTickScheduler(t)
+	system := &fakeTickSystem{id: "dialogue", priority: 300, ready: true, reason: "unread"}
+	s.Register(system)
+
+	s.Pause()
+	s.Tick()
+	time.Sleep(20 * time.Millisecond)
+	if system.runCount() != 0 {
+		t.Fatalf("维护态下不应触发体系，实际运行 %d 次", system.runCount())
+	}
+
+	s.Resume()
+	s.Tick()
+	s.wg.Wait()
+	if system.runCount() != 1 {
+		t.Fatalf("恢复后应正常触发，实际 %d 次", system.runCount())
+	}
+
+	// 运行中 WaitIdle 超时返回 false，结束后返回 true
+	system.started = make(chan struct{})
+	system.block = make(chan struct{})
+	s.Tick()
+	<-system.started
+	if s.WaitIdle(50 * time.Millisecond) {
+		t.Fatal("运行中不应判定为空闲")
+	}
+	close(system.block)
+	if !s.WaitIdle(time.Second) {
+		t.Fatal("运行结束后应判定为空闲")
+	}
+	s.wg.Wait()
+}
+
 func TestSchedulerBusySkipsTick(t *testing.T) {
 	s := newTestTickScheduler(t)
 	started := make(chan struct{})
