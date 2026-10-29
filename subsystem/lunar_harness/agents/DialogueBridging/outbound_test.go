@@ -19,7 +19,9 @@ func resetOutboundTest(t *testing.T) {
 	origState := GetBridgeState()
 	origLoaded, origID, origNick := botInfoLoaded, botUserID, botNickname
 	origAt, origGroups, origFriends, origErr := qqDirectoryAt, qqDirectoryGroups, qqDirectoryFriends, qqDirectoryErr
+	resetWhitelistPending()
 	t.Cleanup(func() {
+		resetWhitelistPending()
 		bridgeConfig = origConfig
 		setBridgeState(origState)
 		botInfoLoaded, botUserID, botNickname = origLoaded, origID, origNick

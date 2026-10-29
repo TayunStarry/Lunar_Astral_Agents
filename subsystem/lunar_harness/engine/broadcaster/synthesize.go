@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	KokoroTTS "LunarSubsystem/LunarHarness/engine/broadcaster/kokoro"
+	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/broadcaster/omnivoice"
+	qwentts "LunarSubsystem/LunarHarness/engine/broadcaster/qwen"
 	"LunarSubsystem/LunarHarness/engine/config"
-	KokoroTTS "LunarSubsystem/LunarHarness/engine/kokoro_tts"
-	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/omnivoice_tts"
-	qwentts "LunarSubsystem/LunarHarness/engine/qwen_tts"
 )
 
 // ==== 统一合成执行层 ====

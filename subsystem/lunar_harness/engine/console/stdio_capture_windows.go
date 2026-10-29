@@ -6,7 +6,7 @@ package console
 //
 // 为什么会漏：Install 换的只是 Go 层的 os.Stdout / os.Stderr / log 输出，**进程级标准句柄没动**。
 // 进程内加载的原生库用的是 CRT 的 printf/fprintf —— 典型是 OmniVoice TTS 引擎（以 DLL 形式
-// 经 LoadLibraryExW 进来，源码在 engine/omnivoice_tts/cpp/src）：
+// 经 LoadLibraryExW 进来，源码在 engine/broadcaster/omnivoice/cpp/src）：
 //   - maskgit-tts.h 每步打印 `[MaskGIT-Step] 25/32 demask=12 remaining=239`；
 //   - backend.h 的 ggml 日志桥 `fputs(text, stderr)`；
 //   - bpe.h / gguf-weights.h / dac-*.h / hubert-enc.h 的加载信息与告警。

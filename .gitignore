@@ -80,9 +80,9 @@ Thumbs.db
 ## TTS 引擎（GGML/C++）构建产物（build/ build_*/ 已由全局规则覆盖）
 # ggml 自带的示例数据集与示例图（GGML_BUILD_EXAMPLES=OFF，构建不使用；
 # YOLO 数据集 760 张图 ×2 引擎 + SAM 示例图，纯示例二进制）
-subsystem/lunar_harness/engine/*/cpp/ggml/examples/**/*.png
-subsystem/lunar_harness/engine/*/cpp/ggml/examples/**/*.jpg
-subsystem/lunar_harness/engine/*/cpp/ggml/examples/**/*.jpeg
+subsystem/lunar_harness/engine/broadcaster/*/cpp/ggml/examples/**/*.png
+subsystem/lunar_harness/engine/broadcaster/*/cpp/ggml/examples/**/*.jpg
+subsystem/lunar_harness/engine/broadcaster/*/cpp/ggml/examples/**/*.jpeg
 
 ## Vulkan / GPU 编译产物
 *.spv

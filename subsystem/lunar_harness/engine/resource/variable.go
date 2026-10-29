@@ -67,6 +67,24 @@ const (
 	OriginStorageScan  = "storage-scan"  // 启动扫描入库
 )
 
+// GC 积分与可清理范围（gc_run.go / gc_track.go 共用）
+const (
+	// GCPointsInit 新建 GC 表 2 记录的初始调用积分
+	GCPointsInit = 0
+	// GCPointsMin 调用积分硬下限（达到即删除句柄与关联物理文件）
+	GCPointsMin = -20
+	// GCPointsMax 调用积分硬上限
+	GCPointsMax = 20
+	// GCPointsUnusedStep 上一轮未使用时的积分变化
+	GCPointsUnusedStep = -1
+	// GCPointsUsedStep 上一轮被查询使用时的积分变化
+	GCPointsUsedStep = 1
+	// gcCurrentCallUsed GC 表 2「当前调用」标记：本轮被查询使用过
+	gcCurrentCallUsed = 1
+	// gcHashAudioNameLen audios 根目录哈希音频的文件名（去扩展名）长度
+	gcHashAudioNameLen = 16
+)
+
 // 句柄文法正则：唯一权威定义
 const (
 	// HandlePattern 完整句柄（含可选锚点）

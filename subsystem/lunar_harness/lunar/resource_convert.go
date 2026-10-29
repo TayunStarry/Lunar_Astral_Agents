@@ -194,7 +194,7 @@ func urlHandleText(source, fallbackExt, origin string, _ *urlExtractBudget, _ st
 }
 
 // animatedHandleText 动图 → @G 句柄；已有解析文本时一并带上
-func animatedHandleText(source, origin string) string {
+func animatedHandleText(source, _ string) string {
 	tag := handleFromVisionURL(source)
 	admittedURL := ""
 	if tag == "" {

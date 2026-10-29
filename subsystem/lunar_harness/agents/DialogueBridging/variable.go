@@ -46,6 +46,34 @@ var (
 	lastDelivery *deliveryRecord
 )
 
+// ==== 主动投递白名单 ====
+//
+// 默认启用白名单模式：主动发送前必须校验目标是否在 bridging_users 内。
+const (
+	// whitelistBlockedText 目标不在白名单时的固定提示文本（需求要求原样返回）
+	whitelistBlockedText = "对方不在白名单中, 请勿随意打扰他人"
+	// whitelistConfirmHint 绕过白名单的确认引导
+	whitelistConfirmHint = "\n如需绕过白名单发送，请回复「确认绕过白名单」并重新说明目标与内容。"
+	// whitelistBypassTTL 绕过确认的有效期：超时后必须重新发起并再次确认
+	whitelistBypassTTL = 10 * time.Minute
+)
+
+// whitelistConfirmPhrases 明确确认绕过白名单的口令
+var whitelistConfirmPhrases = []string{
+	"确认绕过白名单",
+	"确认绕过",
+	"确认发送",
+	"强制发送",
+	"仍然发送",
+	"同意发送",
+}
+
+// whitelistPending 记录已提示、等待对话者确认的目标（key → 过期时间）
+var (
+	whitelistPendingMu sync.Mutex
+	whitelistPending   = map[string]time.Time{}
+)
+
 // 模型实况观察者：由 app 注入控制台的 StreamBegin/Delta/End 与计量。
 var (
 	observerMu sync.Mutex

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	KokoroTTS "LunarSubsystem/LunarHarness/engine/kokoro_tts"
-	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/omnivoice_tts"
+	KokoroTTS "LunarSubsystem/LunarHarness/engine/broadcaster/kokoro"
+	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/broadcaster/omnivoice"
 )
 
 // ==== 引擎专属能力端点 ====

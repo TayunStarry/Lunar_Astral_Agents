@@ -67,12 +67,15 @@ func Outline(rawHandle string) ([]Section, string, error) {
 		return nil, "", fmt.Errorf("%s", ErrHandleInvalid)
 	}
 	if res.BlobPath != "" {
-		abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
-		if !fileExists(abs) {
-			_ = archiveDB.DeleteResource(res.ID)
-			return nil, "", fmt.Errorf("%s", ErrFileLost)
+		if !fileExists(localAbs(res.BlobPath)) {
+			// 有文本描述：句柄保留（只降级 lost）；无描述：进入 GC 表 1
+			_ = archiveDB.preserveOrArchive(res, gcOrphanReason(res))
+			if !hasTextDescription(res) {
+				return nil, "", fmt.Errorf("%s", ErrFileLost)
+			}
 		}
 	}
+	archiveDB.markGCCurrentCall(res.Handle)
 	sections, err := archiveDB.ListSectionsByURL(res.URL)
 	if err != nil {
 		return nil, "", err
@@ -106,12 +109,15 @@ func Resolve(rawHandle string) (Resource, error) {
 		return Resource{}, fmt.Errorf("%s", ErrHandleInvalid)
 	}
 	if res.BlobPath != "" {
-		abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
-		if !fileExists(abs) {
-			_ = archiveDB.DeleteResource(res.ID)
-			return Resource{}, fmt.Errorf("%s", ErrFileLost)
+		if !fileExists(localAbs(res.BlobPath)) {
+			_ = archiveDB.preserveOrArchive(res, gcOrphanReason(res))
+			if !hasTextDescription(res) {
+				return Resource{}, fmt.Errorf("%s", ErrFileLost)
+			}
+			res.State = StateLost
 		}
 	}
+	archiveDB.markGCCurrentCall(res.Handle)
 	return res, nil
 }
 

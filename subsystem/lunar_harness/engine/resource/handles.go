@@ -76,6 +76,7 @@ func (d *store) InsertResource(res *Resource) error {
 			// 同一 URL 同一类型：复用既有句柄，仅续期
 			*res = existing
 			d.touchURLInternal(existing.ID)
+			d.upsertGCMediaScoreLocked(res)
 			return nil
 		}
 		if existing.Handle != "" {
@@ -94,15 +95,15 @@ func (d *store) InsertResource(res *Resource) error {
 		}
 	}
 
-	seq, err := d.nextSeqLocked(res.Kind)
+	// 句柄分配：优先复用 GC 表 1 标记的空闲句柄，池空时才分配新序号。
+	seq, handle, err := d.takeFreeOrNextSeqLocked(res.Kind)
 	if err != nil {
 		return err
 	}
-	handle := FormatHandle(res.Kind, seq)
 
 	tx, err := d.db.Begin()
 	if err != nil {
-		archiveSeqCache[res.Kind] = seq - 1
+		d.rollbackSeqLocked(res.Kind, seq)
 		return err
 	}
 	if found {
@@ -118,28 +119,29 @@ func (d *store) InsertResource(res *Resource) error {
 			res.Retain, res.State, res.SectionCount, now, res.ParseText, res.ParseState,
 			handle, existing.ID); err != nil {
 			rollbackTx(tx)
-			archiveSeqCache[res.Kind] = seq - 1
+			d.rollbackSeqLocked(res.Kind, seq)
 			return err
 		}
 		// 句柄表里可能残留同 URL 的旧行（异常数据），先清掉再写
 		if _, err = tx.Exec(`DELETE FROM `+handleTable(res.Kind)+` WHERE url = ?`, res.URL); err != nil {
 			rollbackTx(tx)
-			archiveSeqCache[res.Kind] = seq - 1
+			d.rollbackSeqLocked(res.Kind, seq)
 			return err
 		}
 		if _, err = tx.Exec(`INSERT INTO `+handleTable(res.Kind)+` (seq, handle, url) VALUES (?, ?, ?)`,
 			seq, handle, res.URL); err != nil {
 			rollbackTx(tx)
-			archiveSeqCache[res.Kind] = seq - 1
+			d.rollbackSeqLocked(res.Kind, seq)
 			return err
 		}
 		if err = tx.Commit(); err != nil {
-			archiveSeqCache[res.Kind] = seq - 1
+			d.rollbackSeqLocked(res.Kind, seq)
 			return err
 		}
 		res.ID = existing.ID
 		res.Seq = seq
 		res.Handle = handle
+		d.upsertGCMediaScoreLocked(res)
 		return nil
 	}
 
@@ -156,20 +158,21 @@ func (d *store) InsertResource(res *Resource) error {
 		res.CreatedAt, res.UsedAt, now, boolToInt(res.BlobOwned))
 	if err != nil {
 		rollbackTx(tx)
-		archiveSeqCache[res.Kind] = seq - 1
+		d.rollbackSeqLocked(res.Kind, seq)
 		return fmt.Errorf("写入 URL 主表失败: %v", err)
 	}
 	if _, err = tx.Exec(`INSERT INTO `+handleTable(res.Kind)+` (seq, handle, url) VALUES (?, ?, ?)`,
 		seq, handle, res.URL); err != nil {
 		rollbackTx(tx)
-		archiveSeqCache[res.Kind] = seq - 1
+		d.rollbackSeqLocked(res.Kind, seq)
 		return fmt.Errorf("写入句柄表失败: %v", err)
 	}
 	if err = tx.Commit(); err != nil {
-		archiveSeqCache[res.Kind] = seq - 1
+		d.rollbackSeqLocked(res.Kind, seq)
 		return err
 	}
 	res.ID, _ = result.LastInsertId()
+	d.upsertGCMediaScoreLocked(res)
 	return nil
 }
 

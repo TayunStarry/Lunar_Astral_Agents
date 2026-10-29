@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"runtime/debug"
 
+	KokoroTTS "LunarSubsystem/LunarHarness/engine/broadcaster/kokoro"
+	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/broadcaster/omnivoice"
+	qwentts "LunarSubsystem/LunarHarness/engine/broadcaster/qwen"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	KokoroTTS "LunarSubsystem/LunarHarness/engine/kokoro_tts"
-	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/omnivoice_tts"
-	qwentts "LunarSubsystem/LunarHarness/engine/qwen_tts"
 )
 
 // ==== 引擎加载器（槽位专属：仅由 slot.go 的 loadEngine 分发调用） ====

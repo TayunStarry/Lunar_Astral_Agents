@@ -237,6 +237,16 @@ func (d *store) deleteResourceLocked(id int64) error {
 		rollbackTx(tx)
 		return err
 	}
+	if res.Handle != "" {
+		if _, err := tx.Exec(`DELETE FROM gc_media_score WHERE handle = ?`, res.Handle); err != nil {
+			rollbackTx(tx)
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM gc_orphan_handle WHERE handle = ?`, res.Handle); err != nil {
+			rollbackTx(tx)
+			return err
+		}
+	}
 	if _, err := tx.Exec(`DELETE FROM url_master WHERE id = ?`, id); err != nil {
 		rollbackTx(tx)
 		return err

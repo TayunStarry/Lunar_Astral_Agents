@@ -29,9 +29,11 @@ if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found - version ${OpenMP_CXX_VERSION}")
 endif()
 
+# GGML 源码与构建目录分离：默认保持源码树内构建，统一编排脚本会通过
+# -DGGML_BUILD_DIR / -DGGML_LIB_DIR 指向 broadcaster/native/build/ggml/qwen。
 set(GGML_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ggml")
-set(GGML_BUILD_DIR "${GGML_DIR}/build")
-set(GGML_LIB_DIR "${GGML_BUILD_DIR}/src")
+set(GGML_BUILD_DIR "${GGML_DIR}/build" CACHE PATH "ggml build directory")
+set(GGML_LIB_DIR "${GGML_BUILD_DIR}/src" CACHE PATH "ggml static library directory")
 
 function(link_ggml_libs target)
     target_include_directories(${target} PUBLIC

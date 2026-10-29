@@ -53,7 +53,7 @@ func Install() {
 
 			// ==== 进程级标准流接管：拦住进程内原生库的直写 ====
 			// 上面换掉的只是 Go 层输出，**进程级标准句柄与 CRT 的 fd 1/2 仍指向真实控制台**。
-			// OmniVoice TTS 引擎以 DLL 形式在进程内加载（engine/omnivoice_tts），其
+			// OmniVoice TTS 引擎以 DLL 形式在进程内加载（engine/broadcaster/omnivoice），其
 			// maskgit-tts.h 的逐步骤 fprintf(stderr, "[MaskGIT-Step] 25/32 demask=12 …")
 			// 与 backend.h 的 ggml 日志桥 fputs(text, stderr) 就这样一帧帧打在 TUI 界面上
 			// （实测故障：合成语音时整屏被进度行刷乱）。把标准句柄槽与 CRT 的 fd 1/2 一并接到

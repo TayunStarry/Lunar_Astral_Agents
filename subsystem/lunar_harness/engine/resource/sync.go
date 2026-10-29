@@ -53,13 +53,13 @@ func syncStorageHandles() error {
 			present[rel] = true
 			if validateErr := validateStorageFile(rel, path); validateErr != nil {
 				logger.SubWarn("Persistence", "Scan", "扫描校验失败(%s): %v", rel, validateErr)
-				_ = archiveDB.DeleteResourcesByBlobPath(rel)
+				archiveUnusablePath(rel, "扫描校验失败: "+validateErr.Error())
 				cleaned++
 				return nil
 			}
 			if _, _, syncErr := upsertHandleForPath(rel, path); syncErr != nil {
 				logger.SubWarn("Persistence", "Scan", "扫描登记失败(%s): %v", rel, syncErr)
-				_ = archiveDB.DeleteResourcesByBlobPath(rel)
+				archiveUnusablePath(rel, "扫描登记失败: "+syncErr.Error())
 				cleaned++
 				return nil
 			}
@@ -83,8 +83,9 @@ func syncStorageHandles() error {
 		if present[res.BlobPath] {
 			continue
 		}
-		if err := archiveDB.DeleteResource(res.ID); err != nil {
-			logger.SubWarn("Persistence", "Scan", "清理失效句柄失败(%s): %v", res.Handle, err)
+		// 有文本描述的句柄永不因源丢失被移除，只降级为 lost；无描述者进入 GC 表 1。
+		if err := archiveDB.preserveOrArchive(res, gcOrphanReason(res)); err != nil {
+			logger.SubWarn("Persistence", "Scan", "处置失效句柄失败(%s): %v", res.Handle, err)
 			continue
 		}
 		cleaned++
@@ -95,6 +96,15 @@ func syncStorageHandles() error {
 	logger.Info("Persistence", "内容仓库句柄同步完成：登记 %d 个实体，清理 %d 个失效项，跳过 %d 个派生缓存文件",
 		scanned, cleaned, skippedDerived)
 	return nil
+}
+
+// archiveUnusablePath 扫描期无法登记 / 校验失败的实体：有描述保留句柄，无描述进入 GC 表 1。
+func archiveUnusablePath(rel, reason string) {
+	res, found := archiveDB.FindResourceByBlobPath(rel)
+	if !found {
+		return
+	}
+	_ = archiveDB.preserveOrArchive(res, reason)
 }
 
 // validateStorageFile 扫描期的完整性校验：图片必须能解析出宽高（SVG 除外）

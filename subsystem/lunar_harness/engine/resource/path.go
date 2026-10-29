@@ -41,6 +41,11 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
+// localAbs 把内容仓库相对路径换算为 LocalDir 下的绝对路径
+func localAbs(rel string) string {
+	return filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(normalizeRel(rel)))
+}
+
 // stripBOM 去除 UTF-8 BOM
 func stripBOM(s string) string {
 	return strings.TrimPrefix(s, "\ufeff")

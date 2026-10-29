@@ -65,9 +65,9 @@ func FindActiveByHash(kind, hash string) (Resource, bool) {
 	if !ok {
 		return Resource{}, false
 	}
-	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(existing.BlobPath))
+	abs := localAbs(existing.BlobPath)
 	if existing.State != StateActive || !fileExists(abs) {
-		_ = archiveDB.DeleteResource(existing.ID)
+		_ = archiveDB.preserveOrArchive(existing, gcOrphanReason(existing))
 		return Resource{}, false
 	}
 	return existing, true
@@ -163,9 +163,11 @@ func TouchHandlesForRead(rel string) {
 	if !IsStoragePath(rel) || EnsureReady() != nil {
 		return
 	}
-	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(rel))
+	abs := localAbs(rel)
 	if !fileExists(abs) {
-		_ = archiveDB.DeleteResourcesByBlobPath(rel)
+		if existing, found := archiveDB.FindResourceByBlobPath(rel); found {
+			_ = archiveDB.preserveOrArchive(existing, gcOrphanReason(existing))
+		}
 		return
 	}
 	if existing, found := archiveDB.FindResourceByBlobPath(rel); found {

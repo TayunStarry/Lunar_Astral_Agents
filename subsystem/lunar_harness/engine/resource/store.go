@@ -45,6 +45,10 @@ func Init(dbPath string) error {
 	if err := SyncStorageHandles(); err != nil {
 		logger.Warn("Persistence", "内容仓库句柄同步失败: %v", err)
 	}
+	// 启动 GC：孤儿句柄入池、可清理媒体建档、按上一轮调用情况结算积分
+	if err := RunStartupGC(); err != nil {
+		logger.Warn("Persistence", "启动 GC 失败: %v", err)
+	}
 	return nil
 }
 
@@ -193,6 +197,32 @@ func (d *store) ensureSchema() error {
 			used_at    INTEGER NOT NULL DEFAULT 0,
 			PRIMARY KEY(kind, source_url, variant)
 		)`,
+
+		// GC 专用表 1：源文件不存在/URL 不可达且没有任何文本描述的句柄。
+		// 启动时把这些句柄从主表移除；行本身保留为「空闲句柄池」，新资源优先复用。
+		`CREATE TABLE IF NOT EXISTS gc_orphan_handle (
+			handle     TEXT PRIMARY KEY,
+			kind       TEXT NOT NULL,
+			seq        INTEGER NOT NULL,
+			url        TEXT NOT NULL DEFAULT '',
+			blob_path  TEXT NOT NULL DEFAULT '',
+			reason     TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_gc_orphan_kind_seq ON gc_orphan_handle(kind, seq)`,
+
+		// GC 专用表 2：可清理的根目录媒体（multimedia 根图片/视频、audios 根哈希音频）。
+		// call_points 为调用积分（-20..20），current_call 为本轮是否被查询（0/1）。
+		`CREATE TABLE IF NOT EXISTS gc_media_score (
+			handle       TEXT PRIMARY KEY,
+			kind         TEXT NOT NULL,
+			blob_path    TEXT NOT NULL,
+			call_points  INTEGER NOT NULL DEFAULT 0,
+			current_call INTEGER NOT NULL DEFAULT 0,
+			created_at   INTEGER NOT NULL DEFAULT 0,
+			updated_at   INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_gc_media_score_path ON gc_media_score(blob_path)`,
 	}
 	for _, stmt := range stmts {
 		if _, err := d.db.Exec(stmt); err != nil {

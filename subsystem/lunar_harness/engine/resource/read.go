@@ -4,17 +4,14 @@ package resource
 //
 // 语义：
 //   - 本地实体在位 → 文本按锚点展开，二进制返回 base64；
-//   - 实体丢失 → Lost=true 并删除失效句柄；
+//   - 实体丢失 → Lost=true；有描述保留句柄，无描述进入 GC 表 1；
 //   - 外部链接（无本地实体）→ 返回「地址 + 标题 + 解析文本」，不触发加载。
 
 import (
 	"encoding/base64"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
-
-	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // Read 按句柄取回资源内容（带锚点时按锚点定位）
@@ -31,6 +28,8 @@ func Read(rawHandle string, maxBytes int) (ReadResult, error) {
 		return ReadResult{}, fmt.Errorf("%s", ErrHandleInvalid)
 	}
 	archiveDB.TouchResource(res.ID)
+	// GC 表 2：月华通过文件查询调用该句柄时，实时把「当前调用」置 1
+	archiveDB.markGCCurrentCall(res.Handle)
 
 	result := ReadResult{
 		Handle:   res.Handle,
@@ -51,10 +50,12 @@ func Read(rawHandle string, maxBytes int) (ReadResult, error) {
 		return result, nil
 	}
 
-	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
+	abs := localAbs(res.BlobPath)
 	if res.State != StateActive || !fileExists(abs) {
-		_ = archiveDB.DeleteResource(res.ID)
+		// 有文本描述：句柄保留并降级为 lost；无描述：移出主表并进入 GC 表 1
+		_ = archiveDB.preserveOrArchive(res, gcOrphanReason(res))
 		result.Lost = true
+		result.Content = strings.TrimSpace(res.ParseText)
 		return result, nil
 	}
 
@@ -66,8 +67,9 @@ func Read(rawHandle string, maxBytes int) (ReadResult, error) {
 	}
 	data, err := os.ReadFile(abs)
 	if err != nil {
-		_ = archiveDB.DeleteResource(res.ID)
+		_ = archiveDB.preserveOrArchive(res, gcOrphanReason(res))
 		result.Lost = true
+		result.Content = strings.TrimSpace(res.ParseText)
 		return result, nil
 	}
 	if len(data) > maxBytes {
@@ -82,8 +84,9 @@ func Read(rawHandle string, maxBytes int) (ReadResult, error) {
 func readTextResource(res Resource, base ReadResult, handle Handle, abs string, maxBytes int) (ReadResult, error) {
 	data, err := os.ReadFile(abs)
 	if err != nil {
-		_ = archiveDB.DeleteResource(res.ID)
+		_ = archiveDB.preserveOrArchive(res, gcOrphanReason(res))
 		base.Lost = true
+		base.Content = strings.TrimSpace(res.ParseText)
 		return base, nil
 	}
 	text := stripBOM(string(data))

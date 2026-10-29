@@ -126,7 +126,7 @@ func readResource(handle string, maxBytes int) *ResourceReadResult {
 		return nil
 	}
 	if result.Lost {
-		_ = resource.Delete(normalized)
+		// 句柄是否移除由资源层 GC 规则决定：有文本描述的句柄必须保留。
 		return &result
 	}
 	if result.Kind == "I" && result.BlobPath != "" {

@@ -4,8 +4,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	KokoroTTS "LunarSubsystem/LunarHarness/engine/kokoro_tts"
-	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/omnivoice_tts"
+	KokoroTTS "LunarSubsystem/LunarHarness/engine/broadcaster/kokoro"
+	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/broadcaster/omnivoice"
 )
 
 // ==== 引擎目录与槽位常量 ====

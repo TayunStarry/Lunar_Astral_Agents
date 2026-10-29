@@ -4,7 +4,7 @@
 #   1. subsystem/core_personality  核心人格（月华 + 琉璃合并工程）
 #        ├─ 图标编译（rsrc）
 #        ├─ 关闭运行中的主程序（释放输出文件与 TTS 引擎 DLL 占用）
-#        ├─ TTS 引擎库按需构建（qwen_tts / omnivoice_tts → 运行时 DLL）
+#        ├─ TTS 引擎库按需构建（broadcaster/qwen / broadcaster/omnivoice → 运行时 DLL）
 #        ├─ 月华智能体 TypeScript 打包（tsc + rollup → agentSystem.js）
 #        ├─ 端点自述文档生成（server/variable.go 统一路由注册表）
 #        └─ CGO 编译输出到仓库根目录：Lunar_Astral_Agents.exe

@@ -28,10 +28,14 @@ func executePlan(plan sendPlan, instruction string, groups []QQGroup, friends []
 	total := len(plan.Deliveries)
 	reports := make([]string, 0, total)
 	successes := 0
+	blocked := 0
 	for index, delivery := range plan.Deliveries {
 		report, ok := executeDelivery(delivery, instruction, groups, friends)
 		if ok {
 			successes++
+		}
+		if strings.Contains(report, whitelistBlockedText) {
+			blocked++
 		}
 		if total > 1 {
 			report = fmt.Sprintf("目标 %d/%d：\n%s", index+1, total, report)
@@ -41,6 +45,11 @@ func executePlan(plan sendPlan, instruction string, groups []QQGroup, friends []
 
 	text := strings.Join(reports, "\n\n")
 	if successes == 0 {
+		// 白名单拦截是预期的「未执行」结果，不是系统故障：原样返回提示文本，
+		// 由上层模型把确认引导转告对话者。
+		if blocked == total {
+			return text, nil
+		}
 		return text, fmt.Errorf("全部投递失败")
 	}
 	// 部分成功不视为整体失败：报告里已逐项写明哪些目标未完成。
@@ -60,6 +69,10 @@ func executeDelivery(delivery sendDelivery, instruction string, groups []QQGroup
 	target, err := resolveTarget(plan, groups, friends)
 	if err != nil {
 		return "未执行：目标解析失败：" + err.Error(), false
+	}
+	// 白名单闸门：目标不在 bridging_users 时一律不发送，只返回固定提示并等待确认。
+	if allowed, message := authorizeActiveSend(target, instruction); !allowed {
+		return message, false
 	}
 	if plan.Text == "" && len(plan.Images) == 0 && len(plan.Files) == 0 {
 		return "未执行：没有可发送的内容（文本 / 图片 / 文件都为空）", false

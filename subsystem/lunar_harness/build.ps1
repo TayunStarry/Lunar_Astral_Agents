@@ -183,13 +183,14 @@ try {
     $binaryName = "Lunar_Astral_Agents.exe"
     if ($TargetOS -ne "windows") { $binaryName = $binaryName -replace '\.exe$', '' }
 
-    # 按需构建两个 TTS 引擎库（须在关闭服务之后：运行中的进程会锁住 DLL）
+    # 按需构建两个 TTS 引擎库（统一入口 engine\broadcaster\native\build_tts.ps1；
+    # 须在关闭服务之后：运行中的进程会锁住 DLL）
     Invoke-TtsLibBuildIfNeeded -Name "QwenTTS" `
         -DllPath (Join-Path $repoRoot "local_data\models\Qwen3-TTS\qwen3tts.dll") `
-        -BuildScript (Join-Path $ScriptDir "engine\qwen_tts\build.ps1")
+        -BuildScript (Join-Path $ScriptDir "engine\broadcaster\qwen\build.ps1")
     Invoke-TtsLibBuildIfNeeded -Name "OmniVoiceTTS" `
         -DllPath (Join-Path $repoRoot "local_data\models\OmniVoice\omnivoice.dll") `
-        -BuildScript (Join-Path $ScriptDir "engine\omnivoice_tts\build.ps1")
+        -BuildScript (Join-Path $ScriptDir "engine\broadcaster\omnivoice\build.ps1")
 
     # 生成端点自述文档（须在设置 GOOS/GOARCH 之前）
     Invoke-EndpointDocsGenerate
