@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 // forumTools 返回全部工具定义（每次调用时构建，便于测试与后续扩展）。

@@ -80,18 +80,11 @@ func reportModelCall(requestBody []byte, completion string, usage *modelUsage, e
 // resolveModel 解析主多模态模型端点（只解析一次）
 func resolveModel() {
 	modelOnce.Do(func() {
-		modelName = strings.TrimSpace(config.AgentMultimodalModel)
-		if modelName == "" {
-			modelName = defaultModelName
-		}
-		modelURL = strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
-		if modelURL == "" {
-			modelURL = config.LocalV1URL()
-		}
+		modelName = config.AgentMultimodalModel
+		modelURL = strings.TrimRight(config.AgentMultimodalURL, "/")
 		if !strings.HasSuffix(modelURL, "/v1") {
 			modelURL += "/v1"
 		}
-		modelKey = strings.TrimSpace(config.AgentMultimodalKey)
 	})
 }
 
@@ -135,9 +128,6 @@ func chatOnce(system, user string) (string, error) {
 		return "", fmt.Errorf("创建模型请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if modelKey != "" {
-		req.Header.Set("Authorization", "Bearer "+modelKey)
-	}
 
 	start := time.Now()
 	resp, err := modelHTTPClient.Do(req)

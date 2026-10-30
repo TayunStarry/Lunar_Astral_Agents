@@ -2,16 +2,16 @@ package lunar
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/affection"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/life"
 	"LunarSubsystem/LunarHarness/engine/mood"
-	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
 )
 
 const failureReply = "刚才有点走神，你再说一遍好吗？"
@@ -56,9 +56,12 @@ func Start() error {
 
 	agentReady.Store(true)
 	stopCh = make(chan struct{})
+	responderCtx, responderCancel = context.WithCancel(context.Background())
 	running.Store(true)
 	loopWG.Add(1)
 	go runLoop()
+	loopWG.Add(1)
+	go runResponderLoop()
 	logger.Info(lunarCoreModule, "月华智能体（统一 Tick 调度）已启动")
 	return nil
 }
@@ -71,6 +74,10 @@ func Stop() {
 		return
 	}
 	close(stopCh)
+	if responderCancel != nil {
+		responderCancel()
+		responderCancel = nil
+	}
 	loopWG.Wait()
 	if tickSchedulerInstance != nil {
 		tickSchedulerInstance.Stop()
@@ -88,6 +95,7 @@ func IsReady() bool {
 func buildTickScheduler() *tickScheduler {
 	scheduler := newTickScheduler()
 	scheduler.Register(dialogueSystem{})
+	scheduler.Register(logisticsSystem{})
 	scheduler.Register(viewingSystem{})
 	scheduler.Register(lifeSystem{})
 	return scheduler
@@ -127,29 +135,10 @@ func pullContext() []PostMessage {
 	return ResourcesConversionHandle(messages)
 }
 
-// dispatchBeforeReadingMessage 读取消息前事件
+// dispatchBeforeReadingMessage 读取消息前事件。
+// 私有 js 运行时不再在对话链路上挂事件订阅，消息原样交付。
 func dispatchBeforeReadingMessage(messages []PostMessage) []PostMessage {
-	if len(messages) == 0 {
-		return messages
-	}
-	result := StarLTP.Emit(StarLTP.EventBeforeReadingMessage, map[string]any{"messages": messages}, "")
-	feedback, ok := result.Return.(map[string]any)
-	if !result.Returned || !ok {
-		return messages
-	}
-	raw, has := feedback["messages"]
-	if !has {
-		return messages
-	}
-	data, err := json.Marshal(raw)
-	if err != nil {
-		return messages
-	}
-	var out []PostMessage
-	if json.Unmarshal(data, &out) != nil {
-		return messages
-	}
-	return out
+	return messages
 }
 
 // runDialogueTurn 对话链一次完整回合
@@ -191,6 +180,8 @@ func runDialogueTurn(incoming []PostMessage) {
 
 	if strings.TrimSpace(finalText) == "" {
 		if failure != "" {
+			// 交给拯救者：上下文类故障（超长、坏图）由后勤体系在后续 Tick 修复
+			Savior.Report("core", errors.New(failure))
 			pushAssistantContext("text", failureReply, "", false)
 			logger.Warn(lunarCoreModule, "[思考链] 本轮应答失败: %s", failure)
 			return

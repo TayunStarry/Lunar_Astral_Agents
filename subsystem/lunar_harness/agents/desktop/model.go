@@ -20,9 +20,8 @@ import (
 // autoConfig 惰性加载模型配置（模型名/URL/Key），仅首次调用时解析一次。
 func autoConfig() {
 	autoConfigOnce.Do(func() {
-		autoModel = stringOr(config.AgentMultimodalModel, "primary_reasoning")
-		autoURL = normV1(stringOr(config.AgentMultimodalURL, config.LocalV1URL()))
-		autoKey = stringOr(config.AgentMultimodalKey, "")
+		autoModel = config.AgentMultimodalModel
+		autoURL = normV1(config.AgentMultimodalURL)
 	})
 }
 
@@ -89,9 +88,6 @@ func autoChatOnce(ctx context.Context, role string, messages []chatMessage, tool
 		return chatMessage{}, fmt.Errorf("创建聊天请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if autoKey != "" {
-		req.Header.Set("Authorization", "Bearer "+autoKey)
-	}
 
 	observeBegin(role)
 	defer observeEnd(role)

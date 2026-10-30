@@ -37,6 +37,13 @@ func Init(dbPath string) error {
 	}
 	archiveDB = db
 	logger.Info("Persistence", "统一句柄库初始化完成: %s", dbPath)
+	// 内容仓库根目录（documents / audios / multimedia / unknown）随句柄库一起就绪：
+	// unknown 专门存放不可读二进制文件（zip/7z/bin/exe/dll/gguf…），同样纳入扫描与 GC。
+	for _, root := range StorageRoots {
+		if err := os.MkdirAll(filepath.Join(config.LocalDir, root), 0o755); err != nil {
+			logger.Warn("Persistence", "创建内容仓库目录失败(%s): %v", root, err)
+		}
+	}
 	// persistence 的落盘观察者：三棵内容仓库树内的写 / 移 / 删 / 读全部同步句柄
 	persistenceObserverOnce.Do(func() {
 		registerObserver()

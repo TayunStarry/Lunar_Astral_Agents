@@ -15,9 +15,10 @@ import (
 	"strings"
 )
 
-// files 内嵌的全部提示词（角色提示词、任务模板、外观提示词）
+// files 内嵌的全部提示词（角色提示词、任务模板、外观提示词）与运行时 API 契约
+// （runtimeAPI.d.ts，供创作 / 文件编辑智能体写脚本前查阅）。
 //
-//go:embed *.md
+//go:embed *.md *.d.ts
 var files embed.FS
 
 // Read 读取内嵌提示词。

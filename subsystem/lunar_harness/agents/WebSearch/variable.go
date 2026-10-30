@@ -62,7 +62,6 @@ var (
 	modelOnce sync.Once
 	modelName string
 	modelURL  string
-	modelKey  string
 
 	// 模型实况观察者：由 app 注入控制台的 StreamBegin/Delta/End，
 	// 让 TUI「核心智能 实况」能看到网络搜索的模型思考与输出。

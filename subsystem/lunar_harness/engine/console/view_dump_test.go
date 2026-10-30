@@ -66,38 +66,54 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 		}
 	}
 
-	// 未分配的热键与空串必须返回 -1（调用方据此判断"不是热键"）
-	for _, miss := range []string{"", "x", "8", "9", "0", "esc", "enter"} {
+	// 未分配的编号、半截编号与空串必须返回 -1（调用方据此判断"不是完整热键"）
+	for _, miss := range []string{"", "0", "1", "14", "20", "x", "esc", "enter"} {
 		if got := dumpHotkeyIndex(miss); got != -1 {
 			t.Fatalf("非热键 %q 不应命中，实际返回 %d", miss, got)
 		}
 	}
 
-	// 回归防线：导出范围重划后，运行数据与各 Go 智能体的助记键必须固定。
+	// 回归防线：快捷键统一为两位数字编号（01-13），且必须指向固定目标。
 	wantKeys := []struct {
-		key  string
-		kind dumpKind
+		hotkey string
+		kind   dumpKind
 	}{
-		{"l", dumpKindLogs},
-		{"t", dumpKindTranscript},
-		{"c", dumpKindContext},
-		{"w", dumpKindContext},
-		{"b", dumpKindContext},
-		{"d", dumpKindContext},
-		{"s", dumpKindContext},
-		{"q", dumpKindContext},
-		{"m", dumpKindContext},
+		{"01", dumpKindLogs},
+		{"02", dumpKindTranscript},
+		{"03", dumpKindContext},
+		{"04", dumpKindContext},
+		{"05", dumpKindContext},
+		{"06", dumpKindContext},
+		{"07", dumpKindContext},
+		{"08", dumpKindContext},
+		{"09", dumpKindContext},
+		{"10", dumpKindContext},
+		{"11", dumpKindContext},
+		{"12", dumpKindContext},
+		{"13", dumpKindContext},
 	}
 	for _, want := range wantKeys {
-		got := dumpHotkeyIndex(want.key)
+		got := dumpHotkeyIndex(want.hotkey)
 		if got < 0 || dumpOptionList[got].kind != want.kind {
-			t.Fatalf("热键 %q 未指向期望的导出类型", want.key)
+			t.Fatalf("编号 %q 未指向期望的导出类型", want.hotkey)
 		}
 	}
-	if got := dumpHotkeyIndex("c"); dumpOptionList[got].key != "core" {
-		t.Fatal("热键 c 应指向核心人格")
+	if got := dumpHotkeyIndex("03"); dumpOptionList[got].key != "core" {
+		t.Fatal("编号 03 应指向核心人格")
 	}
-	if got := dumpHotkeyIndex("m"); dumpOptionList[got].key != "mutual_forum" {
-		t.Fatal("热键 m 应指向互助论坛")
+	if got := dumpHotkeyIndex("04"); dumpOptionList[got].key != "file_editor" {
+		t.Fatal("编号 04 应指向文件编辑")
+	}
+	if got := dumpHotkeyIndex("05"); dumpOptionList[got].key != "creative" {
+		t.Fatal("编号 05 应指向创作")
+	}
+	if got := dumpHotkeyIndex("06"); dumpOptionList[got].key != "responder" {
+		t.Fatal("编号 06 应指向通用应答")
+	}
+	if got := dumpHotkeyIndex("07"); dumpOptionList[got].key != "savior" {
+		t.Fatal("编号 07 应指向智能修复")
+	}
+	if got := dumpHotkeyIndex("13"); dumpOptionList[got].key != "mutual_forum" {
+		t.Fatal("编号 13 应指向互助论坛")
 	}
 }

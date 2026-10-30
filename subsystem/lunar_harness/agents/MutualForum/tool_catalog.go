@@ -13,7 +13,7 @@ func ToolCatalog() []agentinfo.Agent {
 	}
 	return []agentinfo.Agent{{
 		ID: "mutual_forum", Name: "互助论坛", Source: "agents/MutualForum",
-		Note:  "模块：Mutual Forum；工具是否可见取决于独立配置与论坛健康检查",
+		Note:  "论坛协作智能体：发布需求、检索答复并整理上下文。",
 		Tools: tools,
 	}}
 }

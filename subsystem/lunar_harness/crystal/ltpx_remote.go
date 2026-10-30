@@ -4,7 +4,6 @@ import (
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/plugin"
 	"LunarSubsystem/LunarHarness/transport/ws"
 	"encoding/json"
 	"fmt"
@@ -404,19 +403,15 @@ func LTPRemoteEventHandler(w http.ResponseWriter, r *http.Request) {
 	if payload == nil {
 		payload = map[string]any{}
 	}
-	result := StarLTP.Emit(topic, payload, fmt.Sprintf("ltp9-ev-%d", time.Now().UnixNano()))
-	data := result.Data
-	if data == nil {
-		data = payload
-	}
-	logger.Info("CrystalAstral", "月华事件推送 %s (sub=%d, mod=%v, ret=%v)", topic, result.Summary.Subscribed, result.Modified, result.Returned)
+	// 私有 js 运行时不再提供跨包事件订阅；事件推送按「无订阅者」语义原样回显。
+	logger.Info("CrystalAstral", "月华事件推送 %s（无订阅者，原样回显）", topic)
 	jsonOK(w, http.StatusOK, map[string]any{
 		"ok":       true,
 		"topic":    topic,
-		"modified": result.Modified,
-		"data":     data,
-		"returned": result.Returned,
-		"return":   result.Return,
-		"summary":  result.Summary,
+		"modified": false,
+		"data":     payload,
+		"returned": false,
+		"return":   nil,
+		"summary":  map[string]any{"subscribed": 0, "errored": 0, "intercepted": false, "canceled": false},
 	})
 }

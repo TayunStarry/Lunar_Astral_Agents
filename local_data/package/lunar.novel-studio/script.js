@@ -80,7 +80,7 @@
             // 4. 加载状态
             await this.loadState();
 
-            // 5. 从 lunar_config.json 加载 AI 配置
+            // 5. 加载 AI 配置（本地部署固定值）
             await this.config.loadAgentConfig();
 
             // 6. 初始化记忆库

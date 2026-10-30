@@ -22,7 +22,6 @@ func TestFrontendEntrypointsAreEmbedded(t *testing.T) {
 		{"月华移动端入口", LunarFS(), "/mobile/index.html"},
 		{"琉璃桌面入口", CrystalFS(), "/index.html"},
 		{"琉璃桌面脚本", CrystalFS(), "/script.js"},
-		{"琉璃编辑运行子页", CrystalFS(), "/file-runner/index.html"},
 	}
 
 	for _, tc := range cases {
@@ -53,9 +52,9 @@ func TestFrontendEntrypointsAreEmbedded(t *testing.T) {
 // assets/ 目录下、靠文件名前缀区分，任何一个前缀写错都会静默取到另一套前端
 // 的资源（页面能打开、样式与脚本却是别人的），比 404 难排查得多。
 func TestFrontendTreesAreDisjoint(t *testing.T) {
-	if f, err := LunarFS().Open("/file-runner/index.html"); err == nil {
+	if f, err := LunarFS().Open("/script.js"); err == nil {
 		f.Close()
-		t.Fatal("月华消息终端不应包含琉璃编辑运行的 file-runner/ 子树")
+		t.Fatal("月华消息终端不应包含琉璃桌面的 script.js")
 	}
 	if f, err := CrystalFS().Open("/mobile/index.html"); err == nil {
 		f.Close()

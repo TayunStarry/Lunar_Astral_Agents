@@ -14,8 +14,6 @@ import (
 const (
 	// roleLabel 该智能体在「核心智能 实况」中的角色标签（模块名 Mutual Forum）
 	roleLabel = "互助论坛"
-	// defaultModelName 未配置多模态模型时的兜底名称
-	defaultModelName = "primary_reasoning"
 	// maxToolRounds 单次需求允许的工具调用轮次上限
 	maxToolRounds = 8
 	// historyLimitMessages 独立上下文保留的消息条数（约 20 轮问答）
@@ -41,7 +39,6 @@ var (
 	modelOnce sync.Once
 	modelName string
 	modelURL  string
-	modelKey  string
 
 	// historyMu 保护独立上下文
 	historyMu sync.Mutex

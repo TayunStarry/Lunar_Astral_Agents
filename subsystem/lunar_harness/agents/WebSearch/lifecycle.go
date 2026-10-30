@@ -34,7 +34,7 @@ func prepareSearchModel(cfg Config) (summaryProfile, func()) {
 }
 
 // mainSummaryProfile 主模型摘要档位
-func mainSummaryProfile(cfg Config) summaryProfile {
+func mainSummaryProfile(_ Config) summaryProfile {
 	return summaryProfile{}
 }
 

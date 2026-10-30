@@ -83,15 +83,14 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/generate/scheme", Handler: image.DiffusionSchemeHandler, Method: "GET/POST", Description: "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）"},
 
 	// ==================== 模型服务与显存守卫 ====================
-	// llama.cpp 本地代理（同源 /v1，端口随 BasicPort）+ 显存守卫（阈值触发卸载已加载模型）
-	{Path: "/v1/", Handler: llama.ProxyHandler, Method: "ANY", Description: "llama.cpp 代理接口"},
+	// 外部调用统一走 /agent（非流式、模型名固定）；Go 智能体直连 llama.cpp，不再对外转发 /v1
+	{Path: "/agent/chat/completions", Handler: AgentChatHandler, Method: "POST", Description: "外部多模态推理（非流式；模型名固定 primary_reasoning；请求经响应者智能体排队，由响应者独立 Tick 在主调度空档期依次处理）"},
+	{Path: "/agent/embeddings", Handler: AgentEmbeddingHandler, Method: "POST", Description: "外部文本嵌入（非流式；模型名固定 text_embedding）"},
 	{Path: "/vram/guard", Handler: llama.VRAMGuardHandler, Method: "POST", Description: "显存守卫（可用显存低于阈值时卸载已加载模型，一并释放 KV 缓存）"},
 	{Path: "/vram/unload", Handler: llama.VRAMUnloadHandler, Method: "POST", Description: "定向卸载（卸载指定 ID 的已加载模型）"},
 
 	// ==================== 代理请求 ====================
 	{Path: "/proxy", Handler: lunar.ProxyHandler, Method: "POST", Description: "代理访问服务"},
-	{Path: "/proxy/models", Handler: crystal.ModelsProxyHandler, Method: "POST", Description: "模型查询代理"},
-	{Path: "/proxy/chat", Handler: crystal.ChatProxyHandler, Method: "POST", Description: "对话代理"},
 
 	// ==================== 语音播报（Broadcaster 统一链路） ====================
 	// 全部 TTS 调用强制收敛到 /broadcaster 端点族：唯一合成入口按请求 engine 参数

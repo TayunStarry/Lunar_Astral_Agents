@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 )
 
@@ -54,4 +55,32 @@ type SystemEndpoint struct {
 	Method string `json:"method"`
 	// Description 端点说明（供自述文档展示）
 	Description string `json:"description"`
+}
+
+// AgentChatMessage /agent 非流式补全的助手消息
+type AgentChatMessage struct {
+	Role             string          `json:"role"`
+	Content          string          `json:"content"`
+	ReasoningContent string          `json:"reasoning_content,omitempty"`
+	ToolCalls        json.RawMessage `json:"tool_calls,omitempty"`
+}
+
+// AgentChatChoice /agent 非流式补全的单条选项
+type AgentChatChoice struct {
+	Index        int              `json:"index"`
+	Message      AgentChatMessage `json:"message"`
+	FinishReason string           `json:"finish_reason"`
+}
+
+// AgentChatResponse /agent 端点响应（非流式补全或错误）
+type AgentChatResponse struct {
+	Object  string            `json:"object"`
+	Model   string            `json:"model,omitempty"`
+	Choices []AgentChatChoice `json:"choices,omitempty"`
+	Error   *AgentChatError   `json:"error,omitempty"`
+}
+
+// AgentChatError /agent 端点错误主体
+type AgentChatError struct {
+	Message string `json:"message"`
 }

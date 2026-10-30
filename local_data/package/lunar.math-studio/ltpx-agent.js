@@ -13,7 +13,7 @@
  * - 多轮工具调用循环：LLM 通过 OpenAI function calling 逐次调用工具，
  *   观察工具结果并持续决策，直到给出最终答复；上限 8 次防死循环
  * - 步骤回调：每个关键步骤通过 onStep 通知前端，实现「月华操作步骤」的同步展示
- * - 模型调用走琉璃后端 /v1 代理（OpenAI v1 协议），模型名从 lunar_config.json 读取，不硬编码
+ * - 模型调用走琉璃后端 /agent 端点（非流式），模型为后端固定值
  */
 
 // ===== 智能体常量与状态 =====
@@ -25,30 +25,6 @@ const MS_AGENT_MAX_TOOL_LOOPS = 8;
 
 /** 已完成的对话历史：数组元素为 { user, assistant }（各为纯文本） */
 let msAgentHistory = [];
-
-/** 模型配置加载 Promise（从 lunar_config.json 的 agent 字段读取，不硬编码） */
-let msModelConfigPromise = null;
-
-/**
- * 读取 lunar_config.json 的 agent.multimodal_model 作为模型名
- * （通过 /file/read/ 文件接口；读取失败回退默认占位值，仍走同源 /v1 代理解析）
- * @returns {Promise<string>}
- */
-async function loadMSAgentModel() {
-    if (msModelConfigPromise) return msModelConfigPromise;
-    msModelConfigPromise = (async () => {
-        try {
-            const resp = await fetch('/file/read/lunar_config.json', { cache: 'no-store' });
-            if (!resp.ok) throw new Error('读取配置失败 HTTP ' + resp.status);
-            const cfg = await resp.json();
-            const agent = (cfg && cfg.agent) || {};
-            return (agent.multimodal_model && String(agent.multimodal_model)) || 'primary_reasoning';
-        } catch (e) {
-            return 'primary_reasoning';
-        }
-    })();
-    return msModelConfigPromise;
-}
 
 // ===== 工具定义（OpenAI function calling 格式，供智能体 LLM 调用） =====
 
@@ -130,20 +106,18 @@ function buildMSSystemPrompt() {
     ].join('\n');
 }
 
-// ===== 模型调用（OpenAI v1 协议，琉璃后端 /v1 代理解析模型配置） =====
+// ===== 模型调用（/agent 协议，非流式；模型名由后端固定） =====
 
 /**
- * 调用 /v1/chat/completions（crystal_astral 将 /v1/ 代理到月华后端）
+ * 调用 /agent/chat/completions（后端固定模型，不接受模型名与流式）
  * @param {Array<Object>} messages - 完整消息数组（含 system / user / assistant / tool）
  * @returns {Promise<Object>} OpenAI 响应中的 message 对象
  */
 async function callMSModel(messages) {
-    const model = await loadMSAgentModel();
-    const response = await fetch('/v1/chat/completions', {
+    const response = await fetch('/agent/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: model,
             messages: messages,
             tools: msAgentTools,
             stream: false
@@ -151,13 +125,8 @@ async function callMSModel(messages) {
     });
     if (!response.ok) throw new Error('AI 调用失败: HTTP ' + response.status);
     const data = await response.json();
-    // OpenAI 兼容原始响应
     if (data.choices && data.choices[0] && data.choices[0].message) {
         return data.choices[0].message;
-    }
-    // 代理包装响应
-    if (data.success && data.data && data.data.choices && data.data.choices[0]) {
-        return data.data.choices[0].message;
     }
     throw new Error('AI 响应格式异常');
 }

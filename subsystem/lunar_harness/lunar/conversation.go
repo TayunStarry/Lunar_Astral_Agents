@@ -15,7 +15,6 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
-	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
@@ -340,35 +339,10 @@ func pushContext(kind, content, audio string, auto bool) bool {
 	return true
 }
 
-// dispatchBeforeSendingMessage 消息发送前事件：插件可改写/追加/取消
+// dispatchBeforeSendingMessage 消息发送前事件。
+// 私有 js 运行时不再在对话链路上挂事件订阅，待发内容原样返回。
 func dispatchBeforeSendingMessage(items []PushContextData) []PushContextData {
-	if len(items) == 0 {
-		return items
-	}
-	result := StarLTP.Emit(StarLTP.EventBeforeSendingMessage, map[string]any{"messages": items}, "")
-	feedback, ok := result.Return.(map[string]any)
-	if !result.Returned || !ok {
-		return items
-	}
-	if cancel, _ := feedback["cancel"].(bool); cancel {
-		return nil
-	}
-	raw, has := feedback["messages"]
-	if !has {
-		return items
-	}
-	data, err := json.Marshal(raw)
-	if err != nil {
-		return items
-	}
-	var out []PushContextData
-	if err := json.Unmarshal(data, &out); err != nil {
-		return items
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return items
 }
 
 // pushAssistantContext 推送助手上下文并写入缓存

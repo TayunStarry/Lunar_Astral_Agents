@@ -26,16 +26,15 @@ func TestPlanSendParsesJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	origURL, origModel, origKey := config.AgentMultimodalURL, config.AgentMultimodalModel, config.AgentMultimodalKey
+	origURL, origModel := config.AgentMultimodalURL, config.AgentMultimodalModel
 	modelOnce = sync.Once{}
-	modelName, modelURL, modelKey = "", "", ""
+	modelName, modelURL = "", ""
 	config.AgentMultimodalURL = server.URL
 	config.AgentMultimodalModel = "test-model"
-	config.AgentMultimodalKey = ""
 	t.Cleanup(func() {
-		config.AgentMultimodalURL, config.AgentMultimodalModel, config.AgentMultimodalKey = origURL, origModel, origKey
+		config.AgentMultimodalURL, config.AgentMultimodalModel = origURL, origModel
 		modelOnce = sync.Once{}
-		modelName, modelURL, modelKey = "", "", ""
+		modelName, modelURL = "", ""
 	})
 
 	groups, friends := testDirectory()

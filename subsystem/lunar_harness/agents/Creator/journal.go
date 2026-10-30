@@ -60,7 +60,7 @@ func formatJournal(j journal) string {
 	writeList(&b, j.Errors)
 	if strings.TrimSpace(j.LastSummary) != "" {
 		b.WriteString("\n【上一轮收尾】\n")
-		b.WriteString(previewRunes(j.LastSummary, 600))
+		b.WriteString(clipAtSentence(j.LastSummary, maxSummaryRunes))
 		b.WriteByte('\n')
 	}
 	return b.String()
@@ -73,7 +73,7 @@ func writeList(b *strings.Builder, items []string) {
 	}
 	for _, item := range items {
 		b.WriteString("- ")
-		b.WriteString(previewRunes(item, maxReferenceRunes))
+		b.WriteString(clipAtSentence(item, maxReferenceRunes))
 		b.WriteByte('\n')
 	}
 }
@@ -89,7 +89,7 @@ func (s *session) addReference(reference string) {
 			return
 		}
 	}
-	s.refs = append(s.refs, previewRunes(reference, maxReferenceRunes))
+	s.refs = append(s.refs, clipAtSentence(reference, maxReferenceRunes))
 	if len(s.refs) > maxReferences {
 		s.refs = s.refs[len(s.refs)-maxReferences:]
 	}
@@ -100,7 +100,7 @@ func (s *session) addError(err error) {
 	if err == nil {
 		return
 	}
-	s.errs = append(s.errs, previewRunes(err.Error(), 300))
+	s.errs = append(s.errs, clipAtSentence(err.Error(), maxErrorRunes))
 	if len(s.errs) > maxErrors {
 		s.errs = s.errs[len(s.errs)-maxErrors:]
 	}
@@ -112,5 +112,5 @@ func (s *session) addMemo(memo string) {
 	if memo == "" {
 		return
 	}
-	s.memos = append(s.memos, previewRunes(memo, 300))
+	s.memos = append(s.memos, clipAtSentence(memo, maxMemoRunes))
 }

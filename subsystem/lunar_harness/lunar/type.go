@@ -533,12 +533,13 @@ type TickSnapshot struct {
 	IdleTicks      int
 	Unread         int
 	ViewingPending bool
+	SalvagePending int
 }
 
 // TickSystem 可注册的 Tick 体系。
 //
 // 新增体系只需实现该接口并注册，主调度逻辑不需要改动：
-//   - Priority 越大越先判定（对话 300 / 观影 200 / 生活 100）；
+//   - Priority 越大越先判定（对话 300 / 后勤 250 / 观影 200 / 生活 100）；
 //   - Ready 只读判定，不得消费消息或改状态；
 //   - IdleReset 本次运行结束后把空闲进度重置到该值（决定下一次生活冷却）；
 //   - Run 执行一个原子工作单元，返回即表示释放 Tick。
@@ -548,6 +549,12 @@ type TickSystem interface {
 	Ready(TickSnapshot) (bool, string)
 	IdleReset() int
 	Run(ctx context.Context) error
+}
+
+// idleKeeper 可选能力：把本次运行当作一格空闲推进（冷却 +1 而不是重置）。
+// 后勤体系代表「系统在空闲中工作」，因此实现该接口。
+type idleKeeper interface {
+	KeepIdle() bool
 }
 
 // TickState 调度器持久化状态。
@@ -655,6 +662,13 @@ type DialogueRole struct {
 
 // MemorizerRole 记忆入库与检索流程（非独立智能体：不持有模型上下文，也不参与 function calling）
 type MemorizerRole struct{}
+
+// coreRoleSnapshot 核心人格内某个角色的上下文视图（拯救者读取与修复时使用）
+type coreRoleSnapshot struct {
+	ID      string
+	Label   string
+	Builder *ModelBuilder
+}
 
 // PainterRole 绘制者角色
 type PainterRole struct {

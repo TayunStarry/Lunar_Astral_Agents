@@ -71,9 +71,14 @@ func Run(instruction string) (string, error) {
 
 	tools := forumTools()
 	lastSummary := ""
+	// 整轮只在 Run 开头/结尾各标记一次实况，多轮工具调用合并成同一轮；
+	// 否则每个工具轮次都会留下一条只有标题、没有内容的空实况。
+	observeBegin()
+	defer observeEnd()
 	for round := 0; round < maxToolRounds; round++ {
 		response, callErr := chatWithTools(ctx, messages, tools, round)
 		if callErr != nil {
+			logger.Warn(roleLabel, "模型调用失败（第 %d 轮）: %v", round+1, callErr)
 			return "", fmt.Errorf("互助论坛模型调用失败: %w", callErr)
 		}
 
@@ -97,6 +102,7 @@ func Run(instruction string) (string, error) {
 		}
 
 		for _, call := range response.ToolCalls {
+			logger.Info(roleLabel, "[实况] 工具 %s（%s）", call.Function.Name, previewText(call.Function.Arguments, 200))
 			args, parseErr := parseToolArgs(call.Function.Arguments)
 			if parseErr != nil {
 				outcome := toolError(fmt.Errorf("工具 %s 的参数不是合法 JSON: %w", call.Function.Name, parseErr))

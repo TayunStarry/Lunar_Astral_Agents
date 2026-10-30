@@ -613,11 +613,7 @@ document.getElementById('addEmptyRowBtn').addEventListener('click', addEmptyRow)
 document.getElementById('removeEmptyRowBtn').addEventListener('click', removeEmptyRow);
 document.getElementById('quickSortBtn').addEventListener('click', quickSortLayout);
 
-// 编辑运行：内置模块（琉璃 assets/file-runner），点击后经覆盖层 iframe 嵌入打开
-document.getElementById('fileRunnerBtn').addEventListener('click', () => {
-    addMessage('system', '已为您打开【编辑运行】');
-    openPageInFrame('/desktop/file-runner/index.html', '编辑运行', 'lunar.file-runner');
-});
+// 编辑运行入口已移除：文件编辑能力改由「月华-文件编辑」智能体在控制台集中承载。
 
 // 构建结构化操作指令（附加到系统提示词）：不再依赖范式函数调用（避免多模态模型后端卡死），
 // 改由琉璃在需要执行操作时输出一个 JSON 动作对象，前端解析后执行。
@@ -886,8 +882,7 @@ async function handleSend() {
     const allMessages = [{ role: 'system', content: enhancedSystemPrompt }, ...messages];
 
     try {
-        const modelName = configData?.agent?.multimodal_model || 'primary_reasoning';
-        const st = await streamAssistantReply(modelName, allMessages);
+        const st = await streamAssistantReply(allMessages);
 
         if (!st.content && st.toolCalls.size === 0 && !st.reasoning) {
             addMessage('system', '未收到有效回复');
@@ -910,7 +905,7 @@ async function handleSend() {
             } else {
                 // 兼容旧格式：解析回复中的 JSON 代码块配置变更
                 parseConfigChangeFromReply(st.content);
-                // 流式期间正文已逐字显示；完成后仅对正文做 TTS 播报（思考内容与工具调用不朗读）
+                // 回复显示完成后仅对正文做 TTS 播报（思考内容与工具调用不朗读）
                 const speechText = extractSpeechText(st.content);
                 if (speechText) {
                     speakAssistantText(speechText, () => { });
@@ -927,9 +922,9 @@ async function handleSend() {
     }
 }
 
-// ===== 流式对话：SSE 解析，思考/工具调用/正文三路分流渲染 =====
-// 约定：delta.reasoning_content（或 reasoning）为思考内容；delta.tool_calls 为
-// OpenAI 工具调用增量；delta.content 为正文（兼容内联 <think>...</think> 标签）。
+// ===== 非流式对话：单次请求，思考/工具调用/正文三路分流渲染 =====
+// 约定：message.reasoning_content（或 reasoning）为思考内容；message.tool_calls 为
+// OpenAI 工具调用数组；message.content 为正文（兼容内联 <think>...</think> 标签）。
 // 仅正文进入对话历史与 TTS 播报，思考与工具调用只在消息内展示。
 
 function createStreamingAssistantRow() {
@@ -986,20 +981,19 @@ function routeContentText(st, text) {
     }
 }
 
-// streamAssistantReply 发起流式对话并实时渲染，返回累积状态
+// streamAssistantReply 发起单次非流式对话并渲染，返回累积状态
 // st: { reasoning 思考全文, content 正文全文, inThink, toolCalls(index→{name,arguments}), finish }
-async function streamAssistantReply(modelName, allMessages) {
-    const response = await fetch('/v1/chat/completions', {
+async function streamAssistantReply(allMessages) {
+    const response = await fetch('/agent/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: modelName, messages: allMessages, stream: true })
+        body: JSON.stringify({ messages: allMessages, stream: false })
     });
-    if (!response.ok || !response.body) throw new Error('Network response was not ok');
+    if (!response.ok) throw new Error('Network response was not ok');
 
     const ui = createStreamingAssistantRow();
     const st = { reasoning: '', content: '', inThink: false, toolCalls: new Map(), finish: null };
 
-    let paintTimer = null;
     let done = false;
     // paint 整绘：思考区 + 工具调用区 + 正文 Markdown 重渲染（快照比对防止乱序覆盖）
     const paint = () => {
@@ -1036,59 +1030,23 @@ async function streamAssistantReply(modelName, allMessages) {
             chatMessages.scrollTop = chatMessages.scrollHeight;
         });
     };
-    // schedulePaint 节流重绘（80ms），完成时强制整绘
-    const schedulePaint = () => {
-        if (paintTimer) return;
-        paintTimer = setTimeout(() => { paintTimer = null; paint(); }, 80);
-    };
 
-    // handleChunkLine 单行 SSE 数据处理
-    const handleChunkLine = (line) => {
-        line = line.trim();
-        if (!line.startsWith('data:')) return;
-        const payload = line.slice(5).trim();
-        if (!payload || payload === '[DONE]') return;
-        let obj;
-        try { obj = JSON.parse(payload); } catch (e) { return; }
-        const choice = obj.choices && obj.choices[0];
-        if (!choice) return;
-        if (choice.finish_reason) st.finish = choice.finish_reason;
-        const delta = choice.delta || {};
-        // 思考内容：reasoning_content（llama.cpp/DeepSeek 风格）或 reasoning（OpenRouter 风格）
-        const think = delta.reasoning_content || delta.reasoning;
-        if (think) { st.reasoning += think; schedulePaint(); }
-        // 正文（含内联 <think> 标签兼容）
-        if (delta.content) { routeContentText(st, delta.content); schedulePaint(); }
-        // 工具调用增量：按 index 槽位累积 function.name / arguments
-        if (Array.isArray(delta.tool_calls)) {
-            for (const tc of delta.tool_calls) {
-                const idx = typeof tc.index === 'number' ? tc.index : 0;
-                const slot = st.toolCalls.get(idx) || { name: '', arguments: '' };
-                if (tc.function) {
-                    if (tc.function.name) slot.name += tc.function.name;
-                    if (tc.function.arguments) slot.arguments += tc.function.arguments;
-                }
-                st.toolCalls.set(idx, slot);
-            }
-            schedulePaint();
-        }
-    };
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-        for (const line of lines) handleChunkLine(line);
+    // 解析非流式响应：思考内容 + 正文（含内联 <think> 标签）+ 工具调用数组
+    const data = await response.json();
+    const choice = data.choices && data.choices[0];
+    const message = (choice && choice.message) || {};
+    if (choice && choice.finish_reason) st.finish = choice.finish_reason;
+    st.reasoning = message.reasoning_content || message.reasoning || '';
+    routeContentText(st, message.content || '');
+    if (Array.isArray(message.tool_calls)) {
+        message.tool_calls.forEach((tc, i) => {
+            const idx = typeof tc.index === 'number' ? tc.index : i;
+            const fn = tc.function || {};
+            st.toolCalls.set(idx, { name: fn.name || '', arguments: fn.arguments || '' });
+        });
     }
-    if (buffer.trim()) handleChunkLine(buffer);
 
     done = true;
-    if (paintTimer) { clearTimeout(paintTimer); paintTimer = null; }
     paint();
 
     // 仅正文进入对话历史（与 addMessage 的 20 条上限行为一致）
@@ -1102,7 +1060,7 @@ async function streamAssistantReply(modelName, allMessages) {
     return st;
 }
 
-// ===== 琉璃语音播报：流式正文显示完成后，仅对正文部分经 /broadcaster/synthesize（统一播报链路，按配置引擎）合成并播放 =====
+// ===== 琉璃语音播报：正文显示完成后，仅对正文部分经 /broadcaster/synthesize（统一播报链路，按配置引擎）合成并播放 =====
 // 参考音频（音色来源）：相对 local_data 目录；Qwen/OmniVoice 用于声音克隆，Kokoro 不支持参考音频会自动忽略
 const TTS_REF_AUDIO = 'local_data/audios/crystal-template.wav';
 let ttsPlayback = null; // 当前正在播放的琉璃语音（新回复播放前先停止上一段）
@@ -2306,7 +2264,6 @@ async function aiGenerateModuleInfo() {
         // 1) 提取项目真实内容
         const project = await inspectModuleProject();
         const projectText = buildInspectPrompt(project);
-        const modelName = configData?.cloud?.multimodal_model_name || 'primary_reasoning';
         // 元信息提示词：id 前缀不硬编码任何厂商（后端在 id 为空时自动生成 module.<包名>），
         // 命名空间按项目自身来源推导，避免所有导入项目都套用同一家的前缀
         const prompt = [
@@ -2319,10 +2276,10 @@ async function aiGenerateModuleInfo() {
             'title 要精炼准确（可用原英文名做副标题，如「中文名 · English Name」）；description 必须基于给出的项目内容概括，不要臆造；',
             'tool_name 必须用最准确的词语形容这个工具的类型与用途（如飞行模拟器→fpv_flight_simulator、音乐编辑器→lofi_music_editor、文件管理器→file_manager、天气查询→weather_news_query），只允许小写字母、数字和下划线，禁止使用应用的中文名或品牌名。'
         ].join('\n');
-        const response = await fetch('/v1/chat/completions', {
+        const response = await fetch('/agent/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: modelName, messages: [{ role: 'user', content: prompt }] })
+            body: JSON.stringify({ messages: [{ role: 'user', content: prompt }], stream: false })
         });
         if (!response.ok) throw new Error('AI 服务不可用');
         const data = await response.json();

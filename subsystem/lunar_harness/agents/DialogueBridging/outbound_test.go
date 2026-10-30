@@ -2,6 +2,7 @@ package DialogueBridging
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -86,6 +87,33 @@ func TestQQTargetsAndBridgeReady(t *testing.T) {
 	}
 	if !BridgeReady() {
 		t.Fatal("连接成功且目录可用时应判定为就绪")
+	}
+}
+
+// TestUnconfirmedUploadTreatedAsSuccess 钉住 NapCat 文件上传的事件回执超时：
+// 文件实际已上传成功，不能因为 onMsgInfoListUpdate 超时把投递判为失败并打 WARN。
+func TestUnconfirmedUploadTreatedAsSuccess(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "上传后事件回执超时",
+			err: errors.New("/upload_group_file 返回错误: Timeout: NTEvent serviceAndMethod:NodeIKernelMsgService/sendMsg " +
+				"ListenerName:NodeIKernelMsgListener/onMsgInfoListUpdate EventRet:\n{}"),
+			want: true,
+		},
+		{name: "普通接口失败", err: errors.New("/upload_group_file 返回错误: 权限不足"), want: false},
+		{name: "非事件超时", err: errors.New("文件不可读"), want: false},
+		{name: "空错误", err: nil, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isUnconfirmedUpload(tc.err); got != tc.want {
+				t.Fatalf("isUnconfirmedUpload=%v，应为 %v（%v）", got, tc.want, tc.err)
+			}
+		})
 	}
 }
 

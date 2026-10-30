@@ -101,9 +101,6 @@ var autoModel string
 // autoURL 模型 API 地址
 var autoURL string
 
-// autoKey 模型 API 密钥
-var autoKey string
-
 // autoHTTPClient 共享的模型 API 客户端，带 120 秒超时。
 var autoHTTPClient = &http.Client{Timeout: 120 * time.Second}
 

@@ -52,7 +52,7 @@ func (r *creativeRun) Next(ctx context.Context, _ Env) (EventStep, error) {
 	}
 	return EventStep{
 		Done:   true,
-		Record: "创作了：" + truncateAtSentence(text, 200),
+		Record: "创作了：" + truncateAtSentence(text, 120),
 		Detail: fmt.Sprintf("创作返回 %d 字", len([]rune(text))),
 	}, nil
 }

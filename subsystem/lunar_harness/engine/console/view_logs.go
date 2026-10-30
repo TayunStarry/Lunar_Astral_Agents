@@ -81,36 +81,21 @@ func (s *logsState) content(width int) []string {
 // 若只在 View 中计算，按方向键时拿到的行数会一直是 0，滚动便不会生效。
 func (m *appModel) syncViewMetrics() {
 	switch m.screen {
-	case screenRaw, screenLunarJS, screenLTP9, screenGoWarn, screenDraw:
+	case screenLogs:
 		w, _ := m.frameFor("", "", nil).bodySize()
-		m.logsStateOf(m.screenSource()).content(w)
+		m.logView.content(w)
+	case screenEdit:
+		w, h := m.frameFor("", "", nil).bodySize()
+		m.editView.sync(w, h)
 	case screenAgent:
 		w, _ := m.frameFor("", "", nil).bodySize()
 		m.agent.total = len(m.agentLines(maxInt(20, w-4), m.agent.expand))
 	}
 }
 
-// screenSource 当前屏对应的日志来源（非日志屏返回 SourceRaw）
-func (m appModel) screenSource() LogSource {
-	switch m.screen {
-	case screenLunarJS:
-		return SourceLunarJS
-	case screenLTP9:
-		return SourceLTP9JS
-	case screenDraw:
-		return SourceDraw
-	case screenGoWarn:
-		return SourceGoWarn
-	}
-	return SourceRaw
-}
-
-// updateLogs 日志屏事件（source 指定日志屏之一）。
-// 注意：状态必须从接收者副本内取（s 指向 m 自己的字段）——若由调用方传入
-// 指向其副本的指针，滚动等变更会落在中间副本上，随返回值一并丢失
-// （表现为 ↑/↓/PgUp/PgDn 按了没反应）。
-func (m appModel) updateLogs(source LogSource, msg tea.Msg) (tea.Model, tea.Cmd) {
-	s := m.logsStateOf(source)
+// updateLogs 「系统日志」屏事件：左右方向键切换分类，上下方向键滚动。
+func (m appModel) updateLogs(msg tea.Msg) (tea.Model, tea.Cmd) {
+	s := &m.logView
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -121,10 +106,16 @@ func (m appModel) updateLogs(source LogSource, msg tea.Msg) (tea.Model, tea.Cmd)
 		case "esc":
 			m.screen = screenMenu
 			return m, nil
+		case "left", "h":
+			m.switchLogCategory(-1)
+			return m, nil
+		case "right", "l":
+			m.switchLogCategory(1)
+			return m, nil
 		case "c":
 			ClearLogs(s.source)
 			s.reset()
-			m.setNotice("已清空日志缓冲", false)
+			m.setNotice("已清空「"+logCategoryTitles[s.source]+"」日志缓冲", false)
 			return m, nil
 		}
 		if next, follow, ok := scrollKey(s.offset, key, s.lines, m.bodyPage(), s.follow); ok {
@@ -135,29 +126,32 @@ func (m appModel) updateLogs(source LogSource, msg tea.Msg) (tea.Model, tea.Cmd)
 	return m, nil
 }
 
-// logsStateOf 取指定日志屏的状态指针（指向接收者自身的字段）
-func (m *appModel) logsStateOf(source LogSource) *logsState {
-	switch source {
-	case SourceLunarJS:
-		return &m.lunarView
-	case SourceLTP9JS:
-		return &m.ltp9View
-	case SourceDraw:
-		return &m.drawView
-	case SourceGoWarn:
-		return &m.warnView
-	default:
-		return &m.rawView
+// switchLogCategory 切换日志分类（重置视图缓存，绘图分类注入专用行排版）。
+func (m *appModel) switchLogCategory(delta int) {
+	n := len(logCategories)
+	if n == 0 {
+		return
 	}
+	cur := 0
+	for i, category := range logCategories {
+		if category == m.logCat {
+			cur = i
+			break
+		}
+	}
+	next := ((cur+delta)%n + n) % n
+	m.logCat = logCategories[next]
+	m.logView = newLogsState(m.logCat)
+	if m.logCat == SourceDraw {
+		m.logView.renderLine = renderDrawLogLine
+	}
+	m.setNotice("日志分类："+logCategoryTitles[m.logCat], false)
 }
 
-// logsKeys 日志屏键位
-//
-// 措辞刻意压短：底栏宽度有限（窄终端还要与右侧状态争宽），说明一长就把末尾的
-// 全局键位（? 帮助）挤掉——键位栏被截断是历史缺陷，这里按「最小可读」取舍；
-// 翻页与首尾键属于全局键位，见 layout.go 的 globalKeys（帮助页里有）。
+// logsKeys 系统日志屏键位
 func logsKeys() []keyHint {
 	return []keyHint{
+		kh("←/→", "切换分类"),
 		kh("↑↓", "滚动"),
 		kh("f", "跟随"),
 		kh("c", "清空"),
@@ -165,27 +159,66 @@ func logsKeys() []keyHint {
 	}
 }
 
-// viewLogs 日志屏渲染：定高状态条 + 折行日志窗口（空通道给空态而不是一行灰字）
-func (m appModel) viewLogs(s *logsState, title, subtitle string) string {
+// viewSystemLogs 「系统日志」屏渲染：分类标签条 + 日志窗口。
+func (m appModel) viewSystemLogs() string {
+	title := "系统日志"
+	subtitle := logCategoryDescs[m.logCat]
 	f := m.frameFor(title, subtitle, logsKeys())
 	w, h := f.bodySize()
 
-	lines := s.content(w)
+	tabs := logCategoryTabs(w, m.logCat)
+	strip := []string{}
+	if m.logCat == SourceDraw {
+		if p := parseDrawProgress(GetLogs(SourceDraw)); p.Found {
+			line := progressBar(p.Percent, minInt(w-8, 40))
+			if p.Total > 0 {
+				line += "  " + valueStyle.Render(fmt.Sprintf("步 %d/%d", p.Step, p.Total))
+			}
+			if p.Speed != "" {
+				line += "  " + drawProgressStyle.Render(p.Speed)
+			}
+			strip = append(strip, "  "+line)
+		}
+	}
+
+	lines := m.logView.content(w)
+	headRows := len(tabs) + len(strip)
 	if len(lines) == 0 {
-		body := emptyState("暂无日志", subtitle+" 通道还没有任何输出。",
-			"启动对应功能后此处实时刷新 · 按 [ / ] 切到其它日志屏", w, maxInt(1, h-1))
-		body = append(body, logStatusLine(w, scrollInfo{}, s.follow))
+		body := append([]string{}, tabs...)
+		body = append(body, strip...)
+		body = append(body, emptyState("暂无日志", subtitle+" 通道还没有任何输出。",
+			"启动对应功能后此处实时刷新 · 左右方向键切换分类", w, maxInt(1, h-headRows-1))...)
+		body = append(body, logStatusLine(w, scrollInfo{}, m.logView.follow))
 		f.status = dimStyle.Render("共 0 行")
 		return f.render(body)
 	}
 
-	win, offset, info := windowLines(lines, s.offset, maxInt(1, h-1), s.follow)
-	s.offset = offset
+	winH := maxInt(1, h-headRows-1)
+	win, offset, info := windowLines(lines, m.logView.offset, winH, m.logView.follow)
+	m.logView.offset = offset
 
-	body := append([]string{}, win...)
-	body = append(body, logStatusLine(w, info, s.follow))
+	body := append([]string{}, tabs...)
+	body = append(body, strip...)
+	body = append(body, win...)
+	body = append(body, logStatusLine(w, info, m.logView.follow))
+
 	f.status = dimStyle.Render(fmt.Sprintf("共 %d 行", info.Total))
 	return f.render(body)
+}
+
+// logCategoryTabs 分类标签条：当前分类反白高亮，其余弱化。
+func logCategoryTabs(width int, current LogSource) []string {
+	parts := make([]string, 0, len(logCategories))
+	for _, category := range logCategories {
+		label := " " + logCategoryTitles[category] + " "
+		if category == current {
+			parts = append(parts, selRowStyle.Render(label))
+		} else {
+			parts = append(parts, faintStyle.Render(label))
+		}
+	}
+	line := "  " + strings.Join(parts, " ")
+	return []string{fitWidth(line, width)}
 }
 
 // logStatusLine 日志窗底部状态条：位置百分比 + 跟随状态
@@ -501,48 +534,6 @@ func atoiSafe(s string) int {
 		n = n*10 + int(r-'0')
 	}
 	return n
-}
-
-// viewDraw 绘图引擎日志屏渲染：定高进度条 + 日志窗口
-func (m appModel) viewDraw() string {
-	f := m.frameFor("绘图引擎日志", "sd.cpp", logsKeys())
-	w, h := f.bodySize()
-
-	// 顶部：引擎名 + 最近一次采样进度（无进度时提示等待）
-	strip := []string{}
-	if p := parseDrawProgress(GetLogs(SourceDraw)); p.Found {
-		line := progressBar(p.Percent, minInt(w-8, 40))
-		if p.Total > 0 {
-			line += "  " + valueStyle.Render(fmt.Sprintf("步 %d/%d", p.Step, p.Total))
-		}
-		if p.Speed != "" {
-			line += "  " + drawProgressStyle.Render(p.Speed)
-		}
-		strip = append(strip, "  "+line)
-	} else {
-		strip = append(strip, "  "+dimStyle.Render("（尚无采样进度：发起图像生成后此处实时显示）"))
-	}
-
-	lines := m.drawView.content(w)
-	if len(lines) == 0 {
-		body := append([]string{}, strip...)
-		body = append(body, emptyState("暂无绘图日志", "sd.cpp 引擎与绘图编排还没有输出。",
-			"在前端发起一次图像生成后，采样进度与统计会实时显示", w, maxInt(1, h-len(strip)-1))...)
-		body = append(body, logStatusLine(w, scrollInfo{}, m.drawView.follow))
-		f.status = dimStyle.Render("共 0 行")
-		return f.render(body)
-	}
-
-	winH := maxInt(1, h-len(strip)-1)
-	win, offset, info := windowLines(lines, m.drawView.offset, winH, m.drawView.follow)
-	m.drawView.offset = offset
-
-	body := append([]string{}, strip...)
-	body = append(body, win...)
-	body = append(body, logStatusLine(w, info, m.drawView.follow))
-
-	f.status = dimStyle.Render(fmt.Sprintf("共 %d 行", info.Total))
-	return f.render(body)
 }
 
 // ==== 运行状态屏 ====

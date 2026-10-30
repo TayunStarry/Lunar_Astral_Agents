@@ -72,35 +72,6 @@ type ModuleInspectResponse struct {
 	Fields  []ModuleInspectField `json:"fields,omitempty"` // 提取到的元信息片段
 }
 
-// ChatProxyRequest 对话代理请求结构体
-type ChatProxyRequest struct {
-	BaseURL  string                   `json:"base_url"`
-	APIKey   string                   `json:"api_key"`
-	Model    string                   `json:"model"`
-	Messages []map[string]interface{} `json:"messages"`
-	Stream   bool                     `json:"stream,omitempty"`
-}
-
-// ChatProxyResponse 对话代理响应结构体
-type ChatProxyResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-}
-
-// ModelProxyRequest 模型代理请求结构体
-type ModelProxyRequest struct {
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
-}
-
-// ModelProxyResponse 模型代理响应结构体
-type ModelProxyResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-}
-
 // ==== LTPX 远程（工具包调度）协议类型 ====
 
 // LTPXRemoteToolDef 对外暴露的「智能体式」工具定义

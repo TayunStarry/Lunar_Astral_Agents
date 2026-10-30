@@ -13,7 +13,7 @@ func ToolCatalog() []agentinfo.Agent {
 	}
 	return []agentinfo.Agent{{
 		ID: "descriptor", Name: "描述者", Source: "agents/Descriptor",
-		Note:  "影像描述走视觉模型；文件探查使用下列查询工具",
+		Note:  "描述智能体：按需读取影像与文件并生成结构化描述。",
 		Tools: tools,
 	}}
 }

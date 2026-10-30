@@ -67,14 +67,8 @@ type ModelConfig struct {
 	} `json:"models"`
 	// 系统级设置：运行/安全、日志、聊天显存守卫、前端显示共用同一个根对象
 	System SystemSettings `json:"system"`
-	// 月华 Agent：模型路由 + 多模态输入方式
+	// 月华 Agent：多模态输入方式 + 追加设定（模型路由为本地固定值，不开放配置）
 	Agent struct {
-		EmbeddingModel  string `json:"embedding_model"`  // 嵌入模型名称
-		EmbeddingURL    string `json:"embedding_url"`    // 嵌入服务 API 地址
-		EmbeddingKey    string `json:"embedding_key"`    // 嵌入服务 API 密钥
-		MultimodalModel string `json:"multimodal_model"` // 多模态模型名称
-		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
-		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
 		// 语音识别模型名称（ASR）
 		ASRModel string `json:"asr_model"`
 		// 视频解读输入模式：file=写媒体目录后以 file:// 引用交 llama-server 抽帧（默认）；
@@ -241,6 +235,9 @@ func init() {
 	if len(filtered) > 1 {
 		_ = flag.CommandLine.Parse(filtered[1:])
 	}
+	// 本地固定模型端点按 BasicPort 同步（包初始化时端口标志尚未解析）
+	AgentEmbeddingURL = LlamaV1URL()
+	AgentMultimodalURL = LlamaV1URL()
 	// 获取当前可执行文件的路径
 	exePath, err := os.Executable()
 	// 若获取失败，打印错误日志并直接返回
@@ -327,24 +324,8 @@ func applyConfig(parameter *ModelConfig) []string {
 	// ==== 记忆库模型路由：已移除（统一复用 agent 分组的嵌入/多模态模型） ====
 	// 旧版 lunar_config.json 的 memory 节会被 JSON 解码忽略；迁移提示由文档说明。
 	// ==== 核心智能体配置（agent） ====
-	if parameter.Agent.EmbeddingModel != "" {
-		AgentEmbeddingModel = parameter.Agent.EmbeddingModel
-	}
-	if parameter.Agent.EmbeddingURL != "" {
-		AgentEmbeddingURL = parameter.Agent.EmbeddingURL
-	}
-	if parameter.Agent.EmbeddingKey != "" {
-		AgentEmbeddingKey = parameter.Agent.EmbeddingKey
-	}
-	if parameter.Agent.MultimodalModel != "" {
-		AgentMultimodalModel = parameter.Agent.MultimodalModel
-	}
-	if parameter.Agent.MultimodalURL != "" {
-		AgentMultimodalURL = parameter.Agent.MultimodalURL
-	}
-	if parameter.Agent.MultimodalKey != "" {
-		AgentMultimodalKey = parameter.Agent.MultimodalKey
-	}
+	// 模型路由（embedding / multimodal 的 url、model、key）已收敛为本地固定参数，
+	// 不再从配置文件或命令行开放；旧配置中的对应字段在 JSON 解码时被忽略。
 	if parameter.Agent.ASRModel != "" {
 		AgentASRModel = parameter.Agent.ASRModel
 	}

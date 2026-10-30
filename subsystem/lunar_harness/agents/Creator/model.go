@@ -48,18 +48,11 @@ func retryable(err error) bool {
 // resolveModel 解析主多模态模型端点（只解析一次）。
 func resolveModel() {
 	modelOnce.Do(func() {
-		modelName = strings.TrimSpace(config.AgentMultimodalModel)
-		if modelName == "" {
-			modelName = defaultModelName
-		}
-		modelURL = strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
-		if modelURL == "" {
-			modelURL = config.LocalV1URL()
-		}
+		modelName = config.AgentMultimodalModel
+		modelURL = strings.TrimRight(config.AgentMultimodalURL, "/")
 		if !strings.HasSuffix(modelURL, "/v1") {
 			modelURL += "/v1"
 		}
-		modelKey = strings.TrimSpace(config.AgentMultimodalKey)
 	})
 }
 
@@ -84,9 +77,6 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 		return nil, fmt.Errorf("构造模型请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if modelKey != "" {
-		req.Header.Set("Authorization", "Bearer "+modelKey)
-	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -174,7 +164,14 @@ func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instructi
 		limit = maxPlannerRounds
 	}
 	for round := 0; round < limit; round++ {
+		// 每轮请求前收紧预算：工具结果累计过长时压缩较早内容，避免单次请求超出模型上下文
+		compactToolResults(messages)
 		response, err := chatWithTools(ctx, messages, tools)
+		if err != nil && isContextOverflow(err) {
+			// 模型仍报上下文超限：激进压缩历史后重试一次，避免整个步骤被跳过
+			shrinkMessages(messages)
+			response, err = chatWithTools(ctx, messages, tools)
+		}
 		if err != nil {
 			return "", err
 		}
@@ -197,7 +194,7 @@ func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instructi
 			args, parseErr := parseToolArgs(call.Function.Arguments)
 			if parseErr != nil {
 				outcome := toolOutcome{JSON: `{"error":"参数不是合法 JSON"}`, Summary: "参数解析失败"}
-				messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Content: outcome.JSON})
+				messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Content: toolResultContent(outcome)})
 				lastSummary += outcome.Summary + "；"
 				continue
 			}
@@ -211,7 +208,7 @@ func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instructi
 			if outcome.Reference != "" {
 				s.addReference(outcome.Reference)
 			}
-			messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Content: outcome.JSON})
+			messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Content: toolResultContent(outcome)})
 			lastSummary += outcome.Summary + "；"
 			if done {
 				return response.Content, nil
@@ -258,6 +255,39 @@ func previewRunes(text string, limit int) string {
 		return string(runes)
 	}
 	return string(runes[:limit]) + "…"
+}
+
+// clipAtSentence 按标点截断：优先在句末标点处收尾，其次在逗号/顿号等分句标点处收尾。
+// 找不到任何标点时**不截断**（宁可保留完整内容，也不把一句话切成半句）。
+// 生活链的规划日志会原样喂给下一轮模型的「历史」上下文，半句会直接损害理解。
+func clipAtSentence(text string, limit int) string {
+	text = strings.TrimSpace(text)
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	const sentenceEnders = "。！？!?；;…\n"
+	const clauseEnders = "，,、：:"
+	if idx := lastPunctBefore(runes, limit, sentenceEnders); idx >= 0 {
+		return string(runes[:idx+1]) + "…"
+	}
+	if idx := lastPunctBefore(runes, limit, clauseEnders); idx >= 0 {
+		return string(runes[:idx+1]) + "…"
+	}
+	return text
+}
+
+// lastPunctBefore 在 [0, limit) 范围内从后向前找最后一个标点，返回其下标（未命中返回 -1）。
+func lastPunctBefore(runes []rune, limit int, marks string) int {
+	if limit > len(runes) {
+		limit = len(runes)
+	}
+	for i := limit - 1; i > 0; i-- {
+		if strings.ContainsRune(marks, runes[i]) {
+			return i
+		}
+	}
+	return -1
 }
 
 // jsonText 把任意值序列化为回填给模型的 JSON 文本。

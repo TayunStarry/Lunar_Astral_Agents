@@ -398,7 +398,7 @@ func setupAgent(t *testing.T, modelScript *stubModel) *stubForum {
 	})
 
 	modelOnce = sync.Once{}
-	modelName, modelURL, modelKey = "", "", ""
+	modelName, modelURL = "", ""
 	ResetContext()
 	return forum
 }

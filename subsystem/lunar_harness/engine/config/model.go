@@ -1,18 +1,14 @@
 package config
 
 var (
-	// AgentEmbeddingModel 核心智能体嵌入模型名称
+	// AgentEmbeddingModel 核心智能体嵌入模型名称（本地部署固定值，不开放配置）
 	AgentEmbeddingModel = "text_embedding"
-	// AgentEmbeddingURL 核心智能体嵌入服务 API 地址
-	AgentEmbeddingURL = "http://127.0.0.1:36789/v1"
-	// AgentEmbeddingKey 核心智能体嵌入服务 API 密钥
-	AgentEmbeddingKey = ""
-	// AgentMultimodalModel 核心智能体多模态模型名称
+	// AgentEmbeddingURL 核心智能体嵌入端点：直连 llama.cpp（不经过 Web 服务转发）
+	AgentEmbeddingURL = LlamaV1URL()
+	// AgentMultimodalModel 核心智能体多模态模型名称（本地部署固定值，不开放配置）
 	AgentMultimodalModel = "primary_reasoning"
-	// AgentMultimodalURL 核心智能体多模态服务 API 地址
-	AgentMultimodalURL = "http://127.0.0.1:36789/v1"
-	// AgentMultimodalKey 核心智能体多模态服务 API 密钥
-	AgentMultimodalKey = ""
+	// AgentMultimodalURL 核心智能体多模态端点：直连 llama.cpp（不经过 Web 服务转发）
+	AgentMultimodalURL = LlamaV1URL()
 	// AgentASRModel 核心智能体语音识别模型名称
 	AgentASRModel = "audio_transcriber"
 

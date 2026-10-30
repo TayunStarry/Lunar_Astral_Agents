@@ -9,8 +9,7 @@
  * - 专用系统提示词：定义「通用页面操作执行者」角色与操作边界
  * - 多轮工具调用循环：LLM 通过 OpenAI function calling 逐次调用页面操作工具，
  *   观察工具结果并持续决策，直到给出最终答复
- * - 模型调用走琉璃后端 /v1 代理（OpenAI v1 协议，由后端按 lunar_config.json
- *   解析模型 name/key/url，前端不接触模型配置）
+ * - 模型调用走琉璃后端 /agent 端点（非流式，模型名由后端固定，前端不接触模型配置）
  * - 内嵌 AtoA 集成层：位于 iframe 中时自动监听 ltpx_run 并回执 ltpx_result
  * - LLM 不可用时降级到最小离线规则，保证基础可用（非主路径）
  * ===================================================================== */
@@ -47,30 +46,13 @@
     let modelConfig = null;
 
     /**
-     * 读取 lunar_config.json 的 agent 配置（通过 /file/read/ 文件接口）。
-     * 模型名取 agent.multimodal_model；base_url / api_key 一并返回供自定义代理使用。
+     * 本地部署固定模型配置：同源 /agent 端点，模型 primary_reasoning。
      * @returns {Promise<{model:string, base_url:string, api_key:string|null}>}
      */
     async function loadModelConfig() {
         if (modelConfigPromise) return modelConfigPromise;
-        modelConfigPromise = (async () => {
-            try {
-                const resp = await fetch('/file/read/lunar_config.json', { cache: 'no-store' });
-                if (!resp.ok) throw new Error('读取配置失败 HTTP ' + resp.status);
-                const cfg = await resp.json();
-                const agent = (cfg && cfg.agent) || {};
-                modelConfig = {
-                    model: (agent.multimodal_model && String(agent.multimodal_model)) || 'primary_reasoning',
-                    base_url: (agent.multimodal_url && String(agent.multimodal_url)) || '/v1',
-                    api_key: agent.multimodal_key || null
-                };
-                return modelConfig;
-            } catch (e) {
-                // 读取失败回退默认（与配置中的占位值一致，仍走同源 /v1 代理解析）
-                modelConfig = { model: 'primary_reasoning', base_url: '/v1', api_key: null };
-                return modelConfig;
-            }
-        })();
+        modelConfig = { model: 'primary_reasoning', base_url: '/v1', api_key: null };
+        modelConfigPromise = Promise.resolve(modelConfig);
         return modelConfigPromise;
     }
 
@@ -227,15 +209,13 @@
         ].join('\n');
     }
 
-    /* ---------------- 模型调用（OpenAI v1 协议，琉璃后端 /v1 代理） ---------------- */
+    /* ---------------- 模型调用（/agent 协议，非流式；模型名由后端固定） ---------------- */
 
     async function callAgentModel(messages) {
-        const cfg = await loadModelConfig();
-        const response = await fetch('/v1/chat/completions', {
+        const response = await fetch('/agent/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: cfg.model,
                 messages: messages,
                 tools: agentTools,
                 stream: false
@@ -245,9 +225,6 @@
         const data = await response.json();
         if (data.choices && data.choices[0] && data.choices[0].message) {
             return data.choices[0].message;
-        }
-        if (data.success && data.data && data.data.choices && data.data.choices[0]) {
-            return data.data.choices[0].message;
         }
         throw new Error('AI 响应格式异常');
     }

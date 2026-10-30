@@ -52,7 +52,7 @@ func (r *watchRun) Next(_ context.Context, _ Env) (EventStep, error) {
 	}
 	return EventStep{
 		Done:   true,
-		Record: "刷了会视频：" + truncateAtSentence(text, 200),
+		Record: "刷了会视频：" + truncateAtSentence(text, 120),
 		Detail: text,
 	}, nil
 }

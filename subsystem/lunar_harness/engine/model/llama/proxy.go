@@ -8,9 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -228,68 +225,4 @@ func waitForProcessExit(cmd *exec.Cmd) {
 	} else {
 		logger.Info("LlamaProxy", "llama-server 进程正常退出")
 	}
-}
-
-// ProxyHandler 将所有请求代理到 llama.cpp 服务器
-func ProxyHandler(w http.ResponseWriter, r *http.Request) {
-	if isEmbeddingRequest(r) {
-		proxyToLocal(w, r)
-		return
-	}
-	if config.AgentMultimodalURL != "" && config.AgentMultimodalURL != config.LocalV1URL() {
-		ProxyToCloud(w, r)
-		return
-	}
-	proxyToLocal(w, r)
-}
-
-// isEmbeddingRequest 检测请求是否为 embedding 模型请求
-func isEmbeddingRequest(r *http.Request) bool {
-	path := strings.ToLower(r.URL.Path)
-	return strings.Contains(path, "/embeddings") || strings.Contains(path, "/embedding")
-}
-
-// proxyToLocal 将请求反向代理到本地 llama.cpp 服务器
-func proxyToLocal(w http.ResponseWriter, r *http.Request) {
-	targetURL := fmt.Sprintf("http://localhost:%d", config.ModelPort)
-	target, err := url.Parse(targetURL)
-	if err != nil {
-		http.Error(w, "llama[ERROR] -> 解析目标 URL 失败", http.StatusInternalServerError)
-		return
-	}
-
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		logger.Error("LlamaProxy", "代理错误: %v", err)
-		http.Error(w, "llama[ERROR] -> 代理失败", http.StatusBadGateway)
-	}
-
-	proxy.ServeHTTP(w, r)
-}
-
-// ProxyToCloud 将请求反向代理到云服务器
-func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
-	target, err := url.Parse(config.AgentMultimodalURL)
-	if err != nil {
-		http.Error(w, "GGUF模块[ERROR] -> 解析云服务器 URL 失败", http.StatusInternalServerError)
-		return
-	}
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		logger.Error("LlamaProxy", "云代理错误: %v", err)
-		http.Error(w, "GGUF模块[ERROR] -> 云代理失败", http.StatusBadGateway)
-	}
-	// 自定义 Director 函数，保留原始请求路径并注入认证头
-	proxy.Director = func(req *http.Request) {
-		req.URL.Scheme = target.Scheme
-		req.URL.Host = target.Host
-		req.Host = target.Host
-		// 注入云模型密钥认证头
-		if config.AgentMultimodalKey != "" {
-			req.Header.Set("Authorization", "Bearer "+config.AgentMultimodalKey)
-		}
-	}
-	logger.Info("LlamaProxy", "云代理: %s %s -> %s%s", r.Method, r.URL.Path, config.AgentMultimodalURL, r.URL.Path)
-	proxy.ServeHTTP(w, r)
 }

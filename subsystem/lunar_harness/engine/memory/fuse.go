@@ -352,9 +352,6 @@ func (d *Store) mergeMemoryContentsWithModel(ctx context.Context, contents []str
 		return "", fmt.Errorf("创建整合请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if config.AgentMultimodalKey != "" {
-		req.Header.Set("Authorization", "Bearer "+config.AgentMultimodalKey)
-	}
 
 	client := d.httpClient
 	if client == nil {

@@ -35,7 +35,7 @@ func currentEmbeddingModel() string {
 //
 // 启动时不再指定某个集合：磁盘上的所有集合全部载入，默认分组集合缺失时自动创建，
 // 没有集合名嵌入向量的集合按集合名调用嵌入模型补齐。
-// 模型配置与智能体共用 agent.embedding_* / agent.multimodal_*。
+// 模型配置为本地固定值，与智能体共用嵌入/多模态模型。
 func (d *Store) EnsureReady() error {
 	if d.baseDir == "" {
 		return fmt.Errorf("记忆库 baseDir 为空，请先调用 Init")

@@ -152,7 +152,7 @@ type Collection struct {
 
 // Store 记忆库实例（多集合分组架构）
 // 职责：嵌入服务连接、LLM 标签生成、集合管理、记忆 CRUD、维度锁定、持久化
-// 模型配置与智能体共用 agent.embedding_* / agent.multimodal_*（不再有独立记忆库模型配置）
+// 模型配置为本地固定值，与智能体共用嵌入/多模态模型（不再有独立记忆库模型配置）
 // 存储布局：<baseDir>/<collectionName>/{metadata.json, documents_*.json, embeddings_*.json}
 type Store struct {
 	initMu        sync.Mutex             // 实例初始化互斥锁（启动/懒加载并发保护）

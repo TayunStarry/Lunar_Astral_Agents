@@ -76,35 +76,18 @@ test('ConfigManager._buildMessages 多条 user 消息时仅末条携带图片', 
     assert.ok(Array.isArray(result[1].content));
 });
 
-test('ConfigManager.getConfig 默认兜底配置', () => {
+test('ConfigManager.getConfig 固定本地模型配置', () => {
     const cm = new ConfigManager({});
-    cm.agentConfig = null;
-    const cfg = cm.getConfig();
-    assert.strictEqual(cfg.name, 'primary_reasoning');
-    assert.strictEqual(cfg.url, 'http://127.0.0.1:36789/v1');
-    assert.strictEqual(cfg.key, '');
-});
-
-test('ConfigManager.getConfig 读取 agent 配置（兼容 {url,name,key} 形态）', () => {
-    const cm = new ConfigManager({});
-    cm.agentConfig = {
-        multimodal_model: 'my-mm',
-        multimodal_url: 'https://example.com/v1',
-        multimodal_key: 'sk-abc'
-    };
     assert.deepStrictEqual(plain(cm.getConfig()), {
-        url: 'https://example.com/v1',
-        name: 'my-mm',
-        key: 'sk-abc'
+        url: '/v1',
+        name: 'primary_reasoning',
+        key: ''
     });
 });
 
-test('ConfigManager.getEmbeddingModel 默认与自定义', () => {
+test('ConfigManager.getEmbeddingModel 固定嵌入模型名', () => {
     const cm = new ConfigManager({});
-    cm.agentConfig = null;
     assert.strictEqual(cm.getEmbeddingModel(), 'text_embedding');
-    cm.agentConfig = { embedding_model: 'my-embed' };
-    assert.strictEqual(cm.getEmbeddingModel(), 'my-embed');
 });
 
 // ==== CreativeBuilder 测试 ====

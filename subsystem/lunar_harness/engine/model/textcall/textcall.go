@@ -31,16 +31,7 @@ func CompleteMessages(ctx context.Context, model string, messages []Message) (st
 	if strings.TrimSpace(model) == "" {
 		model = config.AgentMultimodalModel
 	}
-	if strings.TrimSpace(model) == "" {
-		model = "primary_reasoning"
-	}
-	baseURL := strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
-	if baseURL == "" {
-		baseURL = config.LocalV1URL()
-	}
-	if !strings.HasSuffix(baseURL, "/v1") {
-		baseURL += "/v1"
-	}
+	baseURL := config.AgentMultimodalURL
 	body, err := json.Marshal(completionRequest{Model: model, Messages: messages, Stream: false})
 	if err != nil {
 		return "", fmt.Errorf("序列化模型请求失败: %w", err)
@@ -50,9 +41,6 @@ func CompleteMessages(ctx context.Context, model string, messages []Message) (st
 		return "", fmt.Errorf("创建模型请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if key := strings.TrimSpace(config.AgentMultimodalKey); key != "" {
-		req.Header.Set("Authorization", "Bearer "+key)
-	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("模型请求失败: %w", err)

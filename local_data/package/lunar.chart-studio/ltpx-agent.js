@@ -8,7 +8,7 @@
  * - 多轮工具调用循环：LLM 通过 OpenAI function calling 逐次调用 render_echart /
  *   render_mermaid / read_editor，观察工具结果并持续修正，直到给出最终答复（上限 8 次）
  * - 步骤回调：每个关键步骤通过 onStep 通知前端，同步展示到「月华操作步骤」面板
- * - 模型调用走同源 /v1 代理（OpenAI v1 协议），模型名读取 lunar_config.json 的 agent 字段，不硬编码
+ * - 模型调用走同源 /agent 端点（非流式），模型为后端固定值
  */
 
 // ===== 智能体常量与状态 =====
@@ -22,30 +22,6 @@ const CS_EDITOR_SNIPPET_MAX = 4000;
 
 /** 已完成的对话历史：数组元素为 { user, assistant }（各为纯文本） */
 let csAgentHistory = [];
-
-/** 模型配置加载 Promise（从 lunar_config.json 的 agent 字段读取，不硬编码） */
-let csModelConfigPromise = null;
-
-/**
- * 读取 lunar_config.json 的 agent.multimodal_model 作为模型名
- * （通过 /file/read/ 文件接口；读取失败回退默认占位值，仍走同源 /v1 代理解析）
- * @returns {Promise<string>}
- */
-async function loadCSAgentModel() {
-    if (csModelConfigPromise) return csModelConfigPromise;
-    csModelConfigPromise = (async () => {
-        try {
-            const resp = await fetch('/file/read/lunar_config.json', { cache: 'no-store' });
-            if (!resp.ok) throw new Error('读取配置失败 HTTP ' + resp.status);
-            const cfg = await resp.json();
-            const agent = (cfg && cfg.agent) || {};
-            return (agent.multimodal_model && String(agent.multimodal_model)) || 'primary_reasoning';
-        } catch (e) {
-            return 'primary_reasoning';
-        }
-    })();
-    return csModelConfigPromise;
-}
 
 // ===== 工具定义（OpenAI function calling 格式，供智能体 LLM 调用） =====
 
@@ -155,32 +131,26 @@ function parseCSDeclaration(text) {
     return { format: format, formatLabel: formatLabel, type: type };
 }
 
-// ===== 模型调用（OpenAI v1 协议，同源 /v1 代理解析模型配置） =====
+// ===== 模型调用（/agent 协议，非流式；模型名由后端固定） =====
 
 /**
- * 调用 /v1/chat/completions（同源代理，避免 CORS）
+ * 调用 /agent/chat/completions（同源，避免 CORS；后端不接受模型名与流式）
  * @param {Array<Object>} messages - 完整消息数组（含 system / user / assistant / tool）
  * @param {boolean} includeTools - 是否附带工具定义（声明阶段不附带，强制纯文本输出）
  * @returns {Promise<Object>} OpenAI 响应中的 message 对象
  */
 async function callCSModel(messages, includeTools) {
-    const model = await loadCSAgentModel();
-    const body = { model: model, messages: messages, stream: false };
+    const body = { messages: messages, stream: false };
     if (includeTools !== false) body.tools = csAgentTools;
-    const response = await fetch('/v1/chat/completions', {
+    const response = await fetch('/agent/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
     });
     if (!response.ok) throw new Error('AI 调用失败: HTTP ' + response.status);
     const data = await response.json();
-    // OpenAI 兼容原始响应
     if (data.choices && data.choices[0] && data.choices[0].message) {
         return data.choices[0].message;
-    }
-    // 代理包装响应
-    if (data.success && data.data && data.data.choices && data.data.choices[0]) {
-        return data.data.choices[0].message;
     }
     throw new Error('AI 响应格式异常');
 }

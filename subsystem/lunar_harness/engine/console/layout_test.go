@@ -8,9 +8,9 @@ import (
 // 全部屏幕的清单：新增屏幕时请一并加进来，宽度不变式对它们同样生效。
 func allScreens() []screenID {
 	return []screenID{
-		screenMenu, screenAgent, screenStats, screenRaw, screenLunarJS, screenLTP9,
-		screenDraw, screenGoWarn, screenFrontend, screenProxy, screenArchive,
-		screenUpdate, screenPorts, screenMarket, screenLTP9Auth, screenDump, screenTools,
+		screenMenu, screenAgent, screenStats, screenLogs, screenEdit,
+		screenFrontend, screenProxy, screenArchive,
+		screenUpdate, screenPorts, screenMarket, screenDump, screenTools,
 	}
 }
 

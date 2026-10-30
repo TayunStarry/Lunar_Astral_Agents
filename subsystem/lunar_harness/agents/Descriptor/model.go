@@ -93,19 +93,11 @@ func reportModelCall(requestBody []byte, reply modelReply, elapsed time.Duration
 // resolveModel 解析模型配置（仅首次调用）
 func resolveModel() {
 	modelOnce.Do(func() {
-		modelName = strings.TrimSpace(config.AgentMultimodalModel)
-		if modelName == "" {
-			modelName = "primary_reasoning"
+		modelName = config.AgentMultimodalModel
+		modelURL = strings.TrimRight(config.AgentMultimodalURL, "/")
+		if !strings.HasSuffix(modelURL, "/v1") {
+			modelURL += "/v1"
 		}
-		rawURL := strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
-		if rawURL == "" {
-			rawURL = config.LocalV1URL()
-		}
-		if !strings.HasSuffix(rawURL, "/v1") {
-			rawURL += "/v1"
-		}
-		modelURL = rawURL
-		modelKey = strings.TrimSpace(config.AgentMultimodalKey)
 	})
 }
 
@@ -138,9 +130,6 @@ func chatStream(messages []chatMessage, tools []toolDef) (chatMessage, error) {
 		return chatMessage{}, fmt.Errorf("创建模型请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if modelKey != "" {
-		req.Header.Set("Authorization", "Bearer "+modelKey)
-	}
 	start := time.Now()
 	resp, err := httpClient.Do(req)
 	if err != nil {

@@ -68,18 +68,14 @@ const (
 	screenMenu screenID = iota
 	screenAgent
 	screenStats
-	screenRaw
-	screenLunarJS
-	screenLTP9
-	screenDraw
-	screenGoWarn
+	screenLogs
+	screenEdit
 	screenFrontend
 	screenProxy
 	screenArchive
 	screenUpdate
 	screenPorts
 	screenMarket
-	screenLTP9Auth
 	screenDump
 	screenTools
 )
@@ -102,41 +98,33 @@ type menuItem struct {
 // 每屏各自的历史助记键。新增条目时按顺序追加，不要插空或跳号。
 var menuItems = []menuItem{
 	{key: "0", title: "推理实况", group: "运行观测", screen: screenAgent,
-		desc: "月华思考 / 输出 / 工具调用的流式显示（对话者 · 绘制者 · 演奏者 · 记忆者…）"},
+		desc: "月华思考 / 输出 / 工具调用的流式显示（对话者 · 绘制者 · 演奏者 · 通用应答 · 智能修复…）"},
 	{key: "1", title: "运行状态", group: "运行观测", screen: screenStats,
 		desc: "资源占用 / token 消耗总量 / 均次消耗 / 输出速度 / 平均上下文"},
-	{key: "2", title: "原始日志", group: "运行观测", screen: screenRaw,
-		desc: "终端全量原始行（stdout 拦截 + 结构化日志合流）"},
-	{key: "3", title: "月华日志", group: "运行观测", screen: screenLunarJS,
-		desc: "月华对话链 / 计划表 / 记忆 / 资源的运行日志（模块 LunarCore）"},
-	{key: "4", title: "插件日志", group: "运行观测", screen: screenLTP9,
-		desc: "LTP9 沙箱 JavaScript 层日志"},
-	{key: "5", title: "系统警告", group: "运行观测", screen: screenGoWarn,
-		desc: "Go 模块 WARN / ERROR / FATAL 日志"},
-	{key: "6", title: "绘图日志", group: "运行观测", screen: screenDraw,
-		desc: "sd.cpp 绘图引擎输出（进度 / 采样速度 / 时间统计），顶部附采样进度"},
-	{key: "7", title: "数据导出", group: "运行观测", screen: screenDump,
+	{key: "2", title: "系统日志", group: "运行观测", screen: screenLogs,
+		desc: "统一日志屏：左右方向键切换 原始 / 警告 / 绘图 / 对话 / 生活 / 后勤"},
+	{key: "3", title: "编辑显示", group: "运行观测", screen: screenEdit,
+		desc: "文档库文件内容展示（触碰文件黄色高亮、改动片段绿色标记）；可运行文件按 R 直接运行"},
+	{key: "4", title: "数据导出", group: "运行观测", screen: screenDump,
 		desc: "导出原始日志、推理实况、以及 Go 智能体上下文"},
 
-	{key: "8", title: "工具列表", group: "系统管理", screen: screenTools,
+	{key: "5", title: "工具列表", group: "系统管理", screen: screenTools,
 		desc: "扫描并展示全部 Go 智能体的工具与说明"},
-	{key: "9", title: "前端页面", group: "系统管理", screen: screenFrontend,
+	{key: "6", title: "前端页面", group: "系统管理", screen: screenFrontend,
 		desc: "月华 / 琉璃桌面窗口状态探测与意外关闭重启"},
-	{key: "a", title: "局域共享", group: "系统管理", screen: screenProxy,
+	{key: "7", title: "局域共享", group: "系统管理", screen: screenProxy,
 		desc: "WSS → WS 反向代理，支持 IP 选择与手机扫码接入"},
-	{key: "b", title: "打包归档", group: "系统管理", screen: screenArchive,
+	{key: "8", title: "打包归档", group: "系统管理", screen: screenArchive,
 		desc: "项目文件 7z 分卷打包，支持进度显示"},
-	{key: "c", title: "端口释放", group: "系统管理", screen: screenPorts,
+	{key: "9", title: "端口释放", group: "系统管理", screen: screenPorts,
 		desc: "扫描指定端口范围，终止占用进程并验证释放"},
 
-	{key: "d", title: "资源更新", group: "更新与发布", screen: screenUpdate,
+	{key: "a", title: "资源更新", group: "更新与发布", screen: screenUpdate,
 		desc: "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希），更新含主程序时自动重启"},
-	{key: "e", title: "应用市场", group: "更新与发布", screen: screenMarket,
+	{key: "b", title: "应用市场", group: "更新与发布", screen: screenMarket,
 		desc: "浏览 / 标签筛选 / 安装 / 发布 LTPX 工具包（Gitee Release 通道）"},
-	{key: "f", title: "授权签发", group: "更新与发布", screen: screenLTP9Auth,
-		desc: "扫描包目录中的 LTP9 包，可依据脚本现有引用的权限签发 permissions.key"},
 
-	{key: "g", title: "退出程序", group: "会话", screen: screenMenu,
+	{key: "c", title: "退出程序", group: "会话", screen: screenMenu,
 		desc: "关闭控制台并优雅停止全部子系统（感谢使用「星月智能 · 控制台」）"},
 }
 
@@ -170,23 +158,21 @@ type appModel struct {
 
 	spinner spinner.Model
 
-	rawView   logsState // [2] 原始日志
-	lunarView logsState // [3] 月华日志
-	ltp9View  logsState // [4] ltp9 插件日志
-	drawView  logsState // [6] sd.cpp 绘图引擎日志
-	warnView  logsState // [5] Go 警告错误
-	agent     agentState
-	stats     statsState
-	frontend  frontendState
-	proxy     proxyState
-	archive   archiveState
-	update    updateState
-	ports     portsState
-	market    marketState
-	ltp9Auth  ltp9AuthState
-	dump      dumpState
-	engine    engineState
-	tools     toolsState
+	// 系统日志：单一屏 + 分类（左右方向键切换）；编辑显示为纯展示层
+	logCat   LogSource
+	logView  logsState
+	editView editState
+	agent    agentState
+	stats    statsState
+	frontend frontendState
+	proxy    proxyState
+	archive  archiveState
+	update   updateState
+	ports    portsState
+	market   marketState
+	dump     dumpState
+	engine   engineState
+	tools    toolsState
 
 	streamUnsub func() // 流式事件订阅注销
 	sizeLogged  bool   // 首帧尺寸自检是否已落盘
@@ -194,23 +180,18 @@ type appModel struct {
 
 // newAppModel 构建初始模型
 func newAppModel() appModel {
-	drawView := newLogsState(SourceDraw)
-	drawView.renderLine = renderDrawLogLine // 绘图引擎日志按专用规则排版
 	return appModel{
-		screen:    screenMenu,
-		spinner:   newSpinner(),
-		agent:     agentState{follow: true}, // 实况屏默认跟随最新轮次
-		rawView:   newLogsState(SourceRaw),
-		lunarView: newLogsState(SourceLunarJS),
-		ltp9View:  newLogsState(SourceLTP9JS),
-		drawView:  drawView,
-		warnView:  newLogsState(SourceGoWarn),
-		proxy:     newProxyState(),
-		archive:   newArchiveState(),
-		update:    newUpdateState(),
-		ports:     newPortsState(),
-		market:    newMarketState(),
-		ltp9Auth:  newLTP9AuthState(),
+		screen:   screenMenu,
+		spinner:  newSpinner(),
+		agent:    agentState{follow: true}, // 实况屏默认跟随最新轮次
+		logCat:   SourceRaw,
+		logView:  newLogsState(SourceRaw),
+		editView: newEditState(),
+		proxy:    newProxyState(),
+		archive:  newArchiveState(),
+		update:   newUpdateState(),
+		ports:    newPortsState(),
+		market:   newMarketState(),
 	}
 }
 
@@ -259,8 +240,22 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncViewMetrics()
 		return m, nil
 
+	case editRunMsg:
+		// 运行回执在顶层处理：用户运行期间切屏也照样收尾，避免「running 卡住」。
+		m.editView.running = false
+		if msg.err != nil {
+			m.setNotice("运行失败："+msg.path, true)
+			return m, nil
+		}
+		m.setNotice(msg.summary, false)
+		return m, nil
+
 	case statsTickMsg:
 		m.stats.snap = GetSnapshot()
+		// 每秒采样同时也是「编辑显示」文件清单/元数据的刷新时机：
+		// 旧实现这里直接 return，跳过了 syncViewMetrics，导致进入编辑屏后
+		// 必须等某条日志/流事件到达才会首次扫描文档库（表现为「好一会才加载出来」）。
+		m.syncViewMetrics()
 		return m, tickStats()
 
 	case progressMsg:
@@ -328,16 +323,10 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateAgent(msg)
 	case screenStats:
 		return m.updateStats(msg)
-	case screenRaw:
-		return m.updateLogs(SourceRaw, msg)
-	case screenLunarJS:
-		return m.updateLogs(SourceLunarJS, msg)
-	case screenLTP9:
-		return m.updateLogs(SourceLTP9JS, msg)
-	case screenDraw:
-		return m.updateLogs(SourceDraw, msg)
-	case screenGoWarn:
-		return m.updateLogs(SourceGoWarn, msg)
+	case screenLogs:
+		return m.updateLogs(msg)
+	case screenEdit:
+		return m.updateEdit(msg)
 	case screenFrontend:
 		return m.updateFrontend(msg)
 	case screenProxy:
@@ -350,8 +339,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updatePorts(msg)
 	case screenMarket:
 		return m.updateMarket(msg)
-	case screenLTP9Auth:
-		return m.updateLTP9Auth(msg)
 	case screenDump:
 		return m.updateDump(msg)
 	case screenTools:
@@ -497,16 +484,12 @@ func (m *appModel) enterScreen(id screenID) tea.Cmd {
 	case screenStats:
 		m.stats.snap = GetSnapshot()
 		return tickStats()
-	case screenRaw:
-		m.rawView.reset()
-	case screenLunarJS:
-		m.lunarView.reset()
-	case screenLTP9:
-		m.ltp9View.reset()
-	case screenGoWarn:
-		m.warnView.reset()
-	case screenDraw:
-		m.drawView.reset()
+	case screenLogs:
+		m.logView.reset()
+	case screenEdit:
+		m.editView.reset()
+		// 进入编辑屏立即扫描一次文档库：首帧就要有文件，而不是等下一次 Tick/日志唤醒。
+		m.syncViewMetrics()
 	case screenFrontend:
 		m.frontend.msg = ""
 	case screenProxy:
@@ -521,8 +504,6 @@ func (m *appModel) enterScreen(id screenID) tea.Cmd {
 		return textinput.Blink
 	case screenMarket:
 		return m.marketEnter()
-	case screenLTP9Auth:
-		return m.ltp9AuthEnter()
 	case screenDump:
 		return m.dumpEnter()
 	case screenTools:
@@ -761,16 +742,10 @@ func (m appModel) View() string {
 		return m.viewAgent()
 	case screenStats:
 		return m.viewStats()
-	case screenRaw:
-		return m.viewLogs(&m.rawView, "原始日志", "全量 stdout + 结构化日志")
-	case screenLunarJS:
-		return m.viewLogs(&m.lunarView, "月华智能体 JS 日志", "LunarCore · JavaScript")
-	case screenLTP9:
-		return m.viewLogs(&m.ltp9View, "插件引擎 JS 日志", "StarLTP · console")
-	case screenDraw:
-		return m.viewDraw()
-	case screenGoWarn:
-		return m.viewLogs(&m.warnView, "Go 警告与错误", "WARN / ERROR / FATAL")
+	case screenLogs:
+		return m.viewSystemLogs()
+	case screenEdit:
+		return m.viewEdit()
 	case screenFrontend:
 		return m.viewFrontend()
 	case screenProxy:
@@ -783,8 +758,6 @@ func (m appModel) View() string {
 		return m.viewPorts()
 	case screenMarket:
 		return m.viewMarket()
-	case screenLTP9Auth:
-		return m.viewLTP9Auth()
 	case screenDump:
 		return m.viewDump()
 	case screenTools:
@@ -802,16 +775,10 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 		return "核心智能 实况", "", agentKeys(m.agent)
 	case screenStats:
 		return "运行状态", "采样 1s · 运行观测", engineKeys(m.engine)
-	case screenRaw:
-		return "原始日志", "全量 stdout + 结构化日志", logsKeys()
-	case screenLunarJS:
-		return "月华智能体 JS 日志", "LunarCore · JavaScript", logsKeys()
-	case screenLTP9:
-		return "插件引擎 JS 日志", "StarLTP · console", logsKeys()
-	case screenDraw:
-		return "绘图引擎日志", "sd.cpp", logsKeys()
-	case screenGoWarn:
-		return "Go 警告与错误", "WARN / ERROR / FATAL", logsKeys()
+	case screenLogs:
+		return "系统日志 · " + logCategoryTitles[m.logCat], logCategoryDescs[m.logCat], logsKeys()
+	case screenEdit:
+		return "编辑显示", "documents · 展示与运行", editKeys()
 	case screenFrontend:
 		return "前端管理", "", frontendKeys()
 	case screenProxy:
@@ -824,8 +791,6 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 		return "端口释放", "", portsKeys()
 	case screenMarket:
 		return "LTPX 应用市场", marketContext(m.market), marketKeys(m.market)
-	case screenLTP9Auth:
-		return "LTP9 授权签发", ltp9AuthContext(m.ltp9Auth), ltp9AuthKeys(m.ltp9Auth)
 	case screenDump:
 		return "数据导出", dumpContextLine(m.dump), dumpKeys(m.dump)
 	case screenTools:
@@ -839,7 +804,7 @@ func menuKeys() []keyHint {
 	return []keyHint{
 		kh("↑/↓", "选择"),
 		kh("Enter/→", "进入"),
-		kh("0-9 a-g", "直达"),
+		kh("0-9 a-c", "直达"),
 		kh("?", "帮助"),
 		kh("q", "退出"),
 	}

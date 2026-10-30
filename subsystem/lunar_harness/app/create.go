@@ -98,9 +98,6 @@ func Assemble() {
 	// 引擎本体在首次合成请求时经统一播报链路（engine/broadcaster）惰性加载，本守护只负责闲置回收。
 	broadcaster.StartIdleUnloader()
 
-	// ==== 入站消费：ltp9/* 调试信封交由 LTP9 引擎处理 ====
-	ws.Instance.SubscribeInbound("ltp9", crystal.HandleInbound)
-
 	// ==== 消费层启动：月华 Go 原生对话链（每秒思考循环） ====
 	// 必须最后启动：思考循环一经运行即可能消费计划表等到期任务，若此时 llama 模型、
 	// 记忆库、LTP9/LTPX 协调层尚未就绪，到期任务会在依赖缺失下执行。

@@ -130,6 +130,7 @@ const (
 	StorageRootDocuments  = "documents"
 	StorageRootAudios     = "audios"
 	StorageRootMultimedia = "multimedia"
+	StorageRootUnknown = "unknown"
 )
 
 // DerivedStorageRoots 内容仓库内的派生缓存子树（不进入句柄索引）
@@ -139,8 +140,10 @@ var DerivedStorageRoots = []string{
 	StorageRootAudios + "/cache",
 }
 
-// StorageRoots 内容仓库扫描根
-var StorageRoots = []string{StorageRootDocuments, StorageRootAudios, StorageRootMultimedia}
+// StorageRoots 内容仓库扫描根（四棵：文档 / 音频 / 多媒体 / 不可读二进制）
+var StorageRoots = []string{
+	StorageRootDocuments, StorageRootAudios, StorageRootMultimedia, StorageRootUnknown,
+}
 
 // 缓存类型
 const (
@@ -181,11 +184,22 @@ var animatedExtensions = map[string]bool{
 	".gif": true, ".webp": true, ".apng": true, ".png": true,
 }
 
+// binaryExtensions 明确按二进制处理的扩展名（与文本白名单互斥；命中即按 base64 取回）。
+// 这些文件仍使用 @D 句柄：可读性由扩展名 + 文件头探测判定，而不是新增类型码。
+var binaryExtensions = map[string]bool{
+	".zip": true, ".7z": true, ".rar": true, ".gz": true, ".tar": true, ".xz": true, ".bz2": true,
+	".exe": true, ".dll": true, ".so": true, ".dylib": true, ".bin": true, ".msi": true, ".apk": true,
+	".gguf": true, ".safetensors": true, ".pt": true, ".pth": true, ".onnx": true, ".ckpt": true,
+	".pdf": true, ".docx": true, ".xlsx": true, ".pptx": true, ".doc": true, ".xls": true, ".ppt": true,
+	".ttf": true, ".otf": true, ".woff": true, ".woff2": true, ".eot": true,
+	".db": true, ".sqlite": true, ".sqlite3": true, ".class": true, ".jar": true, ".wasm": true,
+}
+
 // workspaceTextExtensions 允许按需收录的工作区文本类扩展名（白名单）
 var workspaceTextExtensions = map[string]bool{
 	".md": true, ".markdown": true, ".txt": true, ".json": true, ".xml": true,
 	".yaml": true, ".yml": true, ".toml": true, ".ini": true, ".cfg": true, ".conf": true,
-	".log": true, ".csv": true, ".tsv": true,
+	".log": true, ".csv": true, ".tsv": true, ".jsonl": true, ".ndjson": true,
 	".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".cjs": true,
 	".py": true, ".rs": true, ".java": true, ".kt": true, ".c": true, ".h": true, ".cpp": true,
 	".cxx": true, ".hpp": true, ".cs": true, ".rb": true, ".php": true, ".swift": true,

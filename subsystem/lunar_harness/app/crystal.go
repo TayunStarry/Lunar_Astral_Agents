@@ -13,7 +13,7 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/ltpx"
 )
 
-// assembleCrystal 装配琉璃人格格：知识库/记忆库、LTP9 插件引擎与前端总线消费。
+// assembleCrystal 装配琉璃人格格：知识库/记忆库、LTPX 协调与前端总线消费。
 func assembleCrystal() error {
 	// ==== 统一句柄库（SQLite handles.db：URL 主表 / 六类句柄 / 段落 / 缓存） ====
 	// 必须先于月华智能体运行时启动：入库层在对话链路里即被调用。
@@ -37,11 +37,6 @@ func assembleCrystal() error {
 
 	// ==== 记忆库实例与默认分组（与月华 JS agent 行为对齐） ====
 	initMemoryDatabase()
-
-	// ==== LTP9-Flash 引擎：注入宿主通道（前端智能体 / 单向通报 / 调试回执推送） ====
-	if err := crystal.BridgeLTP9(); err != nil {
-		logger.Warn("LunarHarness", "LTP9 引擎初始化失败: %v (不影响服务启动)", err)
-	}
 
 	// ==== LTPX 协调：注入进程内实现，月华侧不再走 HTTP 通道 ====
 	ltpx.SetBroker(crystal.NewBroker())

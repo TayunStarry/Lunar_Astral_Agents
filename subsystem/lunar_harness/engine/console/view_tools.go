@@ -117,10 +117,9 @@ func (m appModel) viewTools() string {
 	f := m.frameFor("工具列表", toolsContextLine(m.tools), toolsKeys())
 	w, h := f.bodySize()
 
-	head := []string{
-		dimStyle.Render("  扫描 Go 实现的智能体工具（来源：subsystem/lunar_harness/agents + lunar）"),
-		"",
-	}
+	// 不再重复页面来源与扫描方式：标题栏已给出「几个智能体 / 几个工具」，
+	// 每个智能体区块也有统一的首行简述，顶部再写一遍只是冗余。
+	head := make([]string, 0, 2)
 	if m.tools.note != "" {
 		head = append(head, "  "+warnStyle.Render(m.tools.note), "")
 	}
@@ -157,9 +156,9 @@ func (m appModel) viewTools() string {
 		if selected {
 			name = selectStyle.Render(entry.tool.Name)
 		}
+		// 工具行只写工具名：所属智能体已由上方区块标题标明，逐行重复只是噪音。
 		block = append(block, newRow(rowW, selected).
 			L(cursor, name).
-			R(dimStyle.Render("["+agent.Name+"]")).
 			String())
 		for _, line := range wrapPlain(entry.tool.Description, maxInt(8, rowW-6)) {
 			block = append(block, "     "+dimStyle.Render(line))

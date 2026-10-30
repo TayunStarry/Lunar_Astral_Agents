@@ -45,9 +45,6 @@ func (d *Store) embedTexts(ctx context.Context, model string, texts []string) ([
 		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if config.AgentEmbeddingKey != "" {
-		req.Header.Set("Authorization", "Bearer "+config.AgentEmbeddingKey)
-	}
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil {

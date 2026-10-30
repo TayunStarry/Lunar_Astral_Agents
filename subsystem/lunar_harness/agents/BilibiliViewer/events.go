@@ -1,51 +1,20 @@
 package BilibiliViewer
 
-// events.go 哔哩观影事件：把「开始前 / 结束前」推到 LTP9 引擎域。
+// events.go 哔哩观影的开始前 / 结束前钩子占位。
 //
-//   - before_life_starts：可取消本次观影；取消由生活体系的额度统一计数；
-//   - before_life_ends：纯触发通知（正常完成或中途失败），返回值不被使用。
+// 私有 js 运行时不再在生活链路上挂事件订阅（原 before_life_starts / before_life_ends
+// 由插件订阅器消费），因此这里保持「始终允许开始、结束仅记录」的默认行为，
+// 调用方无需改动。
 
-import (
-	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
-)
-
-// dispatchBeforeLifeStarts 观影开始前事件：返回是否允许开始，以及插件给出的取消原因。
+// dispatchBeforeLifeStarts 观影开始前：始终允许开始。
 func dispatchBeforeLifeStarts(cfg Config) (bool, string) {
-	replies := cfg.RepliesPerRound
-	if replies <= 0 {
-		replies = defaultRepliesPerRound
-	}
-	res := StarLTP.Emit(StarLTP.EventBeforeLifeStarts, map[string]any{
-		"forced":          false,
-		"candidates":      candidateMax,
-		"slicesPerVideo":  watchSliceDefault,
-		"repliesPerRound": replies,
-	}, "")
-	feedback, ok := res.Return.(map[string]any)
-	if !res.Returned || !ok {
-		return true, ""
-	}
-	if cancel, _ := feedback["cancel"].(bool); cancel {
-		reason, _ := feedback["reason"].(string)
-		return false, reason
-	}
+	_ = cfg
 	return true, ""
 }
 
-// dispatchBeforeLifeEnds 观影结束前事件（纯触发器：忽略返回值）。
+// dispatchBeforeLifeEnds 观影结束前（纯触发器）。
 func dispatchBeforeLifeEnds(r *runner, result, reason string) {
-	if r == nil {
-		return
-	}
-	payload := map[string]any{
-		"result":        result,
-		"videosWatched": len(r.approved),
-		"videosSampled": len(r.videos),
-		"repliesUsed":   r.replied,
-		"dynamic":       r.dynID != "",
-	}
-	if reason != "" {
-		payload["reason"] = reason
-	}
-	StarLTP.Emit(StarLTP.EventBeforeLifeEnds, payload, "")
+	_ = r
+	_ = result
+	_ = reason
 }

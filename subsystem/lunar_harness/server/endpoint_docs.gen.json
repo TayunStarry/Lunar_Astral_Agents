@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.303.0744",
+    "version": "2026.303.2204",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -22,6 +22,32 @@
       "get": {
         "summary": "月华消息终端静态前端（内嵌 clients/lunar 资源）",
         "description": "月华消息终端静态前端（内嵌 clients/lunar 资源）",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/agent/chat/completions": {
+      "post": {
+        "summary": "外部多模态推理（非流式；模型名固定 primary_reasoning；请求经响应者智能体排队，由响应者独立 Tick 在主调度空档期依次处理）",
+        "description": "外部多模态推理（非流式；模型名固定 primary_reasoning；请求经响应者智能体排队，由响应者独立 Tick 在主调度空档期依次处理）",
+        "operationId": "AgentChatHandler",
+        "x-handler": "AgentChatHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/agent/embeddings": {
+      "post": {
+        "summary": "外部文本嵌入（非流式；模型名固定 text_embedding）",
+        "description": "外部文本嵌入（非流式；模型名固定 text_embedding）",
+        "operationId": "AgentEmbeddingHandler",
+        "x-handler": "AgentEmbeddingHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -952,32 +978,6 @@
         }
       }
     },
-    "/proxy/chat": {
-      "post": {
-        "summary": "对话代理",
-        "description": "对话代理",
-        "operationId": "crystal.ChatProxyHandler",
-        "x-handler": "crystal.ChatProxyHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/proxy/models": {
-      "post": {
-        "summary": "模型查询代理",
-        "description": "模型查询代理",
-        "operationId": "crystal.ModelsProxyHandler",
-        "x-handler": "crystal.ModelsProxyHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/resize": {
       "post": {
         "summary": "图片缩放",
@@ -1010,92 +1010,6 @@
         "description": "统一键鼠操作共享模块",
         "operationId": "crystal.SharedInputHandler",
         "x-handler": "crystal.SharedInputHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/v1/": {
-      "delete": {
-        "summary": "llama.cpp 代理接口",
-        "description": "llama.cpp 代理接口",
-        "operationId": "llama.ProxyHandler_delete",
-        "x-handler": "llama.ProxyHandler",
-        "x-method": "ANY",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      },
-      "get": {
-        "summary": "llama.cpp 代理接口",
-        "description": "llama.cpp 代理接口",
-        "operationId": "llama.ProxyHandler_get",
-        "x-handler": "llama.ProxyHandler",
-        "x-method": "ANY",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      },
-      "head": {
-        "summary": "llama.cpp 代理接口",
-        "description": "llama.cpp 代理接口",
-        "operationId": "llama.ProxyHandler_head",
-        "x-handler": "llama.ProxyHandler",
-        "x-method": "ANY",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      },
-      "options": {
-        "summary": "llama.cpp 代理接口",
-        "description": "llama.cpp 代理接口",
-        "operationId": "llama.ProxyHandler_options",
-        "x-handler": "llama.ProxyHandler",
-        "x-method": "ANY",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      },
-      "patch": {
-        "summary": "llama.cpp 代理接口",
-        "description": "llama.cpp 代理接口",
-        "operationId": "llama.ProxyHandler_patch",
-        "x-handler": "llama.ProxyHandler",
-        "x-method": "ANY",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      },
-      "post": {
-        "summary": "llama.cpp 代理接口",
-        "description": "llama.cpp 代理接口",
-        "operationId": "llama.ProxyHandler_post",
-        "x-handler": "llama.ProxyHandler",
-        "x-method": "ANY",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      },
-      "put": {
-        "summary": "llama.cpp 代理接口",
-        "description": "llama.cpp 代理接口",
-        "operationId": "llama.ProxyHandler_put",
-        "x-handler": "llama.ProxyHandler",
-        "x-method": "ANY",
         "responses": {
           "200": {
             "description": "成功"

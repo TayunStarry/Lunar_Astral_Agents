@@ -39,12 +39,6 @@
 		]
 	},
 	"agent": {
-		"embedding_model": "text_embedding",
-		"embedding_url": "http://127.0.0.1:36789/v1",
-		"embedding_key": null,
-		"multimodal_model": "primary_reasoning",
-		"multimodal_url": "http://127.0.0.1:36789/v1",
-		"multimodal_key": null,
 		"video_input": "file",
 		"image_input": "url",
 		"vision_max_side": 1024,

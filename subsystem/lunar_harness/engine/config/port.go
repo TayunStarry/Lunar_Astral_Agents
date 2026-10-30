@@ -11,9 +11,9 @@ var (
 	ProxyPort = BasicPort + 5
 )
 
-// LocalV1URL 本机 OpenAI 兼容接口基址（同源 /v1，端口随 BasicPort 配置变化）。
-func LocalV1URL() string {
-	return fmt.Sprintf("http://127.0.0.1:%d/v1", BasicPort)
+// LlamaV1URL llama.cpp 直连的 OpenAI 兼容接口基址（Go 智能体内部专用，端口随 ModelPort 变化）。
+func LlamaV1URL() string {
+	return fmt.Sprintf("http://127.0.0.1:%d/v1", ModelPort)
 }
 
 // LocalBaseURL 本机 Web 服务根地址（端口随 BasicPort 配置变化）

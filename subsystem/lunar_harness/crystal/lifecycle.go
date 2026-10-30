@@ -1,16 +1,12 @@
 package crystal
 
+// lifecycle.go 琉璃人格格持有的运行时资源收尾。
+
 import (
-	StarLTP "LunarSubsystem/LunarHarness/engine/plugin"
+	runtime "LunarSubsystem/LunarHarness/engine/runtime"
 )
 
-// HandleInbound 消费 /ws 入站消息：ltp9/* 调试信封交由 LTP9 引擎处理，其余旁路。
-// 由装配层注册为集线器的入站订阅者。
-func HandleInbound(data []byte) {
-	StarLTP.HandleInbound(data)
-}
-
-// Close 关闭琉璃人格格持有的引擎资源（进程退出前调用）
+// Close 关闭月华私有 js 运行时（进程退出前调用）。
 func Close() {
-	StarLTP.Close()
+	runtime.Close()
 }

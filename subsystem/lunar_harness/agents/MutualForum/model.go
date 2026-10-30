@@ -2,7 +2,7 @@ package MutualForum
 
 // model.go 模型调用：OpenAI 兼容 /chat/completions + function calling。
 //
-// 模型名与端点来自 engine/config（agent.multimodal_*），不硬编码；
+// 模型名与端点为本地固定值（engine/config 的 AgentMultimodalModel/URL）；
 // 同时兼容「原始 OpenAI 响应」与「代理包装响应」（success + data）两种格式。
 
 import (
@@ -80,18 +80,11 @@ func reportModelCall(requestBody []byte, completion string, usage *modelUsage, e
 // resolveModel 解析主多模态模型端点（只解析一次）。
 func resolveModel() {
 	modelOnce.Do(func() {
-		modelName = strings.TrimSpace(config.AgentMultimodalModel)
-		if modelName == "" {
-			modelName = defaultModelName
-		}
-		modelURL = strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
-		if modelURL == "" {
-			modelURL = config.LocalV1URL()
-		}
+		modelName = config.AgentMultimodalModel
+		modelURL = strings.TrimRight(config.AgentMultimodalURL, "/")
 		if !strings.HasSuffix(modelURL, "/v1") {
 			modelURL += "/v1"
 		}
-		modelKey = strings.TrimSpace(config.AgentMultimodalKey)
 	})
 }
 
@@ -117,12 +110,7 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 		return nil, fmt.Errorf("构造模型请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if modelKey != "" {
-		req.Header.Set("Authorization", "Bearer "+modelKey)
-	}
 
-	observeBegin()
-	defer observeEnd()
 	start := time.Now()
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -158,6 +146,7 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 			result.ToolCalls[i].Type = "function"
 		}
 	}
+	observeDelta("think", result.Reasoning)
 	observeDelta("content", result.Content)
 	reportModelCall(body, result.Content+result.Reasoning, completion.Usage, time.Since(start))
 	return result, nil

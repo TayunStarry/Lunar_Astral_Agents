@@ -159,9 +159,6 @@ func (d *Store) postTagRequest(ctx context.Context, messages []chatMessage) ([]s
 		return nil, fmt.Errorf("创建 LLM 请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if config.AgentMultimodalKey != "" {
-		req.Header.Set("Authorization", "Bearer "+config.AgentMultimodalKey)
-	}
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil {

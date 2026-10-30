@@ -1,6 +1,7 @@
 package lunar
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 
@@ -67,6 +68,10 @@ var (
 	stopCh chan struct{}
 	// loopWG 循环退出等待
 	loopWG sync.WaitGroup
+	// responderCtx 响应者独立 Tick 的上下文（停止时取消，中止在跑的外部推理）
+	responderCtx context.Context
+	// responderCancel 取消响应者 Tick
+	responderCancel context.CancelFunc
 
 	// dialogueRole 对话者角色实例
 	dialogueRole *DialogueRole

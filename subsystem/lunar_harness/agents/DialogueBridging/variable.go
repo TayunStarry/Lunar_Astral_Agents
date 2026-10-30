@@ -14,8 +14,6 @@ import (
 const (
 	// roleLabel 该智能体在「核心智能 实况」中的角色标签
 	roleLabel = "通讯桥接"
-	// defaultModelName 未配置多模态模型时的兜底模型名
-	defaultModelName = "primary_reasoning"
 	// maxDirectoryEntries 提示词里最多列出多少个群 / 好友，避免撑爆上下文
 	maxDirectoryEntries = 80
 	// maxSendImages 单次消息最多携带的图片数（超过则分批发送）
@@ -31,7 +29,6 @@ var (
 	modelOnce sync.Once
 	modelName string
 	modelURL  string
-	modelKey  string
 )
 
 // modelHTTPClient 单次规划调用的 HTTP 客户端

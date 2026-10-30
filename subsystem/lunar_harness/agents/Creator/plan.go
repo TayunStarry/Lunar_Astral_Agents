@@ -53,9 +53,9 @@ func plannerPrompt(history journal) string {
 3. steps 必须按严格顺序执行，后一步可以依赖前一步的产物，但不可并列或乱序。
 4. 每个步骤用自然语言详细写清执行目标与操作要求，并指定专属智能体：
    - writer：文字创作与文档维护（个人文档、小说、故事、诗歌等）
-   - engineer：JavaScript / LTP9 项目创建与推进、代码文件维护
-   - researcher：资料查阅、DTS 开发文档研究、目录与文件浏览
-   - runner：LTP9 脚本运行、授权与状态监控、内容调度
+   - engineer：JavaScript 项目创建与推进、代码文件维护
+   - researcher：资料查阅、开发文档研究、目录与文件浏览
+   - runner：脚本运行与结果查看、内容调度
 5. 若上一轮有未完成或遗留事项，优先延续之前的创作思路；也可以发起全新创作。
 6. 所有文件路径一律写相对 /document 的路径。
 7. 不要臆造工具结果；没有查到的资料就明确留待下一步查证。
@@ -103,7 +103,7 @@ func parsePlan(args map[string]any) (planResult, error) {
 	if rawMemos, ok := args["memos"].([]any); ok {
 		for _, raw := range rawMemos {
 			if memo, ok := raw.(string); ok && strings.TrimSpace(memo) != "" {
-				memos = append(memos, previewRunes(memo, 300))
+				memos = append(memos, clipAtSentence(memo, maxMemoRunes))
 				if len(memos) >= maxMemos {
 					break
 				}

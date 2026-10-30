@@ -11,7 +11,7 @@ import "LunarSubsystem/LunarHarness/protocol/agentinfo"
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
 		ID: "dialogue_bridging", Name: "通讯桥接", Source: "agents/DialogueBridging",
-		Note: "规划式执行：一次需求可指定多个目标，按顺序逐个投递",
+		Note: "消息投递智能体：把内容分发到多个群聊或联系人。",
 		Tools: []agentinfo.Tool{
 			{Name: "resolve_target", Description: "把群号 / 群名 / QQ 号 / 昵称 / 备注解析为可投递目标，名称歧义时报错。"},
 			{Name: "send_text", Description: "向一个目标发送文本消息。"},

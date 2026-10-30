@@ -25,7 +25,7 @@ func ToolCatalog() []agentinfo.Agent {
 	}
 	return []agentinfo.Agent{{
 		ID: "desktop_operator", Name: "桌面操作", Source: "agents/desktop",
-		Note:  "多角色流水线（启动者 / 观察者 / 规划者 / 操作者），各角色只拿到白名单内的工具",
+		Note:  "桌面操控智能体：按自然语言要求操作真实桌面键鼠。",
 		Tools: tools,
 	}}
 }

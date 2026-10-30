@@ -88,12 +88,12 @@ async function buildSchemaContext() {
     return lines.join('\n');
 }
 
-// 调用模型（OpenAI 兼容 /v1/chat/completions）
+// 调用模型（/agent/chat/completions，非流式；模型名由后端固定）
 async function callAI(messages) {
-    const response = await fetch('/v1/chat/completions', {
+    const response = await fetch('/agent/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: AI_MODEL, messages, stream: false, temperature: 0.2 })
+        body: JSON.stringify({ messages, stream: false, temperature: 0.2 })
     });
     if (!response.ok) throw new Error('API 请求失败 (' + response.status + ')');
     const data = await response.json();

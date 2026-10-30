@@ -58,7 +58,7 @@
         // ==== 初始化记忆库实例 ====
         async _initInstance() {
             try {
-                // 模型配置已迁移至 lunar_config.json，不再通过请求体传入
+                // 模型配置由后端固定，不再通过请求体传入
                 await this._request('POST', 'init', {});
             } catch (e) {
                 // 已初始化不算错误

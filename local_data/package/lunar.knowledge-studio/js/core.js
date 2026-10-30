@@ -57,7 +57,6 @@ const elements = {
 };
 
 const API_BASE = '/knowledge/';
-const AI_MODEL = 'primary_reasoning';
 
 // ============================================================
 // 原生 SQL 执行通道（db 为当前数据源；返回 Promise<op>，op 为后端 OperationResult）

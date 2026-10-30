@@ -25,7 +25,7 @@ func (s *session) executePlan(ctx context.Context, plan planResult) []stepResult
 		if retryable(err) {
 			s.addError(fmt.Errorf("第 %d 步首次执行失败: %w", i+1, err))
 			retryInstruction := instruction + "\n\n注意：上一次执行失败（" +
-				previewRunes(err.Error(), 160) + "）。请换一种方式完成，避免重复相同的工具调用与相同输出。"
+				clipAtSentence(err.Error(), 300) + "）。请换一种方式完成，避免重复相同的工具调用与相同输出。"
 			text, err = s.runStep(ctx, step.Agent, retryInstruction)
 		}
 		if err != nil {
@@ -45,7 +45,7 @@ func (s *session) executePlan(ctx context.Context, plan planResult) []stepResult
 			text = "已完成本步骤的工具操作"
 		}
 		results = append(results, stepResult{Agent: step.Agent, Task: step.Task, Result: text})
-		prior = fmt.Sprintf("第 %d 步（%s）完成：%s", i+1, label, previewRunes(text, 200))
+		prior = fmt.Sprintf("第 %d 步（%s）完成：%s", i+1, label, clipAtSentence(text, 400))
 	}
 	return results
 }
@@ -64,7 +64,7 @@ func (s *session) runStep(ctx context.Context, agent, instruction string) (strin
 func executorPrompt(agent string) string {
 	base := `你在执行「月华.生活.创作」管线中的一个步骤。只能通过工具完成操作，不要臆造结果。
 所有文件路径一律相对 /document；需要外部资料时可随时联网搜索或查询记忆库。
-完成后用中文简要说明产出（文件路径与关键内容）。`
+完成后用中文简要说明产出：只用 1-2 句话讲清文件路径与本轮最重要的产出，不要罗列过程、不要贴代码或大段原文。`
 	switch agent {
 	case agentWriter:
 		return base + `
@@ -75,26 +75,27 @@ func executorPrompt(agent string) string {
 	case agentEngineer:
 		return base + `
 
-你是工程创作者：负责创建或推进 JavaScript / LTP9 项目，维护代码文件。
-运行环境限定为 LTP9 引擎；写脚本前可先用 read_dts 查阅开发文档，用 code_index 了解现有代码结构。
-脚本写好后用 run_ltp9_script 加载运行（会自动签发授权），并用 script_status 监控状态。`
+你是工程创作者：负责创建或推进 JavaScript 项目，维护代码文件。
+运行环境为月华私有 js 运行时或浏览器运行环境（由文件头「//Engine: Lunar Harness」标识自动分流）；
+写脚本前可先用 read_dts 查阅内嵌的运行时 API 契约，用 code_index 了解现有代码结构。
+脚本写好后用 run_script 运行。`
 	case agentResearcher:
 		return base + `
 
-你是资料查阅者：负责查阅资料、研究 DTS 开发文档、浏览 /document 目录与代码索引。
+你是资料查阅者：负责查阅资料、研究开发文档、浏览 /document 目录与代码索引。
 只做检索与阅读，不修改文件；把关键结论、出处与可直接使用的素材整理清楚，供后续步骤使用。`
 	case agentRunner:
 		return base + `
 
-你是脚本运行者：负责运行 LTP9 脚本并实时监控状态。
-运行前确认脚本文件已存在；用 run_ltp9_script 传入一个或多个脚本（按顺序拼接加载），
-随后用 script_status 查看是否已加载、是否报错、是否导出了可调用结果。`
+你是脚本运行者：负责运行脚本并查看返回结果。
+运行前确认脚本文件已存在；用 run_script 传入一个或多个脚本（按顺序逐个运行并返回结果）。`
 	default:
 		return base
 	}
 }
 
 // summarizeSteps 汇总本轮执行结果，作为生活事件记录。
+// 每个步骤用「简述」而不是硬截断：优先保留完整句子，超长才在标点处收尾。
 func summarizeSteps(results []stepResult, plan planResult) string {
 	if len(results) == 0 {
 		return "创作没有产生可执行的步骤"
@@ -103,14 +104,14 @@ func summarizeSteps(results []stepResult, plan planResult) string {
 	var b strings.Builder
 	for i, result := range results {
 		if result.Skipped {
-			fmt.Fprintf(&b, "%d.[%s] 跳过：%s\n", i+1, agentLabels[result.Agent], previewRunes(result.Error, 80))
+			fmt.Fprintf(&b, "%d.[%s] 跳过：%s\n", i+1, agentLabels[result.Agent], clipAtSentence(result.Error, 240))
 			continue
 		}
 		done++
-		fmt.Fprintf(&b, "%d.[%s] %s\n", i+1, agentLabels[result.Agent], previewRunes(result.Result, 160))
+		fmt.Fprintf(&b, "%d.[%s] %s\n", i+1, agentLabels[result.Agent], clipAtSentence(result.Result, 240))
 	}
-	prefix := fmt.Sprintf("本轮创作 %d 步，完成 %d 步", len(plan.Steps), done)
-	return previewRunes(prefix+"：\n"+b.String(), 1200)
+	prefix := fmt.Sprintf("本轮创作 %d 步，完成 %d 步：\n", len(plan.Steps), done)
+	return clipAtSentence(prefix+b.String(), maxSummaryRunes)
 }
 
 // mergeMemos 合并计划备忘与执行遗留备忘，去重并限长。
@@ -123,7 +124,7 @@ func mergeMemos(plan planResult, extra []string) []string {
 			continue
 		}
 		seen[memo] = true
-		out = append(out, previewRunes(memo, 300))
+		out = append(out, clipAtSentence(memo, maxMemoRunes))
 		if len(out) >= maxMemos {
 			break
 		}

@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
 // ==================== 目标目录 ====================
@@ -130,5 +132,27 @@ func uploadQQFile(action string, target map[string]any, file, name string) error
 		params["folder"] = "" // 传到群文件根目录
 	}
 	_, err := callNapcatAPIWithClient(action, params, uploadHTTPClient)
-	return err
+	if err != nil {
+		// NapCat 的文件上传在「文件已落盘上传」之后还会等待 onMsgInfoListUpdate 事件回执；
+		// 该事件偶尔超时（Wording: Timeout: NTEvent ... sendMsg ...），但文件其实已经发送成功。
+		// 若把这类「回执超时」判为投递失败，用户会在群里明明看到文件、日志却出现失败警告。
+		if isUnconfirmedUpload(err) {
+			logger.Info("DialogueBridging", "文件上传已提交但未收到 NapCat 事件回执，按成功处理: %s（%v）", name, err)
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// isUnconfirmedUpload 判断是否为 NapCat「上传已完成、仅事件回执超时」的错误。
+func isUnconfirmedUpload(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := err.Error()
+	if !strings.Contains(text, "Timeout: NTEvent") {
+		return false
+	}
+	return strings.Contains(text, "sendMsg") || strings.Contains(text, "onMsgInfoListUpdate")
 }

@@ -11,7 +11,7 @@ import "LunarSubsystem/LunarHarness/protocol/agentinfo"
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
 		ID: "web_search", Name: "网络搜索", Source: "agents/WebSearch",
-		Note: "自主流水线（非 function calling），全程仅两次模型调用：检索词提炼 + 长文摘要提取",
+		Note: "检索智能体：多引擎搜索并整理结构化报告。",
 		Tools: []agentinfo.Tool{
 			{Name: "extract_query", Description: "用小模型把自然语言需求提炼成检索词。"},
 			{Name: "search_with_fallback", Description: "按必应 → 百度 → 搜狗的顺序尝试检索页并提取结果条目。"},

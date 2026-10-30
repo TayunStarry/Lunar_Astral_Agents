@@ -1,72 +1,56 @@
 /**
  * AI 配置管理模块
- * 从 lunar_config.json 的 agent 分组读取多模态/嵌入模型配置，
- * 封装聊天/嵌入 API 调用。
+ * 本地部署固定使用同源 /agent 端点与固定模型名，不再读取 lunar_config.json。
  *
- * AI 调用始终走同源代理 /v1/ 路由，避免 CORS 问题。
+ * AI 调用始终走同源 /agent 路由，避免 CORS 问题。
  */
 
 (function(global) {
     'use strict';
 
-    // ==== 默认 agent 配置（读取失败时兜底） ====
+    // ==== 本地部署固定 agent 配置 ====
     var DEFAULT_AGENT_CONFIG = {
         multimodal_model: 'primary_reasoning',
-        multimodal_url: 'http://127.0.0.1:36789/v1',
-        multimodal_key: '',
-        embedding_model: 'text_embedding',
-        embedding_url: 'http://127.0.0.1:36789/v1',
-        embedding_key: ''
+        embedding_model: 'text_embedding'
     };
 
-    // ==== 同源代理路径 ====
-    var PROXY_CHAT_URL = '/v1/chat/completions';
-    var PROXY_EMBED_URL = '/v1/embeddings';
+    // ==== 同源端点路径 ====
+    var PROXY_CHAT_URL = '/agent/chat/completions';
+    var PROXY_EMBED_URL = '/agent/embeddings';
 
     // ==== ConfigManager 类 ====
     class ConfigManager {
         constructor(app) {
             this.app = app;
-            this.agentConfig = null;
+            this.agentConfig = Object.assign({}, DEFAULT_AGENT_CONFIG);
         }
 
-        // ==== 从 lunar_config.json 读取 agent 配置 ====
+        // ==== 固定配置（保留异步接口以兼容调用方） ====
         async loadAgentConfig() {
-            try {
-                var resp = await fetch('/file/read/lunar_config.json');
-                if (!resp.ok) throw new Error('读取配置文件失败: ' + resp.status);
-                var data = await resp.json();
-                this.agentConfig = Object.assign({}, DEFAULT_AGENT_CONFIG, data.agent || {});
-            } catch (e) {
-                console.warn('AI 配置加载失败，使用默认配置:', e);
-                this.agentConfig = Object.assign({}, DEFAULT_AGENT_CONFIG);
-            }
+            this.agentConfig = Object.assign({}, DEFAULT_AGENT_CONFIG);
+            return this.agentConfig;
         }
 
         // ==== 获取多模态模型配置（保持 {url,name,key} 兼容形态） ====
         getConfig() {
-            var cfg = this.agentConfig || DEFAULT_AGENT_CONFIG;
             return {
-                url: cfg.multimodal_url || '',
-                name: cfg.multimodal_model || 'primary_reasoning',
-                key: cfg.multimodal_key || ''
+                url: '/v1',
+                name: DEFAULT_AGENT_CONFIG.multimodal_model,
+                key: ''
             };
         }
 
         // ==== 获取嵌入模型名 ====
         getEmbeddingModel() {
-            var cfg = this.agentConfig || DEFAULT_AGENT_CONFIG;
-            return cfg.embedding_model || 'text_embedding';
+            return DEFAULT_AGENT_CONFIG.embedding_model;
         }
 
         // ==== 聊天 API 调用（始终走同源代理） ====
         // 返回: { content, inputTokens, outputTokens, totalTokens }
         // options.imageUrl 存在时，将图片以多模态 image_url 附加到末条用户消息
         async callChat(messages, options) {
-            var config = this.getConfig();
             var opt = options || {};
             var body = {
-                model: config.name,
                 messages: this._buildMessages(messages, opt.imageUrl),
                 temperature: opt.temperature !== undefined ? opt.temperature : 0.7,
                 max_tokens: opt.maxTokens || 4096,
@@ -115,7 +99,7 @@
             var resp = await fetch(PROXY_EMBED_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: this.getEmbeddingModel(), input: text })
+                body: JSON.stringify({ input: text })
             });
             if (!resp.ok) throw new Error('嵌入调用失败: ' + resp.status);
             var data = await resp.json();

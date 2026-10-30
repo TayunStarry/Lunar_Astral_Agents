@@ -34,7 +34,8 @@ func (r *forumRun) Start(_ context.Context, env Env) error {
 	}
 	r.data.Instruction = fmt.Sprintf(
 		"以「%s」的状态去互助论坛逛一圈：先看看最近的新话题，挑一个感兴趣的读一读；"+
-			"如果有能接话或能帮上忙的，就礼貌回一条；不要发广告、不要争论、不要暴露自己是程序。"+
+			"然后挑一件最想做的事——有能接话或能帮上忙的就礼貌回一条，自己这轮正好有想讨论的事、疑问或进展就发一个新话题。"+
+			"不要发广告、不要争论、不要暴露自己是程序。"+
 			"刚刚我在：%s。",
 		emptyAs(env.MoodLabel, "平静"), emptyAs(env.LastRecord, "没做什么"),
 	)
@@ -55,7 +56,7 @@ func (r *forumRun) Next(ctx context.Context, _ Env) (EventStep, error) {
 	}
 	return EventStep{
 		Done:   true,
-		Record: "逛了论坛：" + truncateAtSentence(text, 200),
+		Record: "逛了论坛：" + truncateAtSentence(text, 120),
 		Detail: "论坛返回 " + fmt.Sprintf("%d 字", len([]rune(text))),
 	}, nil
 }

@@ -34,6 +34,9 @@ var (
 	colThink    = lipgloss.Color("243") // 思考流（暗色）
 	colRole     = lipgloss.Color("176") // 智能体角色名
 	colDraw     = lipgloss.Color("51")  // 绘图采样进度
+	colEditWarm = lipgloss.Color("226") // 编辑显示：本次运行触碰的文件（黄）
+	colEditLive = lipgloss.Color("48")  // 编辑显示：最近改动片段（绿）
+	colEditBase = lipgloss.Color("39")  // 编辑显示：普通文件名（蓝）
 )
 
 // ==== 基础样式 ====
@@ -78,6 +81,12 @@ var (
 	thinkHeadStyle    lipgloss.Style // 思考/输出分区标题
 	roleStyle         lipgloss.Style // 智能体角色名
 	drawProgressStyle lipgloss.Style // 绘图采样进度
+	editTouchedStyle  lipgloss.Style // 编辑显示：本次运行触碰的文件名（黄）
+	editFileStyle     lipgloss.Style // 编辑显示：普通文件名（蓝）
+	editFailStyle     lipgloss.Style // 编辑显示：最近运行失败的文件名（红）
+	editHiliteStyle   lipgloss.Style // 编辑显示：最近改动片段（绿）
+	editLineNoStyle   lipgloss.Style // 编辑显示：行号（灰）
+	editRunStyle      lipgloss.Style // 编辑显示：运行入口提示（紫）
 )
 
 // bindTheme 把全部样式（重新）绑定到渲染器 r。
@@ -128,6 +137,12 @@ func bindTheme(r *lipgloss.Renderer) {
 	thinkHeadStyle = ns().Bold(true).Foreground(colDim)
 	roleStyle = ns().Bold(true).Foreground(colRole)
 	drawProgressStyle = ns().Foreground(colDraw)
+	editTouchedStyle = ns().Foreground(colEditWarm)
+	editFileStyle = ns().Foreground(colEditBase)
+	editFailStyle = ns().Bold(true).Foreground(colErr)
+	editHiliteStyle = ns().Foreground(colEditLive)
+	editLineNoStyle = ns().Foreground(colDim)
+	editRunStyle = ns().Bold(true).Foreground(colAccentSoft)
 }
 
 // init 让样式在「未调用 Run 的场合」（单测、宿主嵌入渲染）也可用：

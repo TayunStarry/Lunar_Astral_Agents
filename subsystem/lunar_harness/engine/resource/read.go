@@ -62,7 +62,7 @@ func Read(rawHandle string, maxBytes int) (ReadResult, error) {
 	if maxBytes <= 0 {
 		maxBytes = MaxReadBytes
 	}
-	if IsTextKind(res.Kind) {
+	if IsTextKind(res.Kind) && !isBinaryResource(res, abs) {
 		return readTextResource(res, result, handle, abs, maxBytes)
 	}
 	data, err := os.ReadFile(abs)
@@ -142,6 +142,56 @@ func findSectionByURL(rawURL string, ordinal int) (Section, bool) {
 		}
 	}
 	return Section{}, false
+}
+
+// isBinaryResource 判断 @D 资源应按文本还是二进制取回。
+// 先按扩展名（文本白名单 / 二进制黑名单），未知扩展名再看文件头：
+// 出现 NUL 或控制字符占比过高即判定为不可读文本，按 base64 取回。
+func isBinaryResource(res Resource, abs string) bool {
+	ext := strings.ToLower(res.Ext)
+	if ext == "" {
+		ext = strings.ToLower(localExt(res.BlobPath))
+	}
+	if workspaceTextExtensions[ext] {
+		return false
+	}
+	if binaryExtensions[ext] {
+		return true
+	}
+	return sniffBinary(abs)
+}
+
+// localExt 从相对路径取扩展名（resource.Ext 为空时的兜底）。
+func localExt(rel string) string {
+	if idx := strings.LastIndex(rel, "."); idx >= 0 {
+		return rel[idx:]
+	}
+	return ""
+}
+
+// sniffBinary 读取文件头 512 字节做轻量二进制探测。
+func sniffBinary(abs string) bool {
+	file, err := os.Open(abs)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	head := make([]byte, 512)
+	n, _ := file.Read(head)
+	if n == 0 {
+		return false
+	}
+	head = head[:n]
+	controls := 0
+	for _, b := range head {
+		if b == 0 {
+			return true
+		}
+		if b < 0x09 || (b > 0x0D && b < 0x20) {
+			controls++
+		}
+	}
+	return controls*100/n > 8
 }
 
 // joinLines 取 1 基行区间的文本（越界自动收敛）

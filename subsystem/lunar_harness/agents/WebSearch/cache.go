@@ -34,7 +34,7 @@ func (c *PageCache) fresh(rawURL string) bool {
 }
 
 // put 写入（或覆写）一条访问记录
-func (c *PageCache) put(rawURL, title, domain, summary string) {
+func (c *PageCache) put(rawURL, title, _, summary string) {
 	if c == nil {
 		return
 	}

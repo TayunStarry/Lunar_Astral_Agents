@@ -39,8 +39,6 @@ var (
 	modelName string
 	// modelURL 模型服务地址（以 /v1 结尾）
 	modelURL string
-	// modelKey 模型服务密钥
-	modelKey string
 	// httpClient 模型请求客户端（影像理解可能持续较久）
 	httpClient = &http.Client{Timeout: 10 * time.Minute}
 

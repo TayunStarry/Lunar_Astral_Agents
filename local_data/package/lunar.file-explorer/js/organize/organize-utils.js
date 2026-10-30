@@ -7,8 +7,6 @@
 
 /** 智能整理触发阈值（当前层级文件数达到该值显示按钮） */
 const ORGANIZE_THRESHOLD = 50;
-/** 整理 AI 模型名（与全项目约定一致，硬编码） */
-const ORGANIZE_MODEL = 'primary_reasoning';
 /** 文本内容取样长度（开头 / 结尾各 2000 字） */
 const TEXT_SAMPLE_LEN = 2000;
 
@@ -116,24 +114,18 @@ async function preprocessOrganizeFile(file) {
  * @returns {Promise<string>} AI 返回的文本内容
  */
 async function callOrganizeAI(messages) {
-    const response = await fetch('/v1/chat/completions', {
+    const response = await fetch('/agent/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: ORGANIZE_MODEL,
             messages: messages,
             stream: false
         })
     });
     if (!response.ok) throw new Error(`AI 调用失败: ${response.statusText}`);
     const data = await response.json();
-    // OpenAI 兼容响应
-    if (data.choices && data.choices[0]) {
+    if (data.choices && data.choices[0] && data.choices[0].message) {
         return data.choices[0].message.content;
-    }
-    // 代理包装响应
-    if (data.success && data.data && data.data.choices) {
-        return data.data.choices[0].message.content;
     }
     throw new Error('AI 响应格式异常');
 }

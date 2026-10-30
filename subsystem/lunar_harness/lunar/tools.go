@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/Descriptor"
+	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/memory"
 	"LunarSubsystem/LunarHarness/engine/resource"
@@ -26,19 +27,23 @@ const (
 	techniqueMusician = "musician"
 	// techniqueScreenshoter 截图子工具
 	techniqueScreenshoter = "screenshoter"
+	// techniqueFileEditor 文件编辑子工具
+	techniqueFileEditor = "file_editor"
+	// fileEditorTimeout 单次文件编辑任务的超时上限
+	fileEditorTimeout = 15 * time.Minute
 )
 
 var agentControlTools = []ToolCall{
-	functionTool(techniqueToolName, "技法创作：type 选择 painter、musician、screenshoter，instruction 用自然语言说明任务；",
+	functionTool(techniqueToolName, "技法创作：type 选择 painter、musician、screenshoter、file_editor，instruction 用自然语言说明任务；",
 		map[string]any{
 			"type": map[string]any{
 				"type":        "string",
-				"enum":        []string{techniquePainter, techniqueMusician, techniqueScreenshoter},
-				"description": "painter=绘画创作、musician=音乐创作、screenshoter=屏幕截图",
+				"enum":        []string{techniquePainter, techniqueMusician, techniqueScreenshoter, techniqueFileEditor},
+				"description": "painter=绘画创作、musician=音乐创作、screenshoter=屏幕截图、file_editor=文件编辑",
 			},
 			"instruction": map[string]any{
 				"type":        "string",
-				"description": "例如: 画一张赛博朋克风格的自画像；创作一段安静的钢琴曲；截取当前屏幕上弹出的对话框",
+				"description": "例如: 画一张赛博朋克风格的自画像；创作一段安静的钢琴曲；截取当前屏幕上弹出的对话框；把文档库里的笔记整理成一篇新文章",
 			},
 			"reference_tag": map[string]any{
 				"type":        "string",
@@ -122,9 +127,32 @@ func handleDispatchTechnique(args map[string]any) ToolResult {
 		return dispatchMusician(instruction)
 	case techniqueScreenshoter:
 		return dispatchScreenshoter(instruction)
+	case techniqueFileEditor:
+		return dispatchFileEditor(instruction)
 	default:
-		return ToolResult{Text: "技法创作调度失败：type 只能取 painter / musician / screenshoter"}
+		return ToolResult{Text: "技法创作调度失败：type 只能取 painter / musician / screenshoter / file_editor"}
 	}
+}
+
+// dispatchFileEditor 把自然语言文件操作需求交给「文件编辑」智能体执行。
+func dispatchFileEditor(instruction string) ToolResult {
+	if instruction == "" {
+		return ToolResult{Text: "文件编辑任务调度失败：操作要求不能为空"}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fileEditorTimeout)
+	defer cancel()
+	result, err := FileEditor.Execute(ctx, instruction)
+	if err != nil {
+		return ToolResult{Text: "文件编辑任务失败：" + err.Error()}
+	}
+	summary := strings.TrimSpace(result.Summary)
+	if summary == "" {
+		summary = "文件编辑已完成"
+	}
+	if len(result.Handles) > 0 {
+		summary += "（资源句柄：" + strings.Join(result.Handles, "、") + "）"
+	}
+	return ToolResult{Text: summary}
 }
 
 func dispatchPainter(description, referenceTag string) ToolResult {

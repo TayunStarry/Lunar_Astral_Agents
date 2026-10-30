@@ -2,7 +2,7 @@ package config
 
 var (
 	// WebViewTitle webview 窗口标题
-	WebViewTitle = "嵌入式 webview 窗口"
+	WebViewTitle = "[ 星月智能-月之华 ]"
 	// WebViewWidth webview 窗口宽度
 	WebViewWidth = 648
 	// WebViewHeight webview 窗口高度

@@ -13,15 +13,30 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
-// 月华日志模块标签（Go 原生对话链、计划表、记忆与资源统一使用 LunarCore）
+// 日志分类模块标签（与各子系统 logger 模块名保持一致，避免反向依赖具体包）。
 const (
+	// lunarModule 月华-对话系统（Go 原生对话链、计划表、记忆与资源统一使用 LunarCore）
 	lunarModule = "LunarCore"
-	// ltp9 沙箱日志的模块标签（engine/plugin/variable.go ServiceName）
-	ltp9Module = "StarLTP"
-	// ltp9 沙箱 console 输出携带的标记（binder.go consolePrint）
-	ltp9ConsoleMark = "[console."
-	// 绘图模块的日志模块标签（multimodal_analysis/module）
+	// lifeModule 月华-生活系统
+	lifeModule = "Life"
+	// viewingModule 哔哩观影（归属生活系统）
+	viewingModule = "BilibiliViewer"
+	// creatorModule 月华-生活-创作（归属生活系统）
+	creatorModule = "创作"
+	// fileEditorModule 文件编辑智能体（归属生活系统）
+	fileEditorModule = "文件编辑"
+	// runtimeModule 月华私有运行时（仅为生活-创作服务，故归入生活）
+	runtimeModule = "Runtime"
+	// drawModule 绘图模块的日志模块标签（multimodal_analysis/module）
 	drawModule = "MultimodalAnalysis"
+	// tickModule 后勤 Tick 调度
+	tickModule = "TickLoop"
+	// responderModule 通用应答（后勤 Tick 内处理外部推理）
+	responderModule = "通用应答"
+	// saviorModule 智能修复（后勤 Tick 内修复故障）
+	saviorModule = "智能修复"
+	// agentEndpointModule 外部推理接入端点（后勤请求入口）
+	agentEndpointModule = "AgentEndpoint"
 )
 
 // Install 装配统一日志处理管线（幂等）：
@@ -193,21 +208,24 @@ func routeLogRecord(level, module, sub, msg string) {
 	// 原始日志视图接收全量
 	pushLog(line, SourceRaw)
 
-	switch {
-	// 月华日志：对话链、计划表、记忆、资源等 LunarCore 全量输出
-	case module == lunarModule:
-		pushLog(line, SourceLunarJS)
-	// ltp9 沙箱 JS 层日志（console 输出带 [console.*] 标记）
-	case module == ltp9Module && strings.Contains(msg, ltp9ConsoleMark):
-		pushLog(line, SourceLTP9JS)
-	// 绘图（sd.cpp）模块编排日志：与引擎输出合并展示于绘图引擎视图
-	case module == drawModule:
+	switch module {
+	// 对话：月华-对话系统（对话链 / 计划表 / 记忆 / 资源）
+	case lunarModule:
+		pushLog(line, SourceDialogue)
+	// 生活：生活系统 / 哔哩观影 / 创作 / 文件编辑 / 私有 js 运行时
+	case lifeModule, viewingModule, creatorModule, fileEditorModule, runtimeModule:
+		pushLog(line, SourceLife)
+	// 绘图：绘图编排模块日志
+	case drawModule:
 		pushLog(line, SourceDraw)
+	// 后勤：Tick 调度 / 通用应答 / 智能修复 / 外部推理接入
+	case tickModule, responderModule, saviorModule, agentEndpointModule:
+		pushLog(line, SourceLogistics)
 	}
 
-	// Go 警告与错误（独立于上面分支，原始日志不受影响）
+	// 系统警告（独立于上面分支，原始日志不受影响）
 	if level == "WARN" || level == "ERROR" || level == "FATAL" {
-		pushLog(line, SourceGoWarn)
+		pushLog(line, SourceWarn)
 	}
 }
 

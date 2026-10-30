@@ -12,6 +12,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
 	"LunarSubsystem/LunarHarness/agents/Descriptor"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
 	"LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/agents/desktop"
@@ -100,6 +101,16 @@ func WireTUIEngineHooks() {
 	// 「工具列表」屏：宿主汇总全部 Go 智能体的工具目录（控制台只负责展示）。
 	console.SetToolCatalogHook(buildToolCatalog)
 
+	// 「编辑显示」屏的 R 键运行入口：委托文件编辑智能体按默认运行时长执行。
+	// 控制台只发起运行与展示回执，不提供编辑、也不设置 / 显示运行时长。
+	console.SetFileRunHook(func(rel string) (string, error) {
+		outcome := FileEditor.RunProjectPath("/document/" + rel)
+		if !outcome.OK {
+			return outcome.Summary, errors.New(outcome.Summary)
+		}
+		return outcome.Summary, nil
+	})
+
 	// 哔哩观影的模型调用也进「核心智能 实况」，用户不用只盯着日志干等。
 	// 计量回调让这些 Go 侧调用一并计入「运行状态」的模型计量。
 	meter := func(prompt, completion, cached int64, generation time.Duration, estimated bool) {
@@ -168,6 +179,7 @@ func WireTUIEngineHooks() {
 func buildToolCatalog() []agentinfo.Agent {
 	out := lunar.ToolCatalog()
 	out = append(out, Descriptor.ToolCatalog()...)
+	out = append(out, FileEditor.ToolCatalog()...)
 	out = append(out, DialogueBridging.ToolCatalog()...)
 	out = append(out, WebSearch.ToolCatalog()...)
 	out = append(out, BilibiliViewer.ToolCatalog()...)

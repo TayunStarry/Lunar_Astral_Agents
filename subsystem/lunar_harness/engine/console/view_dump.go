@@ -49,27 +49,37 @@ type dumpOption struct {
 }
 
 // dumpOptionList 可导出的数据清单：按「运行数据 / Go 智能体」分组。
+// 快捷键统一为两位数字编号（01-13）：第一键定分组，第二键定条目，既不与
+// 「↑/↓ 选择」冲突，也不会因为新增智能体而让既有编号位移。
 var dumpOptionList = []dumpOption{
-	{kind: dumpKindLogs, hotkey: "l", group: "运行数据", title: "原始日志",
+	{kind: dumpKindLogs, hotkey: "01", group: "运行数据", title: "原始日志",
 		desc:    "全量 stdout + 结构化日志，导出为 .log（JSON Lines，可 grep / jq / tail）",
 		toolTip: "正在导出原始日志…"},
-	{kind: dumpKindTranscript, hotkey: "t", title: "推理实况",
+	{kind: dumpKindTranscript, hotkey: "02", title: "推理实况",
 		desc:    "模型调用轮次：思考全文 / 输出全文 / 工具调用序列 / 每轮耗时，导出为 .json",
 		toolTip: "正在导出推理实况…"},
 
-	{kind: dumpKindContext, key: "core", hotkey: "c", group: "Go 智能体", title: "核心人格",
+	{kind: dumpKindContext, key: "core", hotkey: "03", group: "Go 智能体", title: "核心人格",
 		desc: "对话者 + 绘制者 + 演奏者 + 截图者 + 月华主上下文的合并快照"},
-	{kind: dumpKindContext, key: "web_search", hotkey: "w", title: "网络搜索",
+	{kind: dumpKindContext, key: "file_editor", hotkey: "04", title: "文件编辑",
+		desc: "文件编辑的系统提示词、工具清单与文档库现状（按次执行，不保留上下文）"},
+	{kind: dumpKindContext, key: "creative", hotkey: "05", title: "创作",
+		desc: "创作体系的规划日志：上一轮计划、备忘、参考资料、错误与收尾简述"},
+	{kind: dumpKindContext, key: "responder", hotkey: "06", title: "通用应答",
+		desc: "通用应答的队列与运行状态：待处理数、特许运行、忙碌标记"},
+	{kind: dumpKindContext, key: "savior", hotkey: "07", title: "智能修复",
+		desc: "智能修复的待处理故障队列、尝试次数与静默截止时间"},
+	{kind: dumpKindContext, key: "web_search", hotkey: "08", title: "网络搜索",
 		desc: "最近一次检索的检索词、引擎、页数与结构化报告"},
-	{kind: dumpKindContext, key: "bilibili", hotkey: "b", title: "哔哩观影",
+	{kind: dumpKindContext, key: "bilibili", hotkey: "09", title: "哔哩观影",
 		desc: "哔哩观影选片配置、已看视频规模与日记/历史记忆"},
-	{kind: dumpKindContext, key: "desktop", hotkey: "d", title: "桌面操作",
+	{kind: dumpKindContext, key: "desktop", hotkey: "10", title: "桌面操作",
 		desc: "最近一次桌面操纵任务的要求、起止时间、结果或中断原因"},
-	{kind: dumpKindContext, key: "descriptor", hotkey: "s", title: "描述者",
+	{kind: dumpKindContext, key: "descriptor", hotkey: "11", title: "描述者",
 		desc: "描述者的文件查询工具清单与运行说明（按次执行，不保留上下文）"},
-	{kind: dumpKindContext, key: "dialogue_bridging", hotkey: "q", title: "通讯桥接",
+	{kind: dumpKindContext, key: "dialogue_bridging", hotkey: "12", title: "通讯桥接",
 		desc: "最近一次多目标投递计划与逐项执行报告"},
-	{kind: dumpKindContext, key: "mutual_forum", hotkey: "m", title: "互助论坛",
+	{kind: dumpKindContext, key: "mutual_forum", hotkey: "13", title: "互助论坛",
 		desc: "互助论坛智能体最近的需求/答复上下文（模块：Mutual Forum；不含内部凭证）"},
 }
 
@@ -78,6 +88,7 @@ type dumpState struct {
 	index   int      // 目标选中项
 	pl      listPane // 目标列表滚动窗口
 	running bool     // 是否有导出在进行
+	keyBuf  string   // 两位数字编号的输入缓冲（第一键后等待第二键）
 	lastErr string   // 最近一次失败原因
 	// last 最近一次成功回执（{显示名, 结果}）
 	lastLabel  string
@@ -93,6 +104,7 @@ func newDumpState() dumpState {
 func (m *appModel) dumpEnter() tea.Cmd {
 	m.dump.pl = listPane{}
 	m.dump.running = false
+	m.dump.keyBuf = ""
 	m.dump.lastErr = ""
 	return nil
 }
@@ -128,26 +140,55 @@ func (m appModel) updateDump(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.screen = screenMenu
 			return m, nil
+		case "backspace":
+			m.dump.keyBuf = ""
+			return m, nil
 		case "up", "k":
+			m.dump.keyBuf = ""
 			m.dump.index = listMove(m.dump.index, -1, len(dumpOptionList), true)
 		case "down", "j":
+			m.dump.keyBuf = ""
 			m.dump.index = listMove(m.dump.index, 1, len(dumpOptionList), true)
 		case "home", "g":
+			m.dump.keyBuf = ""
 			m.dump.index = 0
 		case "end", "G":
+			m.dump.keyBuf = ""
 			m.dump.index = len(dumpOptionList) - 1
 		case "enter", "right":
 			// 回车导出选中项：所有导出动作都走这一条路径（含日志与实况），
 			// 不依赖用户记住各自动作的独立快捷键
+			m.dump.keyBuf = ""
 			return m, m.dumpSelected()
 		default:
-			// 字母/数字热键：定位到该条目并立即导出（与主菜单"键即动作"的手感一致）
-			if idx := dumpHotkeyIndex(key); idx >= 0 {
-				m.dump.index = idx
-				return m, m.dumpSelected()
+			// 两位数字编号：第一键进入缓冲，第二键命中即导出
+			if key >= "0" && key <= "9" && len(key) == 1 {
+				return m.typeDumpDigits(key)
 			}
 		}
 	}
+	return m, nil
+}
+
+// typeDumpDigits 处理两位数字编号输入。
+// 第一键只进入缓冲（不立即导出，避免 01 与 1 号动作歧义），第二键命中后导出。
+func (m appModel) typeDumpDigits(key string) (tea.Model, tea.Cmd) {
+	candidate := m.dump.keyBuf + key
+	if idx := dumpHotkeyIndex(candidate); idx >= 0 {
+		m.dump.keyBuf = ""
+		m.dump.index = idx
+		return m, m.dumpSelected()
+	}
+	if dumpHotkeyPrefixExists(candidate) {
+		m.dump.keyBuf = candidate
+		return m, nil
+	}
+	// 第二键不匹配：把它当作新的第一键（允许连续改选）
+	if dumpHotkeyPrefixExists(key) {
+		m.dump.keyBuf = key
+		return m, nil
+	}
+	m.dump.keyBuf = ""
 	return m, nil
 }
 
@@ -163,6 +204,19 @@ func dumpHotkeyIndex(key string) int {
 		}
 	}
 	return -1
+}
+
+// dumpHotkeyPrefixExists 判断输入是否为某个编号的前缀。
+func dumpHotkeyPrefixExists(prefix string) bool {
+	if prefix == "" {
+		return false
+	}
+	for _, opt := range dumpOptionList {
+		if opt.hotkey != "" && len(opt.hotkey) > len(prefix) && opt.hotkey[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
 }
 
 // dumpSelected 导出当前选中的条目（按取数通道分发）
@@ -286,7 +340,11 @@ func (m appModel) viewDump() string {
 			"  "+dimStyle.Render(fmt.Sprintf("对象 %s · 记录 %d 条 · %s",
 				m.dump.lastLabel, m.dump.lastResult.Records, humanBytes(m.dump.lastResult.Bytes))))
 	default:
-		body = append(body, "  "+dimStyle.Render("↑/↓ 选择后回车导出；也可直接按行右侧的键位"))
+		hint := "↑/↓ 选择后回车导出；也可输入行右侧的两位数字编号"
+		if m.dump.keyBuf != "" {
+			hint = "已输入编号 " + m.dump.keyBuf + "_，再按一位数字完成导出"
+		}
+		body = append(body, "  "+dimStyle.Render(hint))
 	}
 
 	return f.render(fitLines(body, h))

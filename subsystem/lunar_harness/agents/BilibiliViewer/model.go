@@ -56,7 +56,6 @@ var (
 	modelOnce  sync.Once
 	modelName  string
 	modelURL   string
-	modelKey   string
 	httpClient = &http.Client{Timeout: 5 * time.Minute}
 )
 
@@ -141,18 +140,11 @@ func reportModelCall(requestBody []byte, completionText string, usage *modelUsag
 
 func resolveModel() {
 	modelOnce.Do(func() {
-		modelName = strings.TrimSpace(config.AgentMultimodalModel)
-		if modelName == "" {
-			modelName = "primary_reasoning"
-		}
-		modelURL = strings.TrimRight(strings.TrimSpace(config.AgentMultimodalURL), "/")
-		if modelURL == "" {
-			modelURL = config.LocalV1URL()
-		}
+		modelName = config.AgentMultimodalModel
+		modelURL = strings.TrimRight(config.AgentMultimodalURL, "/")
 		if !strings.HasSuffix(modelURL, "/v1") {
 			modelURL += "/v1"
 		}
-		modelKey = strings.TrimSpace(config.AgentMultimodalKey)
 	})
 }
 
@@ -279,9 +271,6 @@ func chatCompletionOnceModel(model string, messages []chatMessage, display func(
 		return "", fmt.Errorf("创建模型请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if modelKey != "" {
-		req.Header.Set("Authorization", "Bearer "+modelKey)
-	}
 	start := time.Now()
 	resp, err := httpClient.Do(req)
 	if err != nil {

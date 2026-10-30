@@ -94,9 +94,9 @@ func runInstruction(instruction, mood string) (string, error) {
 	if allow, reason := dispatchBeforeLifeStarts(cfg); !allow {
 		manager.mu.Unlock()
 		if strings.TrimSpace(reason) == "" {
-			reason = "插件未给出原因"
+			reason = "未给出原因"
 		}
-		return "本次观影被 LTP9 插件取消（" + reason + "）", nil
+		return "本次观影被取消（" + reason + "）", nil
 	}
 	r := newRunner(cfg, instruction)
 	r.mood = strings.TrimSpace(mood)

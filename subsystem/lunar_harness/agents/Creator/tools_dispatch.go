@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/agents/FileEditor"
 )
 
 func sendGroupText(args map[string]any) toolOutcome {
@@ -33,7 +34,7 @@ func sendGroupFile(args map[string]any) toolOutcome {
 	if err != nil {
 		return failure(toolSendGroupFile, err)
 	}
-	full, _, err := documentPath(argString(args, "path"))
+	full, err := FileEditor.AbsPath(argString(args, "path"))
 	if err != nil {
 		return failure(toolSendGroupFile, err)
 	}

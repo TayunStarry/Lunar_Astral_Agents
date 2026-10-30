@@ -39,6 +39,8 @@ func (s *session) executeTool(ctx context.Context, name string, args map[string]
 		return fileReplace(args)
 	case toolFileDeleteText:
 		return fileDeleteText(args)
+	case toolFileEdit:
+		return fileEditTool(args)
 	case toolCodeIndex:
 		return codeIndexTool(args)
 	case toolReadDTS:

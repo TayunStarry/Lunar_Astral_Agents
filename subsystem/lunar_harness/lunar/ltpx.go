@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/Responder"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/protocol/ltpx"
 )
@@ -224,6 +225,10 @@ func handleUseTheProgram(args map[string]any) ToolResult {
 		return ToolResult{Text: "调用失败：tool 不能为空，只能取以下应用名：" + available + "。只打开应用时无需 instruction。"}
 	}
 	argsJSON := safeJSON(map[string]any{"tool": tool, "instruction": instruction}, "{}")
+	// 对话者正阻塞在工具等待上、模型空闲：开启特许运行，让工具内部的多轮推理即时处理；
+	// 拿到工具返回（含失败）后才关闭
+	Responder.BeginPermit()
+	defer Responder.EndPermit()
 	text, err := callLTPXRemoteTool(crystalToolName, argsJSON)
 	syncLTPXRemoteTools()
 	if err != nil {

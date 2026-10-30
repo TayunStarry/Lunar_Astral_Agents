@@ -8,8 +8,7 @@
  * - 专用系统提示词：定义「文件管理器执行者」角色与操作边界
  * - 多轮工具调用循环：LLM 通过 OpenAI function calling 逐次调用文件操作工具，
  *   观察工具结果并持续决策，直到给出最终答复
- * - 模型调用走琉璃后端 /v1 代理（OpenAI v1 协议），由后端按 lunar_config.json
- *   解析模型 name/key/url，前端不接触模型配置
+ * - 模型调用走琉璃后端 /agent 端点（非流式），模型为后端固定值，前端不接触模型配置
  */
 
 // ===== 智能体常量与状态 =====
@@ -23,30 +22,6 @@ const LTPX_AGENT_MAX_LIST_LINES = 120;
 
 /** 已完成的对话历史：数组元素为 { user, assistant }（各为纯文本） */
 let ltpxAgentHistory = [];
-
-/** 模型配置加载 Promise（从 lunar_config.json 的 agent 字段读取，不硬编码） */
-let ltpModelConfigPromise = null;
-
-/**
- * 读取 lunar_config.json 的 agent.multimodal_model 作为模型名
- * （通过 /file/read/ 文件接口；读取失败回退默认占位值，仍走同源 /v1 代理解析）
- * @returns {Promise<string>}
- */
-async function loadLTPXAgentModel() {
-    if (ltpModelConfigPromise) return ltpModelConfigPromise;
-    ltpModelConfigPromise = (async () => {
-        try {
-            const resp = await fetch('/file/read/lunar_config.json', { cache: 'no-store' });
-            if (!resp.ok) throw new Error('读取配置失败 HTTP ' + resp.status);
-            const cfg = await resp.json();
-            const agent = (cfg && cfg.agent) || {};
-            return (agent.multimodal_model && String(agent.multimodal_model)) || 'primary_reasoning';
-        } catch (e) {
-            return 'primary_reasoning';
-        }
-    })();
-    return ltpModelConfigPromise;
-}
 
 // ===== 工具定义（OpenAI function calling 格式） =====
 
@@ -314,21 +289,18 @@ function buildLTPXUserMessage(fm, instruction) {
     ];
 }
 
-// ===== 模型调用（OpenAI v1 协议，琉璃后端 /v1 代理解析模型配置） =====
+// ===== 模型调用（/agent 协议，非流式；模型名由后端固定） =====
 
 /**
- * 调用 /v1/chat/completions（crystal_astral 将 /v1/ 代理到月华后端，
- * 由后端读取 lunar_config.json 获得模型 name/key/url）
+ * 调用 /agent/chat/completions（后端固定模型，不接受模型名与流式）
  * @param {Array<Object>} messages - 完整消息数组（含 system / user / assistant / tool）
  * @returns {Promise<Object>} OpenAI 响应中的 message 对象
  */
 async function callLTPXAgentModel(messages) {
-    const model = await loadLTPXAgentModel();
-    const response = await fetch('/v1/chat/completions', {
+    const response = await fetch('/agent/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: model,
             messages: messages,
             tools: ltpxAgentTools,
             stream: false
@@ -336,13 +308,8 @@ async function callLTPXAgentModel(messages) {
     });
     if (!response.ok) throw new Error(`AI 调用失败: HTTP ${response.status}`);
     const data = await response.json();
-    // OpenAI 兼容原始响应
     if (data.choices && data.choices[0] && data.choices[0].message) {
         return data.choices[0].message;
-    }
-    // 代理包装响应
-    if (data.success && data.data && data.data.choices && data.data.choices[0]) {
-        return data.data.choices[0].message;
     }
     throw new Error('AI 响应格式异常');
 }
@@ -527,7 +494,7 @@ async function execLTPXReadFileContent(fm, args) {
         return { success: false, error: '暂时不方便看这个文件' };
     }
 
-    // 调用多模态模型解读（与智能整理同一套调用，模型名 primary_reasoning，走 /v1 代理）
+    // 调用多模态模型解读（与智能整理同一套调用，模型名由后端固定，走 /agent 端点）
     try {
         const summary = await callOrganizeAI([
             { role: 'system', content: '你是星月智能的文档/图片解读助手，只输出对内容的简洁中文解读，不要输出其他内容或代码块。' },

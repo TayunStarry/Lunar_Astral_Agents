@@ -11,7 +11,7 @@ import "LunarSubsystem/LunarHarness/protocol/agentinfo"
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
 		ID: "bilibili_viewer", Name: "哔哩观影", Source: "agents/BilibiliViewer",
-		Note: "真实浏览器 + Tick 状态机（非 function calling）",
+		Note: "观影智能体：选片、观看、评论与观影记忆整理。",
 		Tools: []agentinfo.Tool{
 			{Name: "reply_passive", Description: "被动回应收到的 @ 与追评（页面操作，不主动评论他人视频）。"},
 			{Name: "build_keywords", Description: "结合对话指令、长期记忆与配置关键词生成本轮搜索词。"},

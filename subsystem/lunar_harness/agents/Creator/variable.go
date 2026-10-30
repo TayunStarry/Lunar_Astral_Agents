@@ -17,9 +17,7 @@ const (
 	journalFile = "database/life_chain/creative_journal.json"
 	// documentsRootRel 文件操作的统一根目录（相对 LocalDir）
 	documentsRootRel = "documents"
-	// packageRootRel LTP9 包根目录（相对 LocalDir）
-	packageRootRel = "package"
-	// runtimePackageID 创作运行时的 LTP9 包 ID（也是管线名）
+	// runtimePackageID 私有 js 运行时标识（也是创作管线名）
 	runtimePackageID = "lunar.life_creative"
 	// runtimePackageTitle 运行时包标题
 	runtimePackageTitle = "月华.生活.创作"
@@ -41,15 +39,25 @@ const (
 	// maxMemos 规划日志保留的备忘条数
 	maxMemos = 20
 	// maxReferenceRunes 单条参考资料最大字符数
-	maxReferenceRunes = 600
+	maxReferenceRunes = 1200
+	// maxSummaryRunes 规划日志「上一轮收尾」的最大字符数
+	maxSummaryRunes = 2000
+	// maxErrorRunes 单条错误记录最大字符数
+	maxErrorRunes = 600
+	// maxMemoRunes 单条备忘最大字符数
+	maxMemoRunes = 500
 	// maxFileReadBytes 单次文件读取上限
 	maxFileReadBytes = 256 << 10
-	// maxDTSReadBytes DTS 文档读取上限
-	maxDTSReadBytes = 128 << 10
-	// dtsMaxResultRunes 返回给模型的 DTS 内容上限
-	dtsMaxResultRunes = 4000
-	// defaultModelName 未配置多模态模型时的兜底名称
-	defaultModelName = "primary_reasoning"
+	// fileReadChunkRunes 单次 file_read 返回给模型的默认字符数（可用 offset 分批翻页）
+	fileReadChunkRunes = 4000
+	// fileReadChunkLimit 单次 file_read 允许的最大字符数
+	fileReadChunkLimit = 8000
+	// toolMessageMaxRunes 单条工具结果回填模型的最大字符数
+	toolMessageMaxRunes = 6000
+	// toolBudgetRunes 一次工具循环里全部工具结果的字符预算
+	toolBudgetRunes = 18000
+	// toolPrunedRunes 收紧较早的工具结果时保留的字符数
+	toolPrunedRunes = 400
 )
 
 // 可用智能体：全部通过自然语言指令接收任务。
@@ -84,11 +92,12 @@ const (
 	toolFileMove       = "file_move"
 	toolFileReplace    = "file_replace"
 	toolFileDeleteText = "file_delete_content"
+	toolFileEdit       = "file_edit"
 	toolCodeIndex      = "code_index"
 	toolReadDTS        = "read_dts"
 	toolSendGroupText  = "send_group_text"
 	toolSendGroupFile  = "send_group_file"
-	toolRunScript      = "run_ltp9_script"
+	toolRunScript      = "run_script"
 	toolScriptStatus   = "script_status"
 	toolSubmitPlan     = "submit_plan"
 )
@@ -97,7 +106,7 @@ const (
 var plannerTools = []string{
 	toolWebSearch, toolMemorySearch, toolHandleSearch, toolHandleRead,
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
-	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText,
+	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText, toolFileEdit,
 	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
 	toolRunScript, toolScriptStatus, toolSubmitPlan,
 }
@@ -106,15 +115,15 @@ var plannerTools = []string{
 var writerTools = []string{
 	toolWebSearch, toolMemorySearch, toolHandleSearch, toolHandleRead,
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
-	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText,
+	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText, toolFileEdit,
 	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
 }
 
-// engineerTools 工程创作者：JS/LTP9 项目与文件、脚本、DTS。
+// engineerTools 工程创作者：JS 项目与文件、脚本、开发文档。
 var engineerTools = []string{
 	toolWebSearch, toolMemorySearch, toolHandleSearch, toolHandleRead,
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
-	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText,
+	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText, toolFileEdit,
 	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
 	toolRunScript, toolScriptStatus,
 }
@@ -128,7 +137,7 @@ var researcherTools = []string{
 // runnerTools 脚本运行者：运行、监控与必要的文件读写；同样可随时搜索与查记忆。
 var runnerTools = []string{
 	toolWebSearch, toolMemorySearch, toolFileList, toolFileRead,
-	toolFileCreate, toolFileRewrite, toolReadDTS, toolRunScript,
+	toolFileCreate, toolFileRewrite, toolFileEdit, toolReadDTS, toolRunScript,
 	toolScriptStatus, toolSendGroupText,
 }
 
@@ -143,7 +152,6 @@ var (
 	modelOnce sync.Once
 	modelName string
 	modelURL  string
-	modelKey  string
 
 	// lastRunMeta 最近一次脚本运行摘要（供 script_status 汇报）
 	lastRunMu   sync.Mutex

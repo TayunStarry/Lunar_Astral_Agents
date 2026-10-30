@@ -493,7 +493,7 @@ async function translateLineByLine(text, targetLang, langLabel) {
     showToast(`逐行翻译完成，共 ${kvIndices.length} 行`, 'success');
 }
 
-// ===== 全文翻译（流式输出） =====
+// ===== 全文翻译（分段非流式输出） =====
 async function translateFullTextStream(text, targetLang, langLabel) {
     const MAX_CHARS = 2000;
     const sysPrompt = buildSystemPrompt(targetLang);
@@ -523,63 +523,39 @@ async function translateFullTextStream(text, targetLang, langLabel) {
     showToast('全文翻译完成', 'success');
 }
 
-// ===== 流式 AI 调用 =====
+// ===== AI 调用（非流式，单次返回全文） =====
 async function streamAI(messages) {
     abortController = new AbortController();
 
-    const response = await fetch('/v1/chat/completions', {
+    const response = await fetch('/agent/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: 'primary_reasoning',
             messages: messages,
-            stream: true,
+            stream: false,
             temperature: 0.3
         }),
         signal: abortController.signal
     });
 
     if (!response.ok) {
-        const errText = await response.text();
         throw new Error(`API 请求失败 (${response.status})`);
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith('data: ')) continue;
-            const data = trimmed.slice(6);
-            if (data === '[DONE]') break;
-
-            try {
-                const parsed = JSON.parse(data);
-                const content = parsed.choices?.[0]?.delta?.content;
-                if (content) appendToOutputText(content);
-            } catch (e) { /* skip malformed JSON */ }
-        }
-    }
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('API 返回格式异常');
+    appendToOutputText(content);
 }
 
 // ===== 非流式 AI 调用（逐行翻译用） =====
 async function callAI(messages) {
     abortController = new AbortController();
 
-    const response = await fetch('/v1/chat/completions', {
+    const response = await fetch('/agent/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: 'primary_reasoning',
             messages: messages,
             stream: false,
             temperature: 0.3

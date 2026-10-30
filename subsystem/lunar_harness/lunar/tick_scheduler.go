@@ -5,11 +5,14 @@ package lunar
 // 规则：
 //  1. 任一体系运行中（busy=true）→ 当前 Tick 直接跳过，不计数；
 //  2. 存在工具触发的强制生活事件 → 跳过其他体系，下一 Tick 直接进入生活链；
-//  3. 无未读、无待处理视频切片、生活冷却未完成 → 空闲计数 +1；
+//  3. 无就绪体系 → 空闲 Tick：生活冷却 +1（归属后勤体系），并通知 IDLE 钩子；
 //  4. 未读消息 → 对话体系，计数清零；
 //  5. 待处理视频切片 → 观影体系，计数清零；
-//  6. 空闲计数达到生活阈值 → 生活体系，计数清零。
+//  6. 空闲计数达到生活阈值 → 生活体系，计数清零；
+//  7. 待修复故障 → 后勤体系（不重置生活冷却）。
 //
+// 外部推理请求不在这里调度：响应者拥有独立的一秒 Tick（见 responder_loop.go），
+// 只在主调度器空档期运行，对话系统调用 LTPX 工具时会被临时放行一次。
 // 体系通过 TickSystem 接口注册，主调度逻辑不感知具体实现。
 
 import (
@@ -19,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/Responder"
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/life"
 	"LunarSubsystem/LunarHarness/engine/persistence"
@@ -73,6 +78,11 @@ func (s *tickScheduler) Tick() {
 	}
 	s.mu.Unlock()
 
+	// 响应者正在处理外部推理：本轮让出模型，等它处理完再触发体系
+	if Responder.Busy() {
+		return
+	}
+
 	// 工具触发的生活事件在下一 Tick 抢占执行：即使有未读消息也先进入生活链，
 	// 进入后先推进心情/情感，再按强制事件跳过权重选择。
 	forcedLife := life.HasPendingEvent()
@@ -86,6 +96,7 @@ func (s *tickScheduler) Tick() {
 		IdleTicks:      s.state.IdleTicks,
 		Unread:         UnreadCount(),
 		ViewingPending: viewingPendingHook(),
+		SalvagePending: Savior.Pending(),
 	}
 	for _, system := range s.systems {
 		if forcedLife && system.ID() != "life" {
@@ -96,7 +107,12 @@ func (s *tickScheduler) Tick() {
 			continue
 		}
 		s.busy = true
-		s.state.IdleTicks = system.IdleReset()
+		if keeper, ok := system.(idleKeeper); ok && keeper.KeepIdle() {
+			// 后勤体系接管空闲 Tick：本次运行同样推进一格生活冷却
+			s.state.IdleTicks++
+		} else {
+			s.state.IdleTicks = system.IdleReset()
+		}
 		s.state.LastSystem = system.ID()
 		s.state.LastReason = reason
 		s.state.LastTriggerAt = snap.Now.Unix()
@@ -105,13 +121,13 @@ func (s *tickScheduler) Tick() {
 		seq := s.tickSeq
 		s.persistLocked()
 		s.mu.Unlock()
-		logger.Info(tickModule, "[Tick#%d] 触发 %s（%s），空闲进度重置为 %d", seq, system.ID(), reason, s.state.IdleTicks)
+		logger.Info(tickModule, "[Tick#%d] 触发 %s（%s），空闲进度为 %d", seq, system.ID(), reason, s.state.IdleTicks)
 		s.run(seq, system, snap.Now)
 		return
 	}
 	s.state.IdleTicks++
 	if s.state.IdleTicks > 0 && s.state.IdleTicks%60 == 0 {
-		logger.Info(tickModule, "[Tick] 空闲计数 %d/%d", s.state.IdleTicks, life.IdleThreshold())
+		logger.Info(tickModule, "[Tick] 后勤空闲：生活冷却 %d/%d", s.state.IdleTicks, life.IdleThreshold())
 	}
 	s.persistEveryNLocked()
 	s.mu.Unlock()
@@ -139,8 +155,30 @@ func (s *tickScheduler) run(seq int64, system TickSystem, started time.Time) {
 		}()
 		if err := system.Run(s.ctx); err != nil {
 			logger.Warn(tickModule, "[Tick#%d] %s 执行失败: %v", seq, system.ID(), err)
+			// 交给拯救者：由后勤体系在后续 Tick 里尝试修复上下文，避免同一错误反复崩溃
+			Savior.Report(repairTargetOf(system.ID()), err)
 		}
 	}()
+}
+
+// repairTargetOf 把 Tick 体系映射到拯救者可修复的上下文目标。
+func repairTargetOf(systemID string) string {
+	switch systemID {
+	case "dialogue":
+		return "core"
+	case "viewing":
+		return "bilibili"
+	default:
+		return systemID
+	}
+}
+
+// Available 报告主调度器是否处于空档期（可承接外部推理）。
+// 响应者独立 Tick 据此判断：任一体系运行中或维护态时直接跳过。
+func (s *tickScheduler) Available() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.busy && !s.paused
 }
 
 // Pause 进入维护态：后续 Tick 不再触发任何体系（正在运行的一轮不受影响）。

@@ -16,25 +16,52 @@ type LogLine struct {
 	Text   string    `json:"text"`   // 纯文本消息体
 }
 
-// LogSource 日志视图来源枚举
+// LogSource 日志视图来源枚举（同时作为「系统日志」屏的分类编号）
 type LogSource int
 
 const (
-	// SourceRaw 原始日志（stdout 拦截行 + 全部结构化日志）
+	// SourceRaw 原始：展示全部完整日志（stdout 拦截行 + 全部结构化日志）
 	SourceRaw LogSource = iota
-	// SourceLunarJS 月华日志（LunarCore：对话链 / 计划表 / 记忆 / 资源）
-	SourceLunarJS
-	// SourceLTP9JS ltp9 沙箱 JS 层日志（StarLTP console）
-	SourceLTP9JS
-	// SourceDraw sd.cpp 绘图引擎日志（引擎 stdout/stderr 按行接入 + 绘图模块编排日志）
+	// SourceWarn 警告：仅系统警告类信息（WARN / ERROR / FATAL）
+	SourceWarn
+	// SourceDraw 绘图：sd.cpp 引擎输出与绘图模块编排日志
 	SourceDraw
-	// SourceGoWarn Go 模块警告与错误
-	SourceGoWarn
+	// SourceDialogue 对话：月华-对话系统（LunarCore）日志
+	SourceDialogue
+	// SourceLife 生活：月华-生活系统（生活 / 观影 / 创作 / js 运行时）日志
+	SourceLife
+	// SourceLogistics 后勤：月华-后勤系统（Tick 调度 / 通用应答 / 智能修复）日志
+	SourceLogistics
 	// SourceTask 功能任务回显（代理/打包/端口释放/更新包）
 	SourceTask
 	// sourceCount 来源总数（环形缓冲数组长度）
 	sourceCount
 )
+
+// logCategories 「系统日志」屏的分类顺序（左右方向键依次切换）
+var logCategories = []LogSource{
+	SourceRaw, SourceWarn, SourceDraw, SourceDialogue, SourceLife, SourceLogistics,
+}
+
+// logCategoryTitles 分类显示名
+var logCategoryTitles = map[LogSource]string{
+	SourceRaw:       "原始",
+	SourceWarn:      "警告",
+	SourceDraw:      "绘图",
+	SourceDialogue:  "对话",
+	SourceLife:      "生活",
+	SourceLogistics: "后勤",
+}
+
+// logCategoryDescs 分类说明（标题栏上下文）
+var logCategoryDescs = map[LogSource]string{
+	SourceRaw:       "完整日志",
+	SourceWarn:      "系统警告",
+	SourceDraw:      "月华-绘图系统",
+	SourceDialogue:  "月华-对话系统",
+	SourceLife:      "月华-生活系统",
+	SourceLogistics: "月华-后勤系统",
+}
 
 // ==== 智能体流式事件类型 ====
 

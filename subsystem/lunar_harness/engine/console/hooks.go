@@ -128,6 +128,33 @@ func DumpContext(target string) (DataDumpResult, error) {
 	return hook(target)
 }
 
+// ==== 文件运行入口（「编辑显示」屏） ====
+
+var (
+	// fileRunMu 保护文件运行钩子
+	fileRunMu sync.RWMutex
+	// fileRunHook 由宿主注入：按相对 documents 的路径运行项目文件，返回操作简述
+	fileRunHook func(rel string) (string, error)
+)
+
+// SetFileRunHook 注入「运行当前文件」能力（宿主在 TUI 启动前调用；nil 表示不支持）。
+func SetFileRunHook(hook func(rel string) (string, error)) {
+	fileRunMu.Lock()
+	defer fileRunMu.Unlock()
+	fileRunHook = hook
+}
+
+// RunFile 运行指定文档（rel 为相对 documents 的路径），返回操作简述。
+func RunFile(rel string) (string, error) {
+	fileRunMu.RLock()
+	hook := fileRunHook
+	fileRunMu.RUnlock()
+	if hook == nil {
+		return "", errNotWired
+	}
+	return hook(rel)
+}
+
 // ==== Go 智能体工具目录 ====
 
 var (
@@ -153,68 +180,6 @@ func getToolCatalog() []agentinfo.Agent {
 		return nil
 	}
 	return hook()
-}
-
-// ==== LTP9 授权签发钩子注入 ====
-//
-// 为什么由宿主实现：签发要「取 execute.js 的哈希 → 整体加密权限清单 → 覆盖写
-// permissions.key」，这套规则必须与 LTP9 引擎的解码侧（engine/plugin/permission.go）
-// 严格对应；两侧放在同一处实现（引擎侧）才不会出现「控制台签发的密钥引擎解不开」。
-// 控制台只负责扫包、呈现授权状态与触发签发，不复制这套密码学规则。
-
-// LTP9AuthStatus 单个 LTP9 包的授权现状（授权屏渲染数据源）
-type LTP9AuthStatus struct {
-	HasScript bool                // execute.js 是否存在（不存在即不可签发）
-	HasKey    bool                // permissions.key 是否存在
-	Signed    bool                // 现有密钥能否用当前脚本哈希解开（与运行时判据一致）
-	Granted   []string            // 现有密钥解出的权限
-	Required  []string            // 脚本现有引用推断出的权限
-	Reasons   map[string][]string // 权限 → 命中的调用点（确认页呈现签发依据）
-	Hash      string              // execute.js 的 sha16
-}
-
-var (
-	// ltp9AuthMu 保护 LTP9 授权钩子的并发读写
-	ltp9AuthMu sync.RWMutex
-	// ltp9AuthInspectHook 读取授权现状（不修改文件）
-	ltp9AuthInspectHook func(dir string) (LTP9AuthStatus, error)
-	// ltp9AuthSignHook 依据脚本现有引用签发（覆盖写 permissions.key）
-	ltp9AuthSignHook func(dir string) (LTP9AuthStatus, error)
-)
-
-// SetLTP9AuthHooks 注入 LTP9 授权能力（宿主在 TUI 启动前调用）：
-//   - inspect：读取某包的授权现状（不修改文件，供列表着色与依据展示）；
-//   - sign：依据脚本现有引用签发授权并返回签发后的现状。
-func SetLTP9AuthHooks(
-	inspect func(dir string) (LTP9AuthStatus, error),
-	sign func(dir string) (LTP9AuthStatus, error),
-) {
-	ltp9AuthMu.Lock()
-	defer ltp9AuthMu.Unlock()
-	ltp9AuthInspectHook = inspect
-	ltp9AuthSignHook = sign
-}
-
-// InspectLTP9Auth 读取指定 LTP9 包的授权现状（钩子未注入时返回 errNotWired）
-func InspectLTP9Auth(dir string) (LTP9AuthStatus, error) {
-	ltp9AuthMu.RLock()
-	hook := ltp9AuthInspectHook
-	ltp9AuthMu.RUnlock()
-	if hook == nil {
-		return LTP9AuthStatus{}, errNotWired
-	}
-	return hook(dir)
-}
-
-// SignLTP9Auth 为指定 LTP9 包签发授权（钩子未注入时返回 errNotWired）
-func SignLTP9Auth(dir string) (LTP9AuthStatus, error) {
-	ltp9AuthMu.RLock()
-	hook := ltp9AuthSignHook
-	ltp9AuthMu.RUnlock()
-	if hook == nil {
-		return LTP9AuthStatus{}, errNotWired
-	}
-	return hook(dir)
 }
 
 // ==== 桌面操纵钩子 ====

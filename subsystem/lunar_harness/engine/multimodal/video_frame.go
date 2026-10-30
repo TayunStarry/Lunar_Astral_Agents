@@ -2,7 +2,7 @@ package multimodal
 
 // 抽帧基础组元：ExtractVideoFrameAt / EquidistantTimes / MaxVideoFrames / FormatSeconds
 //
-// 上提自 LTP9 引擎的 video.frames 实现（engine/plugin/api_media.go），作为全项目唯一的
+// 上提自运行时沙箱的 video.frames 实现（engine/runtime/api_media.go），作为全项目唯一的
 // 单帧抽取实现。视频与动图的分片、等距采样与观看任务见 watch.go，不在此处重复实现。
 
 import (

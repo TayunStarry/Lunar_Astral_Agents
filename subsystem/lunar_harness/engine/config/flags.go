@@ -72,13 +72,7 @@ func RegisterFlags() {
 	flag.IntVar(&VisionMaxSide, "vision-max-side", VisionMaxSide, "视觉读取副本最大边长(像素)")
 	flag.IntVar(&VisionCacheCapMB, "vision-cache-cap-mb", VisionCacheCapMB, "视觉副本缓存池容量上限(MB), 0=不限制")
 
-	// ==== 模型路由 ====
-	flag.StringVar(&AgentEmbeddingModel, "agent-embedding-model", AgentEmbeddingModel, "核心智能体嵌入模型名称")
-	flag.StringVar(&AgentEmbeddingURL, "agent-embedding-url", AgentEmbeddingURL, "核心智能体嵌入服务 API 地址")
-	flag.StringVar(&AgentEmbeddingKey, "agent-embedding-key", AgentEmbeddingKey, "核心智能体嵌入服务 API 密钥")
-	flag.StringVar(&AgentMultimodalModel, "agent-multimodal-model", AgentMultimodalModel, "核心智能体多模态模型名称")
-	flag.StringVar(&AgentMultimodalURL, "agent-multimodal-url", AgentMultimodalURL, "核心智能体多模态服务 API 地址")
-	flag.StringVar(&AgentMultimodalKey, "agent-multimodal-key", AgentMultimodalKey, "核心智能体多模态服务 API 密钥")
+	// ==== 模型路由（本地部署固定参数，不开放配置） ====
 	flag.StringVar(&AgentASRModel, "agent-asr-model", AgentASRModel, "核心智能体语音识别模型名称")
 	flag.StringVar(&MmprojModel, "mmproj-model", MmprojModel, "多模态投影模型路径")
 	flag.StringVar(&AsrModel, "asr-model", AsrModel, "ASR模型路径")

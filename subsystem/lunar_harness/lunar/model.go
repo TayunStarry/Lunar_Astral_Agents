@@ -134,7 +134,6 @@ func chatCompletionOnce(roleTag, bodyText string) (*ModelResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("创建模型请求失败: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+config.AgentMultimodalKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Lunar-Role", roleTag)
 	req.Header.Set("Accept", "text/event-stream")
@@ -291,7 +290,6 @@ func chatCompletionJSON(body map[string]any) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+config.AgentMultimodalKey)
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: time.Duration(config.SyncFetchTimeout) * time.Second, Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
