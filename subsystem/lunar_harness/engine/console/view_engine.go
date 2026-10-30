@@ -28,15 +28,21 @@ type engineState struct {
 	input textinput.Model
 }
 
-// engineKeys 运行状态屏键位
+// engineKeys 运行状态屏键位：前端窗口重启 + 桌面操纵入口。
 func engineKeys(s engineState) []keyHint {
 	if s.inputMode {
 		return []keyHint{kh("Enter", "启动桌面操纵"), kh("Esc", "取消输入")}
 	}
+	xLabel := "中断"
 	if status, wired := getDesktopOperatorStatus(); wired && status.Running && status.Stopping {
-		return []keyHint{kh("i", "输入桌面操纵要求"), kh("x", "强制结束"), kh("Esc", "返回")}
+		xLabel = "强制结束"
 	}
-	return []keyHint{kh("i", "输入桌面操纵要求"), kh("x", "中断桌面操纵"), kh("Esc", "返回")}
+	return []keyHint{
+		kh("1/2", "重启前端"),
+		kh("i", "桌面任务"),
+		kh("x", xLabel),
+		kh("Esc", "返回"),
+	}
 }
 
 // newDesktopOperatorInput 创建桌面操纵任务要求输入框

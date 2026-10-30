@@ -16,7 +16,7 @@ func promptText(name string) string {
 	}
 	data, err := prompts.Read(name)
 	if err != nil {
-		logger.Error("CrystalAstral", "描述者读取提示词 %s 失败: %v", name, err)
+		logger.Error("CrystalAstral", "通用描述读取提示词 %s 失败: %v", name, err)
 		return ""
 	}
 	text := string(data)

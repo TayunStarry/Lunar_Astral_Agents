@@ -20,7 +20,7 @@ import (
 //
 // @param handle  文本资源句柄（@D.xxx / @T.xxx）
 // @param request 对话者的自然语言需求
-// @return 描述者给出的答复；句柄失效时返回错误
+// @return 通用描述给出的答复；句柄失效时返回错误
 func InspectText(handle, request string) (string, error) {
 	runMu.Lock()
 	defer runMu.Unlock()
@@ -57,7 +57,7 @@ func InspectText(handle, request string) (string, error) {
 		message, chatErr := chatStream(messages, tools)
 		if chatErr != nil && round == 0 {
 			// 模型服务不支持工具调用时退化为单轮回答：至少把预览信息用起来
-			logger.Warn("CrystalAstral", "描述者：文件探查首轮失败，退化为无工具回答: %v", chatErr)
+			logger.Warn("CrystalAstral", "通用描述：文件探查首轮失败，退化为无工具回答: %v", chatErr)
 			fallback, fallbackErr := chatStream(messages, nil)
 			if fallbackErr != nil {
 				return "", fallbackErr
@@ -79,7 +79,7 @@ func InspectText(handle, request string) (string, error) {
 		message.Content = text
 		if len(message.ToolCalls) == 0 {
 			if last == "" {
-				return "", fmt.Errorf("描述者没有返回内容")
+				return "", fmt.Errorf("通用描述没有返回内容")
 			}
 			return last, nil
 		}
@@ -97,7 +97,7 @@ func InspectText(handle, request string) (string, error) {
 	if last != "" {
 		return last, nil
 	}
-	return "", fmt.Errorf("描述者探查轮次超限")
+	return "", fmt.Errorf("通用描述探查轮次超限")
 }
 
 // loadDoc 载入文件正文并建立结构/引用索引
@@ -169,7 +169,7 @@ func scopedContent(doc *docContext, rawHandle string) (scope, block string) {
 	}
 	scoped, err := resource.Read(rawHandle, resource.MaxReadBytes)
 	if err != nil || strings.TrimSpace(scoped.Content) == "" {
-		logger.Warn("CrystalAstral", "描述者：指定范围取回失败，回退整份文件: %v", err)
+		logger.Warn("CrystalAstral", "通用描述：指定范围取回失败，回退整份文件: %v", err)
 		return "整份文件（指定范围未能取回，已回退整份）", buildContentBlock(doc)
 	}
 	if parsed.HasSection {

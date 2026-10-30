@@ -105,7 +105,7 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 		t.Fatal("编号 04 应指向文件编辑")
 	}
 	if got := dumpHotkeyIndex("05"); dumpOptionList[got].key != "creative" {
-		t.Fatal("编号 05 应指向创作")
+		t.Fatal("编号 05 应指向自由创作")
 	}
 	if got := dumpHotkeyIndex("06"); dumpOptionList[got].key != "responder" {
 		t.Fatal("编号 06 应指向通用应答")

@@ -24,7 +24,7 @@ func describeResource(handle, question string) string {
 	if parsed.Kind == "I" || parsed.Kind == "G" {
 		text, err := Descriptor.DescribeMedia(normalized, question)
 		if err != nil {
-			logger.Warn(lunarCoreModule, "[描述者] 影像描述失败: %v", err)
+			logger.Warn(lunarCoreModule, "[通用描述] 影像描述失败: %v", err)
 			return cached
 		}
 		if desc := strings.TrimSpace(text); desc != "" {
@@ -39,7 +39,7 @@ func describeResource(handle, question string) string {
 func describeVideoURL(rawURL, question string) (string, error) {
 	text, err := Descriptor.DescribeVideoURL(rawURL, question)
 	if err != nil {
-		logger.Warn(lunarCoreModule, "[描述者] 视频解读失败: %v", err)
+		logger.Warn(lunarCoreModule, "[通用描述] 视频解读失败: %v", err)
 		return "", err
 	}
 	return strings.TrimSpace(text), nil
@@ -49,7 +49,7 @@ func describeVideoURL(rawURL, question string) (string, error) {
 func inspectTextResource(handle, request string) string {
 	text, err := Descriptor.InspectText(handle, request)
 	if err != nil {
-		logger.Warn(lunarCoreModule, "[描述者] 文件探查失败: %v", err)
+		logger.Warn(lunarCoreModule, "[通用描述] 文件探查失败: %v", err)
 		return ""
 	}
 	return strings.TrimSpace(text)

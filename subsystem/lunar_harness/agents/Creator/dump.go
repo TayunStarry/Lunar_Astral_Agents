@@ -11,9 +11,9 @@ import (
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "creative",
-		Label:       "创作",
+		Label:       "自由创作",
 		Group:       "Go 智能体",
-		Description: "创作体系的规划日志（上一轮计划、备忘、参考资料、错误与收尾）及可调度智能体",
+		Description: "自由创作体系的规划日志（上一轮计划、备忘、参考资料、错误与收尾）及可调度智能体",
 		Export: func(includeImages bool) (any, error) {
 			_ = includeImages
 			journal := loadJournal()

@@ -62,10 +62,10 @@ var memoryTools = []ToolCall{
 }
 
 var resourceTools = []ToolCall{
-	functionTool("use_resource", "按句柄读取或探查资源。规则：已有解析文本直接返回；文件直接返回原文（带 ask 时交给描述者探查）；图片/动图返回描述；音频返回转写；视频按本地副本走观看管线、B 站链接走视频印象；网页链接走现场读取。"+grammarCheatsheet(),
+	functionTool("use_resource", "按句柄读取或探查资源。规则：已有解析文本直接返回；文件直接返回原文（带 ask 时交给通用描述探查）；图片/动图返回描述；音频返回转写；视频按本地副本走观看管线、B 站链接走视频印象；网页链接走现场读取。"+grammarCheatsheet(),
 		map[string]any{
 			"handles": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "资源句柄数组"},
-			"ask":     map[string]any{"type": "string", "description": "可选：交给描述者的自然语言需求"},
+			"ask":     map[string]any{"type": "string", "description": "可选：交给通用描述的自然语言需求"},
 		}, []string{"handles"}),
 	functionTool("browse_resources", "浏览资源目录或跨资源检索。不传 query 时按 kind 列出句柄 + 类型 + 标题/描述 + 内容状态；传 query 时在标题、解析文本、标签与段落标题中匹配。",
 		map[string]any{
@@ -486,7 +486,7 @@ func handleUseResource(args map[string]any) ToolResult {
 		}
 	}
 	if len(handles) == 0 {
-		return ToolResult{Text: "请提供资源句柄，例如 [\"@D.003\"]；需要描述者协助时把需求写进 ask 字段"}
+		return ToolResult{Text: "请提供资源句柄，例如 [\"@D.003\"]；需要通用描述协助时把需求写进 ask 字段"}
 	}
 	ask := strings.TrimSpace(stringArg(args, "ask"))
 
@@ -694,7 +694,7 @@ func documentHandleBlock(handle string, entry *ResourceEntry, ask string, missin
 	if ask != "" {
 		answer := inspectTextResource(handle, ask)
 		if answer == "" {
-			return resourceBlockHeader(handle, entry) + "探查失败：描述者没有给出答复，可去掉 ask 直接取原文"
+			return resourceBlockHeader(handle, entry) + "探查失败：通用描述没有给出答复，可去掉 ask 直接取原文"
 		}
 		return resourceBlockHeader(handle, entry) + answer
 	}

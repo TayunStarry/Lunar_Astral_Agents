@@ -37,7 +37,7 @@ func watchSlices(res resource.Resource, slices []multimodal.WatchSlice, label, q
 	for index, slice := range slices {
 		text, err := watchSlice(system, label, slice, index+1, len(slices))
 		if err != nil {
-			logger.Warn("CrystalAstral", "描述者：%s 第 %d/%d 片观看失败: %v", res.Handle, index+1, len(slices), err)
+			logger.Warn("CrystalAstral", "通用描述：%s 第 %d/%d 片观看失败: %v", res.Handle, index+1, len(slices), err)
 			continue
 		}
 		if trimmed := strings.TrimSpace(text); trimmed != "" {
@@ -53,7 +53,7 @@ func watchSlices(res resource.Resource, slices []multimodal.WatchSlice, label, q
 		if merged, mergeErr := mergeImpressions(system, len(slices), strings.Join(parts, "\n\n")); mergeErr == nil {
 			result = merged
 		} else {
-			logger.Warn("CrystalAstral", "描述者：%s 整体感受合成失败，退回逐片拼接: %v", res.Handle, mergeErr)
+			logger.Warn("CrystalAstral", "通用描述：%s 整体感受合成失败，退回逐片拼接: %v", res.Handle, mergeErr)
 			result = strings.Join(parts, "\n\n")
 		}
 	}
@@ -130,7 +130,7 @@ func cacheSliceFrames(res resource.Resource, slices []multimodal.WatchSlice) {
 			}
 			rel := dir + "/f" + strconv.Itoa(index+1) + ".jpg"
 			if _, err := persistence.SaveFileEx(rel, persistence.SaveOptions{Overwrite: true}, bytes.NewReader(data)); err != nil {
-				logger.Warn("CrystalAstral", "描述者：切片缓存落盘失败(%s): %v", rel, err)
+				logger.Warn("CrystalAstral", "通用描述：切片缓存落盘失败(%s): %v", rel, err)
 				continue
 			}
 			total += int64(len(data))

@@ -2,7 +2,7 @@
 //
 //	agents/desktop/        桌面操纵智能体（Go：UIA / 输入 / 进程 / 窗口）
 //	agents/WebSearch/         网络搜索智能体（Go：引擎 / 过滤 / 文本摘要 / 报告 / 缓存）
-//	agents/Descriptor/     描述者（Go：句柄系统的影像描述与文件内容探查）
+//	agents/Descriptor/     通用描述（Go：句柄系统的影像描述与文件内容探查）
 //	agents/BilibiliViewer/   哔哩观影智能体（Go：真实浏览器刷视频 / 评论 / 日记）
 //	agents/DialogueBridging/ 通讯桥接智能体（Go：向群/好友发送文本、图片、文件）
 //	agents/MutualForum/      互助论坛智能体（Go：论坛浏览/发帖/回复的多轮工具执行）

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/console"
 )
 
 // errLoopOutput 推理循环：同一输出或工具调用重复过多。
@@ -166,11 +167,13 @@ func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instructi
 	for round := 0; round < limit; round++ {
 		// 每轮请求前收紧预算：工具结果累计过长时压缩较早内容，避免单次请求超出模型上下文
 		compactToolResults(messages)
-		response, err := chatWithTools(ctx, messages, tools)
+		// 生活系统（自由创作）的每次模型调用同样上报「推理实况」，
+		// 否则用户只能看到日志，看不到调度者与各专属智能体的思考/输出。
+		response, err := chatWithToolsStreamed(ctx, role, messages, tools)
 		if err != nil && isContextOverflow(err) {
 			// 模型仍报上下文超限：激进压缩历史后重试一次，避免整个步骤被跳过
 			shrinkMessages(messages)
-			response, err = chatWithTools(ctx, messages, tools)
+			response, err = chatWithToolsStreamed(ctx, role, messages, tools)
 		}
 		if err != nil {
 			return "", err
@@ -194,6 +197,7 @@ func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instructi
 			args, parseErr := parseToolArgs(call.Function.Arguments)
 			if parseErr != nil {
 				outcome := toolOutcome{JSON: `{"error":"参数不是合法 JSON"}`, Summary: "参数解析失败"}
+				console.StreamToolResult(role, outcome.Summary)
 				messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Content: toolResultContent(outcome)})
 				lastSummary += outcome.Summary + "；"
 				continue
@@ -205,6 +209,7 @@ func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instructi
 					Summary: call.Function.Name + " 失败",
 				}
 			}
+			console.StreamToolResult(role, outcome.Summary)
 			if outcome.Reference != "" {
 				s.addReference(outcome.Reference)
 			}
@@ -216,6 +221,25 @@ func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instructi
 		}
 	}
 	return "", fmt.Errorf("%s 在 %d 轮内没有完成，已执行的步骤：%s", role, limit, strings.TrimSuffix(lastSummary, "；"))
+}
+
+// chatWithToolsStreamed 包装一次模型调用：把思考、输出与工具调用上报「推理实况」。
+// 模型响应本身仍是非流式整包返回，因此增量在拿到完整响应后一次性推送；
+// 但对实况屏而言，这仍是一轮可查看、可导出的完整推理记录。
+func chatWithToolsStreamed(ctx context.Context, role string, messages []chatMessage, tools []toolDefinition) (*modelResponse, error) {
+	console.StreamBegin(role)
+	response, err := chatWithTools(ctx, messages, tools)
+	if err != nil {
+		console.StreamEnd(role)
+		return nil, err
+	}
+	console.StreamDelta(role, console.KindThink, response.Reasoning)
+	console.StreamDelta(role, console.KindContent, response.Content)
+	for _, call := range response.ToolCalls {
+		console.StreamTool(role, call.Function.Name, call.Function.Arguments)
+	}
+	console.StreamEnd(role)
+	return response, nil
 }
 
 // signatureOf 生成一轮响应的签名，用于循环检测。

@@ -70,7 +70,6 @@ const (
 	screenStats
 	screenLogs
 	screenEdit
-	screenFrontend
 	screenProxy
 	screenArchive
 	screenUpdate
@@ -100,7 +99,7 @@ var menuItems = []menuItem{
 	{key: "0", title: "推理实况", group: "运行观测", screen: screenAgent,
 		desc: "月华思考 / 输出 / 工具调用的流式显示（对话者 · 绘制者 · 演奏者 · 通用应答 · 智能修复…）"},
 	{key: "1", title: "运行状态", group: "运行观测", screen: screenStats,
-		desc: "资源占用 / token 消耗总量 / 均次消耗 / 输出速度 / 平均上下文"},
+		desc: "运行环境 / 模型计量 / 前端窗口 / 桌面操纵；状态按绿黄红区分"},
 	{key: "2", title: "系统日志", group: "运行观测", screen: screenLogs,
 		desc: "统一日志屏：左右方向键切换 原始 / 警告 / 绘图 / 对话 / 生活 / 后勤"},
 	{key: "3", title: "编辑显示", group: "运行观测", screen: screenEdit,
@@ -110,21 +109,19 @@ var menuItems = []menuItem{
 
 	{key: "5", title: "工具列表", group: "系统管理", screen: screenTools,
 		desc: "扫描并展示全部 Go 智能体的工具与说明"},
-	{key: "6", title: "前端页面", group: "系统管理", screen: screenFrontend,
-		desc: "月华 / 琉璃桌面窗口状态探测与意外关闭重启"},
-	{key: "7", title: "局域共享", group: "系统管理", screen: screenProxy,
+	{key: "6", title: "局域共享", group: "系统管理", screen: screenProxy,
 		desc: "WSS → WS 反向代理，支持 IP 选择与手机扫码接入"},
-	{key: "8", title: "打包归档", group: "系统管理", screen: screenArchive,
+	{key: "7", title: "打包归档", group: "系统管理", screen: screenArchive,
 		desc: "项目文件 7z 分卷打包，支持进度显示"},
-	{key: "9", title: "端口释放", group: "系统管理", screen: screenPorts,
+	{key: "8", title: "端口释放", group: "系统管理", screen: screenPorts,
 		desc: "扫描指定端口范围，终止占用进程并验证释放"},
 
-	{key: "a", title: "资源更新", group: "更新与发布", screen: screenUpdate,
+	{key: "9", title: "资源更新", group: "更新与发布", screen: screenUpdate,
 		desc: "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希），更新含主程序时自动重启"},
-	{key: "b", title: "应用市场", group: "更新与发布", screen: screenMarket,
+	{key: "a", title: "应用市场", group: "更新与发布", screen: screenMarket,
 		desc: "浏览 / 标签筛选 / 安装 / 发布 LTPX 工具包（Gitee Release 通道）"},
 
-	{key: "c", title: "退出程序", group: "会话", screen: screenMenu,
+	{key: "b", title: "退出程序", group: "会话", screen: screenMenu,
 		desc: "关闭控制台并优雅停止全部子系统（感谢使用「星月智能 · 控制台」）"},
 }
 
@@ -327,8 +324,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateLogs(msg)
 	case screenEdit:
 		return m.updateEdit(msg)
-	case screenFrontend:
-		return m.updateFrontend(msg)
 	case screenProxy:
 		return m.updateProxy(msg)
 	case screenArchive:
@@ -490,8 +485,6 @@ func (m *appModel) enterScreen(id screenID) tea.Cmd {
 		m.editView.reset()
 		// 进入编辑屏立即扫描一次文档库：首帧就要有文件，而不是等下一次 Tick/日志唤醒。
 		m.syncViewMetrics()
-	case screenFrontend:
-		m.frontend.msg = ""
 	case screenProxy:
 		return m.proxyEnter()
 	case screenArchive:
@@ -746,8 +739,6 @@ func (m appModel) View() string {
 		return m.viewSystemLogs()
 	case screenEdit:
 		return m.viewEdit()
-	case screenFrontend:
-		return m.viewFrontend()
 	case screenProxy:
 		return m.viewProxy()
 	case screenArchive:
@@ -779,8 +770,6 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 		return "系统日志 · " + logCategoryTitles[m.logCat], logCategoryDescs[m.logCat], logsKeys()
 	case screenEdit:
 		return "编辑显示", "documents · 展示与运行", editKeys()
-	case screenFrontend:
-		return "前端管理", "", frontendKeys()
 	case screenProxy:
 		return "HTTPS 代理", proxyContext(m.proxy), proxyKeys(m.proxy)
 	case screenArchive:
@@ -804,7 +793,7 @@ func menuKeys() []keyHint {
 	return []keyHint{
 		kh("↑/↓", "选择"),
 		kh("Enter/→", "进入"),
-		kh("0-9 a-c", "直达"),
+		kh("0-9 a-b", "直达"),
 		kh("?", "帮助"),
 		kh("q", "退出"),
 	}

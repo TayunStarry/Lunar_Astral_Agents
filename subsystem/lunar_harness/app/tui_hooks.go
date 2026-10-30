@@ -128,7 +128,7 @@ func WireTUIEngineHooks() {
 		func(role string) { console.StreamEnd(role) },
 		meter,
 	)
-	// 网络搜索与描述者（Go 侧智能体）的模型调用同样进实况：
+	// 网络搜索与通用描述（Go 侧智能体）的模型调用同样进实况：
 	// 前者让用户看到检索过程的思考与输出，后者让用户看到影像/文件探查的现场推理。
 	streamObserver := func(role string) { console.StreamBegin(role) }
 	streamDelta := func(role, kind, text string) {

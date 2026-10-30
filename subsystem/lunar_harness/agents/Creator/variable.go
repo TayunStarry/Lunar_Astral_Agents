@@ -10,9 +10,9 @@ import (
 
 const (
 	// Module 日志模块名
-	Module = "创作"
+	Module = "自由创作"
 	// plannerLabel 调度者角色名
-	plannerLabel = "创作.调度者"
+	plannerLabel = "自由创作.调度者"
 	// journalFile 创作规划日志（相对 LocalDir）
 	journalFile = "database/life_chain/creative_journal.json"
 	// documentsRootRel 文件操作的统一根目录（相对 LocalDir）
@@ -20,7 +20,7 @@ const (
 	// runtimePackageID 私有 js 运行时标识（也是创作管线名）
 	runtimePackageID = "lunar.life_creative"
 	// runtimePackageTitle 运行时包标题
-	runtimePackageTitle = "月华.生活.创作"
+	runtimePackageTitle = "月华.生活.自由创作"
 
 	// maxPlannerRounds 调度者推理轮次上限
 	maxPlannerRounds = 6

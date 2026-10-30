@@ -1,6 +1,6 @@
 package Descriptor
 
-// variable.go 描述者的全局变量与常量（业务逻辑不得写在本文件）
+// variable.go 通用描述的全局变量与常量（业务逻辑不得写在本文件）
 
 import (
 	"net/http"
@@ -11,7 +11,7 @@ import (
 
 const (
 	// roleLabel TUI 实况屏显示的角色标签
-	roleLabel = "描述者"
+	roleLabel = "通用描述"
 	// summaryStoreChars 写回资源目录的摘要最大字符数
 	summaryStoreChars = 1000
 	// maxToolRounds 文件探查的最大工具轮次
@@ -58,7 +58,7 @@ var (
 	// promptCache 提示词缓存（文件名 → 文本）
 	promptCache = map[string]string{}
 
-	// runMu 串行化描述者运行（共享模型通道与实况流）
+	// runMu 串行化通用描述运行（共享模型通道与实况流）
 	runMu sync.Mutex
 	// toolCallSeq 为缺失 ID 的工具调用分配唯一序号
 	toolCallSeq int64

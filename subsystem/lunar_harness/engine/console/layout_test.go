@@ -9,7 +9,7 @@ import (
 func allScreens() []screenID {
 	return []screenID{
 		screenMenu, screenAgent, screenStats, screenLogs, screenEdit,
-		screenFrontend, screenProxy, screenArchive,
+		screenProxy, screenArchive,
 		screenUpdate, screenPorts, screenMarket, screenDump, screenTools,
 	}
 }

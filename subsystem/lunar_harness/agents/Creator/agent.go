@@ -31,7 +31,7 @@ func Run(ctx context.Context, instruction string) (string, error) {
 		history.Errors = runSession.errs
 		history.UpdatedAt = nowUnix()
 		saveJournal(history)
-		logger.Warn(Module, "[创作] 规划失败: %v", err)
+		logger.Warn(Module, "[自由创作] 规划失败: %v", err)
 		return "", err
 	}
 
@@ -45,7 +45,7 @@ func Run(ctx context.Context, instruction string) (string, error) {
 		Errors:      append([]string(nil), runSession.errs...),
 		LastSummary: summary,
 	})
-	logger.Info(Module, "[创作] 本轮完成：%d 步规划，%d 条参考资料，%d 条错误",
+	logger.Info(Module, "[自由创作] 本轮完成：%d 步规划，%d 条参考资料，%d 条错误",
 		len(plan.Steps), len(runSession.refs), len(runSession.errs))
 	return summary, nil
 }

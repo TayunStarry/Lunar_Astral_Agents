@@ -28,7 +28,7 @@ var (
 	colSelFg      = lipgloss.Color("231") // 选中行前景
 	colSelDim     = lipgloss.Color("250") // 选中行内的次级文字
 
-	colLogInfo  = lipgloss.Color("86")  // 日志：常规
+	colLogInfo  = lipgloss.Color("255") // 日志：常规（白色）
 	colLogDim   = lipgloss.Color("245") // 日志：stdout 原始行
 	colLogProxy = lipgloss.Color("39")  // 日志：任务回显
 	colThink    = lipgloss.Color("243") // 思考流（暗色）
@@ -37,6 +37,8 @@ var (
 	colEditWarm = lipgloss.Color("226") // 编辑显示：本次运行触碰的文件（黄）
 	colEditLive = lipgloss.Color("48")  // 编辑显示：最近改动片段（绿）
 	colEditBase = lipgloss.Color("39")  // 编辑显示：普通文件名（蓝）
+	colTokenIn  = lipgloss.Color("39")  // 模型 token：输入（蓝色系）
+	colTokenOut = lipgloss.Color("213") // 模型 token：输出（粉色系）
 )
 
 // ==== 基础样式 ====
@@ -87,6 +89,8 @@ var (
 	editHiliteStyle   lipgloss.Style // 编辑显示：最近改动片段（绿）
 	editLineNoStyle   lipgloss.Style // 编辑显示：行号（灰）
 	editRunStyle      lipgloss.Style // 编辑显示：运行入口提示（紫）
+	tokenInStyle      lipgloss.Style // 模型 token：输入（蓝色系）
+	tokenOutStyle     lipgloss.Style // 模型 token：输出（粉色系）
 )
 
 // bindTheme 把全部样式（重新）绑定到渲染器 r。
@@ -143,6 +147,8 @@ func bindTheme(r *lipgloss.Renderer) {
 	editHiliteStyle = ns().Foreground(colEditLive)
 	editLineNoStyle = ns().Foreground(colDim)
 	editRunStyle = ns().Bold(true).Foreground(colAccentSoft)
+	tokenInStyle = ns().Bold(true).Foreground(colTokenIn)
+	tokenOutStyle = ns().Bold(true).Foreground(colTokenOut)
 }
 
 // init 让样式在「未调用 Run 的场合」（单测、宿主嵌入渲染）也可用：

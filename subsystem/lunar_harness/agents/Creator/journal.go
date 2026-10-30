@@ -20,7 +20,7 @@ func loadJournal() journal {
 	}
 	var saved journal
 	if err := json.Unmarshal(raw, &saved); err != nil {
-		logger.Warn(Module, "[创作] 规划日志损坏，已按空日志继续: %v", err)
+		logger.Warn(Module, "[自由创作] 规划日志损坏，已按空日志继续: %v", err)
 		return journal{Version: 1}
 	}
 	saved.Version = 1
@@ -33,11 +33,11 @@ func saveJournal(j journal) {
 	j.UpdatedAt = nowUnix()
 	raw, err := json.MarshalIndent(j, "", "  ")
 	if err != nil {
-		logger.Warn(Module, "[创作] 规划日志序列化失败: %v", err)
+		logger.Warn(Module, "[自由创作] 规划日志序列化失败: %v", err)
 		return
 	}
 	if err := persistence.WriteFileAtomic(journalFile, raw); err != nil {
-		logger.Warn(Module, "[创作] 规划日志写入失败: %v", err)
+		logger.Warn(Module, "[自由创作] 规划日志写入失败: %v", err)
 	}
 }
 

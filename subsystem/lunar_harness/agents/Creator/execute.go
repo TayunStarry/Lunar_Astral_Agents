@@ -62,7 +62,7 @@ func (s *session) runStep(ctx context.Context, agent, instruction string) (strin
 
 // executorPrompt 返回专属智能体的系统提示。
 func executorPrompt(agent string) string {
-	base := `你在执行「月华.生活.创作」管线中的一个步骤。只能通过工具完成操作，不要臆造结果。
+	base := `你在执行「月华.生活.自由创作」管线中的一个步骤。只能通过工具完成操作，不要臆造结果。
 所有文件路径一律相对 /document；需要外部资料时可随时联网搜索或查询记忆库。
 完成后用中文简要说明产出：只用 1-2 句话讲清文件路径与本轮最重要的产出，不要罗列过程、不要贴代码或大段原文。`
 	switch agent {

@@ -45,7 +45,7 @@ func (s *session) planRound(ctx context.Context, instruction string, history jou
 
 // plannerPrompt 调度者的系统提示。
 func plannerPrompt(history journal) string {
-	return `你是「创作.调度者」，负责为月华的本轮创作统一推理与编排。
+	return `你是「自由创作.调度者」，负责为月华的本轮创作统一推理与编排。
 
 工作方式：
 1. 先读懂规划日志里的上一轮规划、遗留备忘、参考资料与错误；需要补充事实时调用工具（联网搜索、记忆库、句柄、文件、代码索引、DTS 文档）。

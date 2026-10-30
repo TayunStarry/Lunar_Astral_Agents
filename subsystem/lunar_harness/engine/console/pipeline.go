@@ -21,8 +21,8 @@ const (
 	lifeModule = "Life"
 	// viewingModule 哔哩观影（归属生活系统）
 	viewingModule = "BilibiliViewer"
-	// creatorModule 月华-生活-创作（归属生活系统）
-	creatorModule = "创作"
+	// creatorModule 月华-生活-自由创作（归属生活系统）
+	creatorModule = "自由创作"
 	// fileEditorModule 文件编辑智能体（归属生活系统）
 	fileEditorModule = "文件编辑"
 	// runtimeModule 月华私有运行时（仅为生活-创作服务，故归入生活）

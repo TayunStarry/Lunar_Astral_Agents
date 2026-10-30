@@ -54,7 +54,7 @@ func resourceVisionURI(res resource.Resource, abs string) (string, error) {
 			Bytes:     int64(len(data)),
 		})
 		if removed, freed := resource.VisionCacheEvict(int64(config.VisionCacheCapMB) << 20); removed > 0 {
-			logger.Info("CrystalAstral", "描述者：视觉副本缓存淘汰 %d 个（释放 %d 字节）", removed, freed)
+			logger.Info("CrystalAstral", "通用描述：视觉副本缓存淘汰 %d 个（释放 %d 字节）", removed, freed)
 		}
 	}
 	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil

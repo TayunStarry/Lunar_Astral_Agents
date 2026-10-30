@@ -1,4 +1,4 @@
-﻿package console
+package console
 
 import "testing"
 
@@ -28,7 +28,7 @@ func TestRouteLogRecordSeparatesMediaFromDraw(t *testing.T) {
 }
 
 // TestRouteLogRecordCategories 钉住「系统日志」六个分类的路由边界：
-// 对话 / 生活（含哔哩观影、创作、文件编辑、私有 js 运行时）/ 后勤（Tick、通用应答、智能修复）。
+// 对话 / 生活（含哔哩观影、自由创作、文件编辑、私有 js 运行时）/ 后勤（Tick、通用应答、智能修复）。
 func TestRouteLogRecordCategories(t *testing.T) {
 	sources := []LogSource{SourceRaw, SourceWarn, SourceDraw, SourceDialogue, SourceLife, SourceLogistics}
 	clear := func() {
@@ -44,7 +44,7 @@ func TestRouteLogRecordCategories(t *testing.T) {
 		t.Fatalf("LunarCore 日志应进入「对话」，实际 %d 条", len(got))
 	}
 
-	for _, module := range []string{"Life", "BilibiliViewer", "创作", "文件编辑", "Runtime"} {
+	for _, module := range []string{"Life", "BilibiliViewer", "自由创作", "文件编辑", "Runtime"} {
 		routeLogRecord("INFO", module, "", module+" 输出")
 	}
 	if got := GetLogs(SourceLife); len(got) != 5 {

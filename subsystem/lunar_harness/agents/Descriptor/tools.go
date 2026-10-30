@@ -1,6 +1,6 @@
 package Descriptor
 
-// tools.go 描述者的文件查询工具（file_summary / file_outline / read_lines / file_references）
+// tools.go 通用描述的文件查询工具（file_summary / file_outline / read_lines / file_references）
 
 import (
 	"encoding/json"

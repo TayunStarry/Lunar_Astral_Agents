@@ -92,9 +92,9 @@ func main() {
 	// 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）。
 	// 开发者模式（system.developer 或 --developer）下**不主动弹出前端**：
 	// 调试时只看控制台即可，避免窗口抢占焦点、遮挡日志；
-	// 需要看页面时仍可在「系统管理 → 前端页面」里手动唤起。
+	// 需要看页面时仍可在「运行状态」屏的前端窗口区块手动唤起（入口键 1 / 2）。
 	if config.Developer {
-		logger.Info("LunarHarness", "开发者模式：跳过自动打开月华/琉璃前端窗口（可在控制台「前端页面」手动唤起）")
+		logger.Info("LunarHarness", "开发者模式：跳过自动打开月华/琉璃前端窗口（可在控制台「运行状态」按 1 / 2 手动唤起）")
 	} else {
 		app.OpenFrontendWindows()
 	}

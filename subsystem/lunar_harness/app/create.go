@@ -148,7 +148,7 @@ func crystalWindowSpec() browser.DesktopWindowSpec {
 // OpenFrontendWindows 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）。
 //
 // 控制台（TUI）是程序主界面，这两个窗口是它的可视化前端：窗口全部关闭不会退出程序，
-// 用户可在控制台「前端页面 管理」中重新唤起（见 tui_system 的前端管理屏）。
+// 用户可在控制台「运行状态」屏的前端窗口区块重新唤起（入口键 1 / 2）。
 func OpenFrontendWindows() {
 	for _, spec := range []browser.DesktopWindowSpec{lunarWindowSpec(), crystalWindowSpec()} {
 		if err := browser.OpenDesktopWindow(spec); err != nil {

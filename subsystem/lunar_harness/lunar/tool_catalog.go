@@ -23,7 +23,7 @@ func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{
 		{
 			ID: "dialogue", Name: "对话者", Source: "lunar",
-			Note:  "对话智能体：理解月华意图、调度工具并生成回复。",
+			Note:  "对话智能体：理解对话意图、调度工具并生成回复。",
 			Tools: dialogueTools,
 		},
 		{ID: "painter", Name: "绘制者", Source: "lunar",

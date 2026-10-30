@@ -1,10 +1,5 @@
 package Descriptor
 
-// model.go 描述者的模型调用（OpenAI 兼容 /chat/completions，流式）
-//
-// 为什么单独实现而不复用 goja 侧的 ModelBuilder：描述者属于句柄系统、由 Go 直接调用，
-// 且需要把思考与输出实时送进 TUI「核心智能 实况」。
-
 import (
 	"bufio"
 	"bytes"
@@ -177,7 +172,7 @@ func chatWithRetry(messages []chatMessage, tools []toolDef, label string) (strin
 			lastErr = err
 		}
 		if attempt == 0 {
-			logger.Warn("CrystalAstral", "描述者：%s 推理失败，稍后重试: %v", label, lastErr)
+			logger.Warn("CrystalAstral", "通用描述：%s 推理失败，稍后重试: %v", label, lastErr)
 			time.Sleep(mediaRetryWait)
 		}
 	}

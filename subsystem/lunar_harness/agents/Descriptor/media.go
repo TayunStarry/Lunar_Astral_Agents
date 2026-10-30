@@ -187,6 +187,6 @@ func storeResourceSummary(res resource.Resource, text string) {
 		return
 	}
 	if err := resource.SetSummary(res.ID, hardCutRunes(text, summaryStoreChars), nil); err != nil {
-		logger.Warn("CrystalAstral", "描述者：写入 %s 描述失败: %v", res.Handle, err)
+		logger.Warn("CrystalAstral", "通用描述：写入 %s 描述失败: %v", res.Handle, err)
 	}
 }

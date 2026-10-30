@@ -11,15 +11,16 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/portrelease"
 )
 
-// ==== 前端管理屏 ====
+// 注：原独立「前端页面」屏已并入「运行状态」屏的右栏，
+// 状态探测与窗口唤起能力保持不变，入口键改为 1（月华）/ 2（琉璃）。
 
-// frontendState 前端管理屏状态
+// ==== 前端窗口区块（并入「运行状态」屏） ====
+
+// frontendState 前端窗口状态
 type frontendState struct {
 	busyLunar   bool
 	busyCrystal bool
 	msg         string
-	idx         int // 选中项：0=月华 1=琉璃
-	list        listPane
 }
 
 // frontendOnline 读取宿主注入的在线探针（未注入视为未知）
@@ -28,59 +29,6 @@ func frontendOnline(probe func() bool) (online bool, known bool) {
 		return false, false
 	}
 	return probe(), true
-}
-
-// frontendKeys 前端管理屏键位
-func frontendKeys() []keyHint {
-	return []keyHint{
-		kh("↑/↓", "选择"),
-		kh("Enter", "重启选中前端"),
-		kh("1 / 2", "直接重启月华 / 琉璃"),
-		kh("Esc", "返回菜单"),
-	}
-}
-
-// updateFrontend 前端管理屏事件
-func (m appModel) updateFrontend(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case frontendDoneMsg:
-		switch msg.which {
-		case "lunar":
-			m.frontend.busyLunar = false
-		case "crystal":
-			m.frontend.busyCrystal = false
-		}
-		if msg.err != nil {
-			m.frontend.msg = errStyle.Render("✗ 唤起失败: " + msg.err.Error())
-		} else {
-			m.frontend.msg = okStyle.Render("✓ 已发出唤起请求，等待窗口接入")
-		}
-		return m, nil
-
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
-		case "esc":
-			m.screen = screenMenu
-			return m, nil
-		case "1":
-			m.frontend.idx = 0
-			return m.frontendRelaunch("lunar")
-		case "2":
-			m.frontend.idx = 1
-			return m.frontendRelaunch("crystal")
-		case "enter":
-			if m.frontend.idx == 0 {
-				return m.frontendRelaunch("lunar")
-			}
-			return m.frontendRelaunch("crystal")
-		}
-		if idx, ok := listNavKey(m.frontend.idx, navAlias(msg.String()), 2, 2, true); ok {
-			m.frontend.idx = idx
-		}
-	}
-	return m, nil
 }
 
 // frontendRelaunch 唤起指定前端（忙碌中忽略重复请求）
@@ -131,67 +79,34 @@ func statusBadge(online, known bool) string {
 	return errStyle.Render("○ 离线")
 }
 
-// viewFrontend 前端管理屏渲染：可选中列表 + 运行状态
-func (m appModel) viewFrontend() string {
-	f := m.frameFor("前端管理", "", frontendKeys())
-	w, h := f.bodySize()
-
+// viewFrontendSection 运行状态屏的「前端窗口」区块：
+// 在线绿 / 离线红 / 未知灰，唤起中用黄色「处理中」；[1]/[2] 直接重新唤起。
+func (m appModel) viewFrontendSection(w int) []string {
 	lunarOnline, lunarKnown := frontendOnline(statusLunar)
 	crystalOnline, crystalKnown := frontendOnline(statusCrystal)
 
-	entries := []struct {
-		key    string
-		title  string
-		detail string
-		busy   bool
-		badge  string
-	}{
-		{"1", "月华前端", "消息终端（/）", m.frontend.busyLunar, statusBadge(lunarOnline, lunarKnown)},
-		{"2", "琉璃前端", "桌面工作台（/desktop/）", m.frontend.busyCrystal, statusBadge(crystalOnline, crystalKnown)},
-	}
-
-	rowW := maxInt(8, w-listGutter)
-	blocks := make([][]string, len(entries))
-	for i, e := range entries {
-		sel := i == m.frontend.idx
-		cursor := "  "
-		if sel {
-			cursor = cursorStyle.Render("▸ ")
-		}
-		title := fmt.Sprintf("[%s] 重启%s", e.key, e.title)
-		if sel {
-			title = selectStyle.Render(title)
-		} else {
-			title = labelStyle.Render(title)
-		}
-		right := e.badge
-		if e.busy {
-			title = selectStyle.Render(m.spinner.View() + " 正在唤起" + e.title + "…")
-			right = warnStyle.Render("处理中")
-		}
-		blocks[i] = []string{
-			listRow(rowW, sel, cursor, title, right),
-			newRow(rowW, sel).L("     ", dimStyle.Render(e.detail)).String(),
-		}
-	}
-
-	head := []string{
-		sectionRule("桌面窗口", w),
-		dimStyle.Render("  前端窗口意外关闭后可在此重新唤起；在线状态由宿主探针实时提供"),
-		"",
-	}
-	idx := clampInt(m.frontend.idx, 0, len(entries)-1)
-	lines, _ := m.frontend.list.layoutView(blocks, idx, w, maxInt(1, h-len(head)-2))
-
-	body := append([]string{}, head...)
-	body = append(body, lines...)
-	body = append(body, "")
+	lines := []string{sectionRule("前端窗口", w), ""}
+	lines = append(lines, m.frontendRow(w, "1", "月华前端", "消息终端（/）",
+		lunarOnline, lunarKnown, m.frontend.busyLunar)...)
+	lines = append(lines, m.frontendRow(w, "2", "琉璃前端", "桌面工作台（/desktop/）",
+		crystalOnline, crystalKnown, m.frontend.busyCrystal)...)
+	// 重启入口已写在底部键位栏（1/2 重启前端），此处只回显操作结果，不再重复提示。
 	if m.frontend.msg != "" {
-		body = append(body, "  "+m.frontend.msg)
-	} else {
-		body = append(body, "  "+dimStyle.Render("选中后回车即重新唤起对应窗口"))
+		lines = append(lines, fitWidth("  "+m.frontend.msg, w))
 	}
-	return f.render(fitLines(body, h))
+	return lines
+}
+
+// frontendRow 单个前端窗口的状态行 + 说明行。
+func (m appModel) frontendRow(w int, key, title, detail string, online, known, busy bool) []string {
+	titleText := labelStyle.Render("[" + key + "] " + title)
+	badge := statusBadge(online, known)
+	if busy {
+		titleText = selectStyle.Render(m.spinner.View() + " 正在唤起" + title + "…")
+		badge = warnStyle.Render("处理中")
+	}
+	row := newRow(maxInt(8, w), false).L("  ", titleText).R(badge).String()
+	return []string{row, fitWidth("     "+dimStyle.Render(detail), w)}
 }
 
 // ==== 端口释放屏 ====

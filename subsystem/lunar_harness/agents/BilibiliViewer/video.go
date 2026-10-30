@@ -205,7 +205,7 @@ func prepareVideoSegments(localPath string, maxSlices int) ([]module.MediaSegmen
 // understandOneSlice 观看一个 60 秒切片；供可中断的状态机逐片调用。
 //
 // 抽帧与任务措辞全部来自统一观看管线（module.SegmentImages / module.WatchTask），
-// 与描述者的影像理解一字不差，本智能体只补充视频背景。
+// 与通用描述的影像理解一字不差，本智能体只补充视频背景。
 func understandOneSlice(localPath string, info videoInfo, seg module.MediaSegment, index, total int) (string, error) {
 	images, err := module.SegmentImages(localPath, seg, module.WatchFrameMax)
 	if err != nil {
@@ -248,7 +248,7 @@ func summarizeWatch(video *videoRecord, summaries []string) string {
 		material.WriteString("\n")
 	}
 
-	// 合成任务的措辞与描述者共用一份（prompts/mediaWatchMergeTask.md）
+	// 合成任务的措辞与通用描述共用一份（prompts/mediaWatchMergeTask.md）
 	task := module.WatchMergeTask()
 	system := task
 	if persona, err := prompts.Read("lifeRole.md"); err == nil {

@@ -88,6 +88,7 @@ func TestBindThemeCoversEveryStyle(t *testing.T) {
 		"logInfoStyle": logInfoStyle, "logDimStyle": logDimStyle, "logProxyStyle": logProxyStyle,
 		"logWarnStyle": logWarnStyle, "logErrStyle": logErrStyle, "thinkStyle": thinkStyle,
 		"thinkHeadStyle": thinkHeadStyle, "roleStyle": roleStyle, "drawProgressStyle": drawProgressStyle,
+		"tokenInStyle": tokenInStyle, "tokenOutStyle": tokenOutStyle,
 	}
 	for name, st := range styles {
 		if out := st.Render("x"); !strings.Contains(out, "\x1b[") {
