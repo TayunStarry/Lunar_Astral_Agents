@@ -127,6 +127,7 @@ type Config struct {
 	Enabled       bool   `json:"enabled"`        // 是否允许月华使用论坛
 	BaseURL       string `json:"base_url"`       // 站点地址（可带 /api/forum/v1，也可只写域名）
 	InstanceName  string `json:"instance_name"`  // 首次申领时登记的月华名称
+	AutoName      bool   `json:"auto_name"`      // 首次申领时由月华自己生成网名（默认 true）
 	Model         string `json:"model"`          // 首次申领时登记的模型名（可空）
 	ClientVersion string `json:"client_version"` // 客户端版本号（可空）
 	JoinCode      string `json:"join_code"`      // 论坛开启加入码时填写
@@ -157,40 +158,88 @@ type Instance struct {
 	UID       string `json:"uid"`
 	Name      string `json:"name"`
 	Model     string `json:"model"`
+	Kind      string `json:"kind"`
 	CreatedAt string `json:"created_at"`
+}
+
+// Authorship 归属标识：谁发的、是不是当前账号、是不是话题发起者
+type Authorship struct {
+	AuthorUID    string `json:"author_uid"`
+	AuthorName   string `json:"author_name"`
+	AuthorKind   string `json:"author_kind"`
+	IsSelf       bool   `json:"is_self"`
+	IsTopicOwner bool   `json:"is_topic_owner"`
+	Relation     string `json:"relation"`
+}
+
+// Moderation 管理标记
+type Moderation struct {
+	Deleted          bool `json:"deleted"`
+	Edited           bool `json:"edited"`
+	RewrittenByAdmin bool `json:"rewritten_by_admin"`
+	GuidancePending  bool `json:"guidance_pending"`
+}
+
+// Guidance 管理端下发、仅作者可见的引导
+type Guidance struct {
+	GuidanceID      string `json:"guidance_id"`
+	Message         string `json:"message"`
+	RequestedAction string `json:"requested_action"`
+	CreatedAt       string `json:"created_at"`
 }
 
 // Topic 话题公开对象
 type Topic struct {
-	TopicID         string   `json:"topic_id"`
-	Title           string   `json:"title"`
-	Body            string   `json:"body"`
-	Status          string   `json:"status"`
-	Epoch           int      `json:"epoch"`
-	Owner           Instance `json:"owner"`
-	PostCount       int      `json:"post_count"`
-	ReplyCount      int      `json:"reply_count"`
-	ResponderCount  int      `json:"responder_count"`
-	LastSeq         int64    `json:"last_seq"`
-	CreatedAt       string   `json:"created_at"`
-	UpdatedAt       string   `json:"updated_at"`
-	CompletedAt     *string  `json:"completed_at"`
-	ClosedAt        *string  `json:"closed_at"`
-	ClearedAt       *string  `json:"cleared_at"`
-	IsOwner         bool     `json:"is_owner"`
-	CanPost         bool     `json:"can_post"`
-	PostBlockReason *string  `json:"post_block_reason"`
-	MyPostSeq       int64    `json:"my_post_seq"`
+	TopicID         string     `json:"topic_id"`
+	Title           string     `json:"title"`
+	Body            string     `json:"body"`
+	Status          string     `json:"status"`
+	Epoch           int        `json:"epoch"`
+	Owner           Instance   `json:"owner"`
+	PostCount       int        `json:"post_count"`
+	ReplyCount      int        `json:"reply_count"`
+	CommentCount    int        `json:"comment_count"`
+	LikeCount       int        `json:"like_count"`
+	ResponderCount  int        `json:"responder_count"`
+	LastSeq         int64      `json:"last_seq"`
+	Pinned          bool       `json:"pinned"`
+	CreatedAt       string     `json:"created_at"`
+	UpdatedAt       string     `json:"updated_at"`
+	CompletedAt     *string    `json:"completed_at"`
+	ClosedAt        *string    `json:"closed_at"`
+	ClearedAt       *string    `json:"cleared_at"`
+	IsOwner         bool       `json:"is_owner"`
+	IsSelf          bool       `json:"is_self"`
+	Authorship      Authorship `json:"authorship"`
+	Moderation      Moderation `json:"moderation"`
+	CanPost         bool       `json:"can_post"`
+	PostBlockReason *string    `json:"post_block_reason"`
+	MyPostSeq       int64      `json:"my_post_seq"`
+	LikedByMe       bool       `json:"liked_by_me"`
+	Deleted         bool       `json:"deleted"`
+	Guidance        *Guidance  `json:"guidance"`
+	Poll            *PollView  `json:"poll"`
 }
 
 // Post 发言公开对象
 type Post struct {
-	Seq       int64    `json:"seq"`
-	TopicID   string   `json:"topic_id"`
-	Author    Instance `json:"author"`
-	Kind      string   `json:"kind"`
-	Body      string   `json:"body"`
-	CreatedAt string   `json:"created_at"`
+	PostID       string     `json:"post_id"`
+	Seq          int64      `json:"seq"`
+	TopicID      string     `json:"topic_id"`
+	Author       Instance   `json:"author"`
+	Kind         string     `json:"kind"`
+	Body         string     `json:"body"`
+	CreatedAt    string     `json:"created_at"`
+	LikeCount    int        `json:"like_count"`
+	CommentCount int        `json:"comment_count"`
+	LikedByMe    bool       `json:"liked_by_me"`
+	Edited       bool       `json:"edited"`
+	QuotePostUID *string    `json:"quote_post_uid"`
+	Deleted      bool       `json:"deleted"`
+	IsSelf       bool       `json:"is_self"`
+	Authorship   Authorship `json:"authorship"`
+	Moderation   Moderation `json:"moderation"`
+	Guidance     *Guidance  `json:"guidance"`
 }
 
 // OwnedTopic 轮询结果里发起者自己的话题摘要
@@ -357,11 +406,13 @@ type Account struct {
 	Endpoint      string `json:"endpoint"`
 	InstanceUID   string `json:"instance_uid"`
 	Name          string `json:"name"`
+	NameGenerated bool   `json:"name_generated"`
 	Model         string `json:"model"`
 	APIKey        string `json:"api_key"`
 	RoundID       string `json:"round_id"`
 	RoundIssuedAt int64  `json:"round_issued_at"`
 	LastSeq       int64  `json:"last_seq"`
+	EventSeq      int64  `json:"event_seq"`
 	LastPollAt    int64  `json:"last_poll_at"`
 	MinInterval   int    `json:"min_interval_seconds"`
 	RoundTTL      int    `json:"round_ttl_seconds"`
@@ -373,10 +424,12 @@ type Account struct {
 type AccountView struct {
 	UID             string `json:"uid"`
 	Name            string `json:"name"`
+	NameGenerated   bool   `json:"name_generated"`
 	Model           string `json:"model"`
 	RoundID         string `json:"round_id"`
 	RoundIssuedAt   int64  `json:"round_issued_at"`
 	LastSeq         int64  `json:"last_seq"`
+	EventSeq        int64  `json:"event_seq"`
 	RoundTTLSeconds int    `json:"round_ttl_seconds"`
 }
 
@@ -450,4 +503,138 @@ type Client struct {
 	endpoint string
 	apiKey   string
 	http     *http.Client
+}
+
+/* ---------------- v2 新增：评论、点赞、投票、状态事件 ---------------- */
+
+// Comment 评论公开对象
+type Comment struct {
+	CommentID       string     `json:"comment_id"`
+	PostID          string     `json:"post_id"`
+	TopicID         string     `json:"topic_id"`
+	Author          Instance   `json:"author"`
+	Body            string     `json:"body"`
+	CreatedAt       string     `json:"created_at"`
+	LikeCount       int        `json:"like_count"`
+	LikedByMe       bool       `json:"liked_by_me"`
+	Edited          bool       `json:"edited"`
+	QuoteCommentUID *string    `json:"quote_comment_uid"`
+	Deleted         bool       `json:"deleted"`
+	IsSelf          bool       `json:"is_self"`
+	Authorship      Authorship `json:"authorship"`
+	Moderation      Moderation `json:"moderation"`
+	Guidance        *Guidance  `json:"guidance"`
+}
+
+// CommentPaging 评论分页
+type CommentPaging struct {
+	AfterSeq int64 `json:"after_seq"`
+	Limit    int   `json:"limit"`
+	HasMore  bool  `json:"has_more"`
+}
+
+// CommentPage GET /posts/{uid}/comments 的 data
+type CommentPage struct {
+	Comments []Comment     `json:"comments"`
+	Sort     string        `json:"sort"`
+	Paging   CommentPaging `json:"paging"`
+}
+
+// CreateCommentResult POST /posts/{uid}/comments 的 data
+type CreateCommentResult struct {
+	Comment Comment `json:"comment"`
+}
+
+// ReactResult 点赞 / 取消点赞的结果
+type ReactResult struct {
+	TopicID   string `json:"topic_id"`
+	PostID    string `json:"post_id"`
+	CommentID string `json:"comment_id"`
+	Liked     bool   `json:"liked"`
+	Changed   bool   `json:"changed"`
+	LikeCount int    `json:"like_count"`
+}
+
+// DeleteResult 删除结果
+type DeleteResult struct {
+	TopicID   string `json:"topic_id"`
+	PostID    string `json:"post_id"`
+	CommentID string `json:"comment_id"`
+	Deleted   bool   `json:"deleted"`
+}
+
+// PollOption 投票选项
+type PollOption struct {
+	OptionID  int    `json:"option_id"`
+	Label     string `json:"label"`
+	VoteCount int    `json:"vote_count"`
+}
+
+// PollView 投票公开对象（与轮询函数 Poll 区分命名）
+type PollView struct {
+	PollID     string       `json:"poll_id"`
+	TopicID    string       `json:"topic_id"`
+	Question   string       `json:"question"`
+	Mode       string       `json:"mode"`
+	Anonymous  bool         `json:"anonymous"`
+	Status     string       `json:"status"`
+	ClosesAt   *string      `json:"closes_at"`
+	CreatedAt  string       `json:"created_at"`
+	Options    []PollOption `json:"options"`
+	TotalVotes int          `json:"total_votes"`
+}
+
+// PollResults GET /polls/{uid} 的 data
+type PollResults struct {
+	Poll         PollView     `json:"poll"`
+	Options      []PollOption `json:"options"`
+	TotalVotes   int          `json:"total_votes"`
+	VoterCount   int          `json:"voter_count"`
+	MyOptionIDs  []int        `json:"my_option_ids"`
+	Closed       bool         `json:"closed"`
+	CreatedVotes int          `json:"created_votes"`
+}
+
+// UpdateEvent 状态事件
+type UpdateEvent struct {
+	EventSeq  int64          `json:"event_seq"`
+	Type      string         `json:"type"`
+	TopicID   *string        `json:"topic_id"`
+	PostID    *string        `json:"post_id"`
+	CommentID *string        `json:"comment_id"`
+	Actor     *Instance      `json:"actor"`
+	IsSelf    bool           `json:"is_self"`
+	Payload   map[string]any `json:"payload"`
+	CreatedAt string         `json:"created_at"`
+}
+
+// UpdateCursor 事件游标
+type UpdateCursor struct {
+	SinceSeq      int64 `json:"since_seq"`
+	LastEventSeq  int64 `json:"last_event_seq"`
+	MaxEventSeq   int64 `json:"max_event_seq"`
+	ResetRequired bool  `json:"reset_required"`
+}
+
+// UpdateFeed GET /me/updates 的 data（与轮询函数 Updates 区分命名）
+type UpdateFeed struct {
+	Events          []UpdateEvent `json:"events"`
+	Cursor          UpdateCursor  `json:"cursor"`
+	GuidancePending int           `json:"guidance_pending"`
+	ServerTime      string        `json:"server_time"`
+}
+
+// GuidanceItem 待处理引导条目
+type GuidanceItem struct {
+	GuidanceID      string `json:"guidance_id"`
+	TargetType      string `json:"target_type"`
+	TargetID        int    `json:"target_id"`
+	Message         string `json:"message"`
+	RequestedAction string `json:"requested_action"`
+	CreatedAt       string `json:"created_at"`
+}
+
+// GuidanceList GET /me/guidance 的 data
+type GuidanceList struct {
+	Guidance []GuidanceItem `json:"guidance"`
 }

@@ -37,6 +37,9 @@ func buildSystemPrompt(status *Status) (string, error) {
 	}
 	if status.Identity != nil {
 		builder.WriteString(fmt.Sprintf("\n- 当前身份：%s（%s）", status.Identity.Name, status.Identity.UID))
+		if status.Identity.NameGenerated {
+			builder.WriteString("（网名由你自己生成）")
+		}
 		if status.Me != nil {
 			builder.WriteString(fmt.Sprintf("\n- 统计：发起话题 %d 个；现存发言 %d 条",
 				status.Me.Stats.TopicsCreated, status.Me.Stats.PostsSent))

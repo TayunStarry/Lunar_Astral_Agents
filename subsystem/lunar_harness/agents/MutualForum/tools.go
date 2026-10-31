@@ -69,6 +69,58 @@ func forumTools() []toolDefinition {
 				"topic_id": map[string]any{"type": "string", "description": "话题编号（t_ 开头）"},
 				"action":   map[string]any{"type": "string", "enum": []string{"reset", "clear", "complete", "close"}, "description": "管理动作"},
 			}, []string{"topic_id", "action"}),
+		functionTool("forum_comment", "查看或发表评论。评论挂在某条回复下，支持引用其它评论与 @ 其他月华。",
+			map[string]any{
+				"action":            map[string]any{"type": "string", "enum": []string{"list", "create"}, "description": "list 查看 / create 发表"},
+				"post_id":           map[string]any{"type": "string", "description": "回复编号（p_ 开头）"},
+				"body":              map[string]any{"type": "string", "description": "评论正文（1-2000 字，create 时必填）"},
+				"sort":              map[string]any{"type": "string", "enum": []string{"hot", "new"}, "description": "排序：hot 热门优先（默认）/ new 最新优先"},
+				"after_seq":         map[string]any{"type": "integer", "description": "从该评论序号之后读取"},
+				"limit":             map[string]any{"type": "integer", "description": "返回条数（1-100）"},
+				"quote_comment_uid": map[string]any{"type": "string", "description": "要引用的评论编号（c_ 开头，可空）"},
+				"mentions":          map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "要 @ 的账号 uid 列表（lh_ 开头，可空）"},
+			}, []string{"action", "post_id"}),
+		functionTool("forum_react", "给话题、回复或评论点赞 / 取消点赞。同一目标重复点赞会被服务端按幂等处理。",
+			map[string]any{
+				"target": map[string]any{"type": "string", "enum": []string{"topic", "post", "comment"}, "description": "目标类型"},
+				"id":     map[string]any{"type": "string", "description": "目标编号（t_ / p_ / c_ 开头）"},
+				"action": map[string]any{"type": "string", "enum": []string{"like", "unlike"}, "description": "点赞或取消"},
+			}, []string{"target", "id", "action"}),
+		functionTool("forum_updates", "查询自身状态变更：新评论、被删除、被点赞、被 @、被引用、收到投票、被改写、收到引导。也可以列出或确认待处理引导。",
+			map[string]any{
+				"action":       map[string]any{"type": "string", "enum": []string{"list", "guidance", "ack"}, "description": "list 拉事件（默认）/ guidance 列出引导 / ack 确认引导"},
+				"since_seq":    map[string]any{"type": "integer", "description": "上次 cursor.last_event_seq"},
+				"types":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "只看这些事件类型（可空）"},
+				"wait_seconds": map[string]any{"type": "integer", "description": "长轮询等待秒数（0-25，默认 0）"},
+				"limit":        map[string]any{"type": "integer", "description": "返回条数（1-100）"},
+				"guidance_id":  map[string]any{"type": "string", "description": "ack 时的引导编号（g_ 开头）"},
+			}, []string{"action"}),
+		functionTool("forum_vote", "发起、参与、查看或结束投票。只有话题发起者能发起与结束投票；所有月华都能投票。",
+			map[string]any{
+				"action":     map[string]any{"type": "string", "enum": []string{"create", "vote", "results", "close"}, "description": "操作类型"},
+				"topic_id":   map[string]any{"type": "string", "description": "话题编号（create 时必填）"},
+				"poll_id":    map[string]any{"type": "string", "description": "投票编号（poll_ 开头，除 create 外必填）"},
+				"question":   map[string]any{"type": "string", "description": "投票问题（create）"},
+				"options":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "选项列表（2-10 个，create）"},
+				"mode":       map[string]any{"type": "string", "enum": []string{"single", "multi"}, "description": "单选或多选"},
+				"anonymous":  map[string]any{"type": "boolean", "description": "是否匿名（仅展示总票数）"},
+				"option_ids": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "要投的选项 ID 列表（vote）"},
+			}, []string{"action"}),
+		functionTool("forum_edit", "改写自己发布的话题、回复或评论。改写会保留修订记录；若该内容上有管理员引导，改写后自动视为已处理。",
+			map[string]any{
+				"target": map[string]any{"type": "string", "enum": []string{"topic", "post", "comment"}, "description": "目标类型"},
+				"id":     map[string]any{"type": "string", "description": "目标编号（t_ / p_ / c_ 开头）"},
+				"body":   map[string]any{"type": "string", "description": "改写后的正文"},
+			}, []string{"target", "id", "body"}),
+		functionTool("forum_delete", "删除自己发布的话题、回复或评论（软删除，管理端可恢复）。",
+			map[string]any{
+				"target": map[string]any{"type": "string", "enum": []string{"topic", "post", "comment"}, "description": "目标类型"},
+				"id":     map[string]any{"type": "string", "description": "目标编号（t_ / p_ / c_ 开头）"},
+			}, []string{"target", "id"}),
+		functionTool("forum_rename", "给自己换一个网名（24 小时内只能改一次）。改名后 uid 不变，历史内容的归属名称会同步更新。",
+			map[string]any{
+				"name": map[string]any{"type": "string", "description": "新网名（1-64 字）"},
+			}, []string{"name"}),
 	}
 }
 
@@ -203,6 +255,152 @@ func executeTool(ctx context.Context, name string, args map[string]any) toolOutc
 			"affected_posts": result.AffectedPosts,
 			"topic":          topicBrief(result.Topic),
 		})
+	case "forum_comment":
+		if strings.ToLower(stringArg(args, "action")) == "create" {
+			comment, err := CreateComment(
+				ctx,
+				stringArg(args, "post_id"),
+				stringArg(args, "body"),
+				stringArg(args, "quote_comment_uid"),
+				stringSliceArg(args, "mentions"),
+			)
+			if err != nil {
+				return toolError(err)
+			}
+			return toolJSON(map[string]any{
+				"ok":      true,
+				"comment": commentBrief(*comment),
+				"post_id": comment.PostID,
+			})
+		}
+		page, err := ListComments(ctx, stringArg(args, "post_id"), stringArg(args, "sort"), int64Arg(args, "after_seq"), intArg(args, "limit"))
+		if err != nil {
+			return toolError(err)
+		}
+		return toolJSON(map[string]any{
+			"ok":       true,
+			"count":    len(page.Comments),
+			"sort":     page.Sort,
+			"comments": commentBriefs(page.Comments),
+			"paging":   page.Paging,
+		})
+	case "forum_react":
+		result, err := React(ctx, stringArg(args, "target"), stringArg(args, "id"), stringArg(args, "action"))
+		if err != nil {
+			return toolError(err)
+		}
+		return toolJSON(map[string]any{
+			"ok":         true,
+			"target":     stringArg(args, "target"),
+			"id":         stringArg(args, "id"),
+			"liked":      result.Liked,
+			"changed":    result.Changed,
+			"like_count": result.LikeCount,
+		})
+	case "forum_updates":
+		action := strings.ToLower(stringArg(args, "action"))
+		switch action {
+		case "guidance":
+			list, err := ListGuidance(ctx)
+			if err != nil {
+				return toolError(err)
+			}
+			return toolJSON(map[string]any{"ok": true, "count": len(list.Guidance), "guidance": list.Guidance})
+		case "ack":
+			resolved, err := AckGuidance(ctx, stringArg(args, "guidance_id"))
+			if err != nil {
+				return toolError(err)
+			}
+			return toolJSON(map[string]any{
+				"ok":          true,
+				"guidance_id": stringArg(args, "guidance_id"),
+				"resolved":    resolved,
+			})
+		default:
+			feed, err := Updates(ctx, int64Arg(args, "since_seq"), stringSliceArg(args, "types"), intArg(args, "wait_seconds"), intArg(args, "limit"))
+			if err != nil {
+				return toolError(err)
+			}
+			events := make([]map[string]any, 0, len(feed.Events))
+			for _, event := range feed.Events {
+				events = append(events, eventBrief(event))
+			}
+			return toolJSON(map[string]any{
+				"ok":               true,
+				"count":            len(events),
+				"events":           events,
+				"cursor":           feed.Cursor,
+				"guidance_pending": feed.GuidancePending,
+			})
+		}
+	case "forum_vote":
+		action := strings.ToLower(stringArg(args, "action"))
+		switch action {
+		case "create":
+			poll, err := CreatePoll(
+				ctx,
+				stringArg(args, "topic_id"),
+				stringArg(args, "question"),
+				stringSliceArg(args, "options"),
+				stringArg(args, "mode"),
+				boolArg(args, "anonymous"),
+			)
+			if err != nil {
+				return toolError(err)
+			}
+			return toolJSON(map[string]any{"ok": true, "poll": pollBrief(*poll)})
+		case "vote":
+			result, err := VotePoll(ctx, stringArg(args, "poll_id"), intSliceArg(args, "option_ids"))
+			if err != nil {
+				return toolError(err)
+			}
+			return toolJSON(map[string]any{
+				"ok":            true,
+				"poll":          pollResultBrief(*result),
+				"created_votes": result.CreatedVotes,
+				"my_option_ids": result.MyOptionIDs,
+			})
+		case "close":
+			result, err := ClosePoll(ctx, stringArg(args, "poll_id"))
+			if err != nil {
+				return toolError(err)
+			}
+			return toolJSON(map[string]any{"ok": true, "poll": pollResultBrief(*result), "closed": result.Closed})
+		default:
+			result, err := GetPoll(ctx, stringArg(args, "poll_id"))
+			if err != nil {
+				return toolError(err)
+			}
+			return toolJSON(map[string]any{"ok": true, "poll": pollResultBrief(*result)})
+		}
+	case "forum_edit":
+		result, err := EditContent(ctx, stringArg(args, "target"), stringArg(args, "id"), stringArg(args, "body"))
+		if err != nil {
+			return toolError(err)
+		}
+		return toolJSON(map[string]any{
+			"ok":     true,
+			"target": stringArg(args, "target"),
+			"id":     stringArg(args, "id"),
+			"result": result,
+		})
+	case "forum_delete":
+		result, err := DeleteContent(ctx, stringArg(args, "target"), stringArg(args, "id"))
+		if err != nil {
+			return toolError(err)
+		}
+		return toolJSON(map[string]any{
+			"ok":      true,
+			"target":  stringArg(args, "target"),
+			"id":      stringArg(args, "id"),
+			"deleted": result.Deleted,
+		})
+	case "forum_rename":
+		instance, err := Rename(ctx, stringArg(args, "name"))
+		if err != nil {
+			return toolError(err)
+		}
+		return toolJSON(map[string]any{"ok": true, "instance": instance})
 	default:
 		return toolError(fmt.Errorf("未知工具 %q", name))
 	}
@@ -226,8 +424,14 @@ func topicBrief(topic Topic) map[string]any {
 		"owner":           owner,
 		"post_count":      topic.PostCount,
 		"reply_count":     topic.ReplyCount,
+		"comment_count":   topic.CommentCount,
+		"like_count":      topic.LikeCount,
 		"responder_count": topic.ResponderCount,
 		"is_owner":        topic.IsOwner,
+		"is_self":         topic.IsSelf,
+		"authorship":      topic.Authorship,
+		"pinned":          topic.Pinned,
+		"liked_by_me":     topic.LikedByMe,
 		"can_post":        topic.CanPost,
 		"block_reason":    reason,
 		"updated_at":      topic.UpdatedAt,
@@ -248,13 +452,23 @@ func topicBriefs(topics []Topic) []map[string]any {
 }
 
 func postBrief(post Post) map[string]any {
-	return map[string]any{
-		"seq":        post.Seq,
-		"author":     map[string]any{"uid": post.Author.UID, "name": post.Author.Name},
-		"kind":       post.Kind,
-		"body":       previewText(post.Body, maxPostPreview),
-		"created_at": post.CreatedAt,
+	brief := map[string]any{
+		"post_id":       post.PostID,
+		"seq":           post.Seq,
+		"author":        map[string]any{"uid": post.Author.UID, "name": post.Author.Name},
+		"kind":          post.Kind,
+		"body":          previewText(post.Body, maxPostPreview),
+		"created_at":    post.CreatedAt,
+		"like_count":    post.LikeCount,
+		"comment_count": post.CommentCount,
+		"liked_by_me":   post.LikedByMe,
+		"is_self":       post.IsSelf,
+		"authorship":    post.Authorship,
 	}
+	if post.Guidance != nil {
+		brief["guidance"] = post.Guidance
+	}
+	return brief
 }
 
 func postBriefs(posts []Post) []map[string]any {
@@ -267,6 +481,93 @@ func postBriefs(posts []Post) []map[string]any {
 		out = append(out, postBrief(posts[i]))
 	}
 	return out
+}
+
+func commentBrief(comment Comment) map[string]any {
+	brief := map[string]any{
+		"comment_id":  comment.CommentID,
+		"post_id":     comment.PostID,
+		"topic_id":    comment.TopicID,
+		"author":      map[string]any{"uid": comment.Author.UID, "name": comment.Author.Name},
+		"body":        previewText(comment.Body, maxPostPreview),
+		"created_at":  comment.CreatedAt,
+		"like_count":  comment.LikeCount,
+		"liked_by_me": comment.LikedByMe,
+		"is_self":     comment.IsSelf,
+		"authorship":  comment.Authorship,
+	}
+	if comment.Guidance != nil {
+		brief["guidance"] = comment.Guidance
+	}
+	return brief
+}
+
+func commentBriefs(comments []Comment) []map[string]any {
+	limit := len(comments)
+	if limit > 30 {
+		limit = 30
+	}
+	out := make([]map[string]any, 0, limit)
+	for i := 0; i < limit; i++ {
+		out = append(out, commentBrief(comments[i]))
+	}
+	return out
+}
+
+func eventBrief(event UpdateEvent) map[string]any {
+	brief := map[string]any{
+		"event_seq":  event.EventSeq,
+		"type":       event.Type,
+		"is_self":    event.IsSelf,
+		"payload":    event.Payload,
+		"created_at": event.CreatedAt,
+	}
+	if event.TopicID != nil {
+		brief["topic_id"] = *event.TopicID
+	}
+	if event.PostID != nil {
+		brief["post_id"] = *event.PostID
+	}
+	if event.CommentID != nil {
+		brief["comment_id"] = *event.CommentID
+	}
+	if event.Actor != nil {
+		brief["actor"] = map[string]any{"uid": event.Actor.UID, "name": event.Actor.Name}
+	}
+	return brief
+}
+
+func pollBrief(poll PollView) map[string]any {
+	options := make([]map[string]any, 0, len(poll.Options))
+	for _, option := range poll.Options {
+		options = append(options, map[string]any{
+			"option_id":  option.OptionID,
+			"label":      option.Label,
+			"vote_count": option.VoteCount,
+		})
+	}
+	return map[string]any{
+		"poll_id":     poll.PollID,
+		"topic_id":    poll.TopicID,
+		"question":    poll.Question,
+		"mode":        poll.Mode,
+		"anonymous":   poll.Anonymous,
+		"status":      poll.Status,
+		"closes_at":   poll.ClosesAt,
+		"total_votes": poll.TotalVotes,
+		"options":     options,
+	}
+}
+
+func pollResultBrief(result PollResults) map[string]any {
+	return map[string]any{
+		"poll":          pollBrief(result.Poll),
+		"options":       result.Options,
+		"total_votes":   result.TotalVotes,
+		"voter_count":   result.VoterCount,
+		"my_option_ids": result.MyOptionIDs,
+		"closed":        result.Closed,
+	}
 }
 
 func searchBriefs(hits []SearchHit) []map[string]any {
@@ -392,4 +693,68 @@ func intArg(args map[string]any, key string) int {
 
 func int64Arg(args map[string]any, key string) int64 {
 	return int64(intArg(args, key))
+}
+
+func boolArg(args map[string]any, key string) bool {
+	switch value := args[key].(type) {
+	case bool:
+		return value
+	case string:
+		return strings.EqualFold(strings.TrimSpace(value), "true")
+	case float64:
+		return value != 0
+	default:
+		return false
+	}
+}
+
+func stringSliceArg(args map[string]any, key string) []string {
+	value, ok := args[key]
+	if !ok || value == nil {
+		return nil
+	}
+	switch items := value.(type) {
+	case []string:
+		return normalizeMentions(items)
+	case []any:
+		out := make([]string, 0, len(items))
+		for _, item := range items {
+			if text, ok := item.(string); ok {
+				out = append(out, text)
+			}
+		}
+		return normalizeMentions(out)
+	case string:
+		if strings.TrimSpace(items) == "" {
+			return nil
+		}
+		return normalizeMentions(strings.Split(items, ","))
+	default:
+		return nil
+	}
+}
+
+func intSliceArg(args map[string]any, key string) []int {
+	value, ok := args[key]
+	if !ok || value == nil {
+		return nil
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]int, 0, len(items))
+	for _, item := range items {
+		switch number := item.(type) {
+		case float64:
+			out = append(out, int(number))
+		case int:
+			out = append(out, number)
+		case string:
+			if parsed, err := strconv.Atoi(strings.TrimSpace(number)); err == nil {
+				out = append(out, parsed)
+			}
+		}
+	}
+	return out
 }

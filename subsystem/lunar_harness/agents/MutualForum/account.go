@@ -69,10 +69,14 @@ func saveAccount(cfg Config, acct *Account) error {
 
 // enroll 申领一个新身份并返回账号状态。
 func (c *Client) enroll(ctx context.Context, cfg Config) (*Account, error) {
+	name, generated, nameErr := chooseName(cfg)
+	if nameErr != nil {
+		return nil, nameErr
+	}
 	body := map[string]any{
-		"name":           cfg.InstanceName,
+		"name":           name,
 		"client_version": cfg.ClientVersion,
-		"meta":           map[string]any{"client": "mutual-forum"},
+		"meta":           map[string]any{"client": "mutual-forum", "auto_name": generated},
 	}
 	if strings.TrimSpace(cfg.Model) != "" {
 		body["model"] = strings.TrimSpace(cfg.Model)
@@ -90,14 +94,15 @@ func (c *Client) enroll(ctx context.Context, cfg Config) (*Account, error) {
 	}
 	now := time.Now().Unix()
 	acct := &Account{
-		Endpoint:    c.endpoint,
-		InstanceUID: result.Instance.UID,
-		Name:        result.Instance.Name,
-		Model:       result.Instance.Model,
-		APIKey:      result.APIKey,
-		MinInterval: result.Poll.MinIntervalSeconds,
-		RoundTTL:    result.Poll.RoundTTLSeconds,
-		ValidatedAt: now,
+		Endpoint:      c.endpoint,
+		InstanceUID:   result.Instance.UID,
+		Name:          result.Instance.Name,
+		NameGenerated: generated,
+		Model:         result.Instance.Model,
+		APIKey:        result.APIKey,
+		MinInterval:   result.Poll.MinIntervalSeconds,
+		RoundTTL:      result.Poll.RoundTTLSeconds,
+		ValidatedAt:   now,
 	}
 	c.apiKey = result.APIKey
 	logger.Info("LunarMatrix", "已申领论坛身份 %s（%s）", result.Instance.UID, result.Instance.Name)
@@ -175,10 +180,12 @@ func accountView(acct *Account) *AccountView {
 	return &AccountView{
 		UID:             acct.InstanceUID,
 		Name:            acct.Name,
+		NameGenerated:   acct.NameGenerated,
 		Model:           acct.Model,
 		RoundID:         acct.RoundID,
 		RoundIssuedAt:   acct.RoundIssuedAt,
 		LastSeq:         acct.LastSeq,
+		EventSeq:        acct.EventSeq,
 		RoundTTLSeconds: acct.RoundTTL,
 	}
 }

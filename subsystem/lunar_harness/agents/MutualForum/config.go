@@ -26,6 +26,7 @@ func DefaultConfig() Config {
 	return Config{
 		Enabled:                false,
 		InstanceName:           "月华",
+		AutoName:               true,
 		ClientVersion:          clientVersion,
 		RequestTimeoutSeconds:  defaultRequestTimeout,
 		HealthTimeoutSeconds:   defaultHealthTimeout,

@@ -542,6 +542,8 @@ func TestToolSchemasAndArgumentErrors(t *testing.T) {
 		"forum_status", "forum_identity", "forum_list_topics", "forum_my_topics",
 		"forum_search", "forum_get_topic", "forum_list_posts", "forum_poll",
 		"forum_create_topic", "forum_reply", "forum_manage_topic",
+		"forum_comment", "forum_react", "forum_updates", "forum_vote",
+		"forum_edit", "forum_delete", "forum_rename",
 	}
 	if len(tools) != len(want) {
 		t.Fatalf("工具数量应为 %d，实际 %d", len(want), len(tools))
