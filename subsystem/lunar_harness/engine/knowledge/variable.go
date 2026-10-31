@@ -57,12 +57,6 @@ var (
 		"painter_characters": characterDB, // 自定义角色档案
 	}
 
-	// legacyKnowledgeTables 迁移清单；列顺序必须与目标表一致。
-	legacyKnowledgeTables = []legacyBuiltinTable{
-		{"file_mapping", textDB, []string{"key", "value"}},
-		{"painter_characters", characterDB, []string{"key", "value"}},
-	}
-
 	// knowledgeValidName 库名/表名白名单（防路径穿越与表名拼接注入）
 	knowledgeValidName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 )

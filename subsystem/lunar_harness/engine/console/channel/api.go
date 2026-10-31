@@ -73,12 +73,12 @@ func FriendlyAPIError(err error, hasToken bool) string {
 	switch {
 	case apiErr.RateLimited() && !hasToken:
 		return "Gitee 接口限流：未配置令牌时只能使用匿名额度（按 IP 计，很快耗尽）。" +
-			"请在 lunar_config.json 的 release.gitee_token 填入 Gitee 令牌，" +
+			"请在 local_data/release.json 的 gitee_token 填入 Gitee 令牌，" +
 			"或在发布/安装流程中按提示输入令牌（输入后本次会话的列表请求都会带上它）；随后重试。"
 	case apiErr.RateLimited():
 		return "Gitee 接口限流：当前令牌的调用额度已用尽，请稍后重试。"
 	case apiErr.Status == 401:
-		return "Gitee 鉴权失败：令牌无效或已过期，请检查 release.gitee_token。"
+		return "Gitee 鉴权失败：令牌无效或已过期，请检查 local_data/release.json 的 gitee_token。"
 	case apiErr.Status == 403:
 		return "Gitee 拒绝访问：令牌权限不足（需要仓库的读写权限）。"
 	case apiErr.Status == 404:

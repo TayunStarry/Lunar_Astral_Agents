@@ -80,31 +80,9 @@
 		"idle_unload_minutes": 5
 	},
 	"web_search": {
-		"search_model": "light_reasoning",
-		"swap_model": true,
 		"max_pages": 5,
 		"max_results": 15,
 		"summary_max_chars": 4096,
 		"max_run_seconds": 420
-	},
-	"release": {
-		"gitee_owner": "TayunStarry",
-		"gitee_repo": "Lunar-Astral-Agents",
-		"include": [
-			"local_data/multimedia/background",
-			"local_data/package",
-			"local_data/audios"
-		],
-		"program_files": [
-			"Lunar_Astral_Agents.exe",
-			"Lunar_Update_Applier.exe"
-		],
-		"exclude_dirs_with": [
-			"metadata.json"
-		],
-		"backup_keep": 3,
-		"restart_args": [],
-		"target_dir": ".",
-		"package_dir": "local_data/package"
 	}
 }

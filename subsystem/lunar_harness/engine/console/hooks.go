@@ -24,7 +24,7 @@ func SetFrontendHooks(lunarProbe, crystalProbe func() bool, lunarRelaunch, cryst
 // ==== 更新包配置注入 ====
 
 var (
-	// updatePackCfg 更新包功能配置（宿主从 lunar_config.json 读取注入）
+	// updatePackCfg 更新包功能配置（宿主从 local_data/release.json 读取注入）
 	updatePackCfg *updatepack.Config
 )
 
@@ -41,7 +41,7 @@ func GetUpdatePackConfig() *updatepack.Config {
 // ==== 应用市场配置注入 ====
 
 var (
-	// marketCfg 应用市场配置（宿主从 lunar_config.json 读取注入）
+	// marketCfg 应用市场配置（宿主从 local_data/release.json 读取注入）
 	marketCfg *ltpxmarket.Config
 )
 

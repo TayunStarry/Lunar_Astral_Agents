@@ -1,7 +1,7 @@
 package runtime
 
 // ==== 运行时沙箱顶层全局绑定（能力全量注入，无权限开关） ====
-// 契约见 prompts/runtimeAPI.d.ts：能力以顶层全局（signal/file/memory/http/...）注入。
+// 契约见 prompts/runtimeAPI.d.ts 及按能力拆分的 prompts/*API.d.ts。
 
 import (
 	"fmt"
@@ -18,9 +18,8 @@ func bindSandbox(vm *goja.Runtime, p *plugin) {
 	vm.Set("console", bindConsole(vm))
 
 	// 常驻基础能力
-	vm.Set("event", bindEvent(vm, p)) // 事件订阅器
-	vm.Set("time", bindTime(vm))      // 时间戳
-	vm.Set("sleep", func(ms float64) { time.Sleep(time.Duration(ms) * time.Millisecond) })
+	vm.Set("event", bindEvent(vm, p))                           // 事件订阅器
+	vm.Set("time", bindTime(vm))                                // 时间戳
 	vm.Set("exportFunction", func(name string, fn goja.Value) { // 导出能力（供 Runtime.Call）
 		if fn == nil || !isFunc(fn) {
 			return
@@ -29,7 +28,6 @@ func bindSandbox(vm *goja.Runtime, p *plugin) {
 		p.exports[name] = fn
 		p.mu.Unlock()
 	})
-	vm.Set("config", vm.NewObject())      // 配置占位（私有运行时无 config.yaml）
 	vm.Set("command", bindCommand(vm, p)) // 指令系统
 
 	// 广播收发
@@ -111,7 +109,7 @@ func bindEvent(vm *goja.Runtime, p *plugin) *goja.Object {
 	return event
 }
 
-// bindSignal signal.all/target/subscribe/unsubscribe（allow-signal）。
+// bindSignal signal.all/target/subscribe/unsubscribe。
 // all/target 单向广播；subscribe/unsubscribe 注册/退订广播接收回调。
 func bindSignal(vm *goja.Runtime, p *plugin) *goja.Object {
 	sig := vm.NewObject()
@@ -159,7 +157,7 @@ func bindFile(vm *goja.Runtime, p *plugin) *goja.Object {
 	return f
 }
 
-// bindMemory memory.store/search/searchImage/storeImage/randomImage（allow-memory）。
+// bindMemory memory.store/search/searchImage/storeImage/randomImage。
 // 文本与图片记忆都按类型全局检索，不暴露集合名；集合只是内容自动归入的分组。
 func bindMemory(vm *goja.Runtime) *goja.Object {
 	m := vm.NewObject()
@@ -179,8 +177,8 @@ func bindMemory(vm *goja.Runtime) *goja.Object {
 	return m
 }
 
-// bindDatabase database.query/exec/transaction/migrate/namespace（allow-database）。
-// transaction/migrate 操作共享库 knowledge.db；namespace(name) 返回独立 <name>.db 的作用域对象。
+// bindDatabase database.query/exec/transaction/migrate。
+// 全部操作作用于单一共享库 knowledge.db，不提供新建库文件能力。
 func bindDatabase(vm *goja.Runtime) *goja.Object {
 	d := vm.NewObject()
 	d.Set("query", func(sql string, params []any) (any, error) { return databaseQuery(sql, params) })
@@ -195,8 +193,6 @@ func bindDatabase(vm *goja.Runtime) *goja.Object {
 		}
 		return dbMigrateOn(db, name, upSQL)
 	})
-	// 命名空间作用域：独立 <name>.db 文件，返回 {query, exec, transaction, migrate}
-	d.Set("namespace", func(name string) (any, error) { return databaseNamespace(vm, name) })
 	return d
 }
 
@@ -281,7 +277,7 @@ func bindAgent(vm *goja.Runtime, p *plugin) *goja.Object {
 		}
 		return map[string]any{"success": true, "text": fmt.Sprint(v)}
 	})
-	// search 调用进程内 Web-LTP 网络搜索（双权限：allow-agent 绑定 + allow-network 执行）
+	// search 调用进程内 Web-LTP 网络搜索
 	a.Set("search", func(instruction string) map[string]any {
 		return engineAgentSearch(p, instruction)
 	})

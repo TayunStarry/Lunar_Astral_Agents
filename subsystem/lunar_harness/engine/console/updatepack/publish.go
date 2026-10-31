@@ -95,10 +95,78 @@ func Publish(cfg Config, version string) error {
 	}
 
 	logf("✓ 更新包 %s 发布完成（共 %d 个附件）", version, len(packFiles))
+	// 发布完成后清理历史标签：更新包相关标签最多保留最近 maxUpdateTagsKept 个
+	pruneOldUpdateTags(cfg)
 	reportProgress(100)
 	// 更新包上传完成：统一播放完成提示音
 	sound.Notify()
 	return nil
+}
+
+// pruneOldUpdateTags 清理历史更新包发布与标签：仅保留最近 maxUpdateTagsKept 个。
+// 清理失败只记日志、不中断发布：旧标签残留不应影响本次更新包可用性。
+func pruneOldUpdateTags(cfg Config) {
+	releases, err := listAllReleases(cfg)
+	if err != nil {
+		logf("  [WARN] 读取发布列表失败，跳过历史标签清理: %v", err)
+		return
+	}
+	sortReleasesNewestFirst(releases)
+	stale := selectStaleUpdateReleases(releases, maxUpdateTagsKept)
+	if len(stale) == 0 {
+		return
+	}
+	logf("  清理历史更新包标签：保留最近 %d 个，删除 %d 个", maxUpdateTagsKept, len(stale))
+	for _, r := range stale {
+		if err := deleteRelease(cfg, r.ID); err != nil {
+			logf("  [WARN] 删除旧发布 %s 失败: %v", r.TagName, err)
+			continue
+		}
+		// Release 删除后 git 标签可能仍存在，再删一次标签；失败仅记录
+		if err := deleteTag(cfg, r.TagName); err != nil {
+			logf("  [WARN] 删除旧标签 %s 失败: %v", r.TagName, err)
+		}
+		logf("  已删除旧标签 %s", r.TagName)
+	}
+}
+
+// listAllReleases 分页读取全部发布（每页 100 条，最多 10 页），保证清理不受单页上限影响。
+func listAllReleases(cfg Config) ([]giteeRelease, error) {
+	const perPage = 100
+	all := make([]giteeRelease, 0, perPage)
+	for page := 1; page <= 10; page++ {
+		query := releasesQuery(cfg)
+		query.Set("page", fmt.Sprintf("%d", page))
+		var releases []giteeRelease
+		if err := apiRequest(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), query, &releases); err != nil {
+			return nil, err
+		}
+		all = append(all, releases...)
+		if len(releases) < perPage {
+			break
+		}
+	}
+	return all, nil
+}
+
+// selectStaleUpdateReleases 从「最新在前」的发布列表中选出超出保留上限的更新包发布。
+// 只统计更新包通道，LTPX 应用市场发布不参与计数、也不会被删除。
+func selectStaleUpdateReleases(releases []giteeRelease, keep int) []giteeRelease {
+	if keep < 0 {
+		keep = 0
+	}
+	seen := 0
+	stale := make([]giteeRelease, 0)
+	for _, r := range releases {
+		if !isUpdateRelease(r) {
+			continue
+		}
+		seen++
+		if seen > keep {
+			stale = append(stale, r)
+		}
+	}
+	return stale
 }
 
 // createRelease 创建 Release（幂等：已存在同名 tag 且属于更新包通道时复用）。
@@ -229,7 +297,7 @@ func (m *multipartBody) Read(p []byte) (int, error) {
 // 拉取公开仓库属只读操作，可不带令牌（Gitee 读取 API 支持匿名访问）。
 func validateConfig(cfg Config, needToken bool) error {
 	if cfg.GiteeOwner == "" || cfg.GiteeRepo == "" {
-		return fmt.Errorf("未配置 Gitee 仓库（update_pack.gitee_owner / gitee_repo）")
+		return fmt.Errorf("未配置 Gitee 仓库（local_data/release.json 的 gitee_owner / gitee_repo 为空）")
 	}
 	if needToken && cfg.GiteeToken == "" {
 		return fmt.Errorf("未提供 Gitee 令牌（发布需 Release 读写权限的私人令牌）")

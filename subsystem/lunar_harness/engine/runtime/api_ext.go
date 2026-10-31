@@ -25,7 +25,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 )
 
-// ==== JWT 签名（hash.signJWT，allow-certificate） ====
+// ==== JWT 签名（hash.signJWT） ====
 
 func b64UrlRaw(data []byte) string {
 	return base64.RawURLEncoding.EncodeToString(data)
@@ -112,7 +112,7 @@ func parsePKCS8Ed25519(der []byte) (ed25519.PrivateKey, error) {
 	return priv, nil
 }
 
-// ==== 摘要 / HMAC / Ed25519 / JWT 原语（hash.*，allow-certificate） ====
+// ==== 摘要 / HMAC / Ed25519 / JWT 原语（hash.*） ====
 
 // cryptoMD5 / cryptoSHA1 / cryptoSHA256 摘要为小写十六进制字符串。
 func cryptoMD5(data string) string {
@@ -174,7 +174,7 @@ func edgeJWT(privStr, kid string, claims map[string]any) (string, error) {
 	return m + "." + b64UrlRaw(ed25519.Sign(key, []byte(m))), nil
 }
 
-// ==== 图像处理 image.loadValid/download（allow-file：读/校验；allow-network：下载） ====
+// ==== 图像处理 image.loadValid/download ====
 
 func isImageContent(b []byte) bool {
 	if len(b) >= 8 && bytes.Equal(b[:4], []byte("\x89PNG")) {
@@ -233,7 +233,7 @@ func engineImageDownload(p *plugin, url, fileName string) (any, error) {
 	return rwResult{Success: true, Text: base64.StdEncoding.EncodeToString(b)}, nil
 }
 
-// ==== LLM agent.chat/embed（allow-agent，本地固定模型路由） ====
+// ==== LLM agent.chat/embed（本地固定模型路由） ====
 
 // engineLLMChat 调用 OpenAI 兼容 v1/chat/completions，返回首个 choice 的文本内容。
 // 模型路由使用本地部署固定值（config.AgentMultimodal*），与 embed/memory 同源。
@@ -353,7 +353,7 @@ func embedComplete(texts []string, model, baseURL string) ([][]float64, error) {
 	return vecs, nil
 }
 
-// engineLLMEmbed 计算文本的嵌入向量（engine.llm.embed，allow-agent）。
+// engineLLMEmbed 计算文本的嵌入向量。
 // input 可为单条字符串或字符串数组；返回 { success, embedding } 或 { success, embeddings }。
 func engineLLMEmbed(input any, opts map[string]any) (any, error) {
 	texts := []string{}

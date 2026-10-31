@@ -80,6 +80,39 @@ func apiRequest(path string, query url.Values, out any) error {
 	return nil
 }
 
+// deleteRequest 执行带令牌的 Gitee DELETE 请求；2xx 视为成功。
+func deleteRequest(path string, query url.Values) error {
+	requestURL := giteeAPIBase + path
+	if len(query) > 0 {
+		requestURL += "?" + query.Encode()
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest(http.MethodDelete, requestURL, nil)
+	if err != nil {
+		return fmt.Errorf("构造删除请求失败: %w", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: truncate(string(body), 300)}
+	}
+	return nil
+}
+
+// deleteRelease 删除指定 Release（其附件随之删除）。
+func deleteRelease(cfg Config, id int64) error {
+	return deleteRequest(fmt.Sprintf("/repos/%s/%s/releases/%d", cfg.GiteeOwner, cfg.GiteeRepo, id), tokenQuery(cfg, nil))
+}
+
+// deleteTag 删除仓库标签（Release 删除后清理残留的 git 标签）。
+func deleteTag(cfg Config, name string) error {
+	return deleteRequest(fmt.Sprintf("/repos/%s/%s/tags/%s", cfg.GiteeOwner, cfg.GiteeRepo, url.PathEscape(name)), tokenQuery(cfg, nil))
+}
+
 // defaultBranch 解析仓库默认分支（创建 Release 的 target_commitish 必填）。
 // 优先读仓库信息；个别仓库信息端点不可达时回退到分支列表首项。
 func defaultBranch(cfg Config) string {

@@ -98,7 +98,6 @@ func ChatStreamWithOptions(role string, messages []Message, tools []ToolDefiniti
 	var reply Reply
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
 		guard := loopguard.New(cancel, loopguard.DefaultOptions())
-		guard.Start()
 		reply, err = readStream(role, resp.Body, guard)
 		guard.Stop()
 		if guard.Hit() {

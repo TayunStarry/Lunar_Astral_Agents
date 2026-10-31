@@ -169,8 +169,7 @@ func normalizeMemoryMediaURL(rawURL string) string {
 // memoryMediaRelForDoc 返回该文档可以安全清理的媒体相对路径。
 //
 // 只认本分组专属的媒体目录：
-//   - 新版图片：multimedia/memory/<分组>/
-//   - 旧版图片：multimedia/<分组>/（兼容迁移前数据）
+//   - 图片：multimedia/memory/<分组>/
 //   - 音频：audios/<分组>/
 //
 // 其它路径（生成图、截图、公共图片等）即使被记忆条目引用也不删除，避免误删共享资源。
@@ -181,20 +180,8 @@ func memoryMediaRelForDoc(collection string, doc Document) (string, bool) {
 	}
 	switch documentType(doc) {
 	case TypeImage:
-		newPrefix := path.Join(resource.StorageRootMultimedia, MediaSubdir, collection) + "/"
-		if strings.HasPrefix(rel, newPrefix) {
-			return rel, true
-		}
-		if collection == MediaSubdir {
-			// 分组名恰好叫 memory：旧版文件只可能直接位于 multimedia/memory/ 下，
-			// 不能再把 multimedia/memory/<其它分组>/ 误判成本分组。
-			if path.Dir(rel) == path.Join(resource.StorageRootMultimedia, MediaSubdir) {
-				return rel, true
-			}
-			return "", false
-		}
-		legacyPrefix := path.Join(resource.StorageRootMultimedia, collection) + "/"
-		if strings.HasPrefix(rel, legacyPrefix) {
+		prefix := path.Join(resource.StorageRootMultimedia, MediaSubdir, collection) + "/"
+		if strings.HasPrefix(rel, prefix) {
 			return rel, true
 		}
 	case TypeAudio:
@@ -269,74 +256,6 @@ func (d *Store) removeMemoryMediaForDocs(collection string, docs []Document) {
 		seen[key] = true
 		d.removeMemoryMediaForDoc(collection, doc)
 	}
-}
-
-// migrateLegacyMemoryImages 把旧版 multimedia/<分组>/ 的图片迁移到
-// multimedia/memory/<分组>/，并同步改写文档 URL 与资源目录句柄。
-//
-// 返回是否有文档被改写；迁移失败的条目保持旧路径，仍可正常读取/删除。
-func (c *Collection) migrateLegacyMemoryImages() bool {
-	if c.Name == MediaSubdir {
-		return false
-	}
-	c.mu.RLock()
-	docs := append([]Document(nil), c.Documents...)
-	c.mu.RUnlock()
-	if len(docs) == 0 {
-		return false
-	}
-
-	oldPrefix := path.Join(resource.StorageRootMultimedia, c.Name) + "/"
-	newPrefix := path.Join(resource.StorageRootMultimedia, MediaSubdir, c.Name) + "/"
-	base := filepath.Clean(config.LocalDir)
-	changed := false
-	for i := range docs {
-		doc := &docs[i]
-		if documentType(*doc) != TypeImage {
-			continue
-		}
-		rel, ok := memoryMediaRelFromURL(doc.URL)
-		if !ok || !strings.HasPrefix(rel, oldPrefix) || strings.HasPrefix(rel, newPrefix) {
-			continue
-		}
-		newRel := path.Join(resource.StorageRootMultimedia, MediaSubdir, c.Name, strings.TrimPrefix(rel, oldPrefix))
-		oldAbs := filepath.Join(base, filepath.FromSlash(rel))
-		newAbs := filepath.Join(base, filepath.FromSlash(newRel))
-		if err := os.MkdirAll(filepath.Dir(newAbs), 0755); err != nil {
-			logger.Warn("FileManager", "迁移记忆图片目录失败 [%s]: %v", rel, err)
-			continue
-		}
-		if err := os.Rename(oldAbs, newAbs); err != nil {
-			if _, statErr := os.Stat(newAbs); statErr == nil {
-				// 新路径已有同内容实体（内容寻址），删掉旧副本即可
-				_ = os.Remove(oldAbs)
-			} else {
-				logger.Warn("FileManager", "迁移记忆图片失败 [%s] -> [%s]: %v", rel, newRel, err)
-				continue
-			}
-		}
-		resource.RewriteHandlesForMove(rel, newRel)
-		doc.URL = "/file/read/" + newRel
-		changed = true
-	}
-	if !changed {
-		return false
-	}
-
-	c.mu.Lock()
-	for i := range c.Documents {
-		for j := range docs {
-			if c.Documents[i].ID == docs[j].ID && c.Documents[i].URL != docs[j].URL {
-				c.Documents[i].URL = docs[j].URL
-				break
-			}
-		}
-	}
-	c.mu.Unlock()
-	// 旧目录已空则移除；仍有未迁移/非记忆文件时保留
-	_ = os.Remove(filepath.Join(base, filepath.FromSlash(strings.TrimSuffix(oldPrefix, "/"))))
-	logger.Info("FileManager", "分组 [%s] 旧版记忆图片已迁移到 %s", c.Name, newPrefix)
-	return true
 }
 
 // standardizeMemoryImage 记忆库图片入库前的标准化：

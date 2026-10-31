@@ -59,9 +59,9 @@ func enginePublish(from *plugin, topic string, payload any) {
 	}
 }
 
-// ==== 图片记忆 memory.searchImage/storeImage/randomImage（allow-memory，全局图像类型检索） ====
+// ==== 图片记忆 memory.searchImage/storeImage/randomImage（全局图像类型检索） ====
 
-// memorySearchImage 基于查询文本在全部集合中检索图像类型记忆，返回 { image, similarity } 列表。
+// memorySearchImage 基于查询文本在全部集合中检索图像类型记忆，返回 { url|base64, similarity } 列表。
 func memorySearchImage(query string, limit int) (any, error) {
 	if err := ensureMemory(); err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
@@ -79,13 +79,10 @@ func memorySearchImage(query string, limit int) (any, error) {
 	for _, r := range results {
 		item := map[string]any{"similarity": r.Similarity}
 		// 新记忆只存 URL；历史记忆仍可能只有内联 base64。
-		// image 为历史字段名，与 url/base64 同时返回以兼容旧插件。
 		if r.URL != "" {
 			item["url"] = r.URL
-			item["image"] = r.URL
 		} else {
 			item["base64"] = r.Base64
-			item["image"] = r.Base64
 		}
 		out = append(out, item)
 	}
@@ -126,10 +123,10 @@ func memoryRandomImage(query string) (any, error) {
 	}
 	pick := results[rand.Intn(len(results))]
 	if pick.URL != "" {
-		return map[string]any{"success": true, "url": pick.URL, "image": pick.URL}, nil
+		return map[string]any{"success": true, "url": pick.URL}, nil
 	}
 	// 历史记忆兼容：仅当没有 URL 时回退内联 base64
-	return map[string]any{"success": true, "base64": pick.Base64, "image": pick.Base64}, nil
+	return map[string]any{"success": true, "base64": pick.Base64}, nil
 }
 
 // ==== 跨运行时调用 callFunction ====
@@ -291,4 +288,4 @@ func memorySearch(v map[string]any) (any, error) {
 	return map[string]any{"success": true, "results": out}, nil
 }
 
-// ==== 数据库 database.*（allow-database，实现在 api_database.go） ====
+// ==== 数据库 database.*（实现在 api_database.go） ====

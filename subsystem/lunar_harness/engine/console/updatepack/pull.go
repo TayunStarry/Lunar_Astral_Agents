@@ -73,15 +73,12 @@ func Pull(cfg Config, spec PullSpec) (PullResult, error) {
 			locals = append(locals, local)
 		}
 
-		// 定位 7z 起始卷（发布端统一 7z.001 分卷格式；兼容旧的单卷 .7z）
+		// 定位 7z 起始卷（发布端统一 7z.001 分卷格式）
 		var sevenZStart string
 		for _, local := range locals {
 			if strings.HasSuffix(local, ".7z.001") {
 				sevenZStart = local
 				break
-			}
-			if strings.HasSuffix(local, ".7z") {
-				sevenZStart = local
 			}
 		}
 		reportProgress(85)

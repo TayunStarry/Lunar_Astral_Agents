@@ -85,17 +85,15 @@ type ModelConfig struct {
 	// 仅由琉璃的内置 Web-LTP（agents/WebSearch）消费，与其余配置节统一在此解析，
 	// 智能体侧只读取解析后的全局值，不再自行读取 lunar_config.json。
 	WebSearch struct {
-		SearchModel     string `json:"search_model"`            // 检索词提炼与统一摘要使用的模型名
-		SwapModel       *bool  `json:"swap_model,omitempty"`    // 搜索前卸载主模型、加载搜索模型（未配置默认开启）
-		MaxPages        int    `json:"max_pages"`               // 页面条目总数：首页恒占 1 条，其余为同时打开的详情页
-		MaxResults      int    `json:"max_results"`             // 结果页解析的检索结果条数
-		SummaryMaxChars int    `json:"summary_max_chars"`       // 统一摘要硬切断字符数
-		MaxRunSeconds   int    `json:"max_run_seconds"`         // 单次检索总时长软上限（秒）
-		CacheEnabled    *bool  `json:"cache_enabled,omitempty"` // 近期访问标记开关（未配置默认开启）
-		CacheTTLDays    int    `json:"cache_ttl_days"`          // 近期访问标记的有效期（天）
-		TextTotalChars  int    `json:"text_total_chars"`        // 全部页面正文的总提取硬上限（由所有页面均分）
-		ScrollSettleMS  int    `json:"scroll_settle_ms"`        // 每次滚动后的等待毫秒数
-		ScrollMaxSteps  int    `json:"scroll_max_steps"`        // 单页滚动步数上限
+		MaxPages        int   `json:"max_pages"`               // 页面条目总数：首页恒占 1 条，其余为同时打开的详情页
+		MaxResults      int   `json:"max_results"`             // 结果页解析的检索结果条数
+		SummaryMaxChars int   `json:"summary_max_chars"`       // 统一摘要硬切断字符数
+		MaxRunSeconds   int   `json:"max_run_seconds"`         // 单次检索总时长软上限（秒）
+		CacheEnabled    *bool `json:"cache_enabled,omitempty"` // 近期访问标记开关（未配置默认开启）
+		CacheTTLDays    int   `json:"cache_ttl_days"`          // 近期访问标记的有效期（天）
+		TextTotalChars  int   `json:"text_total_chars"`        // 全部页面正文的总提取硬上限（由所有页面均分）
+		ScrollSettleMS  int   `json:"scroll_settle_ms"`        // 每次滚动后的等待毫秒数
+		ScrollMaxSteps  int   `json:"scroll_max_steps"`        // 单页滚动步数上限
 	} `json:"web_search"`
 	// 文献解析智能体（document_reader）：大文件轻量扫描通道。
 	// 主模型只产出扫描计划，轻量模型逐片做定向/通用摘要，主模型再归并并按需回读原文。
@@ -163,59 +161,8 @@ type ModelConfig struct {
 		// 引擎闲置卸载阈值（分钟）：无合成调用超过该时长即卸载模型释放占用
 		IdleUnloadMinutes *int `json:"idle_unload_minutes,omitempty"`
 	} `json:"tts"`
-	// Gitee Release 发布通道（release）：更新包与 LTPX 应用市场共用同一仓库，
-	// 仓库地址、令牌、打包清单、备份策略统一在此配置。
-	// 两条通道在仓库内以「描述标记 + 附件名前缀」严格区分：
-	// 更新包 body 含 [UPDATE] / 附件名 lunar_updatepack_*；市场包 body 含 [LTPX] / 附件名 ltpx_*.ltpx。
-	// 指针类型用于区分「未配置 release 节」与「配置了但字段为空」——前者回退读取旧节。
-	Release *struct {
-		GiteeOwner string `json:"gitee_owner"` // Gitee 仓库属主
-		GiteeRepo  string `json:"gitee_repo"`  // Gitee 仓库名
-		GiteeToken string `json:"gitee_token"` // Gitee 私人令牌（需 Release 读写权限；留空则发布时在 TUI 手动输入）
-		// ==== 更新包（资源 + 主程序） ====
-		Include []string `json:"include"` // 打包包含的资源目录（相对 target_dir）
-		// 打包排除规则（空时用默认清单）与「含这些文件的目录整体排除」（空时默认 metadata.json）
-		Exclude         []string `json:"exclude"`
-		ExcludeDirsWith []string `json:"exclude_dirs_with"`
-		// 覆盖前备份的保留次数（nil=默认 3；0 或负数=不备份）
-		BackupKeep *int `json:"backup_keep,omitempty"`
-		// 主程序文件清单（相对程序根目录）：发布时纳入包，拉取时判定是否走「关程序→应用器→重启」
-		ProgramFiles []string `json:"program_files"`
-		// 重启主程序时携带的命令行参数
-		RestartArgs []string `json:"restart_args"`
-		// 资源根目录/程序根目录（空时默认 local_data；程序合并后取「程序根目录」）
-		TargetDir string `json:"target_dir"`
-		// ==== LTPX 应用市场 ====
-		// 本地 LTPX 包根目录（空时默认 local_data/package）
-		PackageDir string `json:"package_dir"`
-	} `json:"release"`
-
-	// ==== 旧配置节（迁移兼容，仅用于读取并提示迁移） ====
-	// 保留读取能力：老版本 lunar_config.json 的 update_pack / ltpx_market / tui / multimodal
-	// 仍可被识别，避免升级后配置静默失效（详见 init 中的回退与告警）。
-	LegacyUpdatePack *struct {
-		GiteeOwner      string   `json:"gitee_owner"`
-		GiteeRepo       string   `json:"gitee_repo"`
-		GiteeToken      string   `json:"gitee_token"`
-		Include         []string `json:"include"`
-		Exclude         []string `json:"exclude"`
-		ExcludeDirsWith []string `json:"exclude_dirs_with"`
-		BackupKeep      *int     `json:"backup_keep"`
-		ProgramFiles    []string `json:"program_files"`
-		RestartArgs     []string `json:"restart_args"`
-		TargetDir       string   `json:"target_dir"`
-	} `json:"update_pack"`
-	LegacyLtpxMarket *struct {
-		GiteeOwner string `json:"gitee_owner"`
-		GiteeRepo  string `json:"gitee_repo"`
-		PackageDir string `json:"package_dir"`
-	} `json:"ltpx_market"`
-	// LegacyTUI 旧 tui 节（检测用）：其唯一字段 exit_when_frontends_closed 已随桌面版取消
-	// ——程序只有控制台一种形态，前端窗口全部关闭不再退出进程。
-	// 保留结构仅为在配置仍含该节时给出明确提示，不作任何生效处理。
-	LegacyTUI struct {
-		ExitWhenFrontendsClosed *bool `json:"exit_when_frontends_closed"`
-	} `json:"tui"`
+	// Gitee Release 发布通道不出现在 lunar_config.json：
+	// 唯一来源是独立文件 local_data/release.json（含令牌，已 gitignore）。
 }
 
 // init 加载配置文件
@@ -265,24 +212,27 @@ func init() {
 		log.Printf("[Config][ERROR] -> 解析配置文件失败: %v", err)
 		return
 	}
-	// 解析结果 → 全局配置（映射与旧节回退规则集中在 applyConfig，便于单测覆盖）
-	legacyUsed := applyConfig(parameter)
+	// 解析结果 → 全局配置（映射规则集中在 applyConfig，便于单测覆盖）
+	applyConfig(parameter)
 
-	// ==== 旧配置节迁移提示（合并为一条日志，避免刷屏） ====
-	if len(legacyUsed) > 0 {
-		log.Printf("[Config][WARN] -> lunar_config.json 使用了旧配置节，已按兼容方式读取；建议迁移：%s",
-			strings.Join(legacyUsed, "；"))
+	// ==== 发布通道：唯一来源 local_data/release.json（不再兼容 lunar_config.json 的 release 节） ====
+	// 该文件含 Gitee 私人令牌，已被 .gitignore 排除。
+	if fileCfg, ok, rerr := LoadReleaseConfigFile(filepath.Join(exeDir, LocalDir)); rerr != nil {
+		log.Printf("[Config][WARN] -> 解析 %s 失败，发布通道保持未配置: %v", ReleaseConfigFile, rerr)
+	} else if ok {
+		applyReleaseConfig(fileCfg)
+		log.Printf("[Config] 发布通道配置来自 local_data/%s", ReleaseConfigFile)
+	} else {
+		log.Printf("[Config][INFO] -> 未找到 local_data/%s，发布通道未配置", ReleaseConfigFile)
 	}
 }
 
-// applyConfig 把解析结果写入全局配置，返回本次用到的旧配置节说明（迁移提示用）。
+// applyConfig 把解析结果写入全局配置。
 //
 // 独立成函数：配置文件读的是 exe 同级的 lunar_config.json，init 的文件路径无法在测试中
-// 复现，而「新节优先 / 旧节回退」这类规则必须被单测钉住——否则改动一处就会静默失效
-// （用户升级后配置回到默认值，且没有任何报错）。
-func applyConfig(parameter *ModelConfig) []string {
-	// legacyUsed 记录本次读取用到的旧配置节
-	var legacyUsed []string
+// 复现，而「字段缺省保持默认」这类规则必须被单测钉住——否则改动一处就会静默失效
+// （配置回到默认值，且没有任何报错）。
+func applyConfig(parameter *ModelConfig) {
 	// ==== 模型文件路径（models） ====
 	// 如果配置文件中 DiffusionModel 字段非空，则更新全局配置
 	if parameter.Models.DiffusionModel != "" {
@@ -413,74 +363,9 @@ func applyConfig(parameter *ModelConfig) []string {
 	if parameter.System.Live2DModel != "" {
 		Live2DModel = parameter.System.Live2DModel
 	}
-	// ==== Gitee Release 发布通道（release） ====
-	// 更新包与 LTPX 应用市场共用同一仓库：两条通道在仓库内以「描述标记 + 附件名前缀」
-	// 区分（[UPDATE]/lunar_updatepack_* 与 [LTPX]/ltpx_*.ltpx），因此配置只需一套仓库信息。
-	// 未配置 release 节时回退读取旧的 update_pack / ltpx_market 两节并提示迁移。
-	switch {
-	case parameter.Release != nil:
-		r := parameter.Release
-		ReleaseGiteeOwner = r.GiteeOwner
-		ReleaseGiteeRepo = r.GiteeRepo
-		ReleaseGiteeToken = r.GiteeToken
-		if r.Include != nil {
-			ReleaseInclude = r.Include
-		}
-		if r.Exclude != nil {
-			ReleaseExclude = r.Exclude
-		}
-		if r.ExcludeDirsWith != nil {
-			ReleaseExcludeDirsWith = r.ExcludeDirsWith
-		}
-		if r.BackupKeep != nil {
-			ReleaseBackupKeep = r.BackupKeep
-		}
-		if r.ProgramFiles != nil {
-			ReleaseProgramFiles = r.ProgramFiles
-		}
-		if r.RestartArgs != nil {
-			ReleaseRestartArgs = r.RestartArgs
-		}
-		ReleaseTargetDir = r.TargetDir
-		ReleasePackageDir = r.PackageDir
-		if parameter.LegacyUpdatePack != nil || parameter.LegacyLtpxMarket != nil {
-			log.Printf("[Config][WARN] -> 检测到旧配置节 update_pack/ltpx_market，已被 release 节取代，旧节不再生效，请删除")
-		}
-
-	case parameter.LegacyUpdatePack != nil || parameter.LegacyLtpxMarket != nil:
-		legacyUsed = append(legacyUsed, "update_pack / ltpx_market → release")
-		if l := parameter.LegacyUpdatePack; l != nil {
-			ReleaseGiteeOwner = l.GiteeOwner
-			ReleaseGiteeRepo = l.GiteeRepo
-			ReleaseGiteeToken = l.GiteeToken
-			ReleaseInclude = l.Include
-			ReleaseExclude = l.Exclude
-			ReleaseExcludeDirsWith = l.ExcludeDirsWith
-			ReleaseBackupKeep = l.BackupKeep
-			ReleaseProgramFiles = l.ProgramFiles
-			ReleaseRestartArgs = l.RestartArgs
-			ReleaseTargetDir = l.TargetDir
-		}
-		if l := parameter.LegacyLtpxMarket; l != nil {
-			// 旧市场的仓库字段留空时回退更新包仓库（历史行为：默认同仓库）
-			if strings.TrimSpace(ReleaseGiteeOwner) == "" {
-				ReleaseGiteeOwner = l.GiteeOwner
-			}
-			if strings.TrimSpace(ReleaseGiteeRepo) == "" {
-				ReleaseGiteeRepo = l.GiteeRepo
-			}
-			ReleasePackageDir = l.PackageDir
-		}
-	}
 	// ==== 网络搜索智能体（web_search） ====
+	// 搜索模型固定为 light_reasoning、并在搜索前卸载主模型，属流程内建行为，不再走配置。
 	// 未配置或非法（<=0）的数值字段沿用默认值；布尔字段仅在显式给出时覆盖。
-	if parameter.WebSearch.SearchModel != "" {
-		WebSearchModel = parameter.WebSearch.SearchModel
-	}
-	if v := parameter.WebSearch.SwapModel; v != nil {
-		b := *v
-		WebSearchSwapModel = &b
-	}
 	if v := parameter.WebSearch.CacheEnabled; v != nil {
 		b := *v
 		WebSearchCacheEnabled = &b
@@ -629,15 +514,7 @@ func applyConfig(parameter *ModelConfig) []string {
 	if parameter.System.LoopSimilarity != nil && *parameter.System.LoopSimilarity > 0 && *parameter.System.LoopSimilarity < 1 {
 		LoopSimilarity = *parameter.System.LoopSimilarity
 	}
-	// ==== 旧 tui 节（已取消） ====
-	// 程序只剩控制台一种形态：前端窗口全部关闭不再退出进程，故该节已无对应功能，
-	// 仅提示用户删除，避免「配置写了却没生效」的无解困惑
-	if parameter.LegacyTUI.ExitWhenFrontendsClosed != nil {
-		legacyUsed = append(legacyUsed, "tui.exit_when_frontends_closed 已取消（控制台常驻，前端窗口关闭不再退出程序）")
-	}
-
-	// ==== 旧配置节迁移提示由调用方（init）输出 ====
-	// chat（system.chat_vram_guard 聊天显存守卫）与 bridging（QQ 桥接）不落 Go 全局：
-	// 前者仅由月华 TypeScript 读取，后者由 lunar_astral/bridging/napcat 自行解析
-	return legacyUsed
+	// ==== 聊天显存守卫与 QQ 桥接 ====
+	// chat（system.chat_vram_guard 聊天显存守卫）仅由月华 TypeScript 读取，
+	// bridging（QQ 桥接）由 lunar_astral/bridging/napcat 自行解析，均不落 Go 全局。
 }

@@ -183,7 +183,6 @@ func chatCompletionOnce(roleTag, bodyText string) (*ModelResponse, error) {
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	guard := loopguard.New(cancel, loopguard.DefaultOptions())
-	guard.Start()
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {

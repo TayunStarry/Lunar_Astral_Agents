@@ -18,10 +18,30 @@ import (
 )
 
 // files 内嵌的全部提示词（角色提示词、任务模板、外观提示词）与运行时 API 契约
-// （runtimeAPI.d.ts，供创作 / 文件编辑智能体写脚本前查阅）。
+// （prompts/*API.d.ts，按能力拆分，供创作 / 文件编辑智能体写脚本前按需查阅）。
 //
 //go:embed *.md *.d.ts
 var files embed.FS
+
+// ListDTS 列出全部内嵌运行时 API 契约（按文件名升序）。
+func ListDTS() ([]DTSDoc, error) {
+	entries, err := files.ReadDir(".")
+	if err != nil {
+		return nil, fmt.Errorf("列出内嵌运行时契约失败: %w", err)
+	}
+	docs := make([]DTSDoc, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".d.ts") {
+			continue
+		}
+		info, ierr := entry.Info()
+		if ierr != nil {
+			continue
+		}
+		docs = append(docs, DTSDoc{Name: entry.Name(), Size: info.Size()})
+	}
+	return docs, nil
+}
 
 // Read 读取内嵌提示词。
 //

@@ -395,7 +395,8 @@ func (m appModel) marketSubmit() (tea.Model, tea.Cmd) {
 		m.market.input.Blur()
 		m.market.mode = marketInputToken
 		m.market.input.EchoMode = textinput.EchoPassword
-		m.market.input.SetValue("")
+		// release.json 已保存令牌时预填，直接回车即可发布
+		m.market.input.SetValue(configuredGiteeToken())
 		m.market.input.Placeholder = "输入 Gitee 私人令牌（需 Release 读写权限）"
 		m.market.input.Focus()
 		return m, textinput.Blink
@@ -447,7 +448,7 @@ func listMarketCmd(tag string) tea.Cmd {
 		}
 		cfg := GetMarketConfig()
 		if cfg == nil {
-			return marketListMsg{err: fmt.Errorf("未配置 ltpx_market（lunar_config.json 缺少配置节）")}
+			return marketListMsg{err: fmt.Errorf("未配置应用市场（local_data/release.json 缺少仓库信息）")}
 		}
 		items, err := ltpxmarket.ListPackages(*withSessionTokenMarket(cfg), tag, 0)
 		if err != nil {
@@ -464,7 +465,7 @@ func scanLocalsCmd() tea.Cmd {
 	return func() tea.Msg {
 		cfg := GetMarketConfig()
 		if cfg == nil {
-			return marketLocalsMsg{err: fmt.Errorf("未配置 ltpx_market（lunar_config.json 缺少配置节）")}
+			return marketLocalsMsg{err: fmt.Errorf("未配置应用市场（local_data/release.json 缺少仓库信息）")}
 		}
 		items, err := ltpxmarket.ListLocalPackages(*cfg)
 		return marketLocalsMsg{items: items, err: err}
@@ -484,7 +485,7 @@ func installMarketCmd(item ltpxmarket.MarketItem) tea.Cmd {
 	return func() tea.Msg {
 		cfg := GetMarketConfig()
 		if cfg == nil {
-			return marketDoneMsg{op: "安装", err: fmt.Errorf("未配置 ltpx_market（lunar_config.json 缺少配置节）")}
+			return marketDoneMsg{op: "安装", err: fmt.Errorf("未配置应用市场（local_data/release.json 缺少仓库信息）")}
 		}
 		_, err := ltpxmarket.Install(*cfg, item)
 		return marketDoneMsg{op: "安装 " + item.TagName, err: err}
@@ -496,7 +497,7 @@ func publishMarketCmd(pkg ltpxmarket.LocalPackage, desc, token string) tea.Cmd {
 	return func() tea.Msg {
 		cfg := GetMarketConfig()
 		if cfg == nil {
-			return marketDoneMsg{op: "发布", err: fmt.Errorf("未配置 ltpx_market（lunar_config.json 缺少配置节）")}
+			return marketDoneMsg{op: "发布", err: fmt.Errorf("未配置应用市场（local_data/release.json 缺少仓库信息）")}
 		}
 		cfgCopy := *cfg
 		cfgCopy.GiteeToken = token
@@ -510,7 +511,7 @@ func publishArchiveCmd(path, desc, token string) tea.Cmd {
 	return func() tea.Msg {
 		cfg := GetMarketConfig()
 		if cfg == nil {
-			return marketDoneMsg{op: "发布", err: fmt.Errorf("未配置 ltpx_market（lunar_config.json 缺少配置节）")}
+			return marketDoneMsg{op: "发布", err: fmt.Errorf("未配置应用市场（local_data/release.json 缺少仓库信息）")}
 		}
 		cfgCopy := *cfg
 		cfgCopy.GiteeToken = token
@@ -827,7 +828,7 @@ func (m appModel) marketInputBody(w int) []string {
 	case marketInputToken:
 		body = append(body, stepsBar(marketPublishSteps, 2, w), "")
 		prompt = "输入 Gitee 私人令牌（发布需 Release 读写权限，留空回车取消）："
-		hint = "令牌仅用于本次发布，不写入配置文件；同 id 包发布会覆盖旧发布"
+		hint = "release.json 已保存令牌时自动预填，可直接回车发布；同 id 包发布会覆盖旧发布"
 	}
 
 	body = append(body, "", "  "+labelStyle.Render(prompt), "")

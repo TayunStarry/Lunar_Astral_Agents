@@ -7,9 +7,6 @@ package resource
 //   - 句柄表只存 (seq, handle, url) 三列纯映射，元数据与解析文本在 url_master；
 //   - url_master.bound_handle 的偏唯一索引保证「一条 URL 最多被一个句柄指向」；
 //   - 序号按类型表 MAX(seq) 重建，永不复用。
-//
-// 旧库处理：初始化时若同目录存在 archive.db / media.db / web.db，直接删除（含 -wal / -shm）
-// 并清空 database/messages.json —— 不提供任何兼容或迁移。
 
 import (
 	"database/sql"
@@ -74,9 +71,6 @@ func (d *store) init(dbPath string) error {
 			return fmt.Errorf("创建句柄库目录失败: %v", err)
 		}
 	}
-	// 旧版三库与消息缓存：同目录存在即删除，不做任何导入
-	purgeLegacyDatabaseFiles(dir)
-
 	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=10000&_journal_mode=WAL")
 	if err != nil {
 		return fmt.Errorf("连接句柄库失败: %v", err)
@@ -240,31 +234,6 @@ func (d *store) ensureSchema() error {
 	archiveSeqLoaded = false
 	archiveSeqCache = map[string]int64{}
 	return nil
-}
-
-// purgeLegacyDatabaseFiles 删除同目录下的旧版三库；仅当旧库存在时清空消息缓存
-func purgeLegacyDatabaseFiles(dir string) {
-	if dir == "" {
-		return
-	}
-	legacyFound := false
-	for _, name := range []string{"archive.db", "media.db", "web.db"} {
-		for _, suffix := range []string{"", "-wal", "-shm"} {
-			path := filepath.Join(dir, name+suffix)
-			if _, err := os.Stat(path); err == nil {
-				legacyFound = true
-			}
-			_ = os.Remove(path)
-		}
-	}
-	if !legacyFound {
-		return
-	}
-	// 旧句柄已全部失效，历史会话里的引用没有意义：一次性清空
-	if _, err := os.Stat(filepath.Join(dir, "messages.json")); err == nil {
-		_ = os.Remove(filepath.Join(dir, "messages.json"))
-	}
-	logger.Info("Persistence", "旧版数据库与消息缓存已清除（不保留兼容数据）: %s", dir)
 }
 
 // loadSeqCache 从六张句柄表重建各类型码的下一可用序号（序号永不复用）

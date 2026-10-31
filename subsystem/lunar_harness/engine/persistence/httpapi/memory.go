@@ -32,8 +32,6 @@ import (
 //	DELETE /memory/messages             按 id 删除记忆
 //	GET    /memory/entries              逐条列举（id=按 ID；type/offset/limit；limit=0 全部）
 //	POST   /memory/fuse                 权重融合（把集合内超高相似度的文本条目合并为一条并重算向量）
-//	POST   /memory/{name}               创建/打开集合（兼容旧路径）
-//	DELETE /memory/{name}               删除集合
 //	GET    /memory/{name}/stats         集合统计
 //	GET    /memory/{name}/documents     集合内文档分页（管理用途）
 //	POST   /memory/{name}/rebuild       重建集合内容向量
@@ -63,7 +61,7 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		case "collections":
 			if r.Method == http.MethodPost {
-				handleMemoryCreateCollection(w, r, "")
+				handleMemoryCreateCollection(w, r)
 				return
 			}
 			handleMemoryListCollections(w, r)
@@ -78,15 +76,7 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 			handleMemoryFuse(w, r)
 			return
 		default:
-			// 兼容旧路径：POST/DELETE /memory/{name}
-			switch r.Method {
-			case http.MethodPost:
-				handleMemoryCreateCollection(w, r, parts[0])
-			case http.MethodDelete:
-				handleMemoryDeleteCollection(w, r, parts[0])
-			default:
-				writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST/DELETE")
-			}
+			writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 未知的记忆库端点: %s", parts[0]))
 			return
 		}
 	}
@@ -194,8 +184,8 @@ func handleMemoryListCollections(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleMemoryCreateCollection POST /memory/collections（或旧版 POST /memory/{name}）— 创建集合
-func handleMemoryCreateCollection(w http.ResponseWriter, r *http.Request, collectionName string) {
+// handleMemoryCreateCollection POST /memory/collections — 创建集合
+func handleMemoryCreateCollection(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
 		return
@@ -206,9 +196,7 @@ func handleMemoryCreateCollection(w http.ResponseWriter, r *http.Request, collec
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> 解析请求失败: %v", err))
 		return
 	}
-	if collectionName == "" {
-		collectionName = strings.TrimSpace(req.Name)
-	}
+	collectionName := strings.TrimSpace(req.Name)
 	if collectionName == "" {
 		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 集合名不能为空")
 		return
@@ -682,29 +670,6 @@ func handleMemoryReloadCollection(w http.ResponseWriter, r *http.Request, collec
 	}
 	writeSuccess(w, map[string]string{
 		"message": fmt.Sprintf("分组 [%s] 已从磁盘重新加载", collectionName),
-	})
-}
-
-// handleMemoryDeleteCollection DELETE /memory/{name} — 删除集合
-func handleMemoryDeleteCollection(w http.ResponseWriter, r *http.Request, collectionName string) {
-	if r.Method != http.MethodDelete {
-		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 DELETE")
-		return
-	}
-
-	if !memory.Ready() {
-		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
-		return
-	}
-
-	if err := memory.DeleteCollection(collectionName); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 删除集合失败: %v", err))
-		return
-	}
-
-	logger.Info("FileManager", "集合 [%s] 删除成功", collectionName)
-	writeSuccess(w, map[string]string{
-		"message": fmt.Sprintf("集合 [%s] 已删除", collectionName),
 	})
 }
 

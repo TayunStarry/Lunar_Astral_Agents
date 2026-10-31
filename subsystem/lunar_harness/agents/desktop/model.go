@@ -108,7 +108,6 @@ func autoChatOnce(ctx context.Context, role string, messages []chatMessage, tool
 
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
 		guard := loopguard.New(cancel, loopguard.DefaultOptions())
-		guard.Start()
 		msg, usage, readErr := readAutoStream(resp.Body, guard, role)
 		guard.Stop()
 		if guard.Hit() {

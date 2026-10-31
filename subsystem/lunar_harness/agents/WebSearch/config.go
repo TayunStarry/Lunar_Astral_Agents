@@ -12,7 +12,6 @@ import "LunarSubsystem/LunarHarness/engine/config"
 func LoadConfig() Config {
 	cfg := Config{
 		SearchModel:     config.WebSearchModel,
-		SwapModel:       config.WebSearchSwapModel,
 		MaxPages:        config.WebSearchMaxPages,
 		MaxResults:      config.WebSearchMaxResults,
 		SummaryMaxChars: config.WebSearchSummaryMaxChars,
@@ -57,9 +56,9 @@ func LoadConfig() Config {
 	return cfg
 }
 
-// swapEnabled 是否启用「搜索前卸载主模型、加载搜索小模型」的模型切换（默认开启）
+// swapEnabled 搜索前固定卸载主模型、加载搜索小模型（流程内建，不提供配置开关）
 func (c Config) swapEnabled() bool {
-	return c.SwapModel == nil || *c.SwapModel
+	return true
 }
 
 // cacheEnabled 近期访问缓存开关（未配置时默认开启）

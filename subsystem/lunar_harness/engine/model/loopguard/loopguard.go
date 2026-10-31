@@ -102,9 +102,6 @@ func (g *Guard) Feed(kind, text string) {
 	}
 }
 
-// Start 兼容旧调用：节点检查在 Feed 内完成，不再启动周期任务。
-func (g *Guard) Start() {}
-
 // Stop 流结束时的兜底检查：模型可能在节点中间卡住并以空内容收尾，
 // 这里对最后一个完整节点长度（不足则跳过）再判一次，避免末段漏判。
 func (g *Guard) Stop() {

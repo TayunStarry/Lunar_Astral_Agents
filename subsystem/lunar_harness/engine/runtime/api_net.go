@@ -4,8 +4,7 @@ package runtime
 // fetch 为同步形态（参照 lunar_astral engine.syncFetch 方案）：阻塞直到返回统一
 // Result 信封 { success, status, ok, url, headers, body, error? }，body 为 JSON 时自动
 // 解析为对象；WebSocket 客户端以 onopen/onmessage 等事件回调形态提供（见 api_ws.go）。
-// 同步形态 http.get/post/download 由 binder 按 allow-network 注入。全部网络能力由
-// allow-network 门控。
+// 同步形态 http.get/post/download 由 binder 注入。
 
 import (
 	"bytes"
@@ -29,7 +28,7 @@ import (
 // 图像生成（如 Seedream 2K）耗时可达 40~120s，放宽默认超时避免误判客户端超时（status 0）。
 const fetchTimeout = 150 * time.Second
 
-// bindNetwork 把 fetch 与 WebSocket 客户端全局注册进插件沙箱（allow-network 门控，由 bindSandbox 调用）。
+// bindNetwork 把 fetch 与 WebSocket 客户端全局注册进插件沙箱（由 bindSandbox 调用）。
 func bindNetwork(vm *goja.Runtime, p *plugin) {
 	// 同步 fetch：阻塞直到返回统一 Result 信封（Result 风格与 http.get/post 同构）
 	vm.Set("fetch", func(call goja.FunctionCall) goja.Value {

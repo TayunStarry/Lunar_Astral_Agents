@@ -8,8 +8,7 @@ import (
 
 // Config 网络搜索配置（engine/config 统一解析 web_search 节后的运行期快照）
 type Config struct {
-	SearchModel     string // 检索词提炼与统一摘要使用的模型名（默认 light_reasoning，模型路径由 models.ini 定义）
-	SwapModel       *bool  // 是否在搜索前卸载主多模态模型并加载搜索模型（默认开启）
+	SearchModel     string // 检索词提炼与统一摘要使用的模型名（固定 light_reasoning，由 engine/config 常量给出）
 	MaxPages        int    // 页面条目总数：首页（浏览器引擎页）恒占 1 条，其余为同时打开的详情页
 	MaxResults      int    // 结果页元素提取条数上限
 	SummaryMaxChars int    // 统一摘要的硬切断字符数（≤4096）

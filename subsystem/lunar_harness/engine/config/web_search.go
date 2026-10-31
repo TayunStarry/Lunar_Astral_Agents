@@ -5,11 +5,12 @@ package config
 // 这些字段由本包的 init → applyConfig 统一解析，Web-LTP 只读取解析结果。
 // 指针字段用于区分「未配置」与「显式关闭」；数值字段 0 表示未配置，沿用默认值。
 
-var (
-	// WebSearchModel 检索词提炼与统一摘要使用的模型名
+const (
+	// WebSearchModel 检索词提炼与统一摘要固定使用的轻量模型名
 	WebSearchModel = "light_reasoning"
-	// WebSearchSwapModel 搜索前是否卸载主模型并加载搜索模型（nil=默认开启）
-	WebSearchSwapModel *bool
+)
+
+var (
 	// WebSearchMaxPages 单次搜索的页面条目总数：首页（浏览器引擎页）恒占 1 条，其余为详情页
 	WebSearchMaxPages = 6
 	// WebSearchMaxResults 结果页解析的检索结果条数

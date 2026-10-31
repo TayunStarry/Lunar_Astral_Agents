@@ -1,10 +1,9 @@
 package knowledge
 
-// entry.go 知识条目通道（月华 knowledge 存储复用）、表定位与历史库迁移原语。
+// entry.go 知识条目通道（月华 knowledge 存储复用）与表定位。
 //
 // 上层按「逻辑表名」读写二元组条目；内建表按 knowledgeBuiltinTables 路由到各自领域库，
-// 其余落通用知识库 knowledge.db。表迁移（TableExists / CopyTableRows / BackupDatabase）
-// 同时供 persistence 的历史表搬迁复用。
+// 其余落通用知识库 knowledge.db。
 
 import (
 	"database/sql"
@@ -119,47 +118,6 @@ func tableTarget(table string) (*sql.DB, error) {
 		return nil, err
 	}
 	return store.db, nil
-}
-
-// migrateLegacyTables 把历史 knowledge.db 的内建表搬到各自领域库，搬完即删旧表。
-// 幂等：旧表不存在则跳过；复制用 INSERT OR IGNORE，中断后重跑不会覆盖新库数据。
-// 迁移前先整库备份；备份失败则不动旧表，等下次启动重试。
-func (d *Store) migrateLegacyTables(dbPath string) {
-	pending := make([]legacyBuiltinTable, 0, len(legacyKnowledgeTables))
-	for _, item := range legacyKnowledgeTables {
-		ok, err := TableExists(d.db, item.table)
-		if err != nil {
-			logger.Warn("FileManager", "检查历史表 %s 失败: %v", item.table, err)
-			continue
-		}
-		if ok {
-			pending = append(pending, item)
-		}
-	}
-	if len(pending) == 0 {
-		return
-	}
-	if err := BackupDatabase(d.db, dbPath, "before-db-split"); err != nil {
-		logger.Error("FileManager", "知识库拆表迁移已跳过（备份失败）: %v", err)
-		return
-	}
-	for _, item := range pending {
-		target, err := item.target.open()
-		if err != nil {
-			logger.Warn("FileManager", "迁移 %s 失败（打开目标库）: %v", item.table, err)
-			continue
-		}
-		copied, err := CopyTableRows(d.db, item.table, target, item.table, item.columns)
-		if err != nil {
-			logger.Warn("FileManager", "迁移 %s 失败: %v", item.table, err)
-			continue
-		}
-		if _, err := d.db.Exec("DROP TABLE " + item.table); err != nil {
-			logger.Warn("FileManager", "迁移 %s 后删除旧表失败: %v", item.table, err)
-			continue
-		}
-		logger.Info("FileManager", "知识库表 %s 已迁入 %s 数据库（%d 行）", item.table, item.target.label, copied)
-	}
 }
 
 // TableExists 判断库内是否存在指定表。

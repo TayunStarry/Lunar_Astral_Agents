@@ -269,9 +269,6 @@ func (c *speakerEmbedCache) loadFromDisk() {
 			// 同时以路径为键建立映射，方便路径查找
 			c.embeddings[audioPath] = embedding
 			c.fileHashes[audioPath] = fileHash
-		} else {
-			// 旧格式无哈希：仅以路径为键
-			c.embeddings[audioPath] = embedding
 		}
 
 		loaded++

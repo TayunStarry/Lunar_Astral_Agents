@@ -1,16 +1,14 @@
 package runtime
 
-// ==== SQLite 数据库 database.*（allow-database） ====
-// 命名空间：默认共用 local_data/database/knowledge.db；database.namespace(name)
-// 打开独立 <name>.db 实现真隔离。事务（transaction）与迁移（migrate）均以库为单位，
-// 任意库（共享/命名空间）都可用。
+// ==== SQLite 数据库 database.* ====
+// 统一使用单一固定库 local_data/database/knowledge.db：不提供新建库文件能力。
+// 事务（transaction）与迁移（migrate）均作用于该共享库。
 
 import (
 	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -20,27 +18,14 @@ import (
 	"github.com/dop251/goja"
 )
 
-// ==== 句柄管理（按库名缓存，惰性打开） ====
+// ==== 句柄管理（单库惰性打开） ====
 
 var (
-	// dbMu 保护 dbHandles 的并发打开。
+	// dbMu 保护 sharedDB 的并发打开。
 	dbMu sync.Mutex
-	// dbHandles 库名（空串 = 共享 knowledge.db）→ 连接句柄。
-	dbHandles map[string]*sql.DB
+	// sharedDB 唯一共享库 knowledge.db 的连接句柄。
+	sharedDB *sql.DB
 )
-
-// nsValidName 命名空间名白名单（防路径穿越，仅允许字母数字-_）。
-var nsValidName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
-
-// reservedNamespaceNames 宿主内建领域库名（见 docs/adr/0009），插件命名空间不得占用，
-// 避免把 _migrations 或业务表写进资源名录 / 媒体 / 网页 / 文本 / 角色库。
-var reservedNamespaceNames = map[string]bool{
-	"archive":   true,
-	"media":     true,
-	"web":       true,
-	"text":      true,
-	"character": true,
-}
 
 // databaseDir LTP9 数据库目录（可执行目录/local_data/database）。
 func databaseDir() string {
@@ -51,35 +36,17 @@ func databaseDir() string {
 	return filepath.Join(filepath.Dir(execPath), config.LocalDir, "database")
 }
 
-// ensureDB 打开默认共享库 knowledge.db。
+// ensureDB 打开（或复用）唯一共享库 knowledge.db。
+// 首次打开自动开启 WAL，并确保迁移记录表 _migrations 就绪。
 func ensureDB() (*sql.DB, error) {
-	return nsDB("")
-}
-
-// nsDB 打开（或复用）指定命名空间的 SQLite 库；name 为空 → knowledge.db。
-// 每库自动开启 WAL，并确保迁移记录表 _migrations 就绪。
-func nsDB(name string) (*sql.DB, error) {
-	file := "knowledge.db"
-	if name != "" {
-		if !nsValidName.MatchString(name) {
-			return nil, fmt.Errorf("非法命名空间名: %s（仅允许字母数字-_）", name)
-		}
-		if reservedNamespaceNames[name] {
-			return nil, fmt.Errorf("数据库名 %s 为宿主保留领域库，请改用其它命名空间名", name)
-		}
-		file = name + ".db"
-	}
 	dbMu.Lock()
 	defer dbMu.Unlock()
-	if dbHandles == nil {
-		dbHandles = map[string]*sql.DB{}
-	}
-	if db, ok := dbHandles[name]; ok {
-		return db, nil
+	if sharedDB != nil {
+		return sharedDB, nil
 	}
 	dir := databaseDir()
 	_ = os.MkdirAll(dir, 0755)
-	db, err := sql.Open("sqlite3", filepath.Join(dir, file))
+	db, err := sql.Open("sqlite3", filepath.Join(dir, "knowledge.db"))
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +59,7 @@ func nsDB(name string) (*sql.DB, error) {
 		db.Close()
 		return nil, err
 	}
-	dbHandles[name] = db
+	sharedDB = db
 	return db, nil
 }
 
@@ -279,19 +246,4 @@ func dbMigrateOn(db *sql.DB, name, upSQL string) (any, error) {
 	return map[string]any{"success": true, "applied": true}, nil
 }
 
-// ==== 命名空间作用域（database.namespace） ====
-
-// databaseNamespace 构造命名空间作用域对象 { query, exec, transaction, migrate }，
-// 全部操作落在独立 <name>.db 上。名称非法时返回 error（由 goja 转为 JS 异常）。
-func databaseNamespace(vm *goja.Runtime, name string) (*goja.Object, error) {
-	db, err := nsDB(name)
-	if err != nil {
-		return nil, err
-	}
-	n := vm.NewObject()
-	n.Set("query", func(q string, params []any) (any, error) { return dbQueryOn(db, q, params) })
-	n.Set("exec", func(q string, params []any) (any, error) { return dbExecOn(db, q, params) })
-	n.Set("transaction", func(fn goja.Value) (any, error) { return databaseTransactionOn(vm, db, fn) })
-	n.Set("migrate", func(mName, upSQL string) (any, error) { return dbMigrateOn(db, mName, upSQL) })
-	return n, nil
-}
+// ==== 辅助 ====

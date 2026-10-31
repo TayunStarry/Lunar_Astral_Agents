@@ -617,9 +617,10 @@ func (m appModel) updateMenuAction() (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
 		// 发布需 Gitee 私人令牌：先进入令牌输入态（不回显明文）
+		// 配置文件 release.json 已有令牌时预填，直接回车即可发布
 		m.update.mode = updateInputToken
 		m.update.input.EchoMode = textinput.EchoPassword
-		m.update.input.SetValue("")
+		m.update.input.SetValue(configuredGiteeToken())
 		m.update.input.Placeholder = "输入 Gitee 私人令牌（需 Release 读写权限）"
 		m.update.input.Focus() // 必须 Focus：未聚焦时 textinput 直接丢弃按键
 		m.update.err = nil
@@ -667,7 +668,7 @@ func runUpdateCmd(kind, value string) tea.Cmd {
 	return func() tea.Msg {
 		cfg := GetUpdatePackConfig()
 		if cfg == nil {
-			return updateDoneMsg{err: fmt.Errorf("未配置 update_pack（lunar_config.json 缺少配置节）")}
+			return updateDoneMsg{err: fmt.Errorf("未配置发布通道（local_data/release.json 缺少仓库信息）")}
 		}
 		var err error
 		var res updatepack.PullResult
@@ -720,7 +721,7 @@ func listVersionsCmd() tea.Cmd {
 		}
 		cfg := GetUpdatePackConfig()
 		if cfg == nil {
-			return updateVersionsMsg{err: fmt.Errorf("未配置 update_pack（lunar_config.json 缺少配置节）")}
+			return updateVersionsMsg{err: fmt.Errorf("未配置发布通道（local_data/release.json 缺少仓库信息）")}
 		}
 		versions, err := updatepack.ListVersions(*withSessionTokenUpdate(cfg))
 		if err != nil {
@@ -910,7 +911,7 @@ func (m appModel) updateInputBody(w int) []string {
 		hint = "支持短哈希前缀；Release 通道不可用时走 zipball 兜底"
 	default:
 		prompt = "输入 Gitee 私人令牌（发布需 Release 读写权限，留空回车取消）："
-		hint = "令牌仅用于本次发布，不写入配置文件；拉取公开仓库无需令牌"
+		hint = "release.json 已保存令牌时自动预填，可直接回车发布；令牌只用于本次请求"
 	}
 	boxW := minInt(w, 78)
 	body := []string{

@@ -49,10 +49,3 @@ type domainDB struct {
 	handle     *sql.DB       // 已打开的连接
 	openedPath string        // handle 对应的规整路径（检测配置变化）
 }
-
-// legacyBuiltinTable 旧版塞在 knowledge.db 里的内建表及其迁移列。
-type legacyBuiltinTable struct {
-	table   string
-	target  *domainDB
-	columns []string
-}

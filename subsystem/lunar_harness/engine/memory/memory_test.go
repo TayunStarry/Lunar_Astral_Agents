@@ -6,13 +6,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path"
 	"path/filepath"
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 func testStore(t *testing.T) *Store {
@@ -210,45 +207,6 @@ func TestDefaultCollectionsCoverage(t *testing.T) {
 			t.Fatalf("默认分组名重复或为空: %q", name)
 		}
 		seen[name] = true
-	}
-}
-
-// TestMigrateLegacyMemoryImages 旧版 multimedia/<分组>/ 图片应在加载时迁移到
-// multimedia/memory/<分组>/，同时改写文档 URL。
-func TestMigrateLegacyMemoryImages(t *testing.T) {
-	isolateStorage(t)
-	base := filepath.Clean(config.LocalDir)
-	const collection = "测试分组"
-	legacyRel := path.Join(resource.StorageRootMultimedia, collection, "legacy.png")
-	legacyAbs := filepath.Join(base, filepath.FromSlash(legacyRel))
-	if err := os.MkdirAll(filepath.Dir(legacyAbs), 0o755); err != nil {
-		t.Fatalf("准备旧目录失败: %v", err)
-	}
-	if err := os.WriteFile(legacyAbs, []byte("png-bytes"), 0o644); err != nil {
-		t.Fatalf("准备旧图片失败: %v", err)
-	}
-
-	c := &Collection{
-		Name: collection,
-		Documents: []Document{{
-			ID:   "legacy-image",
-			Type: TypeImage,
-			URL:  "/file/read/" + legacyRel,
-		}},
-	}
-	if !c.migrateLegacyMemoryImages() {
-		t.Fatal("旧版记忆图片应被迁移")
-	}
-	wantRel := path.Join(resource.StorageRootMultimedia, MediaSubdir, collection, "legacy.png")
-	if got := c.Documents[0].URL; got != "/file/read/"+wantRel {
-		t.Fatalf("迁移后 URL 不正确: %s，期望 /file/read/%s", got, wantRel)
-	}
-	newAbs := filepath.Join(base, filepath.FromSlash(wantRel))
-	if _, err := os.Stat(newAbs); err != nil {
-		t.Fatalf("迁移后的图片不存在: %v", err)
-	}
-	if _, err := os.Stat(legacyAbs); !os.IsNotExist(err) {
-		t.Fatalf("旧版图片应已移走: %v", err)
 	}
 }
 

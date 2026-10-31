@@ -42,7 +42,7 @@ func main() {
 	// （取自编译时生成并嵌入的端点自述文档 info.version）
 	console.SetBuildVersion(server.DocsVersion())
 
-	// 注入 Gitee Release 发布通道配置（lunar_config.json release 节）。
+	// 注入 Gitee Release 发布通道配置（local_data/release.json）。
 	// 更新包与 LTPX 应用市场共用同一仓库：仓库信息只有一套，
 	// 两条通道在仓库内以「描述标记 + 附件名前缀」区分（见 TuiSystem/channel）。
 	console.SetUpdatePackConfig(&updatepack.Config{
@@ -58,10 +58,11 @@ func main() {
 		TargetDir:       config.ReleaseTargetDir,
 	})
 
-	// 令牌通常留空：发布时在 TUI 手动输入，不落盘
+	// 令牌通常留空：发布时在 TUI 手动输入；若 release.json 已保存令牌，TUI 会自动预填
 	console.SetMarketConfig(&ltpxmarket.Config{
 		GiteeOwner: config.ReleaseGiteeOwner,
 		GiteeRepo:  config.ReleaseGiteeRepo,
+		GiteeToken: config.ReleaseGiteeToken,
 		PackageDir: config.ReleasePackageDir,
 	})
 

@@ -3,11 +3,10 @@ package knowledge
 // domain_db_test.go 知识库与领域库测试
 //
 // 覆盖：内建表按领域路由（file_mapping → text、painter_characters → character）、
-// 历史 knowledge.db 内建表迁移、域库注册后 ExecuteOn 可用 / 未注册时明确报错。
+// 域库注册后 ExecuteOn 可用 / 未注册时明确报错。
 
 import (
 	"database/sql"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -111,62 +110,6 @@ func TestExecuteOnDomainDB(t *testing.T) {
 	}
 	if n, ok := result.Results[0].Rows[0]["n"].(int64); !ok || n != 0 {
 		t.Errorf("空表计数应为 0，实际 %#v", result.Results[0].Rows[0]["n"])
-	}
-}
-
-// TestLegacyKnowledgeTablesMigrate 历史 knowledge.db 内建表迁移到领域库并删除旧表
-func TestLegacyKnowledgeTablesMigrate(t *testing.T) {
-	tmp := setupKnowledgeTest(t)
-	dbPath := config.KnowledgeDBPath
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		t.Fatalf("创建目录失败: %v", err)
-	}
-	raw, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		t.Fatalf("打开历史库失败: %v", err)
-	}
-	stmts := []string{
-		`CREATE TABLE file_mapping (key TEXT PRIMARY KEY, value TEXT)`,
-		`INSERT INTO file_mapping (key, value) VALUES ('@D.001', '{"chunkCount":3}')`,
-		`CREATE TABLE painter_characters (key TEXT PRIMARY KEY, value TEXT)`,
-		`INSERT INTO painter_characters (key, value) VALUES ('小月', '{"name":"小月"}')`,
-		`CREATE TABLE notes (key TEXT PRIMARY KEY, value TEXT)`,
-		`INSERT INTO notes (key, value) VALUES ('keep', '保留')`,
-	}
-	for _, stmt := range stmts {
-		if _, err := raw.Exec(stmt); err != nil {
-			t.Fatalf("准备历史库失败(%s): %v", stmt, err)
-		}
-	}
-	raw.Close()
-
-	if err := InitKnowledge(dbPath); err != nil {
-		t.Fatalf("初始化知识库失败: %v", err)
-	}
-
-	// 四张内建表都搬走且旧表已删除
-	for _, item := range legacyKnowledgeTables {
-		ok, err := TableExists(store.db, item.table)
-		if err != nil || ok {
-			t.Errorf("旧表 %s 应已从 knowledge.db 删除 (ok=%v err=%v)", item.table, ok, err)
-		}
-		db, err := item.target.open()
-		if err != nil {
-			t.Fatalf("打开 %s 目标库失败: %v", item.target.label, err)
-		}
-		var n int
-		if err := db.QueryRow(`SELECT COUNT(*) FROM ` + item.table).Scan(&n); err != nil || n != 1 {
-			t.Errorf("%s 应有 1 行迁移结果（实际 %d, err=%v）", item.table, n, err)
-		}
-	}
-	// 用户表不受影响
-	if ok, err := TableExists(store.db, "notes"); err != nil || !ok {
-		t.Errorf("用户表 notes 应保留 (ok=%v err=%v)", ok, err)
-	}
-	// 迁移前备份存在
-	backups, _ := filepath.Glob(filepath.Join(tmp, "backup", "database", "knowledge.before-db-split-*.db"))
-	if len(backups) == 0 {
-		t.Errorf("应生成 knowledge.db 迁移前备份")
 	}
 }
 

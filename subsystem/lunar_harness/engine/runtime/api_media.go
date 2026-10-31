@@ -2,7 +2,7 @@ package runtime
 
 // ==== 媒体能力实现：视频抽帧 video.frames / 图像缩放与编码 image.resize|convert / WebSearch 网络搜索 ====
 // 复用 MultimodalAnalysis 模块的抽帧/图像基础组元与 WebSearch 进程内搜索流水线，
-// 沙箱侧契约见 prompts/runtimeAPI.d.ts。
+// 沙箱侧契约见 prompts/videoAPI.d.ts、prompts/imageAPI.d.ts、prompts/agentAPI.d.ts。
 
 import (
 	"bytes"
@@ -24,7 +24,7 @@ import (
 	"github.com/disintegration/imaging"
 )
 
-// ==== 视频抽帧 video.frames（allow-file；URL 源运行时另需 allow-network） ====
+// ==== 视频抽帧 video.frames ====
 // 抽帧基础组元（ExtractVideoFrameAt / EquidistantTimes / MaxVideoFrames / FormatSeconds）
 // 已上提到 MultimodalAnalysis/module，与月华感知者的序列帧解读链路共用同一实现。
 
@@ -220,7 +220,7 @@ func dataVideoToTemp(uri string) (string, error) {
 	return tmp.Name(), nil
 }
 
-// ==== 图像缩放与编码 image.resize / image.convert（allow-file） ====
+// ==== 图像缩放与编码 image.resize / image.convert ====
 
 // imageBytesFromSource 读取插件数据目录图片字节（path 为 data:base64 URI 时内联解码）。
 func imageBytesFromSource(p *plugin, path string) ([]byte, error) {

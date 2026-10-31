@@ -28,7 +28,7 @@ func init() {
 }
 
 // InitKnowledge 初始化通用知识库（SQLite）
-// 创建数据库目录、打开连接、设置 PRAGMA，并把历史内建表迁往各自领域库。
+// 创建数据库目录、打开连接、设置 PRAGMA。
 func InitKnowledge(dbPath string) error {
 	if store.IsInitialized() {
 		return nil
@@ -41,9 +41,6 @@ func InitKnowledge(dbPath string) error {
 
 	store = instance
 	logger.Info("FileManager", "知识库初始化完成: %s", dbPath)
-	// 历史版本把媒体摘要、网页缓存、角色库、文件索引都塞在 knowledge.db：
-	// 启动时一次性搬到各自领域库，旧表搬完即删（先整库备份，失败则保留旧表待下次重试）
-	store.migrateLegacyTables(dbPath)
 	return nil
 }
 

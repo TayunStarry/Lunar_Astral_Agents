@@ -142,7 +142,6 @@ func chatOnce(system, user string) (string, error) {
 
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
 		guard := loopguard.New(cancel, loopguard.DefaultOptions())
-		guard.Start()
 		text, reasoning, usage, readErr := readStream(resp.Body, guard)
 		guard.Stop()
 		if guard.Hit() {

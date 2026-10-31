@@ -307,49 +307,7 @@ func (c *Collection) loadDocumentsFromFile() error {
 	c.Documents = allDocs
 	c.mu.Unlock()
 
-	// 历史数据迁移：
-	//  1. 旧版逐条内联图片 base64 → 落盘为内容仓库实体，JSON 只保留 URL；
-	//  2. 旧版 multimedia/<集合名>/ → multimedia/memory/<集合名>/。
-	// 失败的下次加载再试，不阻断集合可用。
-	changed := c.migrateInlineImages()
-	if c.migrateLegacyMemoryImages() {
-		changed = true
-	}
-	if changed {
-		_ = c.saveDocumentsToFile()
-	}
-
 	return nil
-}
-
-// migrateInlineImages 把旧文档里的 base64 图片迁移为内容仓库文件，返回是否有变更
-func (c *Collection) migrateInlineImages() bool {
-	c.mu.RLock()
-	docs := append([]Document(nil), c.Documents...)
-	c.mu.RUnlock()
-
-	changed := false
-	for i := range docs {
-		if docs[i].Base64 == "" || docs[i].URL != "" {
-			continue
-		}
-		url, err := saveMemoryImageFile(c.Name, docs[i].Base64)
-		if err != nil {
-			logger.Warn("Persistence", "记忆图片迁移失败 [%s]: %v", docs[i].ID, err)
-			continue
-		}
-		c.mu.Lock()
-		for j := range c.Documents {
-			if c.Documents[j].ID == docs[i].ID {
-				c.Documents[j].URL = url
-				c.Documents[j].Base64 = ""
-				break
-			}
-		}
-		c.mu.Unlock()
-		changed = true
-	}
-	return changed
 }
 
 // saveDocumentsToFile 将文档与嵌入向量保存到分块文件（100 条一块）

@@ -30,7 +30,8 @@ local_data/cache/
 local_data/database/
 local_data/audios/
 
-## 敏感凭证与平台私有配置（B 站 / QQ / Mutual Forum；绝不入库、不上传）
+## 敏感凭证与平台私有配置（B 站 / QQ / Mutual Forum / Gitee 发布令牌；绝不入库、不上传）
+local_data/release.json
 local_data/bilibili_config.json
 local_data/bilibili_account.json
 local_data/bilibili_life.json

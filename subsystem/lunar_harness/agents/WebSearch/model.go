@@ -98,7 +98,6 @@ func chatOnce(messages []chatMessage, opts chatOptions) (string, error) {
 	// 服务端可能忽略 stream 参数直接返回 JSON：两种形态都要兼容
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
 		guard := loopguard.New(cancel, loopguard.DefaultOptions())
-		guard.Start()
 		text, reasoning, usage, readErr := readModelStream(resp.Body, opts.Silent, guard)
 		guard.Stop()
 		if guard.Hit() {

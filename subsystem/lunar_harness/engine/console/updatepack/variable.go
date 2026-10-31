@@ -11,6 +11,9 @@ import (
 // （不依赖真实网络，也不需要令牌）。
 var giteeAPIBase = "https://gitee.com/api/v5"
 
+// maxUpdateTagsKept 更新包相关标签的保留上限（发布后自动清理更早的标签）。
+const maxUpdateTagsKept = 10
+
 // logHookFn 日志钩子（TUI 激活时由宿主注入；未注入时回退控制台打印）
 var (
 	hookMu       sync.Mutex

@@ -85,7 +85,6 @@ func TestGuardChecksAtNodes(t *testing.T) {
 	unit := fixedWidth("重复输出同一段内容。", 128)
 	text := strings.Repeat(unit, 8)
 
-	guard.Start()
 	guard.Feed(KindThink, text[:1000])
 	if hit {
 		t.Fatal("不足一个节点时不应判定")

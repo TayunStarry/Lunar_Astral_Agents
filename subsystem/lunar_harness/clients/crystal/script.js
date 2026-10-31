@@ -903,8 +903,6 @@ async function handleSend() {
                     } catch (e) { /* 参数非结构化动作，仅展示 */ }
                 }
             } else {
-                // 兼容旧格式：解析回复中的 JSON 代码块配置变更
-                parseConfigChangeFromReply(st.content);
                 // 回复显示完成后仅对正文做 TTS 播报（思考内容与工具调用不朗读）
                 const speechText = extractSpeechText(st.content);
                 if (speechText) {
@@ -1119,20 +1117,11 @@ function buildConfigContext() {
 ${JSON.stringify(configData, null, 2)}
 
 【配置修改指南】
-如果用户要求修改配置，你可以输出结构化动作：
+如果用户要求修改配置，请输出结构化动作：
 \`\`\`json
-{"action": "modify_config", "changes": {"server": {"port": 8080}}}
+{"action": "modify_config", "changes": {"system": {"developer": true}}}
 \`\`\`
-系统会自动弹出确认对话框；也可以在普通回复中用 \`\`\`json 代码块包含配置变更对象，系统同样会弹出确认框。
-
-配置变更 JSON 示例：
-\`\`\`json
-{
-  "server": {
-    "port": 8080
-  }
-}
-\`\`\`
+系统会自动弹出确认对话框。
 
 当前可编辑的顶级配置节：${getTopLevelKeys().join('、')}`;
 }
@@ -1188,20 +1177,6 @@ async function executeStructuredAction(action) {
             // 未知动作：当作普通文字展示
             addMessage('assistant', JSON.stringify(action));
             break;
-    }
-}
-
-// ===== 解析 AI 回复中的 JSON 配置变更 =====
-function parseConfigChangeFromReply(content) {
-    const jsonMatch = content.match(/```json([\s\S]*?)```/);
-    if (!jsonMatch) return;
-    try {
-        const modifiedConfig = JSON.parse(jsonMatch[1].trim());
-        const originalSnapshot = JSON.parse(JSON.stringify(configData));
-        const mergedConfig = deepMerge(originalSnapshot, modifiedConfig);
-        showPreviewModal(originalSnapshot, modifiedConfig, mergedConfig);
-    } catch (e) {
-        console.error('解析配置变更失败:', e);
     }
 }
 

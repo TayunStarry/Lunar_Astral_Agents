@@ -1,6 +1,6 @@
 package runtime
 
-// ==== network 裸 TCP/UDP/DNS（allow-network） ====
+// ==== network 裸 TCP/UDP/DNS ====
 // 依 LTP9 同步阻塞模型实现：connect/listen 返回「网络套接字对象」，其 send/receive
 // 等为阻塞调用（读取带超时），在插件事件循环线程内执行。WebSocket 能力见全局 WebSocket
 // 客户端（api_ws.go），此处覆盖 WebSocket 替代不了的非 HTTP 场景。
@@ -199,7 +199,7 @@ func netSockObject(vm *goja.Runtime, s *netSock) *goja.Object {
 	return obj
 }
 
-// bindNet network.*（allow-network）：DNS 解析 + TCP/UDP 连接与监听。
+// bindNet network.*：DNS 解析 + TCP/UDP 连接与监听。
 func bindNet(vm *goja.Runtime) *goja.Object {
 	n := vm.NewObject()
 	n.Set("resolveDNS", func(host string, timeoutSec float64) any { return netResolveDNS(host, timeoutSec) })

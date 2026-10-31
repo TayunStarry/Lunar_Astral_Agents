@@ -1,6 +1,6 @@
 package runtime
 
-// ==== encoding 编解码（allow-certificate） ====
+// ==== encoding 编解码 ====
 // 提供 base64 / url 编解码与 lunar_encoder 加解密桥（复用 subsystem/lunar_decoder，
 // 与 permissions.key 的加解密同源）。入参与返回均为字符串（UTF-8 文本）；
 // 二进制数据如需传递可自行用 base64 包裹。

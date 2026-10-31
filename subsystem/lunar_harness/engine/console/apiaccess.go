@@ -2,7 +2,7 @@ package console
 
 // ==== 接口访问的会话级策略：令牌记忆 / 限流冷却 ====
 //
-// 背景（用户实测）：配置里没填 `release.gitee_token` 时，所有列表请求都走 Gitee 的
+// 背景（用户实测）：配置里没填 `local_data/release.json` 的 gitee_token 时，所有列表请求都走 Gitee 的
 // **匿名额度**（按 IP 计、极低），很快就被打满，返回
 // `403 Forbidden (Rate Limit Exceeded)` —— 表现为「应用市场与更新包列表都拉不到」。
 //
@@ -101,6 +101,18 @@ func withSessionTokenMarket(cfg *ltpxmarket.Config) *ltpxmarket.Config {
 		return &cp
 	}
 	return cfg
+}
+
+// configuredGiteeToken 配置文件（local_data/release.json）里已保存的 Gitee 令牌：
+// 更新包配置优先，其次应用市场配置；TUI 发布前用它预填输入框。
+func configuredGiteeToken() string {
+	if cfg := GetUpdatePackConfig(); cfg != nil && cfg.GiteeToken != "" {
+		return cfg.GiteeToken
+	}
+	if cfg := GetMarketConfig(); cfg != nil {
+		return cfg.GiteeToken
+	}
+	return ""
 }
 
 // tokenConfigured 当前请求是否会带上令牌（用于生成提示文案）

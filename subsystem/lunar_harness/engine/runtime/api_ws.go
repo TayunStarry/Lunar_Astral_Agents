@@ -1,6 +1,6 @@
 package runtime
 
-// ==== 全局 WebSocket 客户端（allow-network） ====
+// ==== 全局 WebSocket 客户端 ====
 // 基于 gorilla/websocket，连接与读写都在 goroutine，所有 goja 回调（onopen/onmessage/onerror/onclose）
 // 经 p.loop.RunOnLoop 排到插件自己的事件循环线程触发（保证 goja 线程安全）。
 // 供插件作主动 WebSocket 客户端使用。

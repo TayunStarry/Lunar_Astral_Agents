@@ -56,17 +56,6 @@ function handleWebSocketMessage(msg) {
             });
             return;
         }
-        // 历史回执兼容：旧的 `[文件已导入] #文件名.ext` 形态（迁移期内仍可能出现）
-        const legacyNotice = /^\[文件已导入\]\s*(#[\w.-]+)$/.exec(content.trim());
-        if (legacyNotice) {
-            addMessage({
-                id: generateId(), role: 'assistant', categories: ['text', 'file'],
-                content: legacyNotice[0], fileRef: legacyNotice[1], fileLabel: legacyNotice[1],
-                timestamp: Date.now()
-            });
-            return;
-        }
-
         // 文本 / 思考 / 代码等上下文消息（可能携带 TTS 音频）
         const categories = ['text'];
         if (audio) categories.push('voice');

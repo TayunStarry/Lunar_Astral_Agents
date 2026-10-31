@@ -8,8 +8,7 @@
 // （.ltpx 为琉璃生态的标准安装包后缀，内容为 zip：顶层目录 = 包名）。
 package ltpxmarket
 
-// Config 应用市场配置（宿主从 lunar_config.json 的 ltpx_market 节注入；
-// gitee_owner/gitee_repo 为空时宿主回退 update_pack 同名配置）
+// Config 应用市场配置（宿主从 local_data/release.json 注入）
 type Config struct {
 	GiteeOwner string `json:"gitee_owner"` // Gitee 仓库属主
 	GiteeRepo  string `json:"gitee_repo"`  // Gitee 仓库名

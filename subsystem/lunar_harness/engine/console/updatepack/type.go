@@ -6,7 +6,7 @@
 // 未命中走 zipball 通道 —— Gitee 官方 API 支持 ref=commit SHA 下载仓库 zip）。
 package updatepack
 
-// Config 更新包功能配置（宿主从 lunar_config.json 的 update_pack 节注入）
+// Config 更新包功能配置（宿主从 local_data/release.json 注入）
 type Config struct {
 	GiteeOwner string   `json:"gitee_owner"` // Gitee 仓库属主
 	GiteeRepo  string   `json:"gitee_repo"`  // Gitee 仓库名
