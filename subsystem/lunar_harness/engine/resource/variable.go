@@ -130,7 +130,7 @@ const (
 	StorageRootDocuments  = "documents"
 	StorageRootAudios     = "audios"
 	StorageRootMultimedia = "multimedia"
-	StorageRootUnknown = "unknown"
+	StorageRootUnknown    = "unknown"
 )
 
 // DerivedStorageRoots 内容仓库内的派生缓存子树（不进入句柄索引）
@@ -193,6 +193,13 @@ var binaryExtensions = map[string]bool{
 	".pdf": true, ".docx": true, ".xlsx": true, ".pptx": true, ".doc": true, ".xls": true, ".ppt": true,
 	".ttf": true, ".otf": true, ".woff": true, ".woff2": true, ".eot": true,
 	".db": true, ".sqlite": true, ".sqlite3": true, ".class": true, ".jar": true, ".wasm": true,
+}
+
+// documentBinaryExtensions 二进制但属于可解析文档的扩展名：仍留在 documents/，
+// 由文献解析智能体按格式读取；只有「不可解析」的二进制才归入 unknown/。
+var documentBinaryExtensions = map[string]bool{
+	".pdf": true, ".docx": true, ".xlsx": true, ".pptx": true,
+	".doc": true, ".xls": true, ".ppt": true, ".rtf": true, ".epub": true,
 }
 
 // workspaceTextExtensions 允许按需收录的工作区文本类扩展名（白名单）

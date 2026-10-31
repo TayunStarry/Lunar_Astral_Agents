@@ -15,7 +15,7 @@ type Tool struct {
 type Agent struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
-	Source string `json:"source"` // 代码位置，如 lunar / agents/Descriptor
+	Source string `json:"source"` // 代码位置，如 lunar / agents/Vision
 	Note   string `json:"note,omitempty"`
 	Tools  []Tool `json:"tools"`
 }

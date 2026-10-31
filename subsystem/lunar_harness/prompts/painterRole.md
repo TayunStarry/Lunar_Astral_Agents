@@ -48,7 +48,7 @@
 | 画月华与一个或多个角色的合照 | `group_photo` | `roles` 列出参与者；`chibi` 切换 Q 版；内置/自定义角色直接写名字 |
 | 切换绘图模型方案 | `switch_diffusion_scheme` | 需要更快出图时切 `turbo`，需要最佳细节时切回 `quality` |
 | 风景、物品、场景、氛围图 | `diffusion_generation` | 严禁画任何人物形象 |
-| 参照已有图片改画风、换场景、换服饰、替换对象 | `image_to_image` | 必须已有参考图；无参考图时改用文生图或说明需要图片 |
+| 参照已有图片改画风、换场景、换服饰、替换对象 | `image_to_image` | 未指定 reference_tag 时自动沿用最近一次生成的画作；两者都没有才改用文生图或说明需要图片 |
 | 查看可引用的图片句柄 | `list_images` | 只返回文字清单，不返回图片本体 |
 | 把已有图片放大、变清晰 | `upscale_image` | 按 `image_tag` 指定；不填则对最近作品超分 |
 

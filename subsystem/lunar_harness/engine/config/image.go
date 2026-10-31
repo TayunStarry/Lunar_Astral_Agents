@@ -43,8 +43,6 @@ var (
 	SDSteps = 40
 	// SDImageSize 调用方未指定尺寸时的默认边长
 	SDImageSize = 1024
-	// VideoInputMode 视频解读输入模式: file / frames
-	VideoInputMode = "file"
 	// ImageInputMode 静态图思维链形态: url / base64
 	ImageInputMode = "url"
 	// VisionMaxSide 视觉读取副本的最大边长(像素)

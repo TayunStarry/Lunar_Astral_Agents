@@ -1,5 +1,11 @@
 package broadcaster
 
+import (
+	"container/list"
+	"sync"
+	"sync/atomic"
+)
+
 // ==== 统一请求样式（Broadcaster 设计语言 · 唯一请求形态） ====
 //
 // Broadcaster 是月华语音播报的统一链路：全部 TTS 调用（HTTP 端点、JS 运行时
@@ -149,4 +155,55 @@ type EngineCapability struct {
 	SampleRate int `json:"sample_rate"`
 	// AuxEndpoints 引擎专属能力端点（音色表/词典/语言表等，调用前自动完成槽位对齐）
 	AuxEndpoints []string `json:"aux_endpoints"`
+}
+
+// ==== 合成缓存（Broadcaster 标准内置能力） ====
+//
+// 缓存位于统一合成入口层，对全部引擎一视同仁：键为「引擎 + 统一请求参数」，
+// 值为 base64 WAV 音频。缓存命中不加载引擎；未命中时通过单飞调用合并并发请求，
+// 合成完成后回写缓存。请求 disable_cache=true 时跳过读取，但仍会刷新缓存。
+
+// synthCacheEntry 一条合成缓存条目（值 + LRU 链表位置）
+type synthCacheEntry struct {
+	// key 缓存键
+	key string
+	// audio base64 WAV 音频
+	audio string
+	// element LRU 链表节点
+	element *list.Element
+}
+
+// synthInflightCall 单飞调用：并发请求共享同一次合成结果
+type synthInflightCall struct {
+	// mu 保护 result/err/completed
+	mu sync.Mutex
+	// result 合成结果（base64 WAV）
+	result string
+	// err 合成错误
+	err error
+	// completed 是否已完成
+	completed bool
+	// done 完成通知
+	done chan struct{}
+}
+
+// SynthCache 线程安全 LRU 合成缓存（哈希表 + 双向链表 + 单飞）
+type SynthCache struct {
+	// mu 读写锁
+	mu sync.RWMutex
+	// capacity 容量上限（条目数）
+	capacity int
+	// items 键 → 条目
+	items map[string]*synthCacheEntry
+	// lruList 访问顺序链表（头部最近使用）
+	lruList *list.List
+	// inflight 进行中的单飞调用
+	inflight map[string]*synthInflightCall
+
+	// hits 命中次数
+	hits atomic.Int64
+	// misses 未命中次数
+	misses atomic.Int64
+	// evictions LRU 淘汰次数
+	evictions atomic.Int64
 }

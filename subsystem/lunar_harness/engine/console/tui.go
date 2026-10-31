@@ -763,13 +763,13 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 	case screenMenu:
 		return "主菜单", "", menuKeys()
 	case screenAgent:
-		return "核心智能 实况", "", agentKeys(m.agent)
+		return "推理实况", "", agentKeys(m.agent)
 	case screenStats:
-		return "运行状态", "采样 1s · 运行观测", engineKeys(m.engine)
+		return "运行状态", "", engineKeys(m.engine)
 	case screenLogs:
-		return "系统日志 · " + logCategoryTitles[m.logCat], logCategoryDescs[m.logCat], logsKeys()
+		return "系统日志 · " + logCategoryTitles[m.logCat], "", logsKeys()
 	case screenEdit:
-		return "编辑显示", "documents · 展示与运行", editKeys()
+		return "编辑显示", "", editKeys()
 	case screenProxy:
 		return "HTTPS 代理", proxyContext(m.proxy), proxyKeys(m.proxy)
 	case screenArchive:

@@ -49,7 +49,9 @@ async function saveFile(file) {
     });
     if (!res.ok) throw new Error('文件上传失败');
     const result = await res.json();
-    return `${window.location.origin}/file/read/${result.filename}`;
+    // 二进制会被服务端归位到 unknown/，读取地址必须用实际落点路径
+    const rel = String(result.rel_path || result.filename || '');
+    return `${window.location.origin}/file/read/${rel}`;
 }
 
 function fileToRawBase64(file) {
@@ -70,9 +72,8 @@ function fileToRawBase64(file) {
 
 function getAudioFormat(file) {
     const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
-    // 仅返回多模态模型音频解码器原生支持的格式
-    if (['wav', 'mp3', 'flac', 'ogg'].includes(ext)) return ext;
-    return null;
+    // 音频不再落盘：任何格式都以内联音频下发，由服务端 ffmpeg 转码后交给 audio_transcriber
+    return ext || 'wav';
 }
 
 // 将字节数格式化为可读的文件大小文本（B/KB/MB/GB）
@@ -134,10 +135,13 @@ async function admitDocumentFile(file) {
         body: file
     });
     if (!saved.ok) throw new Error('文件上传失败');
+    // 服务端会把不可读二进制归位到 unknown/，入库必须按实际落点路径
+    const savedInfo = await saved.json().catch(() => ({}));
+    const storedPath = String(savedInfo.rel_path || path);
     const admitted = await fetch('/file/resource/admit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: path, name: fileName })
+        body: JSON.stringify({ path: storedPath, name: fileName })
     });
     if (!admitted.ok) throw new Error('资源入库失败');
     const data = await admitted.json();

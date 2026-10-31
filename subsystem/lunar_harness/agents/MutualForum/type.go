@@ -54,6 +54,32 @@ type modelResponse struct {
 	ToolCalls []toolCallItem
 }
 
+// streamToolDelta 流式响应里的工具调用增量（同一 index 的多段需拼接）
+type streamToolDelta struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+// streamChunk 流式响应分片（正文、思考与工具调用增量）
+type streamChunk struct {
+	Choices []struct {
+		Delta struct {
+			Content          string            `json:"content"`
+			ReasoningContent string            `json:"reasoning_content"`
+			ToolCalls        []streamToolDelta `json:"tool_calls"`
+		} `json:"delta"`
+	} `json:"choices"`
+	Usage *modelUsage `json:"usage"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
 // assistantWire 响应中的 assistant 消息
 type assistantWire struct {
 	Role             string         `json:"role"`

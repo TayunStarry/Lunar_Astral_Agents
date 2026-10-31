@@ -31,6 +31,13 @@ func loadState() bool {
 			return false
 		}
 	}
+	if len(saved.Weights) > 0 {
+		if corrected := dominantLabel(saved.Weights); corrected != saved.Label {
+			logger.Info(moodModule, "[心情] 标签与权重不一致，已校准：%s → %s", saved.Label, corrected)
+			saved.Label = corrected
+			migrated = true
+		}
+	}
 	mu.Lock()
 	state = saved
 	initialized = true

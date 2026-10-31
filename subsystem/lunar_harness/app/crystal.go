@@ -3,8 +3,8 @@ package app
 import (
 	"net/http"
 
+	"LunarSubsystem/LunarHarness/agents/CrystalPersonality"
 	"LunarSubsystem/LunarHarness/clients"
-	"LunarSubsystem/LunarHarness/crystal"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
@@ -39,7 +39,7 @@ func assembleCrystal() error {
 	initMemoryDatabase()
 
 	// ==== LTPX 协调：注入进程内实现，月华侧不再走 HTTP 通道 ====
-	ltpx.SetBroker(crystal.NewBroker())
+	ltpx.SetBroker(CrystalPersonality.NewBroker())
 	logger.Info("LunarHarness", "LTPX 协调层已进程内化")
 
 	return nil

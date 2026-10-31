@@ -61,6 +61,15 @@ const (
 	ToolHandleSr = "handle_search"
 	ToolHandleRd = "handle_read"
 	ToolRunProj  = "run_project"
+
+	// 归档类工具：统一转发给归档操作 / 归档解析智能体
+	ToolArchiveList   = "archive_list"
+	ToolArchiveRead   = "archive_read"
+	ToolArchiveCreate = "archive_create"
+	ToolArchiveDelete = "archive_delete"
+	ToolArchiveAdd    = "archive_add"
+	ToolArchiveRemove = "archive_remove"
+	ToolGGUF          = "gguf_metadata"
 )
 
 // allTools 全部工具（供自然语言模式与工具列表屏展示）。
@@ -68,6 +77,8 @@ var allTools = []string{
 	ToolList, ToolRead, ToolWrite, ToolCreate, ToolDelete, ToolCopy, ToolMove,
 	ToolRename, ToolSearch, ToolReplace, ToolInfo, ToolWeb, ToolMemory,
 	ToolHandleSr, ToolHandleRd, ToolRunProj,
+	ToolArchiveList, ToolArchiveRead, ToolArchiveCreate, ToolArchiveDelete,
+	ToolArchiveAdd, ToolArchiveRemove, ToolGGUF,
 }
 
 var (

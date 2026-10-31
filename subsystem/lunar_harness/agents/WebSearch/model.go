@@ -232,22 +232,6 @@ func profileChatOptions(profile summaryProfile) chatOptions {
 	return searchChatOptions(profile.Model)
 }
 
-// ExtractQuery 把月华的自然语言指令提炼为检索词；失败时返回原指令。
-func ExtractQuery(instruction string, profile summaryProfile) string {
-	q, err := chatWithOptions([]chatMessage{
-		{Role: "system", Content: loadPrompt("webSearchExtractQuery.md")},
-		{Role: "user", Content: instruction},
-	}, profileChatOptions(profile))
-	if err != nil {
-		return instruction
-	}
-	q = strings.TrimSpace(q)
-	if q == "" || len([]rune(q)) > 120 {
-		return instruction
-	}
-	return strings.Trim(q, "\"“”「」")
-}
-
 // hardCutRunes 硬切断文本：总长不超过 max 字符（超长时以省略号收尾并标注）
 func hardCutRunes(s string, max int) string {
 	r := []rune(s)

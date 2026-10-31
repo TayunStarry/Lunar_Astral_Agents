@@ -5,11 +5,11 @@ package multimodal
 // 规则只有一份：
 //   - 视频按 MediaChunkSeconds（60 秒）切片，丢弃不足 1 秒的尾巴，最多 WatchMaxSlices 片；
 //   - 动图没有独立链路，整体视为一个切片（起点 0，终点为动画时长）；
-//   - 每个切片在 [start, end) 上等距取 WatchFrameMax 个时间点抽帧，
-//     长边不超过 MaxMediaWidth，JPEG 编码为 data URI 直接作为 image_url 提交。
+//   - 每个切片在 [start, end) 上等距抽帧，帧数按内容强度在 16/24/32/48 中定档
+//     （见 frame_tiers.go），长边不超过 MaxMediaWidth，JPEG 编码为 data URI 直接作为 image_url 提交。
 //
-// 与旧「1fps 抽满 60 帧再均匀挑 12 帧」的取帧位置一致（0、5、10…55 秒），
-// 但只解码真正要用的帧：抽帧体系唯一、结果可预测、开销下降一个量级。
+// 定档先花 3 张 96px 探测帧判断画面变化强度，再只解码真正要用的帧：
+// 静止画面省解码开销，快节奏画面则比固定帧数看得更细。
 
 import (
 	"bytes"
@@ -78,9 +78,13 @@ func pickSegments(segments []MediaSegment, max int) []MediaSegment {
 
 // SegmentImages 抽取一个切片的采样帧：区间内等距取 frameMax 个时间点，
 // 长边压到 MaxMediaWidth 后编码为 JPEG data URI；个别帧失败只跳过，不中断整片。
+// frameMax 传 WatchFrameAuto（0）时按内容强度自动定档（16/24/32/48）。
 func SegmentImages(localPath string, segment MediaSegment, frameMax int) ([]string, error) {
 	if frameMax <= 0 {
-		frameMax = WatchFrameMax
+		frameMax = autoWatchFrames(localPath, segment)
+	}
+	if frameMax > WatchFramesMax {
+		frameMax = WatchFramesMax
 	}
 	span := segment.End - segment.Start
 	if span <= 0 {
@@ -148,8 +152,8 @@ func VideoToWatchSlices(inputFile string, maxSlices, frameMax int) ([]WatchSlice
 	if len(slices) == 0 {
 		return nil, fmt.Errorf("未能从 %s 中抽取到可用画面", inputFile)
 	}
-	logger.Info(LogModuleMedia, "VideoToWatchSlices: 时长 %.2fs → %d 片（每片 %d 帧）, 来源=%s",
-		duration, len(slices), WatchFrameMax, inputFile)
+	logger.Info(LogModuleMedia, "VideoToWatchSlices: 时长 %.2fs → %d 片（每片按画面变化取 %d–%d 帧）, 来源=%s",
+		duration, len(slices), WatchFramesMin, WatchFramesMax, inputFile)
 	return slices, nil
 }
 

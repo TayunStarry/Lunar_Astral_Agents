@@ -98,6 +98,49 @@ func TestUpdateBlendsTowardsAngry(t *testing.T) {
 	}
 }
 
+// TestInitRepairsLegacyLabel 旧状态文件里标签可能与权重不一致；
+// 重新加载时应按权重校准并持久化，用户无需等到下一次发言才看到变化。
+func TestInitRepairsLegacyLabel(t *testing.T) {
+	resetMood(t)
+	if err := Init(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	state.Label = "开心"
+	state.Weights = map[string]float64{"元气": 0.8, "开心": 0.2}
+	saveStateLocked()
+	state = State{}
+	initialized = false
+	mu.Unlock()
+
+	if err := Init(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := Snapshot().Label; got != "元气" {
+		t.Fatalf("加载旧状态时应按权重校准标签为元气，实际 %s", got)
+	}
+}
+
+// TestLabelFollowsTopWeightWithInertia 钉住标签与权重的一致性：
+// 即使心情向量因 alpha=0.7 的惯性仍偏向旧心情，标签也必须取当前权重最高者。
+func TestLabelFollowsTopWeightWithInertia(t *testing.T) {
+	resetMood(t)
+	if err := Init(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// 默认 alpha=0.7：初始向量偏向开心，直接更新到元气时旧实现会仍返回开心。
+	if err := UpdateFromText(context.Background(), "元气"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := Snapshot()
+	if snapshot.Weights["元气"] <= snapshot.Weights["开心"] {
+		t.Fatalf("前置条件不成立：元气权重应高于开心，实际 %v", snapshot.Weights)
+	}
+	if snapshot.Label != "元气" {
+		t.Fatalf("标签应跟随最高权重「元气」，实际 %s（权重 %v）", snapshot.Label, snapshot.Weights)
+	}
+}
+
 // TestUpdateSupportsExpandedLabels 新增的细分情绪都能作为独立标签参与匹配。
 func TestUpdateSupportsExpandedLabels(t *testing.T) {
 	for _, label := range []string{"平静", "厌倦", "担忧", "恐慌", "满足", "元气"} {

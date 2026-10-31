@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -37,6 +38,8 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Save请求[ERROR] -> 无效的文件名", http.StatusForbidden)
 		return
 	}
+	// 存储根归位：二进制（压缩包/可执行/未知扩展名）统一改投 unknown/，documents/ 只留文本
+	fileName = resource.RouteStorageRel(fileName)
 	// 初始化覆盖标志，默认为不覆盖
 	overwrite := false
 	// 从请求头中获取覆盖标志

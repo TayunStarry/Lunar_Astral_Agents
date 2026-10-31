@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -60,11 +59,6 @@ func startLocked() {
 		"--no-ui",
 		// 空闲等待900秒后休眠服务器
 		"--sleep-idle-seconds", "900",
-	}
-
-	// 若配置了 ffmpeg 路径，同步告知 llama-server 视频解码所需的 ffmpeg/ffprobe 所在目录
-	if config.FfmpegPath != "" {
-		args = append(args, "--video-ffmpeg-dir", filepath.Dir(config.FfmpegPath))
 	}
 
 	logger.Info("LlamaProxy", "正在启动 llama-server 端口: %d", config.ModelPort)

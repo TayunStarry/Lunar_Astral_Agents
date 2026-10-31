@@ -254,10 +254,10 @@ llama-server 是平台内置的大语言模型推理服务，负责承载对话�
 | `--mmproj-offload`, `--no-mmproj-offload` | 是否启用多模态投影的 GPU 卸载（`LLAMA_ARG_MMPROJ_OFFLOAD`） | 启用 | 显存足够建议开启加速 |
 | `--image-min-tokens N` | 每张图像可采用的最小 token 数量，仅用于动态分辨率视觉模型（`LLAMA_ARG_IMAGE_MIN_TOKENS`） | 从模型读取 | 低分辨率图可调低省算力 |
 | `--image-max-tokens N` | 每张图像可采用的最大 token 数量，仅用于动态分辨率视觉模型（`LLAMA_ARG_IMAGE_MAX_TOKENS`） | 从模型读取 | 高清图可调高提升细节 |
-| `--media-path PATH` | 加载本地媒体文件的目录，文件可用相对路径访问 | 禁用 | 需要读取本地图片/视频时设置；`lunar_config.json` 的 `multimodal.video_input` 设为 `frames` 时视频改由本地抽帧提交，本项不参与该链路 |
-| `--video-fps N` | 视频抽帧的目标帧率（环境变量 `LLAMA_ARG_VIDEO_FPS`） | 4.0 | 画面变化快可适当调高 |
+| `--media-path PATH` | 加载本地媒体文件的目录，文件可用相对路径访问 | 禁用 | 通用参数；本项目不提交 `file://` 视频，视频理解走本地抽帧，本项不参与该链路 |
+| `--video-fps N` | 视频抽帧的目标帧率（环境变量 `LLAMA_ARG_VIDEO_FPS`） | 4.0 | 通用参数；本项目不启用，帧数由本地观看管线按画面强度定档（16/24/32/48） |
 | `--video-timestamp-interval N` | 视频文本时间戳间隔，单位毫秒（`LLAMA_ARG_VIDEO_TIMESTAMP_INTERVAL`） | 5000 | 一般保持默认 |
-| `--video-ffmpeg-dir DIR` | ffmpeg 与 ffprobe 可执行文件所在目录（`LLAMA_ARG_VIDEO_FFMPEG_DIR`） | 搜索 PATH | 未装入 PATH 时指定 |
+| `--video-ffmpeg-dir DIR` | ffmpeg 与 ffprobe 可执行文件所在目录（`LLAMA_ARG_VIDEO_FFMPEG_DIR`） | 搜索 PATH | 通用参数；本项目不传给 llama-server，抽帧由自有链路直接调用 ffmpeg |
 
 ### 嵌入与重排序
 
@@ -373,7 +373,7 @@ llama-server 是平台内置的大语言模型推理服务，负责承载对话�
 | 回答重复或风格异常 | 采样参数不合适 | 调高 `--repeat-penalty`，开启 DRY（`--dry-multiplier`），调整 `--temp`、`--top-p`、`--min-p` |
 | 端口冲突或外部无法访问 | 端口被占用、监听地址受限 | 更换 `--port`，将 `--host` 由 127.0.0.1 改为对外监听地址 |
 | 多模态图片不生效 | 投影文件缺失或未加载 | 提供 `-mm`，或用 `-hf` 配合 `--mmproj-auto`；必要时设置 `--mmproj-offload` |
-| 需要图像/视频理解但报错 | 媒体路径未配置或抽帧工具缺失 | 设置 `--media-path`，确认 `--video-ffmpeg-dir` 指向有效 ffmpeg 目录 |
+| 需要图像/视频理解但报错 | 投影文件缺失，或本机 ffmpeg 不可用 | 提供 `-mm`；确认本机 ffmpeg/ffprobe 可执行（本项目视频理解由本地抽帧完成，与 `--media-path` 无关） |
 | 插件或外部客户端连接被拒 | 未设置 API 密钥或密钥不匹配 | 通过 `--api-key` 设置密钥，并确保客户端携带一致密钥 |
 
 ## 六、引用跳转

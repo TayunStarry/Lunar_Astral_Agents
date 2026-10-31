@@ -167,19 +167,17 @@ export function getAudioMimeType(file) {
 }
 
 /**
- * 获取 llama.cpp input_audio 所需的格式标识
+ * 获取音频格式标识
  *
- * llama.cpp 的 OpenAI 兼容端点严格要求 input_audio.format 为 "wav" 或 "mp3"，
- * 其他格式会触发 "input_audio.format must be either 'wav' or 'mp3'" 错误。
+ * 音频不再落盘：任何格式都以内联音频下发，由服务端 ffmpeg 转码后交给
+ * audio_transcriber；因此这里直接返回扩展名，不再限制 wav/mp3。
  *
  * @param {File} file - 文件对象
- * @returns {'wav' | 'mp3' | null} - 返回 'wav'/'mp3'，不支持的格式返回 null
+ * @returns {string} - 扩展名（缺省 wav）
  */
 export function getAudioFormat(file) {
     const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
-    if (ext === 'wav') return 'wav';
-    if (ext === 'mp3') return 'mp3';
-    return null;
+    return ext || 'wav';
 }
 
 /**

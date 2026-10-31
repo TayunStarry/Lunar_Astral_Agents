@@ -8,6 +8,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
+	"LunarSubsystem/LunarHarness/engine/model/modellease"
 )
 
 // prepareSearchModel 执行步骤 0 的模型切换：卸载主多模态模型并改用搜索模型。
@@ -17,6 +18,8 @@ func prepareSearchModel(cfg Config) (summaryProfile, func()) {
 	if !cfg.swapEnabled() {
 		return mainSummaryProfile(cfg), func() {}
 	}
+	// 与文献解析的轻量扫描通道共用同一把切换锁，避免两个智能体同时卸载/加载模型
+	releaseLease := modellease.AcquireSwap()
 	if _, err := llama.UnloadModelByID(config.AgentMultimodalModel); err != nil {
 		logger.SubWarn("CrystalAstral", "WebSearch", "卸载多模态模型[%s]失败，继续尝试搜索模型: %v", config.AgentMultimodalModel, err)
 	} else {
@@ -25,6 +28,7 @@ func prepareSearchModel(cfg Config) (summaryProfile, func()) {
 	logger.Info("CrystalAstral", "Web-Search 本次使用搜索模型[%s]", cfg.SearchModel)
 
 	return searchSummaryProfile(cfg), func() {
+		defer releaseLease()
 		if _, err := llama.UnloadModelByID(cfg.SearchModel); err != nil {
 			logger.SubWarn("CrystalAstral", "WebSearch", "收尾卸载搜索模型[%s]失败: %v", cfg.SearchModel, err)
 			return

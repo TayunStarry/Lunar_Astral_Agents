@@ -69,7 +69,7 @@ func (d *Store) AddImage(ctx context.Context, base64Image string, orientation st
 	// 1. 感知者式标准化：得到入库 URI（静态图缩放/转码；动态图保留动画）与视频理解引用
 	storeURI, mediaRefs, animated := standardizeMemoryImage(base64Image)
 
-	// 2. 多模态标签化理解（单线程 + 同步阻塞）：动态图走 file:// 视频链路，静态图走单图
+	// 2. 多模态标签化理解（单线程 + 同步阻塞）：动态图走统一观看管线抽帧，静态图走单图
 	d.llmMu.Lock()
 	var tags []string
 	var err error

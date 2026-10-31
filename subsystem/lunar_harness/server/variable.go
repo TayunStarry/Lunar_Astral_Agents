@@ -1,13 +1,13 @@
 package server
 
 import (
-	"LunarSubsystem/LunarHarness/crystal"
+	"LunarSubsystem/LunarHarness/agents/CrystalPersonality"
+	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	media "LunarSubsystem/LunarHarness/engine/media/httpapi"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
 	file "LunarSubsystem/LunarHarness/engine/persistence/httpapi"
-	"LunarSubsystem/LunarHarness/lunar"
 	"net/http"
 )
 
@@ -22,11 +22,11 @@ var SystemEndpoints = []SystemEndpoint{
 
 	// ==================== 引擎总线与消息队列 ====================
 	{Path: "/write/engine", Handler: EngineMessageHandler, Method: "POST", Description: "引擎/前端系统总线（反射观测 + 原样透传广播）"},
-	{Path: "/write/message", Handler: lunar.MessageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
+	{Path: "/write/message", Handler: LunarPersonality.MessageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
 
 	// ==================== 应用与资源 ====================
 	{Path: "/background", Handler: file.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
-	{Path: "/load/application", Handler: crystal.LoadApplicationHandler, Method: "POST", Description: "加载应用"},
+	{Path: "/load/application", Handler: CrystalPersonality.LoadApplicationHandler, Method: "POST", Description: "加载应用"},
 
 	// ==================== 文件操作 ====================
 	{Path: "/file/write", Handler: file.SaveHandler, Method: "POST", Description: "文件保存（自动登记句柄；内容哈希全局唯一，生成目录优先于 audios/multimedia 根目录；X-Store-Exact 仅影响新内容落点）"},
@@ -53,9 +53,9 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/package/install", Handler: file.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},
 	{Path: "/file/package/export", Handler: file.ExportPackageHandler, Method: "POST", Description: "导出扩展包"},
 	{Path: "/file/package/delete", Handler: file.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
-	{Path: "/api/packages", Handler: crystal.ScanPackagesHandler, Method: "GET", Description: "扫描包目录"},
-	{Path: "/api/module/create", Handler: crystal.ModuleCreateHandler, Method: "POST", Description: "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）"},
-	{Path: "/api/module/inspect", Handler: crystal.ModuleInspectHandler, Method: "POST", Description: "检查 HTML 项目内容（供 AI 生成模块元信息）"},
+	{Path: "/api/packages", Handler: CrystalPersonality.ScanPackagesHandler, Method: "GET", Description: "扫描包目录"},
+	{Path: "/api/module/create", Handler: CrystalPersonality.ModuleCreateHandler, Method: "POST", Description: "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）"},
+	{Path: "/api/module/inspect", Handler: CrystalPersonality.ModuleInspectHandler, Method: "POST", Description: "检查 HTML 项目内容（供 AI 生成模块元信息）"},
 
 	// ==================== 控制台数据导出 ====================
 	// TUI「数据导出」调用：把原始日志 / 实况轮次 / 智能体上下文落盘为 .log / .json，便于离线排查
@@ -90,7 +90,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/vram/unload", Handler: llama.VRAMUnloadHandler, Method: "POST", Description: "定向卸载（卸载指定 ID 的已加载模型）"},
 
 	// ==================== 代理请求 ====================
-	{Path: "/proxy", Handler: lunar.ProxyHandler, Method: "POST", Description: "代理访问服务"},
+	{Path: "/proxy", Handler: LunarPersonality.ProxyHandler, Method: "POST", Description: "代理访问服务"},
 
 	// ==================== 语音播报（Broadcaster 统一链路） ====================
 	// 全部 TTS 调用强制收敛到 /broadcaster 端点族：唯一合成入口按请求 engine 参数
@@ -108,21 +108,21 @@ var SystemEndpoints = []SystemEndpoint{
 
 	// ==================== LTPX 工具包调度 ====================
 	// 同时作为进程内 Broker 的 HTTP 调试入口
-	{Path: "/ltpx/tools", Handler: crystal.LTPRemoteToolsHandler, Method: "GET", Description: "拉取工具链（动态扫描包 AtoA 能力）"},
-	{Path: "/ltpx/call", Handler: crystal.LTPRemoteCallHandler, Method: "POST", Description: "调用工具（异步受理，立即返回 request_id）"},
-	{Path: "/ltpx/poll", Handler: crystal.LTPRemotePendingHandler, Method: "GET", Description: "列出待定工具调用（调试端点，已不承担轮询取结果）"},
-	{Path: "/ltpx/result", Handler: crystal.LTPRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
-	{Path: "/ltpx/event", Handler: crystal.LTPRemoteEventHandler, Method: "POST", Description: "事件推送（xx事件发生前负载经 LTP9 插件处理）"},
-	{Path: "/mini-ltp-agent.js", Handler: crystal.MiniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（Mini-LTP）"},
-	{Path: "/shared-input.js", Handler: crystal.SharedInputHandler, Method: "GET", Description: "统一键鼠操作共享模块"},
-	{Path: "/self-ltp-agent.js", Handler: crystal.SelfLTPAgentHandler, Method: "GET", Description: "自主页面操作智能体脚本（Self-LTP）"},
+	{Path: "/ltpx/tools", Handler: CrystalPersonality.LTPRemoteToolsHandler, Method: "GET", Description: "拉取工具链（动态扫描包 AtoA 能力）"},
+	{Path: "/ltpx/call", Handler: CrystalPersonality.LTPRemoteCallHandler, Method: "POST", Description: "调用工具（异步受理，立即返回 request_id）"},
+	{Path: "/ltpx/poll", Handler: CrystalPersonality.LTPRemotePendingHandler, Method: "GET", Description: "列出待定工具调用（调试端点，已不承担轮询取结果）"},
+	{Path: "/ltpx/result", Handler: CrystalPersonality.LTPRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
+	{Path: "/ltpx/event", Handler: CrystalPersonality.LTPRemoteEventHandler, Method: "POST", Description: "事件推送（xx事件发生前负载经 LTP9 插件处理）"},
+	{Path: "/mini-ltp-agent.js", Handler: CrystalPersonality.MiniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（Mini-LTP）"},
+	{Path: "/shared-input.js", Handler: CrystalPersonality.SharedInputHandler, Method: "GET", Description: "统一键鼠操作共享模块"},
+	{Path: "/self-ltp-agent.js", Handler: CrystalPersonality.SelfLTPAgentHandler, Method: "GET", Description: "自主页面操作智能体脚本（Self-LTP）"},
 
 	// ==================== WebView 网络搜索代理（后端驱动的顶层 WebView 会话） ====================
-	{Path: "/webview/open", Handler: crystal.WebViewOpenHandler, Method: "POST", Description: "创建 WebView 网络搜索会话窗口"},
-	{Path: "/webview/navigate", Handler: crystal.WebViewNavigateHandler, Method: "POST", Description: "网络搜索会话导航到指定 URL 并等待就绪"},
-	{Path: "/webview/eval", Handler: crystal.WebViewEvalHandler, Method: "POST", Description: "网络搜索会话页面上下文执行脚本并取回 JSON 结果"},
-	{Path: "/webview/ready", Handler: crystal.WebViewReadyHandler, Method: "POST", Description: "等待网络搜索会话页面就绪并返回状态"},
-	{Path: "/webview/screenshot", Handler: crystal.WebViewScreenshotHandler, Method: "POST", Description: "网络搜索会话窗口区域截图（dataURL 返回）"},
-	{Path: "/webview/close", Handler: crystal.WebViewCloseHandler, Method: "POST", Description: "关闭网络搜索会话窗口"},
-	{Path: "/webview/deepread", Handler: crystal.WebViewDeepReadHandler, Method: "POST", Description: "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要"},
+	{Path: "/webview/open", Handler: CrystalPersonality.WebViewOpenHandler, Method: "POST", Description: "创建 WebView 网络搜索会话窗口"},
+	{Path: "/webview/navigate", Handler: CrystalPersonality.WebViewNavigateHandler, Method: "POST", Description: "网络搜索会话导航到指定 URL 并等待就绪"},
+	{Path: "/webview/eval", Handler: CrystalPersonality.WebViewEvalHandler, Method: "POST", Description: "网络搜索会话页面上下文执行脚本并取回 JSON 结果"},
+	{Path: "/webview/ready", Handler: CrystalPersonality.WebViewReadyHandler, Method: "POST", Description: "等待网络搜索会话页面就绪并返回状态"},
+	{Path: "/webview/screenshot", Handler: CrystalPersonality.WebViewScreenshotHandler, Method: "POST", Description: "网络搜索会话窗口区域截图（dataURL 返回）"},
+	{Path: "/webview/close", Handler: CrystalPersonality.WebViewCloseHandler, Method: "POST", Description: "关闭网络搜索会话窗口"},
+	{Path: "/webview/deepread", Handler: CrystalPersonality.WebViewDeepReadHandler, Method: "POST", Description: "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要"},
 }

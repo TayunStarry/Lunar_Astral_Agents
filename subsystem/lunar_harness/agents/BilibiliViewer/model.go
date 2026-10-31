@@ -60,7 +60,7 @@ var (
 )
 
 // 模型实况观察者：由 app 注入控制台的 StreamBegin/Delta/End，
-// 让 TUI「核心智能 实况」能看到生活链的模型调用，而不是只能干等。
+// 让 TUI「推理实况」能看到生活链的模型调用，而不是只能干等。
 var (
 	modelObserverMu sync.Mutex
 	modelBegin      func(role string)
@@ -155,7 +155,7 @@ func chatCompletion(messages []chatMessage) (string, error) {
 }
 
 // chatCompletionWith 与 chatCompletion 相同，额外支持两项按调用定制：
-//   - display 非空时，正文不逐段推送，流结束后先规整再送入「核心智能 实况」；
+//   - display 非空时，正文不逐段推送，流结束后先规整再送入「推理实况」；
 //   - loopOpts 指定重复检测参数（零值字段回退到默认阈值）。
 //
 // 除重复输出外，对模型端的瞬时故障（HTTP 5xx、网络失败）也做有限退避重试：
@@ -335,7 +335,7 @@ func chatCompletionOnceModel(model string, messages []chatMessage, display func(
 	return text, nil
 }
 
-// readModelStream 解析 OpenAI 兼容 SSE，边收边喂给「核心智能 实况」；同时取回思考文本与用量。
+// readModelStream 解析 OpenAI 兼容 SSE，边收边喂给「推理实况」；同时取回思考文本与用量。
 // 每段增量同步送入思考监管守卫，命中循环时请求会被取消，读取随之中断。
 // display 非空时正文不逐段推送，而是流结束后先规整再推送（编排类调用的输出格式固定）。
 func readModelStream(body io.Reader, display func(string) string, guard *loopguard.Guard) (string, string, *modelUsage, error) {

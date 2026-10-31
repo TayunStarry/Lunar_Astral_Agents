@@ -35,6 +35,30 @@ type memoryRun struct {
 	plan *memoryPlan
 }
 
+// selectMemoryCandidates 按触发条件选出本次要整理的条目。
+//
+// 三条硬规则：可整理条目 ≥ memoryTriggerMin 才触发；只取入库时间最久的
+// memoryBatchItems 条；这些条目的入库时长必须都 ≥ memoryMinAge。
+// 任一条件不满足都返回空列表与原因，调用方据此直接按「本次整理完成」收尾。
+func selectMemoryCandidates(items []memoryItem, now time.Time) ([]memoryItem, string) {
+	if len(items) < memoryTriggerMin {
+		return nil, fmt.Sprintf("可整理记忆 %d 条，未达到 %d 条触发线", len(items), memoryTriggerMin)
+	}
+	eligible := make([]memoryItem, 0, len(items))
+	for _, item := range items {
+		// 缺失时间戳的旧数据按最久远处理，避免被永久排除在整理之外
+		if item.Timestamp <= 0 || now.Sub(time.Unix(item.Timestamp, 0)) >= memoryMinAge {
+			eligible = append(eligible, item)
+		}
+	}
+	if len(eligible) < memoryBatchItems {
+		return nil, fmt.Sprintf("入库满 %d 天的记忆仅 %d 条，不足单次整理的 %d 条",
+			memoryMinAgeDays, len(eligible), memoryBatchItems)
+	}
+	// listAllTextMemories 已按入库时间升序排列，前 memoryBatchItems 条即最久的一批
+	return eligible[:memoryBatchItems], ""
+}
+
 func (r *memoryRun) Start(ctx context.Context, _ Env) error {
 	if err := ensureMemoryReady(); err != nil {
 		return err
@@ -43,25 +67,32 @@ func (r *memoryRun) Start(ctx context.Context, _ Env) error {
 		return fmt.Errorf("恢复记忆整理日志失败: %w", err)
 	}
 	items := listAllTextMemories()
-	batches := buildMemoryBatches(items)
-	r.data = memoryRunData{PlanFile: memoryPlanFile, Total: len(batches)}
-	if len(batches) == 0 {
-		logger.Info(Module, "[记忆整理] 没有可整理的文本记忆")
+	candidates, skipReason := selectMemoryCandidates(items, time.Now())
+	if len(candidates) == 0 {
+		// 触发条件不满足：不写计划、不调模型，直接按「本次整理完成」收尾
+		r.data = memoryRunData{PlanFile: memoryPlanFile, Reason: skipReason}
+		logger.Info(Module, "[记忆整理] 本次不整理：%s（可整理共 %d 条）", skipReason, len(items))
 		return nil
 	}
+	batches := buildMemoryBatches(candidates)
+	r.data = memoryRunData{PlanFile: memoryPlanFile, Total: len(batches)}
 	plan := memoryPlan{ID: fmt.Sprintf("mem-%d", time.Now().UnixNano()), Batches: batches}
 	if err := saveMemoryPlan(plan); err != nil {
 		return err
 	}
 	r.plan = &plan
-	r.data.Total = len(batches)
-	logger.Info(Module, "[记忆整理] 共 %d 条记忆，分 %d 批处理", len(items), len(batches))
+	logger.Info(Module, "[记忆整理] 可整理 %d 条，本次取入库最久的 %d 条，分 %d 批处理",
+		len(items), len(candidates), len(batches))
 	return nil
 }
 
 func (r *memoryRun) Next(ctx context.Context, _ Env) (EventStep, error) {
 	if r.data.Total == 0 {
-		return EventStep{Done: true, Record: "小憩了片刻", Detail: "没有可整理的记忆"}, nil
+		detail := r.data.Reason
+		if detail == "" {
+			detail = "没有可整理的记忆"
+		}
+		return EventStep{Done: true, Record: "小憩了片刻", Detail: detail}, nil
 	}
 	if r.plan == nil {
 		plan, err := loadMemoryPlan()

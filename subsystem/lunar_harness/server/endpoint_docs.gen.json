@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.303.2303",
+    "version": "2026.304.2041",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -72,8 +72,8 @@
       "post": {
         "summary": "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）",
         "description": "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）",
-        "operationId": "crystal.ModuleCreateHandler",
-        "x-handler": "crystal.ModuleCreateHandler",
+        "operationId": "CrystalPersonality.ModuleCreateHandler",
+        "x-handler": "CrystalPersonality.ModuleCreateHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -85,8 +85,8 @@
       "post": {
         "summary": "检查 HTML 项目内容（供 AI 生成模块元信息）",
         "description": "检查 HTML 项目内容（供 AI 生成模块元信息）",
-        "operationId": "crystal.ModuleInspectHandler",
-        "x-handler": "crystal.ModuleInspectHandler",
+        "operationId": "CrystalPersonality.ModuleInspectHandler",
+        "x-handler": "CrystalPersonality.ModuleInspectHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -98,8 +98,8 @@
       "get": {
         "summary": "扫描包目录",
         "description": "扫描包目录",
-        "operationId": "crystal.ScanPackagesHandler",
-        "x-handler": "crystal.ScanPackagesHandler",
+        "operationId": "CrystalPersonality.ScanPackagesHandler",
+        "x-handler": "CrystalPersonality.ScanPackagesHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -792,8 +792,8 @@
       "post": {
         "summary": "加载应用",
         "description": "加载应用",
-        "operationId": "crystal.LoadApplicationHandler",
-        "x-handler": "crystal.LoadApplicationHandler",
+        "operationId": "CrystalPersonality.LoadApplicationHandler",
+        "x-handler": "CrystalPersonality.LoadApplicationHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -805,8 +805,8 @@
       "post": {
         "summary": "调用工具（异步受理，立即返回 request_id）",
         "description": "调用工具（异步受理，立即返回 request_id）",
-        "operationId": "crystal.LTPRemoteCallHandler",
-        "x-handler": "crystal.LTPRemoteCallHandler",
+        "operationId": "CrystalPersonality.LTPRemoteCallHandler",
+        "x-handler": "CrystalPersonality.LTPRemoteCallHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -818,8 +818,8 @@
       "post": {
         "summary": "事件推送（xx事件发生前负载经 LTP9 插件处理）",
         "description": "事件推送（xx事件发生前负载经 LTP9 插件处理）",
-        "operationId": "crystal.LTPRemoteEventHandler",
-        "x-handler": "crystal.LTPRemoteEventHandler",
+        "operationId": "CrystalPersonality.LTPRemoteEventHandler",
+        "x-handler": "CrystalPersonality.LTPRemoteEventHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -831,8 +831,8 @@
       "get": {
         "summary": "列出待定工具调用（调试端点，已不承担轮询取结果）",
         "description": "列出待定工具调用（调试端点，已不承担轮询取结果）",
-        "operationId": "crystal.LTPRemotePendingHandler",
-        "x-handler": "crystal.LTPRemotePendingHandler",
+        "operationId": "CrystalPersonality.LTPRemotePendingHandler",
+        "x-handler": "CrystalPersonality.LTPRemotePendingHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -844,8 +844,8 @@
       "post": {
         "summary": "前端包执行完毕后回执结果",
         "description": "前端包执行完毕后回执结果",
-        "operationId": "crystal.LTPRemoteResultHandler",
-        "x-handler": "crystal.LTPRemoteResultHandler",
+        "operationId": "CrystalPersonality.LTPRemoteResultHandler",
+        "x-handler": "CrystalPersonality.LTPRemoteResultHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -857,8 +857,8 @@
       "get": {
         "summary": "拉取工具链（动态扫描包 AtoA 能力）",
         "description": "拉取工具链（动态扫描包 AtoA 能力）",
-        "operationId": "crystal.LTPRemoteToolsHandler",
-        "x-handler": "crystal.LTPRemoteToolsHandler",
+        "operationId": "CrystalPersonality.LTPRemoteToolsHandler",
+        "x-handler": "CrystalPersonality.LTPRemoteToolsHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -956,8 +956,8 @@
       "get": {
         "summary": "通用页面操作智能体脚本（Mini-LTP）",
         "description": "通用页面操作智能体脚本（Mini-LTP）",
-        "operationId": "crystal.MiniLTPAgentHandler",
-        "x-handler": "crystal.MiniLTPAgentHandler",
+        "operationId": "CrystalPersonality.MiniLTPAgentHandler",
+        "x-handler": "CrystalPersonality.MiniLTPAgentHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -969,8 +969,8 @@
       "post": {
         "summary": "代理访问服务",
         "description": "代理访问服务",
-        "operationId": "lunar.ProxyHandler",
-        "x-handler": "lunar.ProxyHandler",
+        "operationId": "LunarPersonality.ProxyHandler",
+        "x-handler": "LunarPersonality.ProxyHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -995,8 +995,8 @@
       "get": {
         "summary": "自主页面操作智能体脚本（Self-LTP）",
         "description": "自主页面操作智能体脚本（Self-LTP）",
-        "operationId": "crystal.SelfLTPAgentHandler",
-        "x-handler": "crystal.SelfLTPAgentHandler",
+        "operationId": "CrystalPersonality.SelfLTPAgentHandler",
+        "x-handler": "CrystalPersonality.SelfLTPAgentHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1008,8 +1008,8 @@
       "get": {
         "summary": "统一键鼠操作共享模块",
         "description": "统一键鼠操作共享模块",
-        "operationId": "crystal.SharedInputHandler",
-        "x-handler": "crystal.SharedInputHandler",
+        "operationId": "CrystalPersonality.SharedInputHandler",
+        "x-handler": "CrystalPersonality.SharedInputHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1047,8 +1047,8 @@
       "post": {
         "summary": "关闭网络搜索会话窗口",
         "description": "关闭网络搜索会话窗口",
-        "operationId": "crystal.WebViewCloseHandler",
-        "x-handler": "crystal.WebViewCloseHandler",
+        "operationId": "CrystalPersonality.WebViewCloseHandler",
+        "x-handler": "CrystalPersonality.WebViewCloseHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1060,8 +1060,8 @@
       "post": {
         "summary": "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
         "description": "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
-        "operationId": "crystal.WebViewDeepReadHandler",
-        "x-handler": "crystal.WebViewDeepReadHandler",
+        "operationId": "CrystalPersonality.WebViewDeepReadHandler",
+        "x-handler": "CrystalPersonality.WebViewDeepReadHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1073,8 +1073,8 @@
       "post": {
         "summary": "网络搜索会话页面上下文执行脚本并取回 JSON 结果",
         "description": "网络搜索会话页面上下文执行脚本并取回 JSON 结果",
-        "operationId": "crystal.WebViewEvalHandler",
-        "x-handler": "crystal.WebViewEvalHandler",
+        "operationId": "CrystalPersonality.WebViewEvalHandler",
+        "x-handler": "CrystalPersonality.WebViewEvalHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1086,8 +1086,8 @@
       "post": {
         "summary": "网络搜索会话导航到指定 URL 并等待就绪",
         "description": "网络搜索会话导航到指定 URL 并等待就绪",
-        "operationId": "crystal.WebViewNavigateHandler",
-        "x-handler": "crystal.WebViewNavigateHandler",
+        "operationId": "CrystalPersonality.WebViewNavigateHandler",
+        "x-handler": "CrystalPersonality.WebViewNavigateHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1099,8 +1099,8 @@
       "post": {
         "summary": "创建 WebView 网络搜索会话窗口",
         "description": "创建 WebView 网络搜索会话窗口",
-        "operationId": "crystal.WebViewOpenHandler",
-        "x-handler": "crystal.WebViewOpenHandler",
+        "operationId": "CrystalPersonality.WebViewOpenHandler",
+        "x-handler": "CrystalPersonality.WebViewOpenHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1112,8 +1112,8 @@
       "post": {
         "summary": "等待网络搜索会话页面就绪并返回状态",
         "description": "等待网络搜索会话页面就绪并返回状态",
-        "operationId": "crystal.WebViewReadyHandler",
-        "x-handler": "crystal.WebViewReadyHandler",
+        "operationId": "CrystalPersonality.WebViewReadyHandler",
+        "x-handler": "CrystalPersonality.WebViewReadyHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1125,8 +1125,8 @@
       "post": {
         "summary": "网络搜索会话窗口区域截图（dataURL 返回）",
         "description": "网络搜索会话窗口区域截图（dataURL 返回）",
-        "operationId": "crystal.WebViewScreenshotHandler",
-        "x-handler": "crystal.WebViewScreenshotHandler",
+        "operationId": "CrystalPersonality.WebViewScreenshotHandler",
+        "x-handler": "CrystalPersonality.WebViewScreenshotHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1164,8 +1164,8 @@
       "post": {
         "summary": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
         "description": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
-        "operationId": "lunar.MessageBatchHandler",
-        "x-handler": "lunar.MessageBatchHandler",
+        "operationId": "LunarPersonality.MessageBatchHandler",
+        "x-handler": "LunarPersonality.MessageBatchHandler",
         "responses": {
           "200": {
             "description": "成功"

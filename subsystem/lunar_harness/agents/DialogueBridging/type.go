@@ -29,7 +29,7 @@ type sendDelivery struct {
 	Target     string   `json:"target"`      // 群号 / QQ 号 / 名称
 	Text       string   `json:"text"`        // 直接投递的文本（可空）
 	Images     []string `json:"images"`      // 图片句柄（@I.xxx）
-	Files      []string `json:"files"`       // 文件句柄（@D./@U./@A./@T. 等）
+	Files      []string `json:"files"`       // 文件句柄（@D./@U./@A./@V./@G. 等）
 	Reason     string   `json:"reason"`      // 该目标无法执行时的说明
 }
 

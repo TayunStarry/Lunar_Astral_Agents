@@ -163,8 +163,7 @@ func logsKeys() []keyHint {
 // viewSystemLogs 「系统日志」屏渲染：分类标签条 + 日志窗口。
 func (m appModel) viewSystemLogs() string {
 	title := "系统日志"
-	subtitle := logCategoryDescs[m.logCat]
-	f := m.frameFor(title, subtitle, logsKeys())
+	f := m.frameFor(title, "", logsKeys())
 	w, h := f.bodySize()
 
 	tabs := logCategoryTabs(w, m.logCat)
@@ -187,8 +186,7 @@ func (m appModel) viewSystemLogs() string {
 	if len(lines) == 0 {
 		body := append([]string{}, tabs...)
 		body = append(body, strip...)
-		body = append(body, emptyState("暂无日志", subtitle+" 通道还没有任何输出。",
-			"启动对应功能后此处实时刷新 · 左右方向键切换分类", w, maxInt(1, h-headRows-1))...)
+		body = append(body, emptyState("暂无日志", "当前通道还没有任何输出。", "启动对应功能后此处实时刷新 · 左右方向键切换分类", w, maxInt(1, h-headRows-1))...)
 		body = append(body, logStatusLine(w, scrollInfo{}, m.logView.follow))
 		f.status = dimStyle.Render("共 0 行")
 		return f.render(body)
@@ -295,7 +293,7 @@ func (m appModel) updateAgent(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // viewAgent 智能体实况屏渲染：轮次分段（思考暗色 / 输出常色 / 工具调用高亮）
 func (m appModel) viewAgent() string {
-	f := m.frameFor("核心智能 实况", "", agentKeys(m.agent))
+	f := m.frameFor("推理实况", "", agentKeys(m.agent))
 	w, h := f.bodySize()
 
 	inner := maxInt(20, w-4)
@@ -577,7 +575,7 @@ func (m appModel) updateStats(msg tea.Msg) (tea.Model, tea.Cmd) {
 // 窄屏退化为顺序堆叠。桌面任务输入作为底部全宽区块，避免表单被挤成窄条。
 // 状态值按阈值着色（好=绿 / 注意=黄 / 异常=红），一眼能分辨当前是否健康。
 func (m appModel) viewStats() string {
-	f := m.frameFor("运行状态", "采样 1s · 运行观测", engineKeys(m.engine))
+	f := m.frameFor("运行状态", "", engineKeys(m.engine))
 	w, h := f.bodySize()
 
 	s := m.stats.snap

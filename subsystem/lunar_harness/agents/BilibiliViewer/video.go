@@ -207,7 +207,7 @@ func prepareVideoSegments(localPath string, maxSlices int) ([]module.MediaSegmen
 // 抽帧与任务措辞全部来自统一观看管线（module.SegmentImages / module.WatchTask），
 // 与通用描述的影像理解一字不差，本智能体只补充视频背景。
 func understandOneSlice(localPath string, info videoInfo, seg module.MediaSegment, index, total int) (string, error) {
-	images, err := module.SegmentImages(localPath, seg, module.WatchFrameMax)
+	images, err := module.SegmentImages(localPath, seg, module.WatchFrameAuto)
 	if err != nil {
 		return "", fmt.Errorf("抽帧失败: %w", err)
 	}

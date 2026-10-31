@@ -65,6 +65,10 @@ func Release() error {
 // ensureSlot 槽位对齐：目标引擎已在位直接返回；否则卸载在位引擎并加载目标引擎。
 // 须持有 slotMu。
 func ensureSlot(engine string) error {
+	// 维护态：不加载任何引擎（合成入口与专属能力端点共用此守卫）
+	if Paused() {
+		return fmt.Errorf("%s", errMaintenanceMessage)
+	}
 	if currentEngine() == engine {
 		return nil
 	}

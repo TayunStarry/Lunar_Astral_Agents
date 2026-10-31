@@ -85,24 +85,18 @@
         }
         return sharedModuleError;
     }
-    var isVisible = sharedFn('isVisible'), escapeCss = sharedFn('escapeCss'),
+    var isVisible = sharedFn('isVisible'),
         query = sharedFn('query'), queryAll = sharedFn('queryAll'),
-        textOf = sharedFn('textOf'), describe = sharedFn('describe'),
-        findByText = sharedFn('findByText'), resolveTarget = sharedFn('resolveTarget'),
-        uniqueSelector = sharedFn('uniqueSelector'), captureElements = sharedFn('captureElements'),
+        resolveTarget = sharedFn('resolveTarget'),
+        captureElements = sharedFn('captureElements'),
         buildCompactElements = sharedFn('buildCompactElements'),
         buildPageInfoText = sharedFn('buildPageInfoText'),
-        dispatchAt = sharedFn('dispatchAt'), resolvePoint = sharedFn('resolvePoint'),
-        fireMouse = sharedFn('fireMouse'), focusEl = sharedFn('focusEl'),
         clickEl = sharedFn('clickEl'), hoverEl = sharedFn('hoverEl'),
-        setInputValue = sharedFn('setInputValue'), typeEl = sharedFn('typeEl'),
-        keyToCode = sharedFn('keyToCode'), normalizeKeyToken = sharedFn('normalizeKeyToken'),
-        pressKeyEl = sharedFn('pressKeyEl'), parseHoldSpec = sharedFn('parseHoldSpec'),
+        typeEl = sharedFn('typeEl'), pressKeyEl = sharedFn('pressKeyEl'),
         mouseButtonEl = sharedFn('mouseButtonEl'), wheelEl = sharedFn('wheelEl'),
         sleep = sharedFn('sleep'), scrollEl = sharedFn('scrollEl'),
         selectEl = sharedFn('selectEl'), getState = sharedFn('getState'),
-        tryDrawPagePixels = sharedFn('tryDrawPagePixels'), drawGrid = sharedFn('drawGrid'),
-        drawElementBoxes = sharedFn('drawElementBoxes'), captureScreenshot = sharedFn('captureScreenshot'),
+        captureScreenshot = sharedFn('captureScreenshot'),
         SCREEN_GRID_STEP = (SharedInput && typeof SharedInput.SCREEN_GRID_STEP === 'number') ? SharedInput.SCREEN_GRID_STEP : 50;
 
 

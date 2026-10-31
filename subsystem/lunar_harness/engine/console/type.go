@@ -53,16 +53,6 @@ var logCategoryTitles = map[LogSource]string{
 	SourceLogistics: "后勤",
 }
 
-// logCategoryDescs 分类说明（标题栏上下文）
-var logCategoryDescs = map[LogSource]string{
-	SourceRaw:       "完整日志",
-	SourceWarn:      "系统警告",
-	SourceDraw:      "月华-绘图系统",
-	SourceDialogue:  "月华-对话系统",
-	SourceLife:      "月华-生活系统",
-	SourceLogistics: "月华-后勤系统",
-}
-
 // ==== 智能体流式事件类型 ====
 
 // StreamKind 流式增量类别
@@ -85,7 +75,7 @@ const (
 
 // StreamEvent 智能体流式事件（由 syncFetch 流式桥推送）
 type StreamEvent struct {
-	Role string     `json:"role"` // 角色标签：对话者/绘制者/演奏者/记忆者/通用描述/网络搜索/主循环
+	Role string     `json:"role"` // 角色标签：对话者/绘制者/演奏者/记忆者/视觉理解/文献解析/网络搜索/主循环
 	Kind StreamKind `json:"kind"` // 事件类别
 	Text string     `json:"text"` // 增量文本或工具信息
 }

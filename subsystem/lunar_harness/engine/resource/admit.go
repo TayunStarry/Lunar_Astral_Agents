@@ -163,14 +163,15 @@ func admitFlexibleKind(existing Resource, res *Resource) (AdmitResult, error) {
 	return admitResultOf(*res, false), nil
 }
 
-// AdmitDocument 以「documents/原文件名」为业务身份入库或刷新文档
+// AdmitDocument 以「documents/原文件名」为业务身份入库或刷新文档；
+// 不可读二进制（压缩包等）实际落在 unknown/，同样允许按该路径入库。
 func AdmitDocument(relPath, name string) (AdmitResult, error) {
 	if err := EnsureReady(); err != nil {
 		return AdmitResult{}, err
 	}
 	relPath = strings.TrimPrefix(strings.ReplaceAll(strings.TrimSpace(relPath), "\\", "/"), "/")
-	if !strings.HasPrefix(relPath, StorageRootDocuments+"/") {
-		return AdmitResult{}, fmt.Errorf("仅支持 documents 目录下的文件: %s", relPath)
+	if !strings.HasPrefix(relPath, StorageRootDocuments+"/") && !strings.HasPrefix(relPath, StorageRootUnknown+"/") {
+		return AdmitResult{}, fmt.Errorf("仅支持 documents / unknown 目录下的文件: %s", relPath)
 	}
 	return Admit(AdmitInput{
 		SourceKind: SourceKindPath,

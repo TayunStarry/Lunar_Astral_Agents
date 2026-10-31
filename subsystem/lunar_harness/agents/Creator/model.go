@@ -5,6 +5,7 @@ package Creator
 // 供执行层判断是否属于可重试的 500 类异常。
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -58,14 +59,18 @@ func resolveModel() {
 }
 
 // chatWithTools 发起一次带工具的模型调用。
-func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefinition) (*modelResponse, error) {
+//
+// 优先以 SSE 流式读取：思考与正文边收边推送「推理实况」，工具调用增量按 index 合并；
+// 若后端忽略 stream 直接返回整包 JSON，则退回整包解析并把结果一次性上报。
+func chatWithTools(ctx context.Context, role string, messages []chatMessage, tools []toolDefinition) (*modelResponse, error) {
 	resolveModel()
 	body, err := json.Marshal(map[string]any{
-		"model":       modelName,
-		"messages":    messages,
-		"tools":       tools,
-		"tool_choice": "auto",
-		"stream":      false,
+		"model":          modelName,
+		"messages":       messages,
+		"tools":          tools,
+		"tool_choice":    "auto",
+		"stream":         true,
+		"stream_options": map[string]any{"include_usage": true},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("序列化模型请求失败: %w", err)
@@ -84,12 +89,17 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 		return nil, fmt.Errorf("模型请求失败: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		return nil, &httpStatusError{Status: resp.StatusCode, Body: string(raw)}
+	}
+	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		return readToolsStream(resp.Body, role)
+	}
+
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return nil, fmt.Errorf("读取模型响应失败: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, &httpStatusError{Status: resp.StatusCode, Body: string(raw)}
 	}
 	completion, err := parseCompletion(raw)
 	if err != nil {
@@ -104,6 +114,83 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 		Reasoning: strings.TrimSpace(message.ReasoningContent),
 		ToolCalls: message.ToolCalls,
 	}
+	fillToolCallDefaults(result)
+	console.StreamDelta(role, console.KindThink, result.Reasoning)
+	console.StreamDelta(role, console.KindContent, result.Content)
+	return result, nil
+}
+
+// readToolsStream 读取 SSE 流：思考/正文实时上报，工具调用增量按 index 合并。
+func readToolsStream(body io.Reader, role string) (*modelResponse, error) {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	var content, reasoning strings.Builder
+	partials := map[int]*toolCallItem{}
+	order := make([]int, 0, 4)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		var chunk streamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		if chunk.Error != nil && strings.TrimSpace(chunk.Error.Message) != "" {
+			return nil, fmt.Errorf("模型错误: %s", chunk.Error.Message)
+		}
+		for _, choice := range chunk.Choices {
+			if text := choice.Delta.ReasoningContent; text != "" {
+				reasoning.WriteString(text)
+				console.StreamDelta(role, console.KindThink, text)
+			}
+			if text := choice.Delta.Content; text != "" {
+				content.WriteString(text)
+				console.StreamDelta(role, console.KindContent, text)
+			}
+			for _, delta := range choice.Delta.ToolCalls {
+				item, ok := partials[delta.Index]
+				if !ok {
+					item = &toolCallItem{}
+					partials[delta.Index] = item
+					order = append(order, delta.Index)
+				}
+				if delta.ID != "" {
+					item.ID = delta.ID
+				}
+				if delta.Type != "" {
+					item.Type = delta.Type
+				}
+				if delta.Function.Name != "" {
+					item.Function.Name = delta.Function.Name
+				}
+				item.Function.Arguments += delta.Function.Arguments
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("读取模型流失败: %w", err)
+	}
+	result := &modelResponse{
+		Content:   strings.TrimSpace(content.String()),
+		Reasoning: strings.TrimSpace(reasoning.String()),
+	}
+	for _, index := range order {
+		result.ToolCalls = append(result.ToolCalls, *partials[index])
+	}
+	if result.Content == "" && len(result.ToolCalls) == 0 {
+		return nil, fmt.Errorf("模型返回空响应")
+	}
+	fillToolCallDefaults(result)
+	return result, nil
+}
+
+// fillToolCallDefaults 补齐工具调用的 ID / Type（流式与整包两条路径共用）。
+func fillToolCallDefaults(result *modelResponse) {
 	for i := range result.ToolCalls {
 		if strings.TrimSpace(result.ToolCalls[i].ID) == "" {
 			result.ToolCalls[i].ID = fmt.Sprintf("call_%d", i)
@@ -112,7 +199,6 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 			result.ToolCalls[i].Type = "function"
 		}
 	}
-	return result, nil
 }
 
 // parseCompletion 兼容原始响应与 {success,data} 包装响应。
@@ -223,18 +309,15 @@ func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instructi
 	return "", fmt.Errorf("%s 在 %d 轮内没有完成，已执行的步骤：%s", role, limit, strings.TrimSuffix(lastSummary, "；"))
 }
 
-// chatWithToolsStreamed 包装一次模型调用：把思考、输出与工具调用上报「推理实况」。
-// 模型响应本身仍是非流式整包返回，因此增量在拿到完整响应后一次性推送；
-// 但对实况屏而言，这仍是一轮可查看、可导出的完整推理记录。
+// chatWithToolsStreamed 包装一次模型调用：思考与输出由 chatWithTools 边收边推送，
+// 这里只负责一轮实况的起止与工具调用的展示。
 func chatWithToolsStreamed(ctx context.Context, role string, messages []chatMessage, tools []toolDefinition) (*modelResponse, error) {
 	console.StreamBegin(role)
-	response, err := chatWithTools(ctx, messages, tools)
+	response, err := chatWithTools(ctx, role, messages, tools)
 	if err != nil {
 		console.StreamEnd(role)
 		return nil, err
 	}
-	console.StreamDelta(role, console.KindThink, response.Reasoning)
-	console.StreamDelta(role, console.KindContent, response.Content)
 	for _, call := range response.ToolCalls {
 		console.StreamTool(role, call.Function.Name, call.Function.Arguments)
 	}

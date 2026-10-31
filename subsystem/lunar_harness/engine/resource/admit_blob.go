@@ -28,10 +28,11 @@ import (
 
 // snapshotRel 生成内容仓库的相对路径
 //
-// 媒体类：图片/视频/音频必须在 llama-server 的 media-path（multimedia 根）之内才能被
-// file:// 取用；命名沿用 sha16，保持内容寻址。
+// 媒体类：图片/视频/音频统一落在 multimedia 与 audios 两棵内容树内，供视觉读取端点
+// 与本地观看管线按路径取用；命名沿用 sha16，保持内容寻址。
 // 文本类：落在 documents 根，**直接使用原文件名**，便于人机两端按名称传递与讨论；
 // 同名文件视为同一份文档并被覆盖更新。
+// 不可读二进制（压缩包 / 可执行 / 模型 / 未知扩展名）：落在 unknown 根，同样使用原文件名。
 func snapshotRel(hash, ext, name string) string {
 	if IsMediaExtension(ext) {
 		// 音频进 audios/，图片与视频进 multimedia/：两条内容寻址树各司其职
@@ -40,7 +41,11 @@ func snapshotRel(hash, ext, name string) string {
 		}
 		return path.Join(StorageRootMultimedia, hash+ext)
 	}
-	return path.Join(StorageRootDocuments, safeDocumentName(name, hash, ext))
+	base := safeDocumentName(name, hash, ext)
+	if isBinaryStorageExt(ext) {
+		return path.Join(StorageRootUnknown, base)
+	}
+	return path.Join(StorageRootDocuments, base)
 }
 
 // safeDocumentName 把建议文件名规整为 documents/ 下可用的裸文件名

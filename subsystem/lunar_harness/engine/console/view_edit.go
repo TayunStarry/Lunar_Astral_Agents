@@ -110,7 +110,7 @@ func (m appModel) editBodyRows() int {
 
 // viewEdit 「编辑显示」屏渲染：主内容区（带行号）+ 当前文件元数据 + 状态。
 func (m appModel) viewEdit() string {
-	f := m.frameFor("编辑显示", "documents · 展示与运行", editKeys())
+	f := m.frameFor("编辑显示", "", editKeys())
 	w, h := f.bodySize()
 
 	files := m.editView.files

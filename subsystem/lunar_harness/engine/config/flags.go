@@ -67,7 +67,6 @@ func RegisterFlags() {
 	flag.BoolVar(&SDFlashAttention, "sd-diffusion-fa", SDFlashAttention, "扩散模型使用 flash attention")
 	flag.IntVar(&SDSteps, "sd-steps", SDSteps, "默认采样步数(调用方未指定时)")
 	flag.IntVar(&SDImageSize, "sd-image-size", SDImageSize, "默认图片边长(调用方未指定时)")
-	flag.StringVar(&VideoInputMode, "video-input", VideoInputMode, "视频解读输入模式: file(file://) / frames(图片序列帧)")
 	flag.StringVar(&ImageInputMode, "image-input", ImageInputMode, "静态图思维链形态: url/file-read 端点 / base64")
 	flag.IntVar(&VisionMaxSide, "vision-max-side", VisionMaxSide, "视觉读取副本最大边长(像素)")
 	flag.IntVar(&VisionCacheCapMB, "vision-cache-cap-mb", VisionCacheCapMB, "视觉副本缓存池容量上限(MB), 0=不限制")

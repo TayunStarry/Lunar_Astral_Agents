@@ -32,14 +32,30 @@ var (
 // ==== 视觉观看（切片与抽帧） ====
 //
 // 视频与动图共用同一套规则：视频按 MediaChunkSeconds 秒切片，动图整体为一个切片，
-// 每片等距抽取 WatchFrameMax 帧。数量只在这里定标，视频/动图链路不得各自再定一套。
+// 每片按内容强度在 16/24/32/48 四档中取帧。数量只在这里定标，视频/动图链路不得各自再定一套。
 const (
 	// MediaChunkSeconds 单个观看切片的最大时长（秒）
 	MediaChunkSeconds = 60.0
 	// WatchMaxSlices 单次观看最多处理的切片数（超出的部分不抽帧、不交给模型）
 	WatchMaxSlices = 8
-	// WatchFrameMax 单个切片送给视觉模型的采样帧数上限
-	WatchFrameMax = 12
+	// WatchFrameAuto 帧数自适应哨兵：由运动强度与切片时长在 16/24/32/48 中定档
+	WatchFrameAuto = 0
+	// WatchFramesMin 单个切片的采样帧数下限（静态长片也不低于此值）
+	WatchFramesMin = 16
+	// WatchFramesMax 单个切片的采样帧数硬上限（也是定向提问的合并帧上限）
+	WatchFramesMax = 48
+	// motionProbeDim 运动强度探测帧的最大长边（像素）；只用于定档，不进模型
+	motionProbeDim = 96
+	// motionQuiet 几乎静止的平均像素差阈值（0-255）
+	motionQuiet = 3.0
+	// motionCalm 常规运动的阈值
+	motionCalm = 10.0
+	// motionBusy 快节奏运动的阈值；超过即取最高档
+	motionBusy = 22.0
+	// longSegmentSeconds 长切片在低运动档位上抬一档的时长阈值（秒）
+	longSegmentSeconds = 120.0
+	// veryLongSegmentSeconds 超长切片直接取最高档的时长阈值（秒）
+	veryLongSegmentSeconds = 300.0
 	// MaxMediaWidth 采样帧的最大长边（像素，宽或高均受限）。
 	// llama-server 的多模态批处理要求非因果注意力块整体落入单个 ubatch，
 	// 高分辨率单帧的视觉 token 数会超出 n_ubatch 上限；长边压到 640px 后每帧落在安全范围。

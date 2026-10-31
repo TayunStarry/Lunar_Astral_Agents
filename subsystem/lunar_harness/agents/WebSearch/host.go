@@ -2,7 +2,8 @@ package WebSearch
 
 // Web-Search · 网络搜索内置智能体（web_search）
 //
-//	步骤 0：卸载 primary_reasoning → 加载 light_reasoning → 搜索模型提炼检索词（模型调用 1/2）
+//	步骤 0：卸载 primary_reasoning → 加载 light_reasoning → 同一次模型调用产出结构化决策
+//	         （pipeline + 检索词/参数 + 把握）；命中直连管线则直接返回结果
 //	步骤 1：打开「网页搜索:首页」，搜索引擎降级链 + 完整滚动 + 结果与正文提取，随后关闭首页
 //	步骤 2：从结果中筛选出需打开的详情页链接（去重/近期已访问过滤/数量上限）
 //	步骤 3：用「网页搜索:详情」同时打开全部详情页，全部等待加载后统一滚动提取正文，随后统一关窗
@@ -16,6 +17,8 @@ package WebSearch
 import (
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/weather"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -37,10 +40,26 @@ func Run(instruction string) (string, error) {
 	deadline := started.Add(time.Duration(cfg.MaxRunSeconds) * time.Second)
 	logger.Info("CrystalAstral", "Web-Search 网络搜索开始: %s", truncateRunes(instruction, 80))
 
-	// 步骤 0：卸载多模态模型，加载搜索模型，并提炼检索词（切换失败时退回主模型继续）
+	// 步骤 0：卸载多模态模型、加载搜索模型，并在同一次调用里决定管线与检索词
 	profile, unloadSearchModel := prepareSearchModel(cfg)
 	defer unloadSearchModel()
-	query := ExtractQuery(instruction, profile)
+	decision := Route(instruction, profile)
+	logger.Info("CrystalAstral", "Web-Search 路由决策: pipeline=%s 把握=%.2f query=%s",
+		decision.Pipeline, decisionConfidence(decision), truncateRunes(decision.Query, 60))
+
+	// 直连管线：命中后直接返回结果，不进搜索引擎与浏览器
+	if decision.Pipeline == PipelineWeather {
+		ctx, cancel := context.WithTimeout(context.Background(), weather.QueryTimeout)
+		data, err := weather.Query(ctx, weatherCity(decision))
+		cancel()
+		if err == nil {
+			logger.Info("CrystalAstral", "Web-Search 天气直连完成（跳过检索）: %s", data.City)
+			return weather.Render(data), nil
+		}
+		loggerWarn("天气查询失败，回退检索管线: %v", err)
+		decision.Query = instruction
+	}
+	query := decision.Query
 
 	var cache *PageCache
 	if cfg.cacheEnabled() {

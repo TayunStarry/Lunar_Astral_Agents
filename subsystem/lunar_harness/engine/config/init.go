@@ -71,9 +71,6 @@ type ModelConfig struct {
 	Agent struct {
 		// 语音识别模型名称（ASR）
 		ASRModel string `json:"asr_model"`
-		// 视频解读输入模式：file=写媒体目录后以 file:// 引用交 llama-server 抽帧（默认）；
-		// frames=本地抽帧为图片序列帧（base64）后以多个 image_url 提交，供不支持 file:// 的架构使用
-		VideoInput string `json:"video_input"`
 		// 静态图思维链形态：url=视觉读取端点 URL（默认）/ base64=变换管线直出 data URI（云端服务用）
 		ImageInput string `json:"image_input"`
 		// 视觉读取副本最大边长（像素），默认 1080
@@ -100,6 +97,15 @@ type ModelConfig struct {
 		ScrollSettleMS  int    `json:"scroll_settle_ms"`        // 每次滚动后的等待毫秒数
 		ScrollMaxSteps  int    `json:"scroll_max_steps"`        // 单页滚动步数上限
 	} `json:"web_search"`
+	// 文献解析智能体（document_reader）：大文件轻量扫描通道。
+	// 主模型只产出扫描计划，轻量模型逐片做定向/通用摘要，主模型再归并并按需回读原文。
+	DocumentReader struct {
+		ScanModel      string `json:"scan_model"`           // 轻量扫描使用的模型名
+		SwapModel      *bool  `json:"swap_model,omitempty"` // 是否卸载主模型、加载轻量模型（未配置默认开启）
+		ScanThreshold  int    `json:"scan_threshold"`       // 启用轻量扫描的字符阈值
+		ScanMaxChunks  int    `json:"scan_max_chunks"`      // 单次扫描最多处理的片数
+		ScanChunkRunes int    `json:"scan_chunk_runes"`     // 扫描单片字符上限
+	} `json:"document_reader"`
 	// 记忆库不再有独立的模型路由：嵌入与多模态模型统一复用 agent 分组
 	// 图像生成（sd.cpp）行为与资源策略
 	Diffusion struct {
@@ -140,11 +146,6 @@ type ModelConfig struct {
 		BridgingGroupKeywords           []string `json:"bridging_group_keywords"`            // 群聊触发关键词
 		BridgingGroupTriggerProbability *float64 `json:"bridging_group_trigger_probability"` // 群聊无关键词时的应答概率
 	} `json:"bridging"`
-	// 多模态解读配置（视频/动态图送入模型的方式）：已并入 agent.video_input，
-	// 此处仅保留旧节结构用于迁移兼容读取
-	LegacyMultimodal struct {
-		VideoInput string `json:"video_input"`
-	} `json:"multimodal"`
 	// 月华语音合成（TTS）：引擎选择 + 统一效果参数。
 	// 参数层面统一：各引擎共用同一套字段；执行层面由 engine/broadcaster 统一播报
 	// 链路按引擎自身格式适配，引擎不支持的参数（如 Kokoro 不支持参考音频）自动忽略。
@@ -338,19 +339,6 @@ func applyConfig(parameter *ModelConfig) []string {
 	if parameter.Diffusion.Img2ImgCFG != nil && *parameter.Diffusion.Img2ImgCFG > 0 {
 		DiffusionImg2ImgCFG = *parameter.Diffusion.Img2ImgCFG
 	}
-	// ==== 多模态解读配置（agent.video_input；兼容旧 multimodal 节） ====
-	// 视频解读输入模式：仅接受 file / frames，未配置或取值非法时保持默认 file（历史行为）
-	videoInput := parameter.Agent.VideoInput
-	if videoInput == "" && parameter.LegacyMultimodal.VideoInput != "" {
-		videoInput = parameter.LegacyMultimodal.VideoInput
-		legacyUsed = append(legacyUsed, "multimodal.video_input → agent.video_input")
-	}
-	switch videoInput {
-	case "frames":
-		VideoInputMode = "frames"
-	case "file":
-		VideoInputMode = "file"
-	}
 	// ==== 静态图思维链形态（agent.image_input / agent.vision_max_side） ====
 	// url=视觉读取端点（默认）；base64=视觉读取管线直出的副本（供无法回取本机 URL 的云端模型）。
 	// 两种形态都是 ≤ vision_max_side 的副本，原图永远不进入思维链（见 docs/adr/0008）。
@@ -520,6 +508,40 @@ func applyConfig(parameter *ModelConfig) []string {
 	}
 	if parameter.WebSearch.ScrollMaxSteps > 0 {
 		WebSearchScrollMaxSteps = parameter.WebSearch.ScrollMaxSteps
+	}
+	// ==== 文献解析智能体（document_reader） ====
+	if parameter.DocumentReader.ScanModel != "" {
+		DocumentScanModel = parameter.DocumentReader.ScanModel
+	}
+	if v := parameter.DocumentReader.SwapModel; v != nil {
+		b := *v
+		DocumentScanSwap = &b
+	}
+	if parameter.DocumentReader.ScanThreshold > 0 {
+		DocumentScanThreshold = parameter.DocumentReader.ScanThreshold
+	}
+	if parameter.DocumentReader.ScanMaxChunks > 0 {
+		DocumentScanMaxChunks = parameter.DocumentReader.ScanMaxChunks
+	}
+	if parameter.DocumentReader.ScanChunkRunes > 0 {
+		DocumentScanChunkRunes = parameter.DocumentReader.ScanChunkRunes
+	}
+	// 收敛到轻量扫描可接受的边界：片数过多会拖长单次任务，
+	// 单片过大则接近 32768 上下文上限（中文约 1 字 1 token）。
+	if DocumentScanThreshold < 10000 {
+		DocumentScanThreshold = 10000
+	}
+	if DocumentScanMaxChunks < 5 {
+		DocumentScanMaxChunks = 5
+	}
+	if DocumentScanMaxChunks > 200 {
+		DocumentScanMaxChunks = 200
+	}
+	if DocumentScanChunkRunes < 4000 {
+		DocumentScanChunkRunes = 4000
+	}
+	if DocumentScanChunkRunes > 16000 {
+		DocumentScanChunkRunes = 16000
 	}
 	// ==== 图像生成行为与资源策略（diffusion） ====
 	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置

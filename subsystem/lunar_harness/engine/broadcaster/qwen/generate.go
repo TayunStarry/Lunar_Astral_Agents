@@ -3,7 +3,6 @@ package qwentts
 import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -190,8 +189,6 @@ type TTSRequest struct {
 	RepetitionPenalty float32 `json:"repetition_penalty,omitempty"`
 	// Threads 用于设置线程数
 	Threads int32 `json:"threads,omitempty"`
-	// DisableCache 用于禁用缓存映射机制
-	DisableCache bool `json:"disable_cache,omitempty"`
 }
 
 func (c *speakerEmbedCache) init() {
@@ -619,53 +616,4 @@ func putUint32LE(b []byte, v uint32) {
 	b[1] = byte(v >> 8)
 	b[2] = byte(v >> 16)
 	b[3] = byte(v >> 24)
-}
-
-// SynthesizeWithCache 带缓存的合成入口（供统一播报链路 engine/broadcaster 按统一参数调用）
-func SynthesizeWithCache(req *TTSRequest) (string, error) {
-	return synthesizeWithCache(req)
-}
-
-// synthesizeWithCache 执行带缓存支持的TTS合成
-// 当 DisableCache 为 false 时优先查询缓存，缓存未命中时执行实际合成并写入缓存
-// 使用 singleflight 模式防止高并发下的缓存击穿
-func synthesizeWithCache(req *TTSRequest) (string, error) {
-	cacheKey := buildCacheKey(req)
-	// 如果未禁用缓存，尝试从缓存获取
-	if !req.DisableCache {
-		if audioData, hit := ttsCache.Get(cacheKey); hit {
-			logger.SubInfo("QWEN-TTS", "Cache", "缓存命中，返回已缓存音频: [%s]", req.Text)
-			return audioData, nil
-		}
-	}
-
-	// 单飞模式：防止并发重复合成（缓存击穿保护）
-	inflight, exists := ttsCache.GetOrCreateInflight(cacheKey)
-	if exists {
-		logger.SubInfo("QWEN-TTS", "Cache", "等待已有合成完成: [%s]", req.Text)
-		audioData, err := inflight.Wait()
-		if err != nil {
-			return "", err
-		}
-		return audioData, nil
-	}
-	defer ttsCache.RemoveInflight(cacheKey)
-
-	// 执行实际的TTS合成
-	samples, err := synthFunc(req.Text, req.RefAudio, req.LanguageID, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
-	if err != nil {
-		inflight.Complete("", err)
-		return "", err
-	}
-
-	wavData := EncodePCMToWAV(samples, 24000)
-	audioBase64 := base64.StdEncoding.EncodeToString(wavData)
-
-	// 无论 disable_cache 是否为 true，都更新缓存
-	// 当 disable_cache=true 时，强制生成新数据并更新缓存
-	ttsCache.Set(cacheKey, audioBase64)
-	inflight.Complete(audioBase64, nil)
-
-	logger.Info("QWEN-TTS", "合成完成: [%s] 采样数: %d", req.Text, len(samples))
-	return audioBase64, nil
 }

@@ -198,6 +198,121 @@
     font-weight: 600;
 }
 
+/* ---- 消息引用条（QQ 风格：输入框上方的待发送引用） ---- */
+.quote-tray {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+    animation: pendingIn 0.25s ease-out;
+}
+
+.quote-tray[hidden] {
+    display: none;
+}
+
+.quote-tray-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.quote-tray-header i {
+    color: var(--accent-color);
+    margin-right: 4px;
+}
+
+.quote-tray-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: 0.15s ease;
+}
+
+.quote-tray-clear:hover {
+    color: #ff7b8a;
+    border-color: rgba(255, 123, 138, 0.5);
+}
+
+.quote-tray-list {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.quote-chip {
+    position: relative;
+    flex-shrink: 0;
+    max-width: 320px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 26px 6px 10px;
+    background: rgba(157, 107, 255, 0.12);
+    border: 1px solid var(--accent-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.78rem;
+}
+
+.quote-chip-sender {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: var(--accent-color);
+}
+
+.quote-chip-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.quote-chip-remove {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.62rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.15s ease;
+}
+
+.quote-chip-remove:hover {
+    color: #ff7b8a;
+    background: rgba(255, 123, 138, 0.15);
+}
+
 .input-wrapper {
     display: flex;
     align-items: flex-end;

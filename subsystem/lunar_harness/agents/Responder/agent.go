@@ -32,15 +32,21 @@ func Pending() int {
 
 // Drain 依次处理当前队列里的每一条请求（每条只写一次回执）。
 func Drain(ctx context.Context) {
-	if Pending() == 0 {
+	if Paused() || Pending() == 0 {
 		return
 	}
 	running.Store(true)
 	defer running.Store(false)
+	// 维护态可能在「检查空闲 → 置忙」之间置位：拿到忙标记后二次确认，
+	// 保证维护期间不会真正开始模型调用。
+	if Paused() {
+		return
+	}
 	started := nowMillis()
 	stats := drainContext{ctx: ctx}
 	for {
-		if ctx.Err() != nil {
+		// 维护态在队列处理中途置位：当前请求收尾后不再取新请求，避免继续拉起模型
+		if ctx.Err() != nil || Paused() {
 			break
 		}
 		select {

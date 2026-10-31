@@ -73,7 +73,8 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
 			if dataLines == 0 && line != "" {
-				head.WriteString(line + "\n")
+				head.WriteString(line)
+				head.WriteString("\n")
 			}
 			continue
 		}

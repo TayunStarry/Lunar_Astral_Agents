@@ -152,6 +152,20 @@ type summaryProfile struct {
 	Model string // 模型名（空 = 主多模态模型）
 }
 
+// routePipeline 结构化路由的可选管线（提示词候选列表由注册表生成）
+type routePipeline struct {
+	ID          string // 管线标识（模型只能从中选）
+	Description string // 给模型看的用途说明与参数约定
+}
+
+// pipelineDecision 路由模型一步产出的结构化决策
+type pipelineDecision struct {
+	Pipeline   string         `json:"pipeline"`
+	Query      string         `json:"query"`
+	Args       map[string]any `json:"args,omitempty"`
+	Confidence *float64       `json:"confidence,omitempty"`
+}
+
 // modelUsage OpenAI 兼容响应中的 token 用量
 type modelUsage struct {
 	Prompt              int64               `json:"prompt_tokens"`

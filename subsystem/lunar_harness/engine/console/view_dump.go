@@ -75,12 +75,18 @@ var dumpOptionList = []dumpOption{
 		desc: "哔哩观影选片配置、已看视频规模与日记/历史记忆"},
 	{kind: dumpKindContext, key: "desktop", hotkey: "10", title: "桌面操作",
 		desc: "最近一次桌面操纵任务的要求、起止时间、结果或中断原因"},
-	{kind: dumpKindContext, key: "descriptor", hotkey: "11", title: "通用描述",
-		desc: "通用描述的文件查询工具清单与运行说明（按次执行，不保留上下文）"},
+	{kind: dumpKindContext, key: "vision", hotkey: "11", title: "视觉理解",
+		desc: "视觉理解的图片 / 动图 / 视频工具清单与运行说明（按次执行，不保留上下文）"},
 	{kind: dumpKindContext, key: "dialogue_bridging", hotkey: "12", title: "通讯桥接",
 		desc: "最近一次多目标投递计划与逐项执行报告"},
 	{kind: dumpKindContext, key: "mutual_forum", hotkey: "13", title: "互助论坛",
 		desc: "互助论坛智能体最近的需求/答复上下文（模块：Mutual Forum；不含内部凭证）"},
+	{kind: dumpKindContext, key: "document_reader", hotkey: "14", title: "文献解析",
+		desc: "文献解析的文件查询工具清单与分批策略（按次执行，不保留上下文）"},
+	{kind: dumpKindContext, key: "archive_reader", hotkey: "15", title: "归档解析",
+		desc: "归档解析的压缩包结构 / 条目读取 / GGUF 元数据工具清单"},
+	{kind: dumpKindContext, key: "archive_ops", hotkey: "16", title: "归档操作",
+		desc: "归档操作的压缩包创建 / 删除 / 条目新增 / 移除工具清单"},
 }
 
 // dumpState 数据导出屏状态
@@ -288,7 +294,7 @@ func (m appModel) viewDump() string {
 	f := m.frameFor("数据导出", dumpContextLine(m.dump), dumpKeys(m.dump))
 	w, h := f.bodySize()
 
-	// 实况轮次的现有条数：让用户在选中"核心智能 实况"之前就知道有没有东西可导
+	// 实况轮次的现有条数：让用户在选中"推理实况"之前就知道有没有东西可导
 	store := GetTurnStoreInfo()
 	head := []string{
 		dimStyle.Render("  导出运行期数据到 local_data/logs/dump/（日志为 .log / JSONL，其余为 .json）"),

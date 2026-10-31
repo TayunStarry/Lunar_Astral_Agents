@@ -50,10 +50,13 @@ export async function admitDocumentFile(file) {
         body: file,
     });
     if (!saved.ok) throw new Error('文件上传失败');
+    // 服务端会把不可读二进制归位到 unknown/，入库必须按实际落点路径
+    const savedInfo = await saved.json().catch(() => ({}));
+    const storedPath = String(savedInfo.rel_path || path);
     const admitted = await fetch('/file/resource/admit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, name: fileName }),
+        body: JSON.stringify({ path: storedPath, name: fileName }),
     });
     if (!admitted.ok) throw new Error('资源入库失败');
     const data = await admitted.json();

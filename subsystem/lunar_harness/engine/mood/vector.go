@@ -102,15 +102,14 @@ func weightedVector(base map[string][]float32, weights []float64) []float32 {
 	return out
 }
 
-// bestLabel 返回与当前向量最相似的基础情绪标签。
-func bestLabel(vec []float32, base map[string][]float32, weights map[string]float64) string {
+// dominantLabel 返回权重最高的基础情绪标签。
+func dominantLabel(weights map[string]float64) string {
 	best := defaultLabel
-	bestScore := -2.0
+	bestWeight := -1.0
 	for _, label := range labels {
-		score := cosine(vec, base[label])
-		if score > bestScore || (score == bestScore && weights[label] > weights[best]) {
+		if weight, ok := weights[label]; ok && weight > bestWeight {
 			best = label
-			bestScore = score
+			bestWeight = weight
 		}
 	}
 	return best

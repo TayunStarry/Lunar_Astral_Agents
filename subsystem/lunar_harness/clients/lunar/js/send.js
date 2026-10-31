@@ -34,6 +34,8 @@ async function handleSend() {
         const attachments = [];        // 本地附件预览
         const categories = new Set();
         const documentRefs = [];       // 已入库文档 {handle, name}
+        const quoteSnapshots = quotedMessages.map(quoteSnapshotOfMessage);
+        const quoteBlock = buildQuoteContentBlock();
 
         for (const pf of pendingFiles) {
             const category = pf.category;
@@ -58,18 +60,12 @@ async function handleSend() {
                     }
                     catch (err) { showToast(`无法上传 ${pf.name}`, 'error'); }
                     break;
-                // 多模态消息 -> 语音/音频
+                // 多模态消息 -> 语音/音频（统一内联下发，服务端转写，不落盘）
                 case 'audio':
                     try {
                         const base64Data = await fileToRawBase64(pf.file);
                         const format = getAudioFormat(pf.file);
-                        if (format) {
-                            contentBlocks.push({ type: 'input_audio', input_audio: { data: base64Data, format } });
-                        }
-                        else {
-                            const fileUrl = await saveFile(pf.file);
-                            contentBlocks.push({ type: 'audio_url', audio_url: { url: fileUrl } });
-                        }
+                        contentBlocks.push({ type: 'input_audio', input_audio: { data: base64Data, format } });
                     }
                     catch (err) { showToast(`无法读取音频 ${pf.name}`, 'error'); }
                     // 历史记录使用独立 blob URL，避免被清理撤销
@@ -115,27 +111,33 @@ async function handleSend() {
         // 发送给月华的主文本带 QQ 适配器同款用户名前缀；本地展示（addMessage）仍用不带前缀的 userText
         const payloadText = userText ? buildUserNamePrefix() + userText : userText;
         const sendPayload = [];
-        if (userText || contentBlocks.length) {
-            const mainContent = contentBlocks.length
-                ? [...(payloadText ? [{ type: 'text', text: payloadText }] : []), ...contentBlocks]
-                : payloadText;
-            sendPayload.push({ role: 'user', content: mainContent });
+        if (userText || contentBlocks.length || quoteBlock) {
+            const blocks = [];
+            if (quoteBlock) blocks.push(quoteBlock);
+            if (payloadText) blocks.push({ type: 'text', text: payloadText });
+            blocks.push(...contentBlocks);
+            sendPayload.push({ role: 'user', content: contentBlocks.length ? blocks : (quoteBlock ? blocks : payloadText) });
         }
 
         // ---- 本地历史展示（单个气泡）----
+        const localMessageId = generateId();
         addMessage({
-            id: generateId(),
+            id: localMessageId,
             role: 'user',
             categories: categories.size ? Array.from(categories) : ['text'],
             content: userText,
             attachments: attachments.length ? attachments : undefined,
+            quotes: quoteSnapshots.length ? quoteSnapshots : undefined,
             timestamp: Date.now()
         });
         // 用户发送消息仅做内存展示；聊天记录由思维链统一写入缓存文件
 
         // 推送到后端
         if (backendConnected) {
-            if (sendPayload.length) await sendMessages(sendPayload);
+            if (sendPayload.length) {
+                const result = await sendMessages(sendPayload);
+                applyAudioHandlesToMessage(localMessageId, result && result.handles);
+            }
         } else {
             showToast('离线模式：内容仅本地渲染', 'info');
         }
@@ -148,6 +150,7 @@ async function handleSend() {
         clearPendingFiles();
         referencedFiles = [];
         renderFileRefChips();
+        clearQuotedMessages();
         messageInput.focus();
         setSendingState(false);
     }

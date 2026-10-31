@@ -34,6 +34,10 @@ const searchClear = document.getElementById('searchClear');
 const pendingAttachments = document.getElementById('pendingAttachments');
 const fileRefChips = document.getElementById('fileRefChips');
 const voiceToggleBtn = document.getElementById('voiceToggleBtn');
+const quoteTray = document.getElementById('quoteTray');
+const quoteTrayTitle = document.getElementById('quoteTrayTitle');
+const quoteTrayList = document.getElementById('quoteTrayList');
+const quoteClearBtn = document.getElementById('quoteClearBtn');
 
 // ---------- 截图 DOM 引用 ----------
 const captureBtn = document.getElementById('captureBtn');
@@ -83,6 +87,7 @@ let currentMatchIndex = -1;
 let mermaidInitialized = false;
 let pendingFiles = [];        // 待发送附件（悬浮气泡）
 let referencedFiles = [];     // 已加载到输入框的资源句柄（@D.003 等规范句柄）
+let quotedMessages = [];      // 待发送的引用消息（按选择顺序；支持多条同时引用）
 let isSending = false;        // 是否正在发送
 let autoPlayVoice = true;     // 收到语音消息时是否自动播放
 let characterRenderer = 'bedrock'; // 角色渲染器（bedrock=基岩版模型 / live2d=Live2D 引擎层），由 lunar_config.json 的 system.character_renderer 决定

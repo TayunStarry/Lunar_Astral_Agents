@@ -9,18 +9,22 @@ import (
 	"strconv"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
+	"LunarSubsystem/LunarHarness/agents/ArchiveReader"
 	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
-	"LunarSubsystem/LunarHarness/agents/Descriptor"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/agents/DocumentReader"
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
+	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
+	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/agents/desktop"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/archive"
+	"LunarSubsystem/LunarHarness/engine/model/agentchat"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
-	"LunarSubsystem/LunarHarness/lunar"
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 	"LunarSubsystem/LunarHarness/server"
 	"LunarSubsystem/LunarHarness/transport/ws"
@@ -63,7 +67,7 @@ func WireTUIFrontendHooks() {
 // 压缩完成后再恢复调度。
 func WireTUIMaintenanceHook() {
 	archive.SetMaintenanceHook(func(fn func() error) error {
-		resume := lunar.BeginMaintenance()
+		resume := LunarPersonality.BeginMaintenance()
 		defer resume()
 		return fn()
 	})
@@ -111,7 +115,7 @@ func WireTUIEngineHooks() {
 		return outcome.Summary, nil
 	})
 
-	// 哔哩观影的模型调用也进「核心智能 实况」，用户不用只盯着日志干等。
+	// 哔哩观影的模型调用也进「推理实况」，用户不用只盯着日志干等。
 	// 计量回调让这些 Go 侧调用一并计入「运行状态」的模型计量。
 	meter := func(prompt, completion, cached int64, generation time.Duration, estimated bool) {
 		console.RecordModelCall(prompt, completion, cached, generation, estimated)
@@ -128,7 +132,7 @@ func WireTUIEngineHooks() {
 		func(role string) { console.StreamEnd(role) },
 		meter,
 	)
-	// 网络搜索与通用描述（Go 侧智能体）的模型调用同样进实况：
+	// 网络搜索、视觉理解与文献解析（Go 侧智能体）的模型调用同样进实况：
 	// 前者让用户看到检索过程的思考与输出，后者让用户看到影像/文件探查的现场推理。
 	streamObserver := func(role string) { console.StreamBegin(role) }
 	streamDelta := func(role, kind, text string) {
@@ -140,7 +144,14 @@ func WireTUIEngineHooks() {
 	}
 	streamEnd := func(role string) { console.StreamEnd(role) }
 	WebSearch.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
-	Descriptor.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
+	// 视觉理解与文献解析共享同一套模型调用层（engine/model/agentchat）：
+	// 一次注入即可让两类智能体的推理过程都进入实况屏与模型计量。
+	agentchat.SetObserver(agentchat.Observer{
+		Begin: streamObserver,
+		Delta: streamDelta,
+		End:   streamEnd,
+		Meter: meter,
+	})
 	// 通讯桥接的规划调用同样进实况与计量（投递内容不展示，只展示规划过程）。
 	DialogueBridging.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
 	// Mutual Forum 的论坛规划与工具调用同样进实况与计量。
@@ -172,13 +183,16 @@ func WireTUIEngineHooks() {
 			}
 		},
 	)
-	lunar.SetDesktopActorStopHook(desktop.Stop)
+	LunarPersonality.SetDesktopActorStopHook(desktop.Stop)
 }
 
 // buildToolCatalog 汇总全部 Go 智能体的工具目录（供控制台「工具列表」屏扫描展示）。
 func buildToolCatalog() []agentinfo.Agent {
-	out := lunar.ToolCatalog()
-	out = append(out, Descriptor.ToolCatalog()...)
+	out := LunarPersonality.ToolCatalog()
+	out = append(out, Vision.ToolCatalog()...)
+	out = append(out, DocumentReader.ToolCatalog()...)
+	out = append(out, ArchiveReader.ToolCatalog()...)
+	out = append(out, ArchiveOps.ToolCatalog()...)
 	out = append(out, FileEditor.ToolCatalog()...)
 	out = append(out, DialogueBridging.ToolCatalog()...)
 	out = append(out, WebSearch.ToolCatalog()...)

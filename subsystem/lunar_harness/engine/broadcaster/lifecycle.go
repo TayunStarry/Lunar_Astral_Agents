@@ -37,9 +37,9 @@ func idleUnloadMinutes() int {
 	return idleUnloadDefaultSeconds / 60
 }
 
-// scanIdleSlot 单轮闲置扫描：在位引擎超阈值即卸载（空槽跳过）
+// scanIdleSlot 单轮闲置扫描：在位引擎超阈值即卸载（空槽与维护态跳过）
 func scanIdleSlot() {
-	if currentEngine() == "" {
+	if Paused() || currentEngine() == "" {
 		return
 	}
 	last := slotLastUseUnix.Load()

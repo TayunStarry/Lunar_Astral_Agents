@@ -106,6 +106,41 @@ var toolDefinitions = map[string]toolDefinition{
 			"path":        strProp("相对 /document 的项目文件路径"),
 			"timeout_sec": intProp("运行时长上限（秒；默认 120，允许 5-3600；优先级高于文件首行声明）", 5, 3600),
 		}, []string{"path"}),
+	ToolArchiveList: toolDef(ToolArchiveList,
+		"查询压缩包内部文件结构：条目路径、原始大小、压缩大小与目录标记。任务会自动转发给归档解析智能体。",
+		map[string]any{"path": strProp("压缩包路径（相对 /document 或相对 LocalDir）")}, []string{"path"}),
+	ToolArchiveRead: toolDef(ToolArchiveRead,
+		"读取压缩包内指定条目的文本内容（单次最多 10000 字）。任务会自动转发给归档解析智能体。",
+		map[string]any{
+			"path":  strProp("压缩包路径"),
+			"entry": strProp("压缩包内条目名（含子目录，如 src/main.go）"),
+		}, []string{"path", "entry"}),
+	ToolArchiveCreate: toolDef(ToolArchiveCreate,
+		"创建压缩包：把 /document 下的文件或目录打包为 .zip / .ltpx。任务会自动转发给归档操作智能体。",
+		map[string]any{
+			"path":  strProp("要创建的压缩包路径（相对 /document，例如 pkg.zip）"),
+			"paths": arrayProp("要打包的文件 / 目录路径列表（相对 /document）"),
+		}, []string{"path", "paths"}),
+	ToolArchiveDelete: toolDef(ToolArchiveDelete,
+		"删除压缩包。任务会自动转发给归档操作智能体。",
+		map[string]any{"path": strProp("压缩包路径")}, []string{"path"}),
+	ToolArchiveAdd: toolDef(ToolArchiveAdd,
+		"在压缩包内新增或覆盖文件：可来自本地文件路径，也可直接写入文本内容。任务会自动转发给归档操作智能体。",
+		map[string]any{
+			"path":    strProp("压缩包路径"),
+			"entry":   strProp("压缩包内条目名（含子目录）"),
+			"source":  strProp("来源文件路径（相对 /document；与 content 二选一）"),
+			"content": strProp("要写入的文本内容（与 source 二选一）"),
+		}, []string{"path", "entry"}),
+	ToolArchiveRemove: toolDef(ToolArchiveRemove,
+		"从压缩包内移除指定条目。任务会自动转发给归档操作智能体。",
+		map[string]any{
+			"path":  strProp("压缩包路径"),
+			"entry": strProp("要移除的条目名（含子目录）"),
+		}, []string{"path", "entry"}),
+	ToolGGUF: toolDef(ToolGGUF,
+		"解析 GGUF 模型文件元数据（模型名、架构、量化、上下文长度等）。任务会自动转发给归档解析智能体。",
+		map[string]any{"path": strProp("GGUF 文件路径")}, []string{"path"}),
 }
 
 // toolDef 构造一条函数工具定义。
@@ -133,6 +168,14 @@ func strProp(description string) map[string]any {
 
 func intProp(description string, minimum, maximum int) map[string]any {
 	return map[string]any{"type": "integer", "description": description, "minimum": minimum, "maximum": maximum}
+}
+
+func arrayProp(description string) map[string]any {
+	return map[string]any{
+		"type":        "array",
+		"description": description,
+		"items":       map[string]any{"type": "string"},
+	}
 }
 
 // ToolCatalog 返回文件编辑智能体的工具清单（供控制台「工具列表」屏展示）。

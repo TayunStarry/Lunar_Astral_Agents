@@ -262,8 +262,9 @@ async function sendVoiceUtterance(frames, sampleRate) {
         const base64Data = await fileToRawBase64(file);
 
         // 本地历史展示（独立 blob URL，避免被清理撤销）
+        const voiceMessageId = generateId();
         addMessage({
-            id: generateId(),
+            id: voiceMessageId,
             role: 'user',
             categories: ['voice'],
             content: '',
@@ -277,13 +278,16 @@ async function sendVoiceUtterance(frames, sampleRate) {
             return;
         }
         // QQ 适配器标准格式：[用户: xxx]: 前缀 + 音频内容块（句柄与转写由服务端生成）
-        await sendMessages([{
-            role: 'user',
-            content: [
+        const quoteBlock = buildQuoteContentBlock();
+        const voiceContent = quoteBlock
+            ? [quoteBlock, { type: 'text', text: buildUserNamePrefix() }, { type: 'input_audio', input_audio: { data: base64Data, format: 'wav' } }]
+            : [
                 { type: 'text', text: buildUserNamePrefix() },
                 { type: 'input_audio', input_audio: { data: base64Data, format: 'wav' } }
-            ]
-        }]);
+            ];
+        const result = await sendMessages([{ role: 'user', content: voiceContent }]);
+        applyAudioHandlesToMessage(voiceMessageId, result && result.handles);
+        clearQuotedMessages();
         // 发送成功后进入等待回应状态，直至收到月华回应或冷却期满
         voiceLastSentAt = Date.now();
         voiceAwaitingReply = true;

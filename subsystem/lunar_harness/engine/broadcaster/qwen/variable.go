@@ -33,15 +33,6 @@ var embedCache = &speakerEmbedCache{
 	cacheDir: "./local_data/audios/cache",
 }
 
-// MaxCacheSize TTS音频缓存容量上限（条目数）
-const MaxCacheSize = 64
-
-// 全局TTS音频缓存实例，容量为 MaxCacheSize 条记录
-var ttsCache = NewTTSCache(MaxCacheSize)
-
-// synthFunc 用于TTS合成的函数变量，可被测试替换为mock实现
-var synthFunc = SynthesizeText
-
 // touchEngine 更新最近合成时间戳（合成入口调用）
 func touchEngine() {
 	lastUsedUnix.Store(time.Now().Unix())

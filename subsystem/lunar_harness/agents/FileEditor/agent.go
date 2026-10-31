@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/prompts"
 )
 
 // Run 用自然语言发布一次文件编辑需求，返回本轮操作简述。
@@ -62,24 +63,23 @@ func Execute(ctx context.Context, instruction string) (OpResult, error) {
 	return newResult("file_editor", "", summary, handles, nil), nil
 }
 
-// systemPrompt 文件编辑智能体的系统提示。
+// systemPrompt 文件编辑智能体的系统提示（统一收纳在 prompts/fileEditor.md）。
 func systemPrompt() string {
-	return `你是「月华.文件编辑」智能体，负责维护 /document 文档库中的文件。
-
-工作原则：
-1. 修改已有文件前必须先 file_read 读出当前内容，禁止凭印象整篇覆盖。
-2. 小范围改动优先用 file_replace_at（按行置换），只有大改时才用 file_write 整篇重写。
-3. 需要外部资料时可用 web_search / memory_search；查找已登记资源用 handle_search / handle_read。
-4. 运行 js/html 项目文件用 run_project：文件头含「//Engine: Lunar Harness」的走月华私有 js 运行时，
-   其余走浏览器运行环境（纯 js 会自动套模板网页展示输出）。
-5. 运行时长默认上限 120 秒；需要更久时在调用 run_project 时传 timeout_sec（5-3600 秒），
-   或在文件第一行写明「//Engine: Lunar Harness | timeout=300s」。订阅型脚本到期会被自动卸载。
-6. 所有文件路径一律写相对 /document 的路径。
-7. 每完成一步都用 1-2 句话说明「对哪个文件做了什么」，不要贴大段代码；不要臆造工具结果。`
+	raw, err := prompts.Read("fileEditor.md")
+	if err != nil {
+		logger.Warn(Module, "[文件编辑] 读取系统提示词失败: %v", err)
+		return "你是「月华.文件编辑」智能体，负责维护 /document 文档库中的文件。"
+	}
+	return string(raw)
 }
 
 // dispatchTool 按工具名分派（自然语言模式使用）。
 func dispatchTool(ctx context.Context, name string, args map[string]any) OpResult {
+	// 压缩包步骤优先转发给归档智能体：文件编辑只用文本方式操作 /document，
+	// 不直接读写二进制容器。
+	if outcome, routed := routeArchive(name, args); routed {
+		return outcome
+	}
 	switch name {
 	case ToolList:
 		return FileList(argString(args, "path"))

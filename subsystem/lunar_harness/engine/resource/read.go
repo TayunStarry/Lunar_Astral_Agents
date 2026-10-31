@@ -39,14 +39,16 @@ func Read(rawHandle string, maxBytes int) (ReadResult, error) {
 		BlobPath: res.BlobPath,
 	}
 
-	// 外部链接：没有本地实体，按「地址 + 标题 + 解析文本」取回
+	// 无本地实体：外部链接按「地址 + 标题 + 解析文本」取回；
+	// 悬空句柄（如音频转写）直接返回其描述文本，不标记丢失。
 	if res.BlobPath == "" {
 		if res.Kind == KindURL || IsRemoteURL(res.URL) {
 			result.Content = formatURLContent(res)
 			result.TotalLines = strings.Count(result.Content, "\n") + 1
 			return result, nil
 		}
-		result.Lost = true
+		result.Content = strings.TrimSpace(res.ParseText)
+		result.Lost = res.State == StateLost || result.Content == ""
 		return result, nil
 	}
 

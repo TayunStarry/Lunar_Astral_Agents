@@ -12,7 +12,7 @@ import (
 // ==================== 智能体模型调用 ====================
 
 const (
-	// roleLabel 该智能体在「核心智能 实况」中的角色标签
+	// roleLabel 该智能体在「推理实况」中的角色标签
 	roleLabel = "通讯桥接"
 	// maxDirectoryEntries 提示词里最多列出多少个群 / 好友，避免撑爆上下文
 	maxDirectoryEntries = 80

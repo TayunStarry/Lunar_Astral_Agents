@@ -28,7 +28,7 @@ const autoMaxLoops = 10
 // autoMaxAttempts 交接记录中保留的最近尝试条数（供规划者避免重复）。
 const autoMaxAttempts = 6
 
-// 各角色在「核心智能 实况」中的标签。
+// 各角色在「推理实况」中的标签。
 const (
 	autoRoleEditor   = "桌面操纵·编纂"
 	autoRoleLauncher = "桌面操纵·启动"

@@ -112,7 +112,8 @@ func completeOnce(ctx context.Context, req *Request) (Result, error) {
 		line := strings.TrimSpace(scanner.Text())
 		if !strings.HasPrefix(line, "data:") {
 			if dataLines == 0 && line != "" {
-				head.WriteString(line + "\n")
+				head.WriteString(line)
+				head.WriteString("\n")
 			}
 			continue
 		}

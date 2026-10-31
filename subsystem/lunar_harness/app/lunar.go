@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
-	"LunarSubsystem/LunarHarness/lunar"
 )
 
 // assembleLunar 装配月华人格局的生产者部分：模型代理、绘图协处理器与 QQ 桥接。
@@ -45,12 +45,13 @@ func assembleLunar() error {
 // startLunarAgent 启动月华的 Go 原生智能体（每秒思考循环）。
 // 该循环一经启动即可能消费计划表等到期任务，故必须排在全部服务层与琉璃消费层之后启动。
 func startLunarAgent() error {
-	return lunar.Start()
+	return LunarPersonality.Start()
 }
 
 // shutdownLunar 关闭月华人格局持有的资源
 func shutdownLunar() {
-	lunar.Stop()
+	LunarPersonality.Close()
+	LunarPersonality.Stop()
 	DialogueBridging.StopBridge()
 	llama.Close()
 }
@@ -83,7 +84,7 @@ func initNapcatBridge() {
 	// QQ 消息（OpenAI 格式）按到达顺序推送到智能体统一未读队列
 	DialogueBridging.SendMessageToAgent = func(messages []map[string]any) {
 		for _, msg := range messages {
-			lunar.EnqueueMessage(lunar.PostMessage{
+			LunarPersonality.EnqueueMessage(LunarPersonality.PostMessage{
 				Role:    "user",
 				Content: msg["content"],
 				Source:  "qq",
@@ -94,7 +95,7 @@ func initNapcatBridge() {
 	// 语音/音频地址包装为媒体URL内容项，按到达顺序写入统一未读队列
 	DialogueBridging.SendAudioToAgent = func(urls []string) {
 		for _, url := range urls {
-			lunar.EnqueueAudioURL(url, "qq")
+			LunarPersonality.EnqueueAudioURL(url, "qq")
 		}
 	}
 

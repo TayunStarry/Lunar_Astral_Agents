@@ -34,7 +34,8 @@ func (r *creativeRun) Start(_ context.Context, env Env) error {
 	}
 	idea = truncateRunes(idea, 2000)
 	r.data.Instruction = fmt.Sprintf(
-		"以「%s」的状态进行本轮创作。刚才我在：%s。可以展开的创作方向：%s。"+
+		"这是月华本人的当前状态（心情与生活记录都属于月华自己，不是用户的状态）："+
+			"当前心情「%s」；刚才月华在：%s。可以展开的创作方向（来自月华与用户最近的交流）：%s。"+
 			"请先阅读创作规划日志，再把本轮要做的事编排成有序计划并执行。",
 		emptyAs(env.MoodLabel, "平静"), emptyAs(env.LastRecord, "没做什么"), idea,
 	)

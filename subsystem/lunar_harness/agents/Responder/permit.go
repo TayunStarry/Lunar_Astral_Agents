@@ -13,6 +13,8 @@ var (
 	permit atomic.Bool
 	// running 响应者是否正在处理队列（主调度器据此避让，避免与模型调用并发）
 	running atomic.Bool
+	// paused 维护态：暂停响应者 Tick，且 Drain 不再开始新的模型调用
+	paused atomic.Bool
 )
 
 // BeginPermit 开启特许运行：对话者开始等待 LTPX 工具返回。
@@ -33,4 +35,19 @@ func Permitted() bool {
 // Busy 报告响应者是否正在处理队列。
 func Busy() bool {
 	return running.Load()
+}
+
+// Pause 进入维护态：响应者 Tick 跳过运行，Drain 不再开始新的推理。
+func Pause() {
+	paused.Store(true)
+}
+
+// Resume 退出维护态，恢复响应者 Tick。
+func Resume() {
+	paused.Store(false)
+}
+
+// Paused 报告是否处于维护暂停态。
+func Paused() bool {
+	return paused.Load()
 }

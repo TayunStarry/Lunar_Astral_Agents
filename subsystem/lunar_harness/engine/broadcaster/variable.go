@@ -3,6 +3,7 @@ package broadcaster
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	KokoroTTS "LunarSubsystem/LunarHarness/engine/broadcaster/kokoro"
 	OmniVoiceTTS "LunarSubsystem/LunarHarness/engine/broadcaster/omnivoice"
@@ -44,6 +45,29 @@ const (
 	idleScanInterval = 30
 )
 
+// ==== 维护态常量 ====
+
+const (
+	// maintenanceWait 进入维护态时等待在位合成收尾的最长时间
+	maintenanceWait = 30 * time.Second
+	// maintenancePoll 维护态等待轮询间隔
+	maintenancePoll = 200 * time.Millisecond
+	// errMaintenanceMessage 维护态下的统一拒绝信息
+	errMaintenanceMessage = "TTS 引擎维护中，暂不支持合成"
+)
+
+// ==== 合成缓存（标准内置能力） ====
+
+const (
+	// synthCacheCapacity 合成缓存容量上限（条目数）
+	synthCacheCapacity = 64
+	// logModuleCache 缓存日志子模块名
+	logModuleCache = "Cache"
+)
+
+// synthCache 全局合成缓存实例（统一入口层共用，与引擎无关）
+var synthCache = newSynthCache(synthCacheCapacity)
+
 // ==== 槽位核心状态 ====
 
 var (
@@ -55,6 +79,9 @@ var (
 
 	// slotStateVal 槽位状态机（原子：/broadcaster/status 零锁观测）
 	slotStateVal atomic.Int32
+
+	// slotPaused 维护态：合成请求一律拒绝，槽位不再加载任何引擎
+	slotPaused atomic.Bool
 
 	// slotEngineName 当前在位引擎名（原子："" = 空槽；slotMu 写、任意读）
 	slotEngineName atomic.Value // string
@@ -95,6 +122,7 @@ var engineCapabilities = []EngineCapability{
 		Speed:        true,
 		Lang:         true,
 		Phonemes:     true,
+		SynthCache:   true,
 		SampleRate:   KokoroTTS.SampleRate,
 		AuxEndpoints: []string{"/broadcaster/kokoro/voices", "/broadcaster/kokoro/dict", "/broadcaster/kokoro/dict/guess"},
 	},
@@ -107,6 +135,7 @@ var engineCapabilities = []EngineCapability{
 		Instruct:       true,
 		Seed:           true,
 		PostprocToggle: true,
+		SynthCache:     true,
 		SampleRate:     OmniVoiceTTS.SampleRate,
 		AuxEndpoints:   []string{"/broadcaster/omnivoice/languages"},
 	},

@@ -94,6 +94,8 @@ type memoryRunData struct {
 	PlanFile string `json:"plan_file"`
 	Index    int    `json:"index"`
 	Total    int    `json:"total"`
+	// Reason 不整理时的原因（触发条件不满足）；有值且 Total=0 时直接视为完成
+	Reason string `json:"reason,omitempty"`
 }
 
 // memoryJournal 单批记忆整理的意图日志。

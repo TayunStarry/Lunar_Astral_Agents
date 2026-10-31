@@ -92,6 +92,12 @@ function buildCategoryBadges(categories) {
 function buildActionsPanel(msg) {
     const panel = document.createElement('div');
     panel.className = 'message-actions-panel';
+    const quoteBtn = document.createElement('button');
+    quoteBtn.className = 'chat-action-button quote_message_button';
+    quoteBtn.title = '引用这条消息';
+    quoteBtn.innerHTML = '<i class="fas fa-quote-left"></i>';
+    quoteBtn.addEventListener('click', () => toggleQuoteMessage(msg));
+    panel.appendChild(quoteBtn);
     const copyBtn = document.createElement('button');
     copyBtn.className = 'chat-action-button copy_message_button';
     copyBtn.title = '复制';
@@ -99,6 +105,39 @@ function buildActionsPanel(msg) {
     copyBtn.addEventListener('click', () => copyMessage(msg));
     panel.appendChild(copyBtn);
     return panel;
+}
+
+/** 构建消息气泡内的引用块（QQ 风格：发送者 + 内容预览，支持多条） */
+function buildQuoteBlock(quotes) {
+    const wrap = document.createElement('div');
+    wrap.className = 'message-quote';
+    const header = document.createElement('div');
+    header.className = 'message-quote-header';
+    header.innerHTML = `<i class="fas fa-quote-left"></i> 引用 ${quotes.length} 条消息`;
+    wrap.appendChild(header);
+    quotes.forEach(quoted => {
+        const item = document.createElement('div');
+        item.className = 'message-quote-item';
+        const sender = document.createElement('span');
+        sender.className = 'message-quote-sender';
+        sender.textContent = quoted.sender || (quoted.role === 'assistant' ? ASSISTANT_NAME : backendUserName);
+        const text = document.createElement('span');
+        text.className = 'message-quote-text';
+        let preview = quoted.text ? '[语音] ' + quoted.text : (quoted.content || '');
+        preview = String(preview).replace(/\s+/g, ' ').trim();
+        if (!preview) preview = quoted.categories && quoted.categories.includes('image') ? '[图片]' : '[消息]';
+        text.textContent = preview.length > 120 ? preview.slice(0, 120) + '…' : preview;
+        item.appendChild(sender);
+        item.appendChild(text);
+        if (quoted.id) {
+            item.title = '点击定位到被引用的消息';
+            item.addEventListener('click', () => {
+                if (typeof jumpToMessage === 'function') jumpToMessage(quoted.id);
+            });
+        }
+        wrap.appendChild(item);
+    });
+    return wrap;
 }
 
 /** 仅用于前端展示：隐藏缓存正文里的 `[用户: 名字]:` 前缀（模型上下文仍保留） */
@@ -125,6 +164,7 @@ function renderMessageElement(msg) {
     el.dataset.categories = (msg.categories || ['text']).join(',');
     el.dataset.searchText = computeSearchText(msg);
     if (msg.categories && msg.categories.includes('action')) el.classList.add('action-message');
+    if (typeof isMessageQuoted === 'function' && isMessageQuoted(msg.id)) el.classList.add('quote-selected');
 
     // 用户气泡名优先用缓存里的实际发送者（QQ 私聊昵称 / 前端配置名）；正文不带前缀
     const displayName = msg.role === 'user' ? (msg.sender || backendUserName) : ASSISTANT_NAME;
@@ -136,6 +176,9 @@ function renderMessageElement(msg) {
         <span class="header-time">${msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : getTimeString()}</span>
     `;
     el.appendChild(header);
+
+    // 引用块（被引用消息快照，支持多条）
+    if (msg.quotes && msg.quotes.length) el.appendChild(buildQuoteBlock(msg.quotes));
 
     // 图片块
     if (msg.imageSrc) el.appendChild(buildImageBlock(msg));

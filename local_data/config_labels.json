@@ -24,7 +24,6 @@
 	"allow_lan": "允许局域网访问",
 	"insecure_tls": "跳过TLS证书校验",
 
-	"video_input": "视频解读输入模式(file/frames)",
 	"image_input": "静态图思维链形态(url/base64)",
 	"vision_max_side": "视觉读取副本最大边长(像素)",
 	"vision_cache_cap_mb": "视觉副本缓存池上限(MB)",

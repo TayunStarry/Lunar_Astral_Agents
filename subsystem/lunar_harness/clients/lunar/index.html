@@ -129,6 +129,15 @@
 
         <!-- 底部输入栏（横跨全宽） -->
         <footer class="input-area">
+            <div class="quote-tray" id="quoteTray" hidden>
+                <div class="quote-tray-header">
+                    <span id="quoteTrayTitle"><i class="fas fa-quote-left"></i> 引用消息</span>
+                    <button class="quote-tray-clear" id="quoteClearBtn" title="清空全部引用">
+                        <i class="fas fa-times"></i> 清空
+                    </button>
+                </div>
+                <div class="quote-tray-list" id="quoteTrayList"></div>
+            </div>
             <div class="pending-attachments" id="pendingAttachments" hidden></div>
             <div class="file-refs" id="fileRefChips" hidden></div>
             <div class="input-wrapper">
@@ -269,6 +278,7 @@
     <script defer src="js/markdown.js"></script>
     <script defer src="js/message-blocks.js"></script>
     <script defer src="js/render.js"></script>
+    <script defer src="js/quote.js"></script>
     <script defer src="js/messages.js"></script>
     <script defer src="js/websocket.js"></script>
     <script defer src="js/filter-search.js"></script>

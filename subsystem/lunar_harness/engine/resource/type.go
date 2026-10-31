@@ -219,6 +219,21 @@ type URLAdmitInput struct {
 	KindHint string
 }
 
+// AudioTranscriptInput 音频转写悬空句柄登记请求。
+//
+// 语音不再落盘：音频接入时调用 audio_transcriber 完成文本转写，仅在资源目录
+// 登记「有描述、无实体」的音频句柄；句柄只在用户引用包含音频的消息时被读取。
+type AudioTranscriptInput struct {
+	// Name 展示文件名（可空：使用「语音.wav」）
+	Name string
+	// Transcript 转写文本（句柄的描述信息）
+	Transcript string
+	// ContentHash 音频内容哈希（sha16；可空：按转写文本计算）
+	ContentHash string
+	// Origin 来源语义（client-upload / channel / ...）
+	Origin string
+}
+
 // VisionCacheEntry 图片缩影缓存条目（统一缓存表中的 image-thumbnail 一类）
 type VisionCacheEntry struct {
 	// SourceURL 源图片对应的本地 URL（/file/read/<rel>）

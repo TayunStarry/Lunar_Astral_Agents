@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/CrystalPersonality"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
-	"LunarSubsystem/LunarHarness/crystal"
+	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/config"
@@ -13,7 +14,6 @@ import (
 	"LunarSubsystem/LunarHarness/engine/debugsnap"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
 	"LunarSubsystem/LunarHarness/engine/resource"
-	"LunarSubsystem/LunarHarness/lunar"
 	"LunarSubsystem/LunarHarness/server"
 	"LunarSubsystem/LunarHarness/transport/enginebus"
 	"LunarSubsystem/LunarHarness/transport/ws"
@@ -42,13 +42,13 @@ func Assemble() {
 		}
 	})
 	// 注册引擎消息观察者：方法名 OnXxx 反射映射到消息 type（OnAnimationList → animation_list）
-	enginebus.Instance.Subscribe(lunar.AnimationObserver{})
-	enginebus.Instance.Subscribe(lunar.TelemetryObserver{})
+	enginebus.Instance.Subscribe(LunarPersonality.AnimationObserver{})
+	enginebus.Instance.Subscribe(LunarPersonality.TelemetryObserver{})
 	logger.Info("LunarHarness", "引擎消息总线（反射 + 透传）已启动")
 
 	// ==== 跨层注入：结构化广播 & 下行桥接 ====
 	// 智能体下行走结构化广播（type/data），QQ 桥接挂在结构化旁路上（原始字节广播不触发）
-	lunar.PushMessageFunc = ws.Instance.BroadcastMessage
+	LunarPersonality.PushMessageFunc = ws.Instance.BroadcastMessage
 	ws.OnStructuredMessage = DialogueBridging.BridgeStructuredMessage
 
 	// ==== 前端静态资源：月华消息终端（/）与琉璃桌面（/desktop/） ====
@@ -86,11 +86,11 @@ func Assemble() {
 	// 月华的机制运行不依赖前端（前端仅显示与记录），但琉璃与 LTPX 的功能实现依托前端
 	// （ltpx_call 派发与 LTP9 插件沙箱都在琉璃桌面页面执行）。LTPX 调用发生而琉璃前端
 	// 已被关闭时，守护经唤起器重建桌面窗口，并等待其重新接入总线后再广播。
-	crystal.SetFrontendRelauncher(func() error {
+	CrystalPersonality.SetFrontendRelauncher(func() error {
 		// 重启语义：窗口可能残留死条目（Run 未返回）或页面已断连，需重载/重建
 		return browser.RestartDesktopWindow(crystalWindowSpec())
 	})
-	crystal.SetFrontendReadyProbe(func() bool {
+	CrystalPersonality.SetFrontendReadyProbe(func() bool {
 		return ws.Instance != nil && ws.Instance.ChannelBusCount(ws.DefaultBusChannel) > 0
 	})
 
@@ -169,7 +169,6 @@ func GracefulShutdown(reason string) {
 		defer close(done)
 		browser.CloseAllDesktopWindows()
 		server.Shutdown(httpServer)
-		crystal.Close()
 		shutdownLunar()
 		// 统一资源目录：关闭 SQLite 连接（内容仓库中的 blob 不动，句柄持久保留）
 		if err := resource.Close(); err != nil {

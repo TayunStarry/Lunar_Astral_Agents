@@ -30,11 +30,19 @@ type WebViewSession struct {
 	wv         webview.WebView
 	navigateMu sync.Mutex // 串行化 EvalJSON / Navigate，避免结果通道串扰
 
-	resultMu   sync.Mutex
-	resultCh   chan string // 最近一次 Eval 的结果回传通道（__lunarReport 回调写入）
-	closedCh   chan struct{}
-	closeOnce  sync.Once
-	aliveFlag  int32
+	resultMu  sync.Mutex
+	resultCh  chan string // 最近一次 Eval 的结果回传通道（__lunarReport 回调写入）
+	closedCh  chan struct{}
+	closeOnce sync.Once
+	aliveFlag atomic.Int32
+
+	// lifeMu 串行化「原生 webview 调用」与「销毁」：Run 返回后先置 dead 再 Destroy，
+	// 所有 Dispatch/Navigate/Eval 都必须持锁并检查 dead，避免把消息投递给已释放的
+	// 原生对象（这是搜索结束、窗口关闭后偶发进程卡死/崩溃的根因）。
+	lifeMu  sync.Mutex
+	dead    bool
+	closing bool
+
 	unregister func()
 }
 
@@ -110,13 +118,18 @@ func OpenWebViewSession(url string, title string, width int, height int) (*WebVi
 		if url != "" {
 			w.Navigate(url)
 		}
-		atomic.StoreInt32(&s.aliveFlag, 1)
+		s.aliveFlag.Store(1)
 		created <- nil
 		w.Run()
 
-		// Run 返回：窗口已被关闭（用户或 Close），释放并注销
+		// Run 返回：窗口已被关闭（用户或 Close）。先落「已结束」标记再销毁，
+		// 任何仍在并发的 Close/Navigate/Eval 都会在 lifeMu 上排队，
+		// 并在 dead=true 时直接返回，绝不会触碰已释放的原生对象。
+		s.lifeMu.Lock()
+		s.dead = true
+		s.aliveFlag.Store(0)
 		w.Destroy()
-		atomic.StoreInt32(&s.aliveFlag, 0)
+		s.lifeMu.Unlock()
 		closeOnceDo(s)
 	}()
 
@@ -170,18 +183,36 @@ func (s *WebViewSession) closeRunCh() {
 }
 
 // Close 请求关闭会话窗口（任意 goroutine 可调用；Terminate 经 Dispatch 投递到 UI 线程）
+//
+// 生命周期锁保证：Run 已经返回并销毁原生对象后，不会再投递任何消息；
+// 同一会话重复调用 Close 只投递一次 Terminate。
 func (s *WebViewSession) Close() {
-	if !s.IsAlive() {
+	s.lifeMu.Lock()
+	defer s.lifeMu.Unlock()
+	if s.dead || s.wv == nil || s.closing {
 		return
 	}
+	s.closing = true
 	s.wv.Dispatch(func() {
+		// 回调只会在该会话的 UI 线程、且 Run 尚未返回时执行
 		s.wv.Terminate()
 	})
 }
 
+// withLive 在生命周期锁内执行一次原生调用；会话已销毁时返回错误。
+func (s *WebViewSession) withLive(call func()) error {
+	s.lifeMu.Lock()
+	defer s.lifeMu.Unlock()
+	if s.dead || s.wv == nil {
+		return errors.New("会话已关闭")
+	}
+	call()
+	return nil
+}
+
 // IsAlive 会话窗口是否仍在运行
 func (s *WebViewSession) IsAlive() bool {
-	return atomic.LoadInt32(&s.aliveFlag) == 1
+	return s.aliveFlag.Load() == 1
 }
 
 // ClosedCh 会话结束时关闭的通道（供外部等待）
@@ -196,12 +227,14 @@ func (s *WebViewSession) Navigate(url string) error {
 	}
 	s.navigateMu.Lock()
 	defer s.navigateMu.Unlock()
-	s.wv.Dispatch(func() {
-		if s.IsAlive() {
-			s.wv.Navigate(url)
-		}
+	return s.withLive(func() {
+		s.wv.Dispatch(func() {
+			// 回调只在该会话的 UI 线程执行；Run 已返回时消息不会再被处理
+			if s.IsAlive() {
+				s.wv.Navigate(url)
+			}
+		})
 	})
-	return nil
 }
 
 // EvalJSON 在页面上下文执行脚本并取回结果。
@@ -225,11 +258,16 @@ func (s *WebViewSession) EvalJSON(script string, timeout time.Duration) (string,
 	s.resultMu.Unlock()
 
 	wrapped := `(function(){var __r;try{__r=JSON.stringify((function(){` + script + `})());}catch(e){__r=JSON.stringify({__eval_error:String((e&&e.message)||e)});}if(__r===undefined){__r="null";}window.__lunarReport(__r);})()`
-	s.wv.Dispatch(func() {
-		if s.IsAlive() {
-			s.wv.Eval(wrapped)
-		}
-	})
+	if err := s.withLive(func() {
+		s.wv.Dispatch(func() {
+			// 回调只在该会话的 UI 线程执行；Run 已返回时消息不会再被处理
+			if s.IsAlive() {
+				s.wv.Eval(wrapped)
+			}
+		})
+	}); err != nil {
+		return "", err
+	}
 
 	select {
 	case r := <-ch:

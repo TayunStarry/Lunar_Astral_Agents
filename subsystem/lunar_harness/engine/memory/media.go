@@ -29,9 +29,9 @@ const memoryStandardMaxDim = 640
 // animatedPerceptionRefs 生成动态图的采样帧引用
 //
 // 动态图按「一个很短的影像片段」处理：由多模态模块的统一观看管线
-// 在整段动画上等距抽取 WatchFrameMax 帧（长边 ≤640），与视频切片同一套规则。
+// 在整段动画上按内容强度自适应抽帧（16/24/32/48，长边 ≤640），与视频切片同一套规则。
 func animatedPerceptionRefs(raw []byte) ([]string, error) {
-	slice, err := multimodal.AnimatedToWatchSlice(raw, multimodal.WatchFrameMax)
+	slice, err := multimodal.AnimatedToWatchSlice(raw, multimodal.WatchFrameAuto)
 	if err != nil {
 		return nil, err
 	}

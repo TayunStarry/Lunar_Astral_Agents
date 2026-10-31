@@ -67,13 +67,13 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 	}
 
 	// 未分配的编号、半截编号与空串必须返回 -1（调用方据此判断"不是完整热键"）
-	for _, miss := range []string{"", "0", "1", "14", "20", "x", "esc", "enter"} {
+	for _, miss := range []string{"", "0", "1", "17", "20", "x", "esc", "enter"} {
 		if got := dumpHotkeyIndex(miss); got != -1 {
 			t.Fatalf("非热键 %q 不应命中，实际返回 %d", miss, got)
 		}
 	}
 
-	// 回归防线：快捷键统一为两位数字编号（01-13），且必须指向固定目标。
+	// 回归防线：快捷键统一为两位数字编号（01-16），且必须指向固定目标。
 	wantKeys := []struct {
 		hotkey string
 		kind   dumpKind
@@ -91,6 +91,9 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 		{"11", dumpKindContext},
 		{"12", dumpKindContext},
 		{"13", dumpKindContext},
+		{"14", dumpKindContext},
+		{"15", dumpKindContext},
+		{"16", dumpKindContext},
 	}
 	for _, want := range wantKeys {
 		got := dumpHotkeyIndex(want.hotkey)

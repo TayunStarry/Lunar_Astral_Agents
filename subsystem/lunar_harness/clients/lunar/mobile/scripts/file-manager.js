@@ -164,7 +164,7 @@ export class FilePreviewManager {
      *
      * 规则与电脑端一致：
      * - 图片 → image_url；视频 → video_url（句柄由服务端生成）
-     * - 音频 → input_audio（仅 wav/mp3 支持，其余退回 audio_url）
+     * - 音频 → input_audio（统一内联下发，服务端转写，不落盘）
      * - 文本 / 其他文件 → 只带文档句柄，正文不进上下文
      *
      * @param {Array<object>} fileResults - processFileUpload 的结果列表
@@ -181,19 +181,10 @@ export class FilePreviewManager {
                 try {
                     const base64Data = await fileToRawBase64(preview.file);
                     const audioFormat = getAudioFormat(preview.file);
-                    if (audioFormat) {
-                        contentBlocks.push({
-                            type: 'input_audio',
-                            input_audio: { data: base64Data, format: audioFormat }
-                        });
-                    } else {
-                        // llama.cpp 仅接受 wav/mp3：其余格式先上传，服务端再按句柄转写
-                        const saved = await saveFile(preview.file, true);
-                        contentBlocks.push({
-                            type: 'audio_url',
-                            audio_url: { url: `${window.location.origin}/file/read/${saved.filename}` }
-                        });
-                    }
+                    contentBlocks.push({
+                        type: 'input_audio',
+                        input_audio: { data: base64Data, format: audioFormat }
+                    });
                 } catch (err) {
                     this.showError?.(`无法读取音频 ${res.fileName}`);
                 }

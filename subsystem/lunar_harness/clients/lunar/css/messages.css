@@ -176,6 +176,85 @@
     transform: scale(1.08);
 }
 
+/* ========== 消息引用（QQ 风格） ========== */
+.message.quote-selected {
+    box-shadow: 0 0 0 2px var(--accent-color), 0 0 18px rgba(157, 107, 255, 0.28);
+}
+
+.message-quote {
+    margin: 2px 0 8px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.14);
+    border-left: 3px solid var(--accent-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.message-quote-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 4px;
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+.message-quote-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2px 0;
+    cursor: default;
+}
+
+.message-quote-item[title] {
+    cursor: pointer;
+}
+
+.message-quote-item:hover {
+    color: var(--text-primary);
+}
+
+.message-quote-sender {
+    flex-shrink: 0;
+    font-weight: 600;
+}
+
+.message-quote-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 语音转写块（音频不再落盘，历史消息以描述呈现） */
+.voice-transcript {
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.12);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+}
+
+.voice-transcript-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin-bottom: 4px;
+}
+
+.voice-transcript-text {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 /* ========== 行动消息 ========== */
 .action-message .markdown-content {
     border-left: 3px solid var(--badge-action-color);

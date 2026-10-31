@@ -69,6 +69,8 @@ function buildAttachmentBlock(att) {
         return container;
     }
     if (att.type === 'audio') {
+        // 音频不再持久化：历史消息只有悬空句柄 + 转写文本，不渲染播放器
+        if (!att.src) return buildVoiceTranscriptBlock(att);
         const audio = document.createElement('audio');
         audio.className = 'message-audio-player';
         audio.controls = true;
@@ -76,6 +78,22 @@ function buildAttachmentBlock(att) {
         return audio;
     }
     return null;
+}
+
+/** 语音转写块：展示句柄与转写文本，替代已取消的音频落盘播放 */
+function buildVoiceTranscriptBlock(att) {
+    const wrap = document.createElement('div');
+    wrap.className = 'voice-transcript';
+    const head = document.createElement('div');
+    head.className = 'voice-transcript-head';
+    head.innerHTML = `<i class="fas fa-microphone"></i> ${escapeHtml(att.label || '语音')}`;
+    if (att.handle) head.title = att.handle;
+    const text = document.createElement('div');
+    text.className = 'voice-transcript-text';
+    text.textContent = att.text || '（这段语音没有可用的转写文本）';
+    wrap.appendChild(head);
+    wrap.appendChild(text);
+    return wrap;
 }
 
 /** 从 ABC 乐谱头部解析卡片展示信息（标题/乐器/速度/调式/拍号） */

@@ -20,8 +20,22 @@ const (
 	planWindow = time.Hour
 	// batchMaxRunes 记忆整理单批最大字符数
 	batchMaxRunes = 10000
-	// memoryMaxTextRunes 单条整理后记忆的最大字符数
-	memoryMaxTextRunes = 500
+	// memoryTriggerMin 触发记忆整理的可整理条目下限：不足时直接视为本次整理完成
+	memoryTriggerMin = 500
+	// memoryBatchItems 单次整理取「入库时间最久」的条数
+	memoryBatchItems = 50
+	// memoryMinAgeDays 被整理条目的最小入库天数
+	memoryMinAgeDays = 10
+	// memoryMinAge 最小入库时长（与 memoryMinAgeDays 保持一致）
+	memoryMinAge = memoryMinAgeDays * 24 * time.Hour
+	// memoryMaxTextRunes 单条整理后记忆的最大字符数（超出时在句读处结束，不硬切半句）
+	memoryMaxTextRunes = 200
+	// memoryKeepPercent 整理后保留下限占输入条数的百分比（防止模型把整批压成寥寥几条）
+	memoryKeepPercent = 25
+	// memoryKeepFloor 保留下限的最小条数（小批次也要至少保留几条）
+	memoryKeepFloor = 4
+	// memoryKeepCeiling 保留下限的最大条数（大批次不要求输出过多条目）
+	memoryKeepCeiling = 48
 	// modelRetry 记忆整理模型输出解析失败后的额外重试次数
 	modelRetry = 1
 )

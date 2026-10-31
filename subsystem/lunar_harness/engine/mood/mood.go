@@ -76,7 +76,7 @@ func UpdateFromText(ctx context.Context, text string) error {
 	for i, label := range labels {
 		weights[label] = probs[i]
 	}
-	label := bestLabel(next, base, weights)
+	label := dominantLabel(weights)
 
 	mu.Lock()
 	state.Vector = next
@@ -154,7 +154,7 @@ func initialize(ctx context.Context) error {
 		Base:    base,
 		Vector:  vector,
 		Weights: weights,
-		Label:   bestLabel(vector, base, weights),
+		Label:   dominantLabel(weights),
 	}
 	mu.Lock()
 	state = next

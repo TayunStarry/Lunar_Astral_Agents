@@ -13,6 +13,7 @@ func ToolCatalog() []agentinfo.Agent {
 		ID: "web_search", Name: "网络搜索", Source: "agents/WebSearch",
 		Note: "检索智能体：多引擎搜索并整理结构化报告。",
 		Tools: []agentinfo.Tool{
+			{Name: "weather_query", Description: "识别到天气指令时直接调用和风天气 / Open-Meteo / wttr.in（纯 API），跳过完整搜索管线。"},
 			{Name: "extract_query", Description: "用小模型把自然语言需求提炼成检索词。"},
 			{Name: "search_with_fallback", Description: "按必应 → 百度 → 搜狗的顺序尝试检索页并提取结果条目。"},
 			{Name: "scroll_and_extract", Description: "「网页搜索:首页」从上到下完整滚动，提取结果条目与全部正文，随后关闭首页。"},

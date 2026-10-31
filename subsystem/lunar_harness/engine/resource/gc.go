@@ -33,16 +33,6 @@ func (d *store) collectCandidates(retain string, limit int) ([]Resource, error) 
 	return out, rows.Err()
 }
 
-// blobReferencedByOthers 一条 URL 只绑定一个句柄，实体不存在共享引用
-func (d *store) blobReferencedByOthers(blobPath string, selfID int64) (bool, error) {
-	return false, nil
-}
-
-// blobReferencedByUnowned 实体归属由 blob_owned 表达；共享引用已不存在
-func (d *store) blobReferencedByUnowned(blobPath string, selfID int64) (bool, error) {
-	return false, nil
-}
-
 // Stats 目录统计（只统计已绑定句柄的资源）
 func (d *store) Stats() (StatsReport, error) {
 	stats := StatsReport{ByKind: map[string]int64{}, ByState: map[string]int64{}, ByRetain: map[string]int64{}}
