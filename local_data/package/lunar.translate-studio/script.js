@@ -446,16 +446,13 @@ async function translateLineByLine(text, targetLang, langLabel) {
 
         E.loadingText.textContent = `正在翻译第 ${ki + 1}/${kvIndices.length} 行...`;
 
-        // 词库校验：查询记忆库是否有推荐译名
+        // 词库校验：查询知识库词库是否有推荐译名
         let glossaryHint = '';
         try {
-            // 用待翻译的 VALUE 文本去语义搜索词库，先清除格式化符和标点
+            // 用待翻译的 VALUE 文本去词库里做文本匹配，先清除格式化符和标点
             const cleanValue = m.value.replace(/§[a-z0-9]/gi, '').replace(/[，。！？、；：""''「」『』【】（）《》…—\s,\.!\?;:'"\(\)\[\]{}<>\/\\@#$%^&\*\+\-=~`|]+/g, '');
-            const matches = await memoryQueryTerm(cleanValue);
+            const matches = await glossaryQueryTerm(cleanValue);
             if (matches.length > 0) {
-                const best = matches[0];
-                const matchLabel = best._fallback ? '文本匹配' : `${(Math.min(1.0, best.similarity || 0) * 100).toFixed(0)}%`;
-
                 // 构建所有匹配词条的译名列表（最多5个）
                 const allTerms = matches.map(m => {
                     const ei = m.content ? m.content.indexOf('=') : -1;
@@ -464,7 +461,7 @@ async function translateLineByLine(text, targetLang, langLabel) {
                     return `${k} → ${v}`;
                 });
                 glossaryHint = `【必须采纳】词库推荐译名（共${matches.length}条）：\n${allTerms.map(t => `  - ${t}`).join('\n')}\n请在翻译时严格使用以上译名，不要音译。`;
-                E.loadingText.textContent = `正在翻译第 ${ki + 1}/${kvIndices.length} 行 (命中词库: ${matchLabel})...`;
+                E.loadingText.textContent = `正在翻译第 ${ki + 1}/${kvIndices.length} 行 (命中词库 ${matches.length} 条)...`;
             }
         } catch (e) { /* 词库查询失败不影响翻译 */ }
 
@@ -780,52 +777,62 @@ function loadColorStyle() {
     });
 }
 
-// ===== 记忆库 API（译名词库） =====
-const GLOSSARY_COLLECTION = 'translation_verification';
+// ===== 知识库 API（译名词库，存于通用知识库 knowledge.db） =====
+const GLOSSARY_TABLE = 'translation_glossary';
+let glossaryReady = false;
 
-// 确保集合存在（仅添加时调用，嵌入模型名从 memory.embedding_model 配置读取）
-async function memoryEnsureCollection() {
-    try {
-        const resp = await fetch(`/memory/${GLOSSARY_COLLECTION}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ collection_type: 'text' })
-        });
-        return resp.ok || resp.status === 409;
-    } catch (e) {
-        console.warn('译名词库集合初始化失败:', e);
-        return false;
-    }
-}
-
-async function memoryAddTerm(key, value) {
-    await memoryEnsureCollection();
-    const content = `${key}=${value}`;
-    const resp = await fetch(`/memory/${GLOSSARY_COLLECTION}/messages`, {
+// 原生 SQL 通道：POST /knowledge/ { sql, params, db } → { success, results: [OperationResult] }
+async function knowledgeSQL(sql, params) {
+    const resp = await fetch('/knowledge/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'user', content })
+        body: JSON.stringify({ sql, params: params || [], db: 'knowledge' })
     });
-    if (!resp.ok) throw new Error(`添加词条失败 (${resp.status})`);
-    return resp.json();
+    if (!resp.ok) throw new Error(`知识库请求失败 (${resp.status})`);
+    const result = await resp.json();
+    if (!result.success) throw new Error(result.error || 'SQL 执行失败');
+    return (result.results && result.results[0]) || { success: true };
 }
 
-// 语义搜索词库，失败时回退到文本匹配
-async function memoryQueryTerm(text) {
-    // 1. 尝试语义搜索（需要嵌入模型初始化）
-    try {
-        const resp = await fetch(`/memory/${GLOSSARY_COLLECTION}/messages?query=${encodeURIComponent(text)}&top_k=5`);
-        if (resp.ok) {
-            const data = await resp.json();
-            if (data.success && data.data?.results) {
-                const results = data.data.results.filter(r => r.similarity > 0.55);
-                if (results.length > 0) return results.map(r => ({ ...r, _semantic: true }));
-            }
-        }
-    } catch (e) { /* 语义搜索不可用，回退到文本匹配 */ }
+// 建表（幂等，进程内只执行一次）
+async function glossaryEnsureTable() {
+    if (glossaryReady) return;
+    await knowledgeSQL(
+        `CREATE TABLE IF NOT EXISTS ${GLOSSARY_TABLE} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            target TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )`
+    );
+    glossaryReady = true;
+}
 
-    // 2. 回退：在已加载的词条列表中做文本匹配
-    if (glossaryTerms.length === 0) return [];
+async function glossaryAddTerm(key, value) {
+    await glossaryEnsureTable();
+    await knowledgeSQL(
+        `INSERT INTO ${GLOSSARY_TABLE} (source, target, created_at) VALUES (?, ?, datetime('now', 'localtime'))`,
+        [key, value]
+    );
+}
+
+async function glossaryDeleteTerm(id) {
+    await glossaryEnsureTable();
+    await knowledgeSQL(`DELETE FROM ${GLOSSARY_TABLE} WHERE id = ?`, [id]);
+}
+
+// 列出最近 50 条词条；content 统一为「原文=译名」形式，供渲染与命中提示复用
+async function glossaryListTerms() {
+    await glossaryEnsureTable();
+    const result = await knowledgeSQL(
+        `SELECT id, source || '=' || target AS content FROM ${GLOSSARY_TABLE} ORDER BY id DESC LIMIT 50`
+    );
+    return Array.isArray(result.rows) ? result.rows : [];
+}
+
+// 在已加载的词条里做文本匹配，返回最多 5 条命中
+async function glossaryQueryTerm(text) {
+    if (glossaryTerms.length === 0) await loadGlossaryTerms();
     const cleanText = text.replace(/§[a-z0-9]/gi, '').toLowerCase();
     const matches = [];
     for (const term of glossaryTerms) {
@@ -834,29 +841,9 @@ async function memoryQueryTerm(text) {
         if (key && cleanText.includes(key)) {
             matches.push({ content: term.content, similarity: 1.0, _fallback: true });
         }
+        if (matches.length >= 5) break;
     }
     return matches;
-}
-
-async function memoryDeleteTerm(id) {
-    const resp = await fetch(`/memory/${GLOSSARY_COLLECTION}/messages`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
-    });
-    if (!resp.ok) throw new Error(`删除词条失败 (${resp.status})`);
-}
-
-// 直接拉取文档列表，不依赖初始化
-async function memoryListTerms() {
-    const resp = await fetch(`/memory/${GLOSSARY_COLLECTION}/documents?limit=50`);
-    if (!resp.ok) {
-        console.warn('获取词条列表失败:', resp.status);
-        return [];
-    }
-    const data = await resp.json();
-    // 记忆库 API 统一返回 { success: true, data: { documents: [...] } }
-    return data.success && data.data ? (data.data.documents || []) : [];
 }
 
 // ===== 译名词库 UI =====
@@ -871,7 +858,7 @@ async function onGlossaryAdd() {
     }
 
     try {
-        const result = await memoryAddTerm(key, value);
+        await glossaryAddTerm(key, value);
         E.glossaryKey.value = '';
         E.glossaryValue.value = '';
         E.glossaryKey.focus();
@@ -884,7 +871,7 @@ async function onGlossaryAdd() {
 
 async function onGlossaryDelete(id, key) {
     try {
-        await memoryDeleteTerm(id);
+        await glossaryDeleteTerm(id);
         showToast(`已删除词条: ${key}`, 'success');
         await loadGlossaryTerms();
     } catch (err) {
@@ -899,7 +886,7 @@ async function loadGlossaryTerms() {
     E.glossaryEmpty.style.display = '';
 
     try {
-        glossaryTerms = await memoryListTerms();
+        glossaryTerms = await glossaryListTerms();
         renderGlossaryList();
     } catch (err) {
         console.warn('加载词条列表失败:', err);

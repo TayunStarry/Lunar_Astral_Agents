@@ -6,6 +6,7 @@ package affection
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -27,50 +28,118 @@ func Init(ctx context.Context) error {
 	return nil
 }
 
-// Update 用一次成对交互（用户发言 + 月华回应）更新对指定用户的长期好感度。
-// 三者任一为空时跳过：成对语义缺一半就不构成一次有效的情感交互。
-func Update(ctx context.Context, userName, userText, replyText string) error {
-	userName = strings.TrimSpace(userName)
-	userText = strings.TrimSpace(userText)
-	replyText = strings.TrimSpace(replyText)
-	if userName == "" || userText == "" || replyText == "" {
-		return nil
+// UpdateWindows 用每个用户最近若干轮的成对语义窗口更新情感认知。
+//
+// 每个用户只取最近 roundWindow 轮，窗口内各轮的极性取均值作为本次样本，
+// 再按 affectionAlpha 融入历史；窗口最新一轮与上次评估相同时跳过。
+func UpdateWindows(ctx context.Context, rounds []Round) (int, error) {
+	windows := groupWindows(rounds)
+	if len(windows) == 0 {
+		return 0, nil
 	}
 	if err := ensureInitialized(ctx); err != nil {
-		return err
+		return 0, err
 	}
 
 	mu.RLock()
 	anchors := copyAnchors(state.Anchors)
-	previous := state.Users[userName]
+	pending := make(map[string][]Round, len(windows))
+	for userName, window := range windows {
+		newest := roundKey(window[len(window)-1])
+		if previous, ok := state.Users[userName]; ok && previous.LastKey == newest {
+			continue
+		}
+		pending[userName] = window
+	}
 	mu.RUnlock()
+	if len(pending) == 0 {
+		return 0, nil
+	}
 
-	vecs, err := embedDocumentsHook(ctx, []string{userText + "\n" + replyText})
+	names := make([]string, 0, len(pending))
+	texts := make([]string, 0, len(pending)*roundWindow)
+	for userName := range pending {
+		names = append(names, userName)
+	}
+	sort.Strings(names)
+	for _, userName := range names {
+		for _, round := range pending[userName] {
+			texts = append(texts, round.UserText+"\n"+round.ReplyText)
+		}
+	}
+
+	vecs, err := embedDocumentsHook(ctx, texts)
 	if err != nil {
-		return fmt.Errorf("计算成对语义嵌入失败: %w", err)
+		return 0, fmt.Errorf("计算成对语义嵌入失败: %w", err)
 	}
-	sample := posture(vecs[0], anchors)
-
-	next := sample
-	if previous.Samples > 0 {
-		next = currentAlpha*previous.Score + (1-currentAlpha)*sample
+	if len(vecs) != len(texts) {
+		return 0, fmt.Errorf("成对语义嵌入数量不匹配: 期望 %d, 实际 %d", len(texts), len(vecs))
 	}
-	label := labelFor(next)
 
 	mu.Lock()
 	if state.Users == nil {
 		state.Users = make(map[string]UserAffection)
 	}
-	state.Users[userName] = UserAffection{
-		Score:     next,
-		Label:     label,
-		Samples:   previous.Samples + 1,
-		UpdatedAt: time.Now().Unix(),
+	offset := 0
+	for _, userName := range names {
+		window := pending[userName]
+		var sample float64
+		for i := 0; i < len(window); i++ {
+			sample += posture(vecs[offset], anchors)
+			offset++
+		}
+		sample /= float64(len(window))
+		previous := state.Users[userName]
+		next := sample
+		if previous.Samples > 0 {
+			next = currentAlpha*previous.Score + (1-currentAlpha)*sample
+		}
+		label := labelFor(next)
+		state.Users[userName] = UserAffection{
+			Score:        next,
+			Label:        label,
+			Samples:      previous.Samples + 1,
+			WindowRounds: len(window),
+			LastKey:      roundKey(window[len(window)-1]),
+			UpdatedAt:    time.Now().Unix(),
+		}
+		logger.Info(Module, "[情感] 对用户「%s」好感度 %.2f（%s），评估窗口 %d 轮", userName, next, label, len(window))
 	}
 	saveStateLocked()
 	mu.Unlock()
-	logger.Info(Module, "[情感] 对用户「%s」好感度 %.2f（%s）", userName, next, label)
-	return nil
+	return len(names), nil
+}
+
+// groupWindows 按用户分组、每人只保留最近 roundWindow 轮；成对要素缺失的轮次直接丢弃。
+func groupWindows(rounds []Round) map[string][]Round {
+	windows := make(map[string][]Round)
+	for _, round := range rounds {
+		userName := strings.TrimSpace(round.UserName)
+		userText := strings.TrimSpace(round.UserText)
+		replyText := strings.TrimSpace(round.ReplyText)
+		if userName == "" || userText == "" || replyText == "" {
+			continue
+		}
+		window := append(windows[userName], Round{
+			Key:       strings.TrimSpace(round.Key),
+			UserName:  userName,
+			UserText:  userText,
+			ReplyText: replyText,
+		})
+		if len(window) > roundWindow {
+			window = window[len(window)-roundWindow:]
+		}
+		windows[userName] = window
+	}
+	return windows
+}
+
+// roundKey 给一轮交互生成去重标识；缺少外部 ID 时退回发言与回应本身。
+func roundKey(round Round) string {
+	if key := strings.TrimSpace(round.Key); key != "" {
+		return key
+	}
+	return round.UserText + "\x00" + round.ReplyText
 }
 
 // Label 返回月华对指定用户已形成的情感标签；未认知时返回 false。

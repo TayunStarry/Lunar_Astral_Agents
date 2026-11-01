@@ -15,50 +15,67 @@ import (
 	"LunarSubsystem/LunarHarness/transport/ws"
 )
 
-// ==== 引擎消息观察者 ====
+// ==== 引擎上行帧（ws 直连） ====
 
-// AnimationObserver 观测动画列表消息
-type AnimationObserver struct{}
+// lunarEngineChannels 月华自己使用的引擎频道。
+//
+// 渲染引擎（lunar.rendering_engine / lunar.live2d_engine）经各自 /ws 连接上行
+// animation_list 与 telemetry；月华只接收这两个频道，工作室编辑器引擎用独立频道，
+// 避免两边的动作列表与位置遥测互相覆盖。
+var lunarEngineChannels = map[string]bool{
+	"message-terminal-renderer": true, // 桌面消息终端
+	"lunar-astral-renderer":     true, // 移动端
+}
 
-func (AnimationObserver) Name() string { return "AnimationListCache" }
-
-func (AnimationObserver) OnAnimationList(raw []byte) {
-	var parsed struct {
-		Type    string `json:"type"`
-		Payload struct {
-			ActionDefinitions []ActionDefinition `json:"actionDefinitions"`
-		} `json:"payload"`
+// HandleEngineFrame 处理引擎经 /ws 上行的原始帧（问答两端均为 ws，不再经 HTTP 中转）。
+func HandleEngineFrame(channel string, raw []byte) {
+	if !lunarEngineChannels[channel] {
+		return
 	}
-	if json.Unmarshal(raw, &parsed) != nil || parsed.Type != "animation_list" || len(parsed.Payload.ActionDefinitions) == 0 {
+	var env struct {
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}
+	if json.Unmarshal(raw, &env) != nil {
+		return
+	}
+	switch env.Type {
+	case "animation_list":
+		applyAnimationList(env.Payload)
+	case "telemetry":
+		applyTelemetry(env.Payload)
+	}
+}
+
+// applyAnimationList 缓存引擎上报的可用动作。
+func applyAnimationList(payload json.RawMessage) {
+	var parsed struct {
+		ActionDefinitions []ActionDefinition `json:"actionDefinitions"`
+	}
+	if json.Unmarshal(payload, &parsed) != nil || len(parsed.ActionDefinitions) == 0 {
 		return
 	}
 	animMu.Lock()
-	animActions = parsed.Payload.ActionDefinitions
+	animActions = parsed.ActionDefinitions
 	animUpdatedAt = time.Now().UnixMilli()
 	animMu.Unlock()
-	logger.Info(lunarCoreModule, "动画列表缓存已更新: %d 个动作", len(parsed.Payload.ActionDefinitions))
+	logger.Info(lunarCoreModule, "动画列表缓存已更新: %d 个动作", len(parsed.ActionDefinitions))
 }
 
-// TelemetryObserver 观测位置遥测消息
-type TelemetryObserver struct{}
-
-func (TelemetryObserver) Name() string { return "AgentPosition" }
-
-func (TelemetryObserver) OnTelemetry(raw []byte) {
-	var env struct {
-		Payload struct {
-			Character *struct {
-				X float64 `json:"x"`
-				Y float64 `json:"y"`
-				Z float64 `json:"z"`
-			} `json:"character"`
-		} `json:"payload"`
+// applyTelemetry 缓存角色位置遥测。
+func applyTelemetry(payload json.RawMessage) {
+	var parsed struct {
+		Character *struct {
+			X float64 `json:"x"`
+			Y float64 `json:"y"`
+			Z float64 `json:"z"`
+		} `json:"character"`
 	}
-	if json.Unmarshal(raw, &env) != nil || env.Payload.Character == nil {
+	if json.Unmarshal(payload, &parsed) != nil || parsed.Character == nil {
 		return
 	}
 	agentPositionMu.Lock()
-	agentPosition = AgentPositionData{X: env.Payload.Character.X, Y: env.Payload.Character.Y, Z: env.Payload.Character.Z}
+	agentPosition = AgentPositionData{X: parsed.Character.X, Y: parsed.Character.Y, Z: parsed.Character.Z}
 	agentPositionMu.Unlock()
 }
 

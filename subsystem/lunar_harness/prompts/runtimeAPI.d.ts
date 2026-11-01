@@ -8,8 +8,7 @@
 // 首行示例：`//Engine: Lunar Harness | timeout=300s`
 //
 // 契约按能力拆分，按需读取对应文件即可（无需一次加载全部类型）：
-//   commonAPI.d.ts    公共类型（消息 / 工具调用 / 事件回调结果）
-//   eventAPI.d.ts     事件订阅（event.*）与月华事件契约
+//   commonAPI.d.ts    公共类型（消息 / 工具调用）
 //   fileAPI.d.ts      文件读写（file.*）
 //   imageAPI.d.ts     图像处理（image.*）
 //   videoAPI.d.ts     视频抽帧（video.*）
@@ -17,9 +16,9 @@
 //   databaseAPI.d.ts  SQLite 单一共享库（database.*）
 //   encodingAPI.d.ts  编解码与哈希签名（encoding.* / hash.*）
 //   agentAPI.d.ts     模型调用（agent.*）
-//   networkAPI.d.ts   同步 HTTP 与裸套接字（http.* / network.*）
+//   networkAPI.d.ts   文件下载（http.download）
 //
-// 本文件收录全局基础设施：console / 定时器 / fetch / WebSocket / time。
+// 本文件收录全局基础设施：console / 定时器 / fetch / WebSocket。
 
 /** 同步 fetch 结果（统一 Result 信封；body 为 JSON 时自动解析为对象，否则为文本） */
 interface FetchResult {
@@ -47,14 +46,6 @@ interface FetchInit {
 	headers?: Record<string, string>
 	/** 请求体 */
 	body?: string
-}
-
-/** 时间戳 */
-declare const time: {
-	/** 秒级时间戳 */
-	now(): number
-	/** 毫秒级时间戳 */
-	nowMs(): number
 }
 
 /**

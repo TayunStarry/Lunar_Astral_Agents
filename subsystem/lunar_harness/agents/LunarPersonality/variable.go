@@ -180,6 +180,8 @@ const (
 	// maxCacheMessages 缓存条数上限
 	maxCacheMessages = 48
 
+	// affectionRoundWindow 情感认知评估时每个角色取用的最近轮数
+	affectionRoundWindow = 5
 	// imageWindowSize 对话者上下文中允许保留的真实图片数量
 	imageWindowSize = 20
 	// maxToolRounds 单次应答允许的工具调用轮次上限

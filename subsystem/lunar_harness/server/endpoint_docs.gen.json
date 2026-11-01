@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.304.2336",
+    "version": "2026.305.0757",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -814,19 +814,6 @@
         }
       }
     },
-    "/ltpx/event": {
-      "post": {
-        "summary": "事件推送（xx事件发生前负载经 LTP9 插件处理）",
-        "description": "事件推送（xx事件发生前负载经 LTP9 插件处理）",
-        "operationId": "CrystalPersonality.LTPRemoteEventHandler",
-        "x-handler": "CrystalPersonality.LTPRemoteEventHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/ltpx/poll": {
       "get": {
         "summary": "列出待定工具调用（调试端点，已不承担轮询取结果）",
@@ -978,6 +965,17 @@
         }
       }
     },
+    "/reliance/": {
+      "get": {
+        "summary": "前端共享依赖（内嵌 clients/reliance 资源）",
+        "description": "前端共享依赖（内嵌 clients/reliance 资源）",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
     "/resize": {
       "post": {
         "summary": "图片缩放",
@@ -1043,116 +1041,12 @@
         }
       }
     },
-    "/webview/close": {
-      "post": {
-        "summary": "关闭网络搜索会话窗口",
-        "description": "关闭网络搜索会话窗口",
-        "operationId": "CrystalPersonality.WebViewCloseHandler",
-        "x-handler": "CrystalPersonality.WebViewCloseHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/webview/deepread": {
-      "post": {
-        "summary": "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
-        "description": "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
-        "operationId": "CrystalPersonality.WebViewDeepReadHandler",
-        "x-handler": "CrystalPersonality.WebViewDeepReadHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/webview/eval": {
-      "post": {
-        "summary": "网络搜索会话页面上下文执行脚本并取回 JSON 结果",
-        "description": "网络搜索会话页面上下文执行脚本并取回 JSON 结果",
-        "operationId": "CrystalPersonality.WebViewEvalHandler",
-        "x-handler": "CrystalPersonality.WebViewEvalHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/webview/navigate": {
-      "post": {
-        "summary": "网络搜索会话导航到指定 URL 并等待就绪",
-        "description": "网络搜索会话导航到指定 URL 并等待就绪",
-        "operationId": "CrystalPersonality.WebViewNavigateHandler",
-        "x-handler": "CrystalPersonality.WebViewNavigateHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/webview/open": {
-      "post": {
-        "summary": "创建 WebView 网络搜索会话窗口",
-        "description": "创建 WebView 网络搜索会话窗口",
-        "operationId": "CrystalPersonality.WebViewOpenHandler",
-        "x-handler": "CrystalPersonality.WebViewOpenHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/webview/ready": {
-      "post": {
-        "summary": "等待网络搜索会话页面就绪并返回状态",
-        "description": "等待网络搜索会话页面就绪并返回状态",
-        "operationId": "CrystalPersonality.WebViewReadyHandler",
-        "x-handler": "CrystalPersonality.WebViewReadyHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/webview/screenshot": {
-      "post": {
-        "summary": "网络搜索会话窗口区域截图（dataURL 返回）",
-        "description": "网络搜索会话窗口区域截图（dataURL 返回）",
-        "operationId": "CrystalPersonality.WebViewScreenshotHandler",
-        "x-handler": "CrystalPersonality.WebViewScreenshotHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/window/focus": {
       "post": {
         "summary": "置前指定桌面窗口（id: lunar/crystal）",
         "description": "置前指定桌面窗口（id: lunar/crystal）",
         "operationId": "WindowFocusHandler",
         "x-handler": "WindowFocusHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/write/engine": {
-      "post": {
-        "summary": "引擎/前端系统总线（反射观测 + 原样透传广播）",
-        "description": "引擎/前端系统总线（反射观测 + 原样透传广播）",
-        "operationId": "EngineMessageHandler",
-        "x-handler": "EngineMessageHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1175,8 +1069,8 @@
     },
     "/ws": {
       "get": {
-        "summary": "WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的连接）",
-        "description": "WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的连接）",
+        "summary": "WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的同频道连接）",
+        "description": "WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的同频道连接）",
         "responses": {
           "200": {
             "description": "成功"

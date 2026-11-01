@@ -928,7 +928,7 @@ func (m appModel) updateInputBody(w int) []string {
 func (m appModel) updateVersionsBody(w, h int) []string {
 	head := []string{
 		sectionRule("仓库已发布版本（仅更新包通道）", w),
-		dimStyle.Render("  回车按该 tag 拉取更新包；同仓库的 LTPX 应用市场发布已自动排除"),
+		dimStyle.Render("  回车按该 tag 拉取更新包；同仓库的历史市场发布已自动排除"),
 		"",
 	}
 	if len(m.update.versions) == 0 {
@@ -946,11 +946,11 @@ func (m appModel) updateVersionsBody(w, h int) []string {
 		if sel {
 			cursor = cursorStyle.Render("▸ ")
 		}
-		title := labelStyle.Render("◆ " + marketOrDash(v.TagName))
-		right := dimStyle.Render(marketOrDash(v.Name))
+		title := labelStyle.Render("◆ " + dashIfEmpty(v.TagName))
+		right := dimStyle.Render(dashIfEmpty(v.Name))
 		if sel {
-			title = selectStyle.Render("◆ " + marketOrDash(v.TagName))
-			right = keyStyle.Render(marketOrDash(v.Name))
+			title = selectStyle.Render("◆ " + dashIfEmpty(v.TagName))
+			right = keyStyle.Render(dashIfEmpty(v.Name))
 		}
 		blocks[i] = []string{
 			listRow(rowW, sel, cursor, title, right),

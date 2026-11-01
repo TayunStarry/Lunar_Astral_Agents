@@ -1,9 +1,5 @@
 // package runtime 实现月华系统的私有 JavaScript 运行时：
 // 每次运行在独立 goja 沙箱内执行脚本，能力以顶层全局（console/file/memory/http/…）注入。
-//
-// 该模块不再是独立的「插件引擎」：不再扫描扩展包目录、不再按 LTP9 标签识别与载入插件，
-// 也不再有任何权限限制 / 加密凭证（permissions.key）机制。运行实例只能由月华系统内部
-// 显式创建（当前唯一调用方是「月华-生活系统-创作」及其文件编辑智能体）。
 package runtime
 
 import (
@@ -22,12 +18,9 @@ import (
 
 var (
 	registryMu sync.RWMutex
-	// runtimes 正在运行的私有运行时（id → 实例），供同一进程内的跨运行时调用/指令分发。
+	// runtimes 正在运行的私有运行时（id → 实例）
 	runtimes = map[string]*plugin{}
 )
-
-// Version 返回运行时构建标记（供调用方自证版本）。
-func Version() string { return EngineBuild }
 
 // Run 在私有沙箱中执行一段 JavaScript，返回可继续调用的运行时句柄。
 // id 用于日志与跨运行时标识；为空时自动生成。
@@ -81,31 +74,11 @@ func Close() {
 	logger.Info(ServiceName, "私有 js 运行时已关闭")
 }
 
-// Lookup 按 id 取运行时句柄（未找到时 ok=false）。
-func Lookup(id string) (*Runtime, bool) {
-	p := runtimeFor(id)
-	if p == nil {
-		return nil, false
-	}
-	return &Runtime{plugin: p}, true
-}
-
 // runtimeFor 按 id 取运行时（未找到返回 nil）。
 func runtimeFor(id string) *plugin {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
 	return runtimes[id]
-}
-
-// snapshotRuntimes 返回运行时副本（供指令/事件分发）。
-func snapshotRuntimes() []*plugin {
-	registryMu.RLock()
-	defer registryMu.RUnlock()
-	out := make([]*plugin, 0, len(runtimes))
-	for _, p := range runtimes {
-		out = append(out, p)
-	}
-	return out
 }
 
 // ==== 运行时句柄 ====

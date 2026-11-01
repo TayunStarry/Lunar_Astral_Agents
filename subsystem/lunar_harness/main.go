@@ -10,7 +10,6 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/console/ltpxmarket"
 	"LunarSubsystem/LunarHarness/engine/console/updatepack"
 	"LunarSubsystem/LunarHarness/engine/sound"
 	"LunarSubsystem/LunarHarness/server"
@@ -43,8 +42,6 @@ func main() {
 	console.SetBuildVersion(server.DocsVersion())
 
 	// 注入 Gitee Release 发布通道配置（local_data/release.json）。
-	// 更新包与 LTPX 应用市场共用同一仓库：仓库信息只有一套，
-	// 两条通道在仓库内以「描述标记 + 附件名前缀」区分（见 TuiSystem/channel）。
 	console.SetUpdatePackConfig(&updatepack.Config{
 		GiteeOwner:      config.ReleaseGiteeOwner,
 		GiteeRepo:       config.ReleaseGiteeRepo,
@@ -56,14 +53,6 @@ func main() {
 		ProgramFiles:    config.ReleaseProgramFiles,
 		RestartArgs:     config.ReleaseRestartArgs,
 		TargetDir:       config.ReleaseTargetDir,
-	})
-
-	// 令牌通常留空：发布时在 TUI 手动输入；若 release.json 已保存令牌，TUI 会自动预填
-	console.SetMarketConfig(&ltpxmarket.Config{
-		GiteeOwner: config.ReleaseGiteeOwner,
-		GiteeRepo:  config.ReleaseGiteeRepo,
-		GiteeToken: config.ReleaseGiteeToken,
-		PackageDir: config.ReleasePackageDir,
 	})
 
 	// 端口基准注入 TUI：代理屏的提示值必须来自真实配置，并拦住会与自身服务撞车的端口。

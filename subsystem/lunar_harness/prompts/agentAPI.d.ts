@@ -19,22 +19,6 @@ export const agent: {
 	 */
 	chat(messages: Array<PostMessage | ToolMessage>, opts?: { temperature?: number; max_tokens?: number; system?: string; tools?: ChatTool[] }): { success: boolean; text?: string; tool_calls?: ToolCall[]; error?: string }
 	/**
-	 * 计算文本的嵌入向量（本地固定文本嵌入模型）
-	 *
-	 * @param input 单条字符串或字符串数组
-	 * @param opts 入参为空时的兜底：{ text? } 或 { texts? }
-	 * @returns 单条返回 { success:true, embedding: number[] }；多条返回 { success:true, embeddings: number[][] }；失败返回 failure
-	 */
-	embed(input: string | string[], opts?: { text?: string; texts?: string[] }): { success: boolean; embedding?: number[]; embeddings?: number[][]; error?: string }
-	/**
-	 * 调用前端智能体（Mini-LTP / Node-LTP），以自然语言驱动目标智能体（同步阻塞）
-	 *
-	 * @param pkgId 目标包目录名（包 ID）
-	 * @param text 要交给智能体的自然语言输入
-	 * @returns { success, text: 执行结果文本, error? }；目标包不存在/拒绝响应时 success=false
-	 */
-	synergy(pkgId: string, text: string): { success: boolean; text?: string; error?: string }
-	/**
 	 * 调用进程内网络搜索，返回自然语言搜索报告
 	 *
 	 * @param instruction 自然语言搜索指令（可含「前N页/个」等数量要求）

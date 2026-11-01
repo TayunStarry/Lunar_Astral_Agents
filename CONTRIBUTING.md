@@ -33,7 +33,7 @@
 
 ## 开始前的准备
 
-1. **阅读文档**: 通读 [README.md](README.md) 与 [Code Wiki 综合文档门户](docs/code-wiki/README.md)（尤其 [01 项目架构总览](docs/code-wiki/01-项目架构总览.md)），了解项目的整体架构与各子系统职责
+1. **阅读文档**: 通读 [README.md](README.md) 与 [用户手册门户](docs/code-wiki/README.md)（推荐先读 [08 智能体架构](docs/code-wiki/08-智能体架构.md)），了解平台的模块划分与各智能体职责
 2. **分叉仓库**: 将项目 Fork 到你的 GitHub 账户下，在 Fork 后的仓库中进行开发
 3. **创建分支**: 基于 `main` 分支创建功能分支，命名建议 `feat/描述` 或 `fix/描述`
 
@@ -100,7 +100,7 @@ import (
 |------|------|
 | 技术栈 | HTML5 + CSS3 + Vanilla JS (ES6+)，**禁止使用 Python** |
 | 模块 | ES Modules (`type="module"`) |
-| 依赖管控 | 仅限引用 `local_data/package/` 下的正式包（经 `/file/read/package/` 加载），**按需引用**标准依赖扁平化清单中的库，禁止从 CDN 引入外部资源；清单见 [Code Wiki 06 §6.1](docs/code-wiki/06-前端资源库.md) |
+| 依赖管控 | 仅限引用 `local_data/package/` 下的正式包（经 `/file/read/package/` 加载），**按需引用**标准依赖清单中的库，禁止从 CDN 引入外部资源；清单见 [07 扩展包 §五](docs/code-wiki/07-扩展包.md) |
 | 设计风格 | 玻璃拟态 (Glassmorphism)，CSS 变量驱动主题 |
 | 图标 | Font Awesome 6.4.0 |
 | 样式命名 | kebab-case，状态类用 `.active` / `.visible` / `.hidden` |
@@ -200,7 +200,7 @@ git clone https://github.com/你的用户名/Lunar_Astral_Agents.git
 cd Lunar_Astral_Agents
 ```
 
-一键编译全部 / 单独编译 / 交叉编译命令见 [Code Wiki 08 构建运行与配置](docs/code-wiki/08-构建运行与配置.md)，此处不重复。
+一键编译全部 / 单独编译 / 交叉编译命令见 [10 快速部署](docs/code-wiki/10-快速部署.md)，此处不重复。
 
 ---
 

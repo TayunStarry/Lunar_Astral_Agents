@@ -23,16 +23,12 @@ func setupKnowledgeTest(t *testing.T) string {
 	origLocal := config.LocalDir
 	origArchive := config.ArchiveDBPath
 	origKnowledge := config.KnowledgeDBPath
-	origMedia := config.MediaDBPath
-	origWeb := config.WebDBPath
 	origText := config.TextDBPath
 	origCharacter := config.CharacterDBPath
 
 	config.LocalDir = tmp
-	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	config.ArchiveDBPath = filepath.Join(tmp, "database", "handles.db")
 	config.KnowledgeDBPath = filepath.Join(tmp, "database", "knowledge.db")
-	config.MediaDBPath = filepath.Join(tmp, "database", "media.db")
-	config.WebDBPath = filepath.Join(tmp, "database", "web.db")
 	config.TextDBPath = filepath.Join(tmp, "database", "text.db")
 	config.CharacterDBPath = filepath.Join(tmp, "database", "character.db")
 
@@ -43,8 +39,6 @@ func setupKnowledgeTest(t *testing.T) string {
 		config.LocalDir = origLocal
 		config.ArchiveDBPath = origArchive
 		config.KnowledgeDBPath = origKnowledge
-		config.MediaDBPath = origMedia
-		config.WebDBPath = origWeb
 		config.TextDBPath = origText
 		config.CharacterDBPath = origCharacter
 	})

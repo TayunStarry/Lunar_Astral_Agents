@@ -3,7 +3,7 @@ import { AudioQueue } from './tts.js';
 import { VoiceChat } from './voice.js';
 import { Toast } from './toast.js';
 import { sendMessages } from './fetch.js';
-import { initMusicRenderer, renderMusicScore, playRenderedAudio } from './music_renderer.js';
+import { initMusicRenderer, renderMusicScore } from './music_renderer.js';
 import { initUserName, getUserNamePrefix } from './username.js';
 import { FilePreviewManager } from './file-manager.js';
 
@@ -228,19 +228,6 @@ class LunarCoreApp {
 			if (content) renderMusicScore(content);
 			return;
 		}
-		// 后端渲染音频就绪（FluidSynth + SoundFont）
-		if (subType === 'music_audio') {
-			try {
-				const audioData = JSON.parse(content || '{}');
-				if (audioData.type === 'audio_ready' && audioData.audio_url) {
-					playRenderedAudio(audioData.audio_url, audioData.file_name);
-				}
-			} catch (e) {
-				console.warn('[音乐] 音频数据解析失败:', e);
-			}
-			return;
-		}
-
 		// 文本响应不显示，仅播报携带的 TTS 语音
 		if (audio) {
 			AudioQueue.enqueue(audio);

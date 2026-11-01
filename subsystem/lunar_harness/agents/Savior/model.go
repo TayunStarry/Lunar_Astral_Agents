@@ -14,6 +14,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
 // httpStatusError 模型服务返回非 200 状态。
@@ -40,6 +41,8 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 	}
 	callCtx, cancel := context.WithTimeout(ctx, modelTimeout)
 	defer cancel()
+	// 循环输出监管：修复推理同样受约束，命中持续复读立即取消本次请求
+	guard := loopguard.New(cancel, loopguard.DefaultOptions())
 	url := strings.TrimRight(config.AgentMultimodalURL, "/") + "/chat/completions"
 	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
@@ -91,14 +94,20 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 			delta := choice.Delta
 			if think := delta.ReasoningContent + delta.Reasoning; think != "" {
 				reasoning.WriteString(think)
+				guard.Feed(loopguard.KindThink, think)
 				console.StreamDelta(roleLabel, console.KindThink, think)
 			}
 			if delta.Content != "" {
 				content.WriteString(delta.Content)
+				guard.Feed(loopguard.KindContent, delta.Content)
 				console.StreamDelta(roleLabel, console.KindContent, delta.Content)
 			}
 			accumulator.ingest(delta.ToolCalls)
 		}
+	}
+	guard.Stop()
+	if guard.Hit() {
+		return nil, loopguard.ErrLoop
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("读取流式响应失败: %w", err)

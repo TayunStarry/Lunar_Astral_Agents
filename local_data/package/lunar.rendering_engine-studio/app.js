@@ -1,8 +1,11 @@
 // ==== 基座层应用（函数式架构） ====
-// 职责：iframe 集成、操纵层互斥切换、BroadcastChannel 协调
+// 职责：iframe 集成、操纵层互斥切换、与引擎核心的 ws 直连协调
+//
+// 基座、5 个操纵面板与信息栏都经 /reliance/ws_bridge.js 连到同一条 ws 通道
+// （频道 rendering-studio），引擎核心也声明同一频道：指令与遥测都不再走 HTTP 中转。
 
 // ==== 常量 ====
-const CHANNEL_NAME = 'lunar-engine-bus';
+const CHANNEL_NAME = 'rendering-studio';
 const PANELS = ['physics', 'animation', 'movement', 'elements', 'assets'];
 const SOURCE_BASE = 'base';
 
@@ -25,7 +28,7 @@ const state = {
     activePanel: 'animation',          // 当前激活的操纵层（Q6.2 默认动画）
     currentMode: 'editor',             // 当前引擎视图模式（Q5）
     readyPanels: new Set(),            // 已就绪的 panel iframe（Q6.5 握手）
-    channel: new BroadcastChannel(CHANNEL_NAME),
+    channel: new WsBridge(CHANNEL_NAME),
     toastTimer: null,
 };
 

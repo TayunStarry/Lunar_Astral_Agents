@@ -47,45 +47,56 @@ func latestUserUtterance() string {
 	return ""
 }
 
-// latestUserName 最新用户发言的发送者名；优先内存值，为空时从对话缓存恢复。
-func latestUserName() string {
-	lastUserTextMu.Lock()
-	text := lastUserText
-	lastUserTextMu.Unlock()
-	if sender, _ := splitUserPrefix(text); sender != "" {
-		return sender
-	}
+// recentAffectionRounds 汇总最近若干轮「用户发言 + 月华回应」，按角色分组交给生活阶段逐人评估。
+//
+// 只收成对完整的轮次：没有回应的发言不构成情感交互；无发送者名的发言（如系统上下文）也跳过。
+func recentAffectionRounds() []affection.Round {
 	cacheMu.Lock()
 	records := append([]CachedMessage(nil), cachedMessages...)
 	cacheMu.Unlock()
-	for i := len(records) - 1; i >= 0; i-- {
-		if records[i].Role != RoleUser {
-			continue
-		}
-		if sender := strings.TrimSpace(records[i].Sender); sender != "" {
-			return sender
-		}
-		if sender, _ := splitUserPrefix(records[i].Content); sender != "" {
-			return sender
-		}
-	}
-	return ""
-}
 
-// latestAssistantUtterance 最近一条月华回应文本。
-func latestAssistantUtterance() string {
-	cacheMu.Lock()
-	records := append([]CachedMessage(nil), cachedMessages...)
-	cacheMu.Unlock()
+	rounds := make([]affection.Round, 0, maxCacheMessages)
+	perUser := make(map[string]int)
+	reply := ""
 	for i := len(records) - 1; i >= 0; i-- {
-		if records[i].Role != RoleAssistant {
+		record := records[i]
+		if record.Role == RoleAssistant {
+			if reply == "" {
+				reply = strings.TrimSpace(record.Content)
+			}
 			continue
 		}
-		if text := strings.TrimSpace(records[i].Content); text != "" {
-			return text
+		if reply == "" {
+			continue
 		}
+		sender, body := splitUserPrefix(record.Content)
+		if sender == "" {
+			sender = strings.TrimSpace(record.Sender)
+		}
+		body = strings.TrimSpace(body)
+		if sender == "" {
+			// 工具产物等无法识别身份的用户侧内容，不打断配对
+			continue
+		}
+		// 这段回应已被这条发言占用，无论是否计入窗口都要消费掉，避免配错到更早的发言
+		roundReply := reply
+		reply = ""
+		if body == "" || perUser[sender] >= affectionRoundWindow {
+			continue
+		}
+		perUser[sender]++
+		rounds = append(rounds, affection.Round{
+			Key:       record.ID,
+			UserName:  sender,
+			UserText:  body,
+			ReplyText: roundReply,
+		})
 	}
-	return ""
+	// 扫描自新到旧，翻转为时间顺序，使每个角色的窗口末尾是最新一轮。
+	for left, right := 0, len(rounds)-1; left < right; left, right = left+1, right-1 {
+		rounds[left], rounds[right] = rounds[right], rounds[left]
+	}
+	return rounds
 }
 
 // rememberEmotionMark 用户消息进入未读队列时记录已形成的情感标识；

@@ -41,7 +41,7 @@ export function initMusicRenderer() {
 
     iframe = document.createElement('iframe');
     iframe.id = 'music-renderer-frame';
-    iframe.src = '/file/read/package/music_libs/music_renderer.html';
+    iframe.src = '/reliance/music_libs/music_renderer.html';
     iframe.allow = 'autoplay';
     iframe.style.cssText = `
         position: fixed;
@@ -102,27 +102,6 @@ export function renderMusicScore(abcNotation) {
 
     showIframe();
     postToIframe({ type: 'render', abcNotation });
-}
-
-/**
- * 播放后端渲染的 WAV 音频
- * 当 FluidSynth + SoundFont 渲染完成时，前端收到音频 URL 直接播放
- * @param {string} audioUrl - WAV 音频文件 URL
- * @param {string} fileName - 文件名
- */
-export function playRenderedAudio(audioUrl, fileName) {
-    if (!audioUrl) {
-        console.warn('[音乐渲染器] 无效的音频 URL');
-        return;
-    }
-
-    if (!isReady) {
-        pendingQueue.push({ type: 'play_audio', audioUrl, fileName });
-        return;
-    }
-
-    showIframe();
-    postToIframe({ type: 'play_audio', audioUrl, fileName });
 }
 
 /**

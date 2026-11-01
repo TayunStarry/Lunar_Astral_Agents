@@ -6,7 +6,6 @@ package runtime
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"github.com/dop251/goja"
@@ -17,10 +16,8 @@ import (
 func bindSandbox(vm *goja.Runtime, p *plugin) {
 	vm.Set("console", bindConsole(vm))
 
-	// 常驻基础能力
-	vm.Set("event", bindEvent(vm, p))                           // 事件订阅器
-	vm.Set("time", bindTime(vm))                                // 时间戳
-	vm.Set("exportFunction", func(name string, fn goja.Value) { // 导出能力（供 Runtime.Call）
+	// 导出能力（供宿主 Runtime.Call）
+	vm.Set("exportFunction", func(name string, fn goja.Value) {
 		if fn == nil || !isFunc(fn) {
 			return
 		}
@@ -28,10 +25,7 @@ func bindSandbox(vm *goja.Runtime, p *plugin) {
 		p.exports[name] = fn
 		p.mu.Unlock()
 	})
-	vm.Set("command", bindCommand(vm, p)) // 指令系统
 
-	// 广播收发
-	vm.Set("signal", bindSignal(vm, p))
 	// 文件 + 图像 + 视频
 	vm.Set("file", bindFile(vm, p))
 	vm.Set("image", bindImage(vm, p))
@@ -43,109 +37,18 @@ func bindSandbox(vm *goja.Runtime, p *plugin) {
 	// 编解码 + 哈希签名
 	vm.Set("encoding", bindEncoding(vm))
 	vm.Set("hash", bindHash(vm))
-	// 跨运行时调用：Result 统一风格，目标不存在/未导出不抛异常
-	vm.Set("callFunction", func(pkgID, fnName string, args []any) map[string]any {
-		v, err := engineCall(pkgID, fnName, args)
-		if err != nil {
-			return map[string]any{"success": false, "error": err.Error()}
-		}
-		return map[string]any{"success": true, "result": v}
-	})
-	// 智能体：LLM 对话 / 文本嵌入
+	// 智能体：LLM 对话 / 网络搜索
 	vm.Set("agent", bindAgent(vm, p))
-	// 网络：同步 http + 裸套接字 + 全局 fetch/WebSocket
+	// 网络：文件下载 + 全局 fetch/WebSocket（通用请求一律用 fetch）
 	vm.Set("http", bindHTTP(vm, p))
-	vm.Set("network", bindNet(vm))
 	bindNetwork(vm, p)
 }
 
-// bindHTTP 同步阻塞的 HTTP 能力（http.get/post/download），返回非 Promise 的普通对象。
+// bindHTTP 同步下载（http.download）：把远端文件存进脚本数据目录。
 func bindHTTP(vm *goja.Runtime, p *plugin) *goja.Object {
 	h := vm.NewObject()
-	h.Set("get", func(url string, headers map[string]any) map[string]any {
-		if headers == nil {
-			headers = map[string]any{}
-		}
-		return httpGetSync(url, headers)
-	})
-	h.Set("post", func(url, body string, headers map[string]any) map[string]any {
-		if headers == nil {
-			headers = map[string]any{}
-		}
-		return httpPostSync(url, body, headers)
-	})
 	h.Set("download", func(url, savePath string) map[string]any { return httpDownloadSync(p, url, savePath) })
 	return h
-}
-
-// bindEvent event.subscribe(topic, handler, priority?)/unsubscribe/publish（常驻注入）。
-func bindEvent(vm *goja.Runtime, p *plugin) *goja.Object {
-	event := vm.NewObject()
-	event.Set("subscribe", func(topic string, cb goja.Value, priority goja.Value) int {
-		if cb == nil || !isFunc(cb) {
-			return 0
-		}
-		pri := priorityUnset
-		if priority != nil && !goja.IsUndefined(priority) && !goja.IsNull(priority) {
-			if n := priority.ToInteger(); n >= 0 {
-				pri = int(n)
-			}
-		}
-		p.mu.Lock()
-		id := p.registerEvent(topic, cb, pri)
-		p.mu.Unlock()
-		return id
-	})
-	event.Set("unsubscribe", func(topic string, id int) {
-		p.mu.Lock()
-		p.removeEvent(topic, id)
-		p.mu.Unlock()
-	})
-	// 插件主动在事件总线上发布事件：派发给其它插件的订阅器 + 转发给宿主 outbound（供外部客户端消费）。
-	// 异步分发（fire-and-forget），避免在被调用插件回调内等待触发插件自身回调造成自锁。
-	event.Set("publish", func(topic string, payload any) {
-		enginePublish(p, topic, payload)
-	})
-	return event
-}
-
-// bindSignal signal.all/target/subscribe/unsubscribe。
-// all/target 单向广播；subscribe/unsubscribe 注册/退订广播接收回调。
-func bindSignal(vm *goja.Runtime, p *plugin) *goja.Object {
-	sig := vm.NewObject()
-	sig.Set("all", func(payload any) { engineBroadcast("__all__", payload) })
-	sig.Set("target", func(id string, payload any) { engineBroadcast(id, payload) })
-	sig.Set("subscribe", func(cb goja.Value) int {
-		if cb == nil || !isFunc(cb) {
-			return 0
-		}
-		p.mu.Lock()
-		p.subSeq++
-		id := p.subSeq
-		p.signalSubs = append(p.signalSubs, &eventSub{orderID: id, handler: cb})
-		p.mu.Unlock()
-		return id
-	})
-	sig.Set("unsubscribe", func(id int) {
-		p.mu.Lock()
-		kept := p.signalSubs[:0]
-		for _, s := range p.signalSubs {
-			if s.orderID != id {
-				kept = append(kept, s)
-			}
-		}
-		p.signalSubs = kept
-		p.mu.Unlock()
-	})
-	return sig
-}
-
-// bindTime time.now()/nowMs()。
-func bindTime(vm *goja.Runtime) *goja.Object {
-	t := vm.NewObject()
-	t.Set("now", func() int64 { return time.Now().Unix() })
-	t.Set("nowMs", func() int64 { return time.Now().UnixMilli() })
-	return t
 }
 
 // bindFile file.write/read/delete（路径限定运行时数据目录）。
@@ -229,11 +132,10 @@ func bindHash(vm *goja.Runtime) *goja.Object {
 	return h
 }
 
-// bindImage image.loadValid/download/resize/convert。
+// bindImage image.loadValid/resize/convert。
 func bindImage(vm *goja.Runtime, p *plugin) *goja.Object {
 	img := vm.NewObject()
 	img.Set("loadValid", func(path string) (any, error) { return engineImageLoadValid(p, path) })
-	img.Set("download", func(url, fileName string) (any, error) { return engineImageDownload(p, url, fileName) })
 	// resize 缩放（max_dim 等比 / width+height 精确）+ 可选编码格式；convert 仅重编码（编码格式化）
 	img.Set("resize", func(path string, opts map[string]any) (any, error) {
 		return engineImageResize(p, path, opts)
@@ -253,7 +155,7 @@ func bindVideo(vm *goja.Runtime, p *plugin) *goja.Object {
 	return v
 }
 
-// bindAgent agent.chat/embed/synergy/search。
+// bindAgent agent.chat/search。
 func bindAgent(vm *goja.Runtime, p *plugin) *goja.Object {
 	a := vm.NewObject()
 	a.Set("chat", func(messages []any, opts map[string]any) (any, error) {
@@ -261,21 +163,6 @@ func bindAgent(vm *goja.Runtime, p *plugin) *goja.Object {
 			opts = map[string]any{}
 		}
 		return engineLLMChat(messages, opts)
-	})
-	a.Set("embed", func(input any, opts map[string]any) (any, error) {
-		if opts == nil {
-			opts = map[string]any{}
-		}
-		return engineLLMEmbed(input, opts)
-	})
-	// synergy 调用前端智能体（Mini-LTP / Node-LTP），同步阻塞返回其执行文本；
-	// Result 统一风格：目标包不存在/拒绝响应返回 { success:false, error }，不抛异常
-	a.Set("synergy", func(pkgID, text string) map[string]any {
-		v, err := engineAgent(pkgID, text)
-		if err != nil {
-			return map[string]any{"success": false, "error": err.Error()}
-		}
-		return map[string]any{"success": true, "text": fmt.Sprint(v)}
 	})
 	// search 调用进程内 Web-LTP 网络搜索
 	a.Set("search", func(instruction string) map[string]any {

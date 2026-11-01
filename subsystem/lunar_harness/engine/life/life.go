@@ -144,33 +144,24 @@ func failActive(eventID string, err error) {
 	logger.Warn(Module, "[生活] 事件 %s 失败，已按「%s」记录: %v", eventID, failureRecord(eventID), err)
 }
 
-// refreshMood 无模型地推进心情与对用户的情感认知；
+// refreshMood 无模型地推进心情与对各角色的情感认知；
 // 输入未变化时跳过，避免生活续跑步骤重复调用嵌入服务。
+//
+// 情感认知按「每个角色最近若干轮」的窗口逐人计算，窗口未前移的角色不会重复嵌入。
 func refreshMood(ctx context.Context) {
 	mu.Lock()
-	textHook, nameHook, replyHook := lastUserTextHook, lastUserNameHook, lastReplyTextHook
+	textHook, roundsHook := lastUserTextHook, dialogueRoundsHook
 	mu.Unlock()
 
-	var userText, userName, replyText string
+	userText := ""
 	if textHook != nil {
 		userText = textHook()
-	}
-	if nameHook != nil {
-		userName = nameHook()
-	}
-	if replyHook != nil {
-		replyText = replyHook()
 	}
 
 	mu.Lock()
 	moodChanged := userText != lastMoodInput
 	if moodChanged {
 		lastMoodInput = userText
-	}
-	emotionKey := userName + "\x00" + userText + "\x00" + replyText
-	emotionChanged := emotionKey != lastEmotionInput
-	if emotionChanged {
-		lastEmotionInput = emotionKey
 	}
 	mu.Unlock()
 
@@ -179,10 +170,11 @@ func refreshMood(ctx context.Context) {
 			logger.Warn(Module, "[生活] 心情更新失败: %v", err)
 		}
 	}
-	if emotionChanged {
-		if err := affection.Update(ctx, userName, userText, replyText); err != nil {
-			logger.Warn(Module, "[生活] 情感认知更新失败: %v", err)
-		}
+	if roundsHook == nil {
+		return
+	}
+	if _, err := affection.UpdateWindows(ctx, roundsHook()); err != nil {
+		logger.Warn(Module, "[生活] 情感认知更新失败: %v", err)
 	}
 }
 

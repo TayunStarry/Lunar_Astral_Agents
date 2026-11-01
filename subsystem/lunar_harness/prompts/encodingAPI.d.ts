@@ -14,22 +14,6 @@ export const encoding: {
 	urlEncode(s: string): string
 	/** URL 解码；返回 { success, text?, error? } */
 	urlDecode(s: string): { success: boolean; text?: string; error?: string }
-	/**
-	 * 加密
-	 *
-	 * @param key 加解密密钥字符串
-	 * @param content 要加密的明文
-	 * @returns { success, text: 密文, error? }
-	 */
-	lunarEncoder(key: string, content: string): { success: boolean; text?: string; error?: string }
-	/**
-	 * 解密
-	 *
-	 * @param key 加解密密钥字符串
-	 * @param cipher 要解密的密文
-	 * @returns { success, text: 原文, error? }
-	 */
-	lunarDecoder(key: string, cipher: string): { success: boolean; text?: string; error?: string }
 }
 
 /** 哈希工具（签名类方法统一 Result 风格） */

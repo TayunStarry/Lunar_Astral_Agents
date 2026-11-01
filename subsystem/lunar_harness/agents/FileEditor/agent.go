@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/prompts"
 )
@@ -29,6 +30,7 @@ func Run(ctx context.Context, instruction string) (string, error) {
 	summary, _, err := runToolLoop(runCtx, systemPrompt(), instruction)
 	if err != nil {
 		logger.Warn(Module, "[文件编辑] 执行失败: %v", err)
+		Savior.ReportRun("file_editor", err)
 		return "", err
 	}
 	if summary == "" {
@@ -54,6 +56,7 @@ func Execute(ctx context.Context, instruction string) (OpResult, error) {
 	summary, handles, err := runToolLoop(runCtx, systemPrompt(), instruction)
 	if err != nil {
 		logger.Warn(Module, "[文件编辑] 执行失败: %v", err)
+		Savior.ReportRun("file_editor", err)
 		return failResult("file_editor", "", err), err
 	}
 	if summary == "" {

@@ -11,7 +11,7 @@ import (
 
 // TestMenuGroupsAndKeysSequential 主菜单：分组顺序固定，快捷键按显示顺序连续占用 0-9、a-z
 func TestMenuGroupsAndKeysSequential(t *testing.T) {
-	wantGroups := []string{"运行观测", "系统管理", "更新与发布", "会话"}
+	wantGroups := []string{"运行观测", "系统管理", "更新与退出"}
 	gotGroups := make([]string, 0, len(wantGroups))
 	for _, item := range menuItems {
 		if len(gotGroups) == 0 || gotGroups[len(gotGroups)-1] != item.group {

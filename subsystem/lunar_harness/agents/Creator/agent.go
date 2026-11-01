@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -32,6 +33,8 @@ func Run(ctx context.Context, instruction string) (string, error) {
 		history.UpdatedAt = nowUnix()
 		saveJournal(history)
 		logger.Warn(Module, "[自由创作] 规划失败: %v", err)
+		// 交给智能修复：规划失败常由参考上下文过长/损坏引起
+		Savior.ReportRun("creative", err)
 		return "", err
 	}
 

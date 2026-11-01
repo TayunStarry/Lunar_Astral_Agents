@@ -34,7 +34,7 @@ const (
 	// runTimeout 整轮文件编辑的总超时
 	runTimeout = 15 * time.Minute
 	// defaultRunLimit 项目脚本的默认运行时长上限。
-	// 私有 js 运行时可能因事件订阅长期驻留，超过该时长后自动卸载实例。
+	// 私有 js 运行时按该时长驻留，到时自动卸载实例。
 	defaultRunLimit = 120 * time.Second
 	// minRunLimit 允许的最短运行时长（防止 AI 设成无法完成加载的值）
 	minRunLimit = 5 * time.Second

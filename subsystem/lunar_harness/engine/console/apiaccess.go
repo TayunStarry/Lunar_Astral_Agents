@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/channel"
-	"LunarSubsystem/LunarHarness/engine/console/ltpxmarket"
 	"LunarSubsystem/LunarHarness/engine/console/updatepack"
 )
 
@@ -90,26 +89,10 @@ func withSessionTokenUpdate(cfg *updatepack.Config) *updatepack.Config {
 	return cfg
 }
 
-// withSessionTokenMarket 把会话令牌补进市场配置（配置里已有则以其为准）
-func withSessionTokenMarket(cfg *ltpxmarket.Config) *ltpxmarket.Config {
-	if cfg == nil {
-		return nil
-	}
-	if cfg.GiteeToken == "" {
-		cp := *cfg
-		cp.GiteeToken = sessionTokenValue()
-		return &cp
-	}
-	return cfg
-}
-
-// configuredGiteeToken 配置文件（local_data/release.json）里已保存的 Gitee 令牌：
-// 更新包配置优先，其次应用市场配置；TUI 发布前用它预填输入框。
+// configuredGiteeToken 配置文件（local_data/release.json）里已保存的 Gitee 令牌；
+// TUI 发布前用它预填输入框。
 func configuredGiteeToken() string {
-	if cfg := GetUpdatePackConfig(); cfg != nil && cfg.GiteeToken != "" {
-		return cfg.GiteeToken
-	}
-	if cfg := GetMarketConfig(); cfg != nil {
+	if cfg := GetUpdatePackConfig(); cfg != nil {
 		return cfg.GiteeToken
 	}
 	return ""
@@ -121,9 +104,6 @@ func tokenConfigured() bool {
 		return true
 	}
 	if cfg := GetUpdatePackConfig(); cfg != nil && cfg.GiteeToken != "" {
-		return true
-	}
-	if cfg := GetMarketConfig(); cfg != nil && cfg.GiteeToken != "" {
 		return true
 	}
 	return false

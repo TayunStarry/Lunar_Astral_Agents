@@ -1,10 +1,10 @@
 package runtime
 
-// ==== 沙箱网络：同步 fetch / WebSocket 客户端与同步 http ====
-// fetch 为同步形态（参照 lunar_astral engine.syncFetch 方案）：阻塞直到返回统一
-// Result 信封 { success, status, ok, url, headers, body, error? }，body 为 JSON 时自动
-// 解析为对象；WebSocket 客户端以 onopen/onmessage 等事件回调形态提供（见 api_ws.go）。
-// 同步形态 http.get/post/download 由 binder 注入。
+// ==== 沙箱网络：同步 fetch / WebSocket 客户端 + 文件下载 ====
+// fetch 为同步形态：阻塞直到返回统一 Result 信封
+// { success, status, ok, url, headers, body, error? }，body 为 JSON 时自动解析为对象；
+// WebSocket 客户端以 onopen/onmessage 等事件回调形态提供（见 api_ws.go）。
+// 通用请求一律用 fetch；http.download 仅负责把远端文件落盘，由 binder 注入。
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ const fetchTimeout = 150 * time.Second
 
 // bindNetwork 把 fetch 与 WebSocket 客户端全局注册进插件沙箱（由 bindSandbox 调用）。
 func bindNetwork(vm *goja.Runtime, p *plugin) {
-	// 同步 fetch：阻塞直到返回统一 Result 信封（Result 风格与 http.get/post 同构）
+	// 同步 fetch：阻塞直到返回统一 Result 信封
 	vm.Set("fetch", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) < 1 {
 			panic(vm.NewTypeError("fetch: url 参数缺失"))
@@ -69,32 +69,6 @@ func bindNetwork(vm *goja.Runtime, p *plugin) {
 	})
 	// WebSocket 客户端全局（新）。
 	bindWebSocket(vm, p)
-}
-
-// httpGetSync 同步 GET：阻塞直到返回，回 { success, status, body } 或 { success:false, error }。供不用异步的插件使用。
-func httpGetSync(url string, headers map[string]any) map[string]any {
-	opts := map[string]any{"method": "GET", "timeout": float64(fetchTimeout / time.Second)}
-	if len(headers) > 0 {
-		opts["headers"] = headers
-	}
-	status, _, _, body, _, _, err := doLTP9Fetch(url, opts)
-	if err != nil {
-		return map[string]any{"success": false, "status": 0, "body": "", "error": err.Error()}
-	}
-	return map[string]any{"success": true, "status": status, "body": string(body)}
-}
-
-// httpPostSync 同步 POST：阻塞直到返回，返回 { success, status, body } 或 { success:false, error }。
-func httpPostSync(url, body string, headers map[string]any) map[string]any {
-	opts := map[string]any{"method": "POST", "body": body, "timeout": float64(fetchTimeout / time.Second)}
-	if len(headers) > 0 {
-		opts["headers"] = headers
-	}
-	status, _, _, b, _, _, err := doLTP9Fetch(url, opts)
-	if err != nil {
-		return map[string]any{"success": false, "status": 0, "body": "", "error": err.Error()}
-	}
-	return map[string]any{"success": true, "status": status, "body": string(b)}
 }
 
 // httpDownloadSync 同步下载文件到插件数据目录（http.download），savePath 为空时按 URL 末段命名。

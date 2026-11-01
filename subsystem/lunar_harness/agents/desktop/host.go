@@ -18,6 +18,7 @@ package desktop
 //   - 连续两轮无变化即判定停滞并暂停，而不是耗尽轮次。
 
 import (
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"context"
 	"encoding/base64"
@@ -33,6 +34,11 @@ func Run(ctx context.Context, instruction string) (resultText string, err error)
 		if r := recover(); r != nil {
 			err = fmt.Errorf("桌面操纵内部异常: %v", r)
 		}
+		// 人工中断不算故障，其余失败交给智能修复
+		if errors.Is(err, ErrCanceled) {
+			return
+		}
+		Savior.ReportRun("desktop", err)
 	}()
 
 	if err := ctx.Err(); err != nil {

@@ -30,8 +30,8 @@ func TestReadRuntimeDocFromEmbedded(t *testing.T) {
 	}
 
 	agentDoc, err := readDTSDoc("agentAPI.d.ts")
-	if err != nil || !strings.Contains(agentDoc, "chat") || !strings.Contains(agentDoc, "embed") {
-		t.Fatalf("agent 契约应完整: err=%v", err)
+	if err != nil || !strings.Contains(agentDoc, "chat") || strings.Contains(agentDoc, "embed") {
+		t.Fatalf("agent 契约应只含对话与搜索: err=%v", err)
 	}
 
 	// 空名：返回清单而不是报错

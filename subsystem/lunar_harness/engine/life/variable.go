@@ -3,6 +3,8 @@ package life
 import (
 	"sync"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/affection"
 )
 
 const (
@@ -76,14 +78,10 @@ var (
 	planUpcomingHook func(time.Time, time.Duration) string
 	// lastUserTextHook 最新用户发言（由 lunar 注入）
 	lastUserTextHook func() string
-	// lastUserNameHook 最新用户发言的发送者名（由 lunar 注入）
-	lastUserNameHook func() string
-	// lastReplyTextHook 上一轮月华回应文本（由 lunar 注入）
-	lastReplyTextHook func() string
+	// dialogueRoundsHook 各角色最近若干轮的成对交互（由 lunar 注入）
+	dialogueRoundsHook func() []affection.Round
 	// lastMoodInput 上次已用于更新心情的最新发言，避免同一发言重复嵌入
 	lastMoodInput string
-	// lastEmotionInput 上次已用于更新情感认知的「用户名+发言+回应」组合
-	lastEmotionInput string
 	// idleThreshold 可通过配置覆盖（当前先用默认值）
 	idleThreshold = defaultIdleThreshold
 )

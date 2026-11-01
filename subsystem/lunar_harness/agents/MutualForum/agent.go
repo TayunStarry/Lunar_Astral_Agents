@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -79,6 +80,8 @@ func Run(instruction string) (string, error) {
 		response, callErr := chatWithTools(ctx, messages, tools, round)
 		if callErr != nil {
 			logger.Warn(roleLabel, "模型调用失败（第 %d 轮）: %v", round+1, callErr)
+			// 交给智能修复：论坛上下文过长或含脏数据时会持续复现
+			Savior.ReportRun("mutual_forum", callErr)
 			return "", fmt.Errorf("互助论坛模型调用失败: %w", callErr)
 		}
 

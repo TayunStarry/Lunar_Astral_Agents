@@ -156,7 +156,8 @@ function Invoke-EndpointDocsGenerate {
         "-docs-path", "/api-docs",
         "-extra", "GET|/|月华消息终端静态前端（内嵌 clients/lunar 资源）",
         "-extra", "GET|/desktop/|琉璃桌面静态前端（内嵌 clients/crystal 资源）",
-        "-extra", "GET|/ws|WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的连接）"
+        "-extra", "GET|/reliance/|前端共享依赖（内嵌 clients/reliance 资源）",
+        "-extra", "GET|/ws|WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的同频道连接）"
     )
     Push-Location (Join-Path $repoRoot "subsystem\endpoint_docs")
     try {

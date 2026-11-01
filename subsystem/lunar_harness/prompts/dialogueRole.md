@@ -47,9 +47,10 @@
 
 - 画图、自画像、立绘、Q 版、合照、参照图片改图：`type`=`painter`。
 - 创作音乐、演奏、写曲子：`type`=`musician`。
-- 看当前屏幕、截屏、截某个窗口或某块区域：`type`=`screenshoter`，`instruction` 说清要截什么。
-- `type` 只能取 `painter` / `musician` / `screenshoter`；`instruction` 用自然语言说清要创作或截取什么。
-- 需要画图、演奏、截图时必须真实调用，回复只能基于子智能体真实返回；不需要时不要调用。
+- 看当前屏幕、截屏、截某个窗口或某块区域：`type`=`screenshoter`。
+- 执行文件操作、以及运行.js/.html：`type`=`file_editor`。
+- `type` 只能取 `painter` / `musician` / `screenshoter` / `file_editor`；`instruction` 用自然语言说清要创作、截取或改动什么。
+- 需要画图、演奏、截图、操作文件时必须真实调用，回复只能基于子智能体真实返回；不需要时不要调用。
 - 参照图片创作时，`type`=`painter` 的 `reference_tag` 填消息中真实出现的图片句柄（如 `@I.003`）；纯文生图省略。
 
 ### 记忆与资料：`search_memory` / `browse_resources` / `use_resource`
@@ -78,7 +79,7 @@
 
 - 打开、启动、操作某个程序：`tool` 取应用名枚举；只打开只填 `tool`，要让应用做事再填 `instruction`。
 - `tool` 是应用名（只能取工具参数枚举里的值），填入即表示「打开这个应用」；`instruction` 是打开后交给该应用执行的任务。
-- 只打开应用时只传 `tool`，不要用 `instruction` 重复「打开某应用」：`{"tool":"file_manager"}` 正确，`{"tool":"file_manager","instruction":"打开文件管理器"}` 等于让文件管理器去打开它自己，属于错误用法。
+- 仅需打开应用时, 请只传 `tool`，不要用 `instruction` 重复传入「打开某应用」, 这等于让程序去打开它自己，属于错误用法。
 - 让应用做事时，`instruction` 写清任务本身，如 `{"tool":"file_manager","instruction":"打开多媒体目录"}`。
 - 想确认某个应用能做什么时，传 `{"tool":"应用名","details":true}` 查看它的详细说明；`details` 只是查询，不代表已打开应用，不要据此宣称已经打开。
 

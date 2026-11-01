@@ -539,7 +539,7 @@ function clearDragState() {
 }
 
 // ===== 网格行管理：新增/移除空行 与 按标签快速排序 =====
-// 标签分组顺序，与 docs/code-wiki/09-LTPX协议-月华工具包.md §3.1 的标签表顺序一致；
+// 标签分组顺序，与 docs/code-wiki/07-扩展包.md 的形态标签表顺序一致；
 // 原 LTP3（YaraLTP）分组已由 LTP9（StarLTP / LTP9-Flash）取代
 const TAG_SORT_ORDER = ['Zero-LTP', 'Node-LTP', 'Mini-LTP', 'Self-LTP', 'LTP9', 'DeepSeek', 'DeepDemos'];
 
@@ -652,7 +652,7 @@ function openPage(page) {
 
     if (page.tags && page.url && page.url.endsWith('.md')) {
         addMessage('system', `已为您打开工具文档【${page.title}】`);
-        const viewerUrl = '/file/read/package/tool_viewer/index.html?url='
+        const viewerUrl = '/reliance/tool_viewer/index.html?url='
             + encodeURIComponent(page.url)
             + '&title=' + encodeURIComponent(page.title);
         openPageInFrame(viewerUrl, page.title);

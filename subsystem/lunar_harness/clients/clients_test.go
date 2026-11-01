@@ -22,6 +22,11 @@ func TestFrontendEntrypointsAreEmbedded(t *testing.T) {
 		{"月华移动端入口", LunarFS(), "/mobile/index.html"},
 		{"琉璃桌面入口", CrystalFS(), "/index.html"},
 		{"琉璃桌面脚本", CrystalFS(), "/script.js"},
+		{"共享依赖·图标样式", RelianceFS(), "/fontAwesome/css/all.min.css"},
+		{"共享依赖·Markdown", RelianceFS(), "/marked.min.js"},
+		{"共享依赖·渲染引擎入口", RelianceFS(), "/lunar.rendering_engine/index.html"},
+		{"共享依赖·Live2D 引擎入口", RelianceFS(), "/lunar.live2d_engine/index.html"},
+		{"共享依赖·通信桥", RelianceFS(), "/ws_bridge.js"},
 	}
 
 	for _, tc := range cases {

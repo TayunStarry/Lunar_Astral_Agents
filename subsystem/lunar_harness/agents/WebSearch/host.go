@@ -15,6 +15,7 @@ package WebSearch
 // 配置来自 engine/config 统一解析的 web_search 节。
 
 import (
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/weather"
@@ -26,7 +27,9 @@ import (
 )
 
 // Run 执行一次网络搜索：月华自然语言指令 → 搜索报告（文本）。
-func Run(instruction string) (string, error) {
+// 失败统一上报给智能修复（循环截断与主动取消已在 ReportRun 内过滤）。
+func Run(instruction string) (out string, err error) {
+	defer func() { Savior.ReportRun("web_search", err) }()
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
 		return "", fmt.Errorf("空指令")

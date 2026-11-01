@@ -1,15 +1,13 @@
 ﻿# Lunar Astral Agents - 统一构建脚本（仓库根目录）
 #
 # 构建目标：
-#   1. subsystem/core_personality  核心人格（月华 + 琉璃合并工程）
+#   1. subsystem/lunar_harness  星月智能主程序（月华 + 琉璃）
 #        ├─ 图标编译（rsrc）
 #        ├─ 关闭运行中的主程序（释放输出文件与 TTS 引擎 DLL 占用）
 #        ├─ TTS 引擎库按需构建（broadcaster/qwen / broadcaster/omnivoice → 运行时 DLL）
-#        ├─ 月华智能体 TypeScript 打包（tsc + rollup → agentSystem.js）
 #        ├─ 端点自述文档生成（server/variable.go 统一路由注册表）
 #        └─ CGO 编译输出到仓库根目录：Lunar_Astral_Agents.exe
-#   2. subsystem/ltp9_keygen      LTP9 权限密钥生成器 → subsystem/LTP9Keygen.exe
-#   3. subsystem/update_applier   更新器 → Lunar_Update_Applier.exe（仓库根目录，与主程序同层）
+#   2. subsystem/update_applier  更新器 → Lunar_Update_Applier.exe（仓库根目录，与主程序同层）
 #
 # 各子构建脚本自身向上查找仓库根，可被本脚本或手工从任意目录调用。
 #
@@ -57,28 +55,6 @@ function Check-GoEnvironment {
         $gccVersion = gcc --version 2>&1 | Select-Object -First 1
         Write-Host "  OK $gccVersion" -ForegroundColor Green
     }
-}
-
-function Check-NodeEnvironment {
-    Write-Host "[检查] Node.js 运行时..." -ForegroundColor Cyan
-
-    if (-not (Test-CommandExists "node")) {
-        throw "未找到 Node.js 运行时，请安装 Node.js (https://nodejs.org/)"
-    }
-
-    $nodeVersion = node --version 2>&1
-    Write-Host "  OK Node.js $nodeVersion" -ForegroundColor Green
-}
-
-function Check-NpmEnvironment {
-    Write-Host "[检查] npm 包管理器..." -ForegroundColor Cyan
-
-    if (-not (Test-CommandExists "npm")) {
-        throw "未找到 npm 包管理器，请确保已安装 npm"
-    }
-
-    $npmVersion = npm --version 2>&1
-    Write-Host "  OK npm $npmVersion" -ForegroundColor Green
 }
 
 function Check-RsrcTool {
@@ -142,8 +118,6 @@ try {
     Write-Host "--- 阶段 1: 环境与依赖检查 ---" -ForegroundColor Yellow
 
     Check-GoEnvironment
-    Check-NodeEnvironment
-    Check-NpmEnvironment
     Check-RsrcTool
 
     Write-Host ""
@@ -153,10 +127,10 @@ try {
     # 阶段 2: 编译项目
     Write-Host "--- 阶段 2: 项目编译 ---" -ForegroundColor Yellow
 
-    # 核心人格（月华 + 琉璃 + 运维工具箱合并工程）：单服务端 + 双桌面前端
+    # [ 月之华 ]主程序
     Invoke-Build -Path "$ScriptRoot\subsystem\lunar_harness" -Name "Lunar Harness"
 
-    # 更新器（独立工具，编译到仓库根目录与主程序同层）
+    # 更新器
     Invoke-Build -Path "$ScriptRoot\subsystem\update_applier" -Name "Update Applier"
 
     Write-Host ""

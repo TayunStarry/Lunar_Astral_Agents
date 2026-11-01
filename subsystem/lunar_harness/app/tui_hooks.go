@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
@@ -17,6 +18,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/agents/desktop"
@@ -151,6 +153,8 @@ func WireTUIEngineHooks() {
 		Delta: streamDelta,
 		End:   streamEnd,
 		Meter: meter,
+		// 推理重试仍失败时交给智能修复：按实况角色标签映射到对应智能体 ID
+		Report: func(role string, err error) { Savior.ReportRun(agentIDByRole(role), err) },
 	})
 	// 通讯桥接的规划调用同样进实况与计量（投递内容不展示，只展示规划过程）。
 	DialogueBridging.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
@@ -184,6 +188,20 @@ func WireTUIEngineHooks() {
 		},
 	)
 	LunarPersonality.SetDesktopActorStopHook(desktop.Stop)
+}
+
+// agentIDByRole 把实况角色标签映射到智能修复使用的智能体 ID。
+// 映射缺失时回落到 core（核心人格），保证失败不会被静默吞掉。
+func agentIDByRole(role string) string {
+	switch {
+	case strings.Contains(role, "视觉"):
+		return "vision"
+	case strings.Contains(role, "文献"):
+		return "document_reader"
+	case strings.Contains(role, "归档"):
+		return "archive_reader"
+	}
+	return "core"
 }
 
 // buildToolCatalog 汇总全部 Go 智能体的工具目录（供控制台「工具列表」屏扫描展示）。

@@ -10,6 +10,8 @@ import (
 const (
 	// DesktopPrefix 琉璃桌面的挂载前缀（月华消息终端占用根路径 /）
 	DesktopPrefix = "/desktop/"
+	// ReliancePrefix 前端共享依赖的挂载前缀（字体图标 / 高亮 / 公式 / 音乐库 / 渲染引擎）
+	ReliancePrefix = "/reliance/"
 )
 
 // noStoreHandler 为静态文件响应补齐缓存控制头。
@@ -50,5 +52,15 @@ func registerStatic(mux *http.ServeMux, roots StaticRoots) {
 		logger.Info("LunarHarness", "琉璃桌面已挂载于 %s（静态资源禁止缓存）", DesktopPrefix)
 	} else {
 		logger.Warn("LunarHarness", "琉璃前端静态资源未就绪，%s 暂不可访问", DesktopPrefix)
+	}
+
+	// ==== 前端共享依赖：/reliance/ ====
+	// 字体图标、代码高亮、公式渲染、音乐库与渲染引擎都从这里取；
+	// 它们没有 metadata.json，不属于扩展包，随程序本体一起编译。
+	if roots.Reliance != nil {
+		mux.Handle(ReliancePrefix, noStoreHandler(http.StripPrefix(ReliancePrefix, http.FileServer(roots.Reliance))))
+		logger.Info("LunarHarness", "前端共享依赖已挂载于 %s（静态资源禁止缓存）", ReliancePrefix)
+	} else {
+		logger.Warn("LunarHarness", "前端共享依赖未就绪，%s 暂不可访问", ReliancePrefix)
 	}
 }

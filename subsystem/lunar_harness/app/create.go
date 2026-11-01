@@ -7,6 +7,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/CrystalPersonality"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
+	"LunarSubsystem/LunarHarness/clients"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/config"
@@ -15,12 +16,11 @@ import (
 	"LunarSubsystem/LunarHarness/engine/knowledge"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/server"
-	"LunarSubsystem/LunarHarness/transport/enginebus"
 	"LunarSubsystem/LunarHarness/transport/ws"
 )
 
 // Assemble 装配各子系统：传输层 → HTTP 服务 → 服务层（月华生产者 / 琉璃）→ 消费层（Go 对话链）。
-// 各层按依赖顺序初始化，跨层依赖（引擎总线发送函数、结构化消息桥接）在此注入，
+// 各层按依赖顺序初始化，跨层依赖（引擎上行观测、结构化消息桥接）在此注入，
 // 避免包间反向依赖，亦避免各人格包互相 import。
 // 消费层（月华对话链与 LTP9 插件沙箱）排在末段启动，
 // 保证其思考循环/插件加载之时，HTTP、llama 代理、记忆库与 LTPX 协调层均已就绪。
@@ -34,17 +34,11 @@ func Assemble() {
 	go ws.Instance.Run()
 	logger.Info("LunarHarness", "统一 WebSocket 集线器已启动")
 
-	// ==== 传输层：引擎消息总线（反射观测 + 原样透传） ====
-	enginebus.Instance = enginebus.NewBus()
-	enginebus.Instance.SetSender(func(data []byte) {
-		if ws.Instance != nil {
-			ws.Instance.BroadcastBus(ws.DefaultBusChannel, data)
-		}
-	})
-	// 注册引擎消息观察者：方法名 OnXxx 反射映射到消息 type（OnAnimationList → animation_list）
-	enginebus.Instance.Subscribe(LunarPersonality.AnimationObserver{})
-	enginebus.Instance.Subscribe(LunarPersonality.TelemetryObserver{})
-	logger.Info("LunarHarness", "引擎消息总线（反射 + 透传）已启动")
+	// ==== 传输层：引擎上行观测（ws 直连） ====
+	// 渲染引擎经各自 /ws 连接上行 animation_list / telemetry，月华在入站侧观测，
+	// 不再经 HTTP 中转：动作查询与动作执行都走同一条 WebSocket。
+	ws.Instance.SubscribeInbound("engine-observer", LunarPersonality.HandleEngineFrame)
+	logger.Info("LunarHarness", "引擎上行观测（ws 直连）已接入")
 
 	// ==== 跨层注入：结构化广播 & 下行桥接 ====
 	// 智能体下行走结构化广播（type/data），QQ 桥接挂在结构化旁路上（原始字节广播不触发）
@@ -54,8 +48,9 @@ func Assemble() {
 	// ==== 前端静态资源：月华消息终端（/）与琉璃桌面（/desktop/） ====
 	StaticRootsProvider = func() server.StaticRoots {
 		return server.StaticRoots{
-			Lunar:   lunarStaticRoot(),
-			Crystal: crystalStaticRoot(),
+			Lunar:    lunarStaticRoot(),
+			Crystal:  crystalStaticRoot(),
+			Reliance: clients.RelianceFS(),
 		}
 	}
 

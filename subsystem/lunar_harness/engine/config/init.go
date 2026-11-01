@@ -135,15 +135,6 @@ type ModelConfig struct {
 		// 图生图的提示词引导系数覆盖值（<=0 表示不覆盖，按 1.0）
 		Img2ImgCFG *float64 `json:"img2img_cfg,omitempty"`
 	} `json:"diffusion"`
-	// NapCat QQ 桥接。仅由月华的 bridging/napcat 读取，此处声明结构以集中呈现配置契约。
-	Bridging struct {
-		BridgingType                    string   `json:"bridging_type"`                      // 桥接类型（napcat）
-		BridgingPath                    string   `json:"bridging_path"`                      // 桥接地址（NapCat WS 地址）
-		BridgingToken                   string   `json:"bridging_token"`                     // 桥接令牌
-		BridgingUsers                   []int64  `json:"bridging_users"`                     // 允许响应的用户/群号列表
-		BridgingGroupKeywords           []string `json:"bridging_group_keywords"`            // 群聊触发关键词
-		BridgingGroupTriggerProbability *float64 `json:"bridging_group_trigger_probability"` // 群聊无关键词时的应答概率
-	} `json:"bridging"`
 	// 月华语音合成（TTS）：引擎选择 + 统一效果参数。
 	// 参数层面统一：各引擎共用同一套字段；执行层面由 engine/broadcaster 统一播报
 	// 链路按引擎自身格式适配，引擎不支持的参数（如 Kokoro 不支持参考音频）自动忽略。
@@ -272,8 +263,6 @@ func applyConfig(parameter *ModelConfig) {
 		SetDiffusionSchemes(parameter.Models.DefaultScheme, schemes)
 	}
 
-	// ==== 记忆库模型路由：已移除（统一复用 agent 分组的嵌入/多模态模型） ====
-	// 旧版 lunar_config.json 的 memory 节会被 JSON 解码忽略；迁移提示由文档说明。
 	// ==== 核心智能体配置（agent） ====
 	// 模型路由（embedding / multimodal 的 url、model、key）已收敛为本地固定参数，
 	// 不再从配置文件或命令行开放；旧配置中的对应字段在 JSON 解码时被忽略。

@@ -41,17 +41,17 @@ type WSResponse struct {
 // Hub 统一 WebSocket 集线器。
 // 同时承载两条互不相同的投递通道：
 //   - BroadcastMessage 结构化下行（{"type":…,"data":…}）→ 投递给全部客户端
-//   - Bus              引擎总线原始帧 → 仅投递给显式订阅的客户端（bus 参数）
+//   - Bus              引擎总线原始帧 → 仅投递给同频道且显式订阅的客户端（bus 参数）
 //
-// 两通道必须分离：引擎/工作室类模块之间经 /write/engine 高频互通原始帧，
+// 两通道必须分离：引擎/工作室类模块之间经 /ws 上行高频互通原始帧，
 // 而消息终端前端把无法识别的帧当作内容渲染，若混投会污染其消息记录。
 type Hub struct {
 	// Clients 在线客户端集合
 	Clients map[*WSClient]bool
-	// Bus 引擎总线原始帧通道（仅订阅者接收）
-	Bus chan []byte
-	// Inbound 入站消息通道（另经订阅者分发）
-	Inbound chan []byte
+	// Bus 引擎总线原始帧通道（带频道，仅订阅者接收）
+	Bus chan BusFrame
+	// Inbound 入站消息通道（带频道，另经订阅者分发）
+	Inbound chan InboundFrame
 	// Register 注册通道
 	Register chan *WSClient
 	// Unregister 注销通道
@@ -64,12 +64,28 @@ type Hub struct {
 	subs []*inboundSub
 }
 
+// BusFrame 一条待投递的引擎总线帧（频道 + 原始字节）
+type BusFrame struct {
+	// Channel 发送方声明的频道（连接 URL 的 channel 参数）
+	Channel string
+	// Data 原始帧字节（发什么转什么，不做改写）
+	Data []byte
+}
+
+// InboundFrame 一条入站消息（频道 + 原始字节）
+type InboundFrame struct {
+	// Channel 发送方声明的频道
+	Channel string
+	// Data 原始帧字节
+	Data []byte
+}
+
 // inboundSub 入站订阅者
 type inboundSub struct {
 	// name 订阅者名称（日志用）
 	name string
 	// ch 独立缓冲通道
-	ch chan []byte
-	// fn 消费函数
-	fn func([]byte)
+	ch chan InboundFrame
+	// fn 消费函数（频道 + 原始字节）
+	fn func(channel string, data []byte)
 }

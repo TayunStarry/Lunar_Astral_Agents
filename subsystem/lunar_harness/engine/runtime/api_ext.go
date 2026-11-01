@@ -208,35 +208,10 @@ func engineImageLoadValid(p *plugin, path string) (any, error) {
 	return rwResult{Success: true, Text: base64.StdEncoding.EncodeToString(b)}, nil
 }
 
-// engineImageDownload 下载 url 到运行数据目录 fileName，校验 magic 后返回 base64。
-func engineImageDownload(p *plugin, url, fileName string) (any, error) {
-	real, err := scopedPath(p, fileName)
-	if err != nil {
-		return rwResult{Success: false, Error: err.Error()}, nil
-	}
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, derr := client.Get(url)
-	if derr != nil {
-		return rwResult{Success: false, Error: "下载失败: " + derr.Error()}, nil
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return rwResult{Success: false, Error: "下载状态: " + resp.Status}, nil
-	}
-	b, rerr := io.ReadAll(resp.Body)
-	if rerr != nil || !isImageContent(b) {
-		return rwResult{Success: false, Error: "下载内容非有效图片（链接可能过期）"}, nil
-	}
-	if werr := os.WriteFile(real, b, 0644); werr != nil {
-		return rwResult{Success: false, Error: werr.Error()}, nil
-	}
-	return rwResult{Success: true, Text: base64.StdEncoding.EncodeToString(b)}, nil
-}
-
-// ==== LLM agent.chat/embed（本地固定模型路由） ====
+// ==== LLM agent.chat（本地固定模型路由） ====
 
 // engineLLMChat 调用 OpenAI 兼容 v1/chat/completions，返回首个 choice 的文本内容。
-// 模型路由使用本地部署固定值（config.AgentMultimodal*），与 embed/memory 同源。
+// 模型路由使用本地部署固定值（config.AgentMultimodal*）。
 func engineLLMChat(messages []any, opts map[string]any) (any, error) {
 	model := config.AgentMultimodalModel
 	baseURL := config.AgentMultimodalURL
@@ -299,99 +274,6 @@ func engineLLMChat(messages []any, opts map[string]any) (any, error) {
 		res.ToolCalls = out.Choices[0].Message.ToolCalls
 	}
 	return res, nil
-}
-
-// readEmbedConfig 读取本地固定的智能体文本嵌入模型配置。
-func readEmbedConfig() (model, baseURL string) {
-	return config.AgentEmbeddingModel, config.AgentEmbeddingURL
-}
-
-// embedComplete 调用 OpenAI 兼容 v1/embeddings 批量嵌入文本，返回与输入等长的向量列表。
-func embedComplete(texts []string, model, baseURL string) ([][]float64, error) {
-	bodyMap := map[string]any{"model": model, "input": texts}
-	body, _ := json.Marshal(bodyMap)
-	base := strings.TrimRight(baseURL, "/")
-	if !strings.HasSuffix(base, "/v1") {
-		base += "/v1"
-	}
-	req, rerr := http.NewRequest("POST", base+"/embeddings", bytes.NewReader(body))
-	if rerr != nil {
-		return nil, rerr
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, rerr := client.Do(req)
-	if rerr != nil {
-		return nil, fmt.Errorf("嵌入请求失败: %v", rerr)
-	}
-	defer resp.Body.Close()
-	rb, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("嵌入状态 %d: %s", resp.StatusCode, previewStr(rb, 300))
-	}
-	var out struct {
-		Data []struct {
-			Embedding []float64 `json:"embedding"`
-		} `json:"data"`
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if json.Unmarshal(rb, &out) != nil {
-		return nil, fmt.Errorf("嵌入响应解析失败")
-	}
-	if out.Error != nil {
-		return nil, fmt.Errorf("嵌入错误: %s", out.Error.Message)
-	}
-	vecs := make([][]float64, 0, len(out.Data))
-	for _, d := range out.Data {
-		vecs = append(vecs, d.Embedding)
-	}
-	if len(vecs) != len(texts) {
-		return nil, fmt.Errorf("嵌入响应数量不匹配: 期望 %d, 实际 %d", len(texts), len(vecs))
-	}
-	return vecs, nil
-}
-
-// engineLLMEmbed 计算文本的嵌入向量。
-// input 可为单条字符串或字符串数组；返回 { success, embedding } 或 { success, embeddings }。
-func engineLLMEmbed(input any, opts map[string]any) (any, error) {
-	texts := []string{}
-	// 位置入参优先：字符串 或 字符串数组
-	switch v := input.(type) {
-	case string:
-		texts = append(texts, v)
-	case []any:
-		for _, s := range v {
-			if st, ok := s.(string); ok && st != "" {
-				texts = append(texts, st)
-			}
-		}
-	}
-	// 位置入参为空时，用 opts.text / opts.texts 兜底（避免与入参叠加成双文本）
-	if len(texts) == 0 && opts != nil {
-		if t, ok := opts["text"].(string); ok && t != "" {
-			texts = []string{t}
-		} else if arr, ok := opts["texts"].([]any); ok {
-			for _, s := range arr {
-				if st, ok := s.(string); ok && st != "" {
-					texts = append(texts, st)
-				}
-			}
-		}
-	}
-	if len(texts) == 0 {
-		return rwResult{Success: false, Error: "缺少待嵌入文本（需传入 string / []string，或 opts.text / opts.texts）"}, nil
-	}
-	model, url := readEmbedConfig()
-	vecs, err := embedComplete(texts, model, url)
-	if err != nil {
-		return rwResult{Success: false, Error: err.Error()}, nil
-	}
-	if len(vecs) == 1 {
-		return map[string]any{"success": true, "embedding": vecs[0]}, nil
-	}
-	return map[string]any{"success": true, "embeddings": vecs}, nil
 }
 
 // previewStr 把字节串截断为最多 n 字符的预览（超长以 ... 结尾）。

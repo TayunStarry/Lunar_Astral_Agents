@@ -365,11 +365,10 @@ func containsInt64(values []int64, want int64) bool {
 	return false
 }
 
-// finishRound 一轮结束：写本轮记忆（此时观看已全部完成）、清理浏览器、通知插件。
+// finishRound 一轮结束：写本轮记忆（此时观看已全部完成）、清理浏览器。
 func (r *runner) finishRound() {
 	recordRoundMemory(r)
 	r.finished = true
 	r.cleanup()
 	r.setProgress("本轮观影完成")
-	dispatchBeforeLifeEnds(r, "finished", "")
 }

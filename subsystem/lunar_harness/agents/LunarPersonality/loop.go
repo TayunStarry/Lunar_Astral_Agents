@@ -41,8 +41,7 @@ func Start() error {
 	life.Init()
 	life.SetPlanHooks(pushDueScheduleItems, upcomingPlanSummary)
 	life.SetLastUserTextProvider(latestUserUtterance)
-	life.SetLastUserNameProvider(latestUserName)
-	life.SetLastReplyTextProvider(latestAssistantUtterance)
+	life.SetDialogueRoundsProvider(recentAffectionRounds)
 	go func() {
 		if err := mood.Init(context.Background()); err != nil {
 			logger.Warn(lunarCoreModule, "[心情] 启动初始化未完成，将在生活事件中重试: %v", err)
@@ -125,20 +124,9 @@ func pullContext() []PostMessage {
 		DialogueBridging.NotifyAgentIdle()
 		return nil
 	}
-	messages = dispatchBeforeReadingMessage(messages)
-	if len(messages) == 0 {
-		DialogueBridging.NotifyAgentIdle()
-		return nil
-	}
 	// 进入上下文前统一资源化：图片→缩影链接；动图/视频/音频/URL/BV→句柄文本；
 	// 文件→句柄。资源在接入阶段已完成下载、校验与句柄绑定，解析留到 use_resource。
 	return ResourcesConversionHandle(messages)
-}
-
-// dispatchBeforeReadingMessage 读取消息前事件。
-// 私有 js 运行时不再在对话链路上挂事件订阅，消息原样交付。
-func dispatchBeforeReadingMessage(messages []PostMessage) []PostMessage {
-	return messages
 }
 
 // runDialogueTurn 对话链一次完整回合

@@ -30,6 +30,19 @@ func Pending() int {
 	return len(inbox)
 }
 
+// ResetQueue 清空待处理队列，返回被丢弃的请求数（正在执行的一条不受影响）。
+func ResetQueue() int {
+	dropped := 0
+	for {
+		select {
+		case <-inbox:
+			dropped++
+		default:
+			return dropped
+		}
+	}
+}
+
 // Drain 依次处理当前队列里的每一条请求（每条只写一次回执）。
 func Drain(ctx context.Context) {
 	if Paused() || Pending() == 0 {

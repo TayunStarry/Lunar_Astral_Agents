@@ -11,10 +11,6 @@ var (
 	KnowledgeDBPath = LocalDir + "/database/knowledge.db"
 	// ArchiveDBPath 统一句柄库文件路径（URL 主表 / 六类句柄 / 段落 / 缓存）
 	ArchiveDBPath = LocalDir + "/database/handles.db"
-	// MediaDBPath 历史媒体派生库路径（新体系不再使用，启动时会被清除）
-	MediaDBPath = LocalDir + "/database/media.db"
-	// WebDBPath 历史网络检索缓存路径（新体系不再使用，启动时会被清除）
-	WebDBPath = LocalDir + "/database/web.db"
 	// TextDBPath 文本内容索引（文件 → 分块集合映射）
 	TextDBPath = LocalDir + "/database/text.db"
 	// CharacterDBPath 自定义角色库（绘图角色档案）

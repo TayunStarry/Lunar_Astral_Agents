@@ -4,7 +4,6 @@ go 1.26.0
 
 require (
 	LunarSubsystem/EndpointDocs v0.0.0-00010101000000-000000000000
-	LunarSubsystem/LunarDecoder v0.0.0-00010101000000-000000000000
 	github.com/auuunya/go-element v1.0.1
 	github.com/chai2010/webp v1.4.0
 	github.com/charmbracelet/bubbles v1.0.0

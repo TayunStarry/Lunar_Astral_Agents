@@ -407,7 +407,7 @@
                 var outline = outlines[i];
                 this._renderProgress(3, '正在生成草稿 第 ' + (i + 1) + '/' + outlines.length + ' 段...');
 
-                // 查询记忆库知识点
+                // 查询知识库知识点
                 var knowledgeContext = '';
                 try {
                     var kp = outline.knowledgePoints || [];
@@ -415,7 +415,7 @@
                     if (kp.length > 0) {
                         queryText = kp.join('，') + '。' + queryText;
                     }
-                    knowledgeContext = await this.app.memory.getKnowledgeContext(queryText, 10);
+                    knowledgeContext = await this.app.knowledgeStore.getKnowledgeContext(queryText, 10);
                 } catch (e) {
                     console.warn('知识点查询失败:', e);
                 }

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
@@ -83,7 +84,8 @@ func StartLifeRound(moodLabel string) (string, error) {
 	return runInstruction("", moodLabel)
 }
 
-func runInstruction(instruction, mood string) (string, error) {
+func runInstruction(instruction, mood string) (out string, err error) {
+	defer func() { Savior.ReportRun("bilibili", err) }()
 	manager.mu.Lock()
 	if manager.job != nil || manager.running {
 		manager.mu.Unlock()
@@ -91,13 +93,6 @@ func runInstruction(instruction, mood string) (string, error) {
 	}
 	manager.reloadConfigLocked()
 	cfg := manager.cfg
-	if allow, reason := dispatchBeforeLifeStarts(cfg); !allow {
-		manager.mu.Unlock()
-		if strings.TrimSpace(reason) == "" {
-			reason = "未给出原因"
-		}
-		return "本次观影被取消（" + reason + "）", nil
-	}
 	r := newRunner(cfg, instruction)
 	r.mood = strings.TrimSpace(mood)
 	manager.running = true

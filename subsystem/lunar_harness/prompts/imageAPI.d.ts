@@ -12,14 +12,6 @@ export const image: {
 	 */
 	loadValid(path: string): { success: boolean; text?: string; error?: string }
 	/**
-	 * 下载图片到数据目录并校验，返回 base64
-	 *
-	 * @param url 图片直链
-	 * @param fileName 相对数据目录的保存文件名
-	 * @returns 成功返回 { success:true, text: base64 }；失败返回 failure
-	 */
-	download(url: string, fileName: string): { success: boolean; text?: string; error?: string }
-	/**
 	 * 缩放图片并按需重编码（等比缩放或指定精确宽高）
 	 *
 	 * @param path 相对数据目录的路径，或 data:image/...;base64 内联数据

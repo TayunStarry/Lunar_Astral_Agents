@@ -101,9 +101,9 @@ The Project includes or depends upon the following third-party components, each 
 | Component | License | Location in Project |
 |-----------|---------|---------------------|
 | ggml | MIT | `subsystem/qwen3_tts/cpp/ggml/` |
-| highlight.js | BSD 3-Clause | `local_data/package/highlight/` |
-| Font Awesome Free | CC BY 4.0 / SIL OFL 1.1 / MIT | `local_data/package/fontAwesome/` |
-| KaTeX | MIT | `local_data/package/katex/` |
+| highlight.js | BSD 3-Clause | `subsystem/lunar_harness/clients/reliance/highlight/` |
+| Font Awesome Free | CC BY 4.0 / SIL OFL 1.1 / MIT | `subsystem/lunar_harness/clients/reliance/fontAwesome/` |
+| KaTeX | MIT | `subsystem/lunar_harness/clients/reliance/katex/` |
 | 7-Zip | GNU LGPL 2.1+ | `local_data/package/archive/` |
 | marked.js | MIT | `local_data/package/marked.min.js` |
 | Mermaid.js | MIT | `local_data/package/mermaid.min.js` |
@@ -221,9 +221,9 @@ The Project includes or depends upon the following third-party components, each 
 | 组件 | 许可证 | 项目内位置 |
 |------|--------|-----------|
 | ggml | MIT | `subsystem/qwen3_tts/cpp/ggml/` |
-| highlight.js | BSD 3-Clause | `local_data/package/highlight/` |
-| Font Awesome Free | CC BY 4.0 / SIL OFL 1.1 / MIT | `local_data/package/fontAwesome/` |
-| KaTeX | MIT | `local_data/package/katex/` |
+| highlight.js | BSD 3-Clause | `subsystem/lunar_harness/clients/reliance/highlight/` |
+| Font Awesome Free | CC BY 4.0 / SIL OFL 1.1 / MIT | `subsystem/lunar_harness/clients/reliance/fontAwesome/` |
+| KaTeX | MIT | `subsystem/lunar_harness/clients/reliance/katex/` |
 | 7-Zip | GNU LGPL 2.1+ | `local_data/package/archive/` |
 | marked.js | MIT | `local_data/package/marked.min.js` |
 | Mermaid.js | MIT | `local_data/package/mermaid.min.js` |

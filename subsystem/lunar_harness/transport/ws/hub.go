@@ -15,8 +15,8 @@ import (
 func NewHub() *Hub {
 	return &Hub{
 		Clients:    make(map[*WSClient]bool),
-		Bus:        make(chan []byte, BroadcastBuffer),
-		Inbound:    make(chan []byte, InboundBuffer),
+		Bus:        make(chan BusFrame, BroadcastBuffer),
+		Inbound:    make(chan InboundFrame, InboundBuffer),
 		Register:   make(chan *WSClient),
 		Unregister: make(chan *WSClient),
 	}
@@ -48,11 +48,11 @@ func (h *Hub) Run() {
 				logger.Info("StudioHub", "客户端已断开，当前连接数: %d", count)
 			}
 
-		case message := <-h.Bus:
-			h.BroadcastBus(DefaultBusChannel, message)
+		case frame := <-h.Bus:
+			h.BroadcastBus(frame.Channel, frame.Data)
 
-		case message := <-h.Inbound:
-			h.dispatchInbound(message)
+		case frame := <-h.Inbound:
+			h.dispatchInbound(frame.Channel, frame.Data)
 		}
 	}
 }
@@ -63,7 +63,7 @@ func (h *Hub) Run() {
 // 未订阅者（消息终端等）与其它频道的订阅者均不收。
 // 缓冲已满的订阅者视为慢客户端，直接被摘除（不阻塞其它客户端）。
 //
-// 为何必须按「订阅 + 频道」投递：/write/engine 承载引擎与工作室模块之间的高频原始帧
+// 为何必须按「订阅 + 频道」投递：引擎与工作室模块之间经 /ws 上行高频互通原始帧
 // （动画列表、位置遥测、面板指令等）。消息终端前端对无法识别的帧会以 JSON 文本兜底渲染，
 // 若把总线帧投给它会持续往聊天记录里灌内容；而同一进程内的多个独立引擎实例
 // （月华内嵌渲染引擎、琉璃 studio 编辑器引擎）若不按频道隔离，各自的遥测会互相串扰。
@@ -137,13 +137,13 @@ func (h *Hub) BroadcastMessage(msgType string, data any) {
 
 // ==================== 上行：入站分发 ====================
 
-// SubscribeInbound 注册入站消息订阅者。
+// SubscribeInbound 注册入站消息订阅者（回调带频道）。
 // 每个订阅者持有独立缓冲通道与消费协程：互不阻塞，也不阻塞集线器主循环；
 // 通道满时丢弃该条入站消息（与旧的非阻塞入站语义一致）。
-func (h *Hub) SubscribeInbound(name string, fn func([]byte)) {
+func (h *Hub) SubscribeInbound(name string, fn func(channel string, data []byte)) {
 	sub := &inboundSub{
 		name: name,
-		ch:   make(chan []byte, SubscriberBuffer),
+		ch:   make(chan InboundFrame, SubscriberBuffer),
 		fn:   fn,
 	}
 	h.subsMu.Lock()
@@ -151,21 +151,21 @@ func (h *Hub) SubscribeInbound(name string, fn func([]byte)) {
 	h.subsMu.Unlock()
 
 	go func() {
-		for msg := range sub.ch {
+		for frame := range sub.ch {
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
 						logger.Error("StudioHub", "入站订阅者 [%s] 处理异常: %v", sub.name, r)
 					}
 				}()
-				sub.fn(msg)
+				sub.fn(frame.Channel, frame.Data)
 			}()
 		}
 	}()
 }
 
 // dispatchInbound 把入站消息扇出到所有订阅者（非阻塞）
-func (h *Hub) dispatchInbound(message []byte) {
+func (h *Hub) dispatchInbound(channel string, message []byte) {
 	h.subsMu.RLock()
 	subs := make([]*inboundSub, len(h.subs))
 	copy(subs, h.subs)
@@ -173,7 +173,7 @@ func (h *Hub) dispatchInbound(message []byte) {
 
 	for _, sub := range subs {
 		select {
-		case sub.ch <- message:
+		case sub.ch <- InboundFrame{Channel: channel, Data: message}:
 		default:
 		}
 	}
@@ -208,7 +208,7 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 // subscribeBus 解析连接的引擎总线订阅声明。
 // 默认**不订阅**：只有显式声明 bus=1/true/yes/on 的连接才接收原始总线帧。
 // 默认不订阅是安全取向——消息终端前端把无法识别的帧当内容渲染，
-// 必须由总线参与者（引擎 iframe、工作室面板、琉璃桌面与蓝图页）自行声明订阅。
+// 必须由总线参与者（引擎 iframe、工作室面板、琉璃桌面）自行声明订阅。
 func subscribeBus(r *http.Request) bool {
 	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get(BusParam))) {
 	case "1", "true", "yes", "on":
@@ -218,12 +218,12 @@ func subscribeBus(r *http.Request) bool {
 	}
 }
 
-// RequestChannel 导出频道解析（供 /write/engine 等宿主端点复用，缺省为 DefaultBusChannel）
+// RequestChannel 导出频道解析（缺省为 DefaultBusChannel）
 func RequestChannel(r *http.Request) string {
 	return requestChannel(r)
 }
 
-// requestChannel 解析总线频道声明（连接与 /write/engine 共用），缺省为 DefaultBusChannel
+// requestChannel 解析连接的频道声明，缺省为 DefaultBusChannel
 func requestChannel(r *http.Request) string {
 	if channel := strings.TrimSpace(r.URL.Query().Get(ChannelParam)); channel != "" {
 		return channel
@@ -290,10 +290,14 @@ func (c *WSClient) readPump(h *Hub) {
 			}
 			return
 		}
-		// 控制帧（ping/pong）由 gorilla 内部处理，不会走到这里；仅数据帧继续进总线与入站
-		h.Bus <- message
+		// 控制帧（ping/pong）由 gorilla 内部处理，不会走到这里；仅数据帧继续进总线与入站。
+		// 总线回流只服务总线参与者（bus=1）：引擎/工作室面板之间的帧按发送方频道投递，
+		// 消息终端等 bus=0 连接只上行给入站订阅者，不参与总线互投。
+		if c.bus {
+			h.Bus <- BusFrame{Channel: c.channel, Data: message}
+		}
 		select {
-		case h.Inbound <- message:
+		case h.Inbound <- InboundFrame{Channel: c.channel, Data: message}:
 		default:
 		}
 	}

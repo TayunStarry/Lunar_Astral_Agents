@@ -1,7 +1,7 @@
 /**
  * 琉璃本地文件 API 封装。
  *
- * 端点（见 docs/code-wiki/09-LTPX协议-月华工具包.md 与 03 章）：
+ * 端点（见 docs/code-wiki/09-安全机制.md 的文件边界说明）：
  *   GET    /file/read/<path>       读文件
  *   POST   /file/write             写文件（X-File-Name: base64(相对路径)，X-Overwrite: true）
  *   POST   /file/list/<dir>        列目录

@@ -50,6 +50,9 @@ const affectionAlpha = 0.7
 // affectionTemperature 极性分布 softmax 温度（越小越接近最强锚点）。
 const affectionTemperature = 0.15
 
+// roundWindow 单个用户参与一次评估的对话轮数（最近若干轮取均值）。
+const roundWindow = 5
+
 var (
 	mu          sync.RWMutex
 	initMu      sync.Mutex

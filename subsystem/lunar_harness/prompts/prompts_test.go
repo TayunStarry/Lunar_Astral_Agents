@@ -14,7 +14,7 @@ func TestListDTSModules(t *testing.T) {
 		t.Fatalf("列出契约失败: %v", err)
 	}
 	want := []string{
-		"runtimeAPI.d.ts", "commonAPI.d.ts", "eventAPI.d.ts", "fileAPI.d.ts",
+		"runtimeAPI.d.ts", "commonAPI.d.ts", "fileAPI.d.ts",
 		"imageAPI.d.ts", "videoAPI.d.ts", "memoryAPI.d.ts", "databaseAPI.d.ts",
 		"encodingAPI.d.ts", "agentAPI.d.ts", "networkAPI.d.ts",
 	}
@@ -52,16 +52,42 @@ func TestDTSContractConstraints(t *testing.T) {
 		if strings.Contains(text, "namespace(") || strings.Contains(text, "<name>.db") {
 			t.Fatalf("%s 仍包含新建数据库声明", doc.Name)
 		}
+		// 跨插件机制（signal / callFunction / command / event / synergy）已移除
+		for _, banned := range []string{"signal", "callFunction", "command.", "export const event", "synergy"} {
+			if strings.Contains(text, banned) {
+				t.Fatalf("%s 仍包含已移除的跨插件机制 %q", doc.Name, banned)
+			}
+		}
 	}
 
-	// agent 契约保持完整
+	// agent 契约只保留对话与搜索（嵌入已裁剪）
 	agent, err := Read("agentAPI.d.ts")
 	if err != nil {
 		t.Fatalf("读取 agentAPI.d.ts 失败: %v", err)
 	}
-	for _, member := range []string{"chat(", "embed(", "synergy(", "search("} {
+	for _, member := range []string{"chat(", "search("} {
 		if !strings.Contains(string(agent), member) {
 			t.Fatalf("agent 契约缺少 %s", member)
+		}
+	}
+	if strings.Contains(string(agent), "embed(") {
+		t.Fatalf("agent 契约不应再声明 embed")
+	}
+
+	// 与全局能力重叠的成员已裁剪
+	trimmed := map[string]string{
+		"runtimeAPI.d.ts":  "declare const time",
+		"networkAPI.d.ts":  "tcpConnect",
+		"encodingAPI.d.ts": "lunarEncoder",
+		"imageAPI.d.ts":    "download(",
+	}
+	for name, banned := range trimmed {
+		text, rerr := Read(name)
+		if rerr != nil {
+			t.Fatalf("读取 %s 失败: %v", name, rerr)
+		}
+		if strings.Contains(string(text), banned) {
+			t.Fatalf("%s 仍包含已裁剪的能力 %q", name, banned)
 		}
 	}
 

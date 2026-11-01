@@ -19,7 +19,9 @@ import (
 )
 
 var (
-	userPrefixRegex = regexp.MustCompile(`^\[用户:\s*([^\]]*)\]\s*[:：]\s*`)
+	// groupPrefixRegex 群聊消息的 `[群聊: 群名]` 前缀（可缺省）
+	groupPrefixRegex = regexp.MustCompile(`^\[群聊:\s*[^\]]*\]\s*`)
+	userPrefixRegex  = regexp.MustCompile(`^\[用户:\s*([^\]]*)\]\s*[:：]\s*`)
 	// 以下三个正则都由 engine/resource 的权威文法拼出，禁止另写类型码集合
 	fileRefRegex    = regexp.MustCompile(resource.HandlePattern)
 	noticeRegex     = regexp.MustCompile(`^\[已收录\]\s*(` + resource.HandlePattern + `)\s*(.*)$`)
@@ -40,13 +42,19 @@ func randomLetters() string {
 	return builder.String()
 }
 
-// splitUserPrefix 拆出 `[用户: 名字]: ` 前缀
+// splitUserPrefix 拆出 `[群聊: 群名][用户: 名字]: ` 前缀
+//
+// 群聊消息先去掉群名，再拆用户前缀；私聊只有用户前缀。
 func splitUserPrefix(text string) (sender, body string) {
-	match := userPrefixRegex.FindStringSubmatch(text)
+	rest := text
+	if groupPrefixRegex.MatchString(rest) {
+		rest = groupPrefixRegex.ReplaceAllString(rest, "")
+	}
+	match := userPrefixRegex.FindStringSubmatch(rest)
 	if match == nil {
 		return "", text
 	}
-	return strings.TrimSpace(match[1]), text[len(match[0]):]
+	return strings.TrimSpace(match[1]), rest[len(match[0]):]
 }
 
 // pathPartOf 去掉地址中的查询串与锚点
@@ -306,9 +314,6 @@ func appendUserMessage(content any) {
 
 // recordAssistantContext 记录一条助手文本/语音/乐谱/动作消息
 func recordAssistantContext(kind, content, audio string) {
-	if kind == "music_audio" {
-		return
-	}
 	record := CachedMessage{
 		ID:         newID(),
 		Role:       RoleAssistant,
@@ -345,22 +350,10 @@ func recordAssistantContext(kind, content, audio string) {
 	appendCachedMessage(record)
 }
 
-// pushContext 推送上下文数据（含插件消息发送前事件）
+// pushContext 推送上下文数据
 func pushContext(kind, content, audio string, auto bool) bool {
-	items := dispatchBeforeSendingMessage([]PushContextData{{Type: kind, Content: content, Audio: audio, Auto: auto}})
-	if items == nil {
-		return false
-	}
-	for _, item := range items {
-		PushMessageFunc("context", item)
-	}
+	PushMessageFunc("context", PushContextData{Type: kind, Content: content, Audio: audio, Auto: auto})
 	return true
-}
-
-// dispatchBeforeSendingMessage 消息发送前事件。
-// 私有 js 运行时不再在对话链路上挂事件订阅，待发内容原样返回。
-func dispatchBeforeSendingMessage(items []PushContextData) []PushContextData {
-	return items
 }
 
 // pushAssistantContext 推送助手上下文并写入缓存

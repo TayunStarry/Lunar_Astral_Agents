@@ -3,8 +3,12 @@
 // 三个前端是同一类东西（可被挂载的静态站点），因此集中在 clients/ 一处收纳，
 // 不再散落在各自人格包里：
 //
-//	clients/lunar/    月华消息终端（挂载于 /，其 mobile/ 子树即月华移动端）
-//	clients/crystal/  琉璃桌面（挂载于 /desktop/，含 file-runner/ 编辑运行等内置子页）
+//	clients/lunar/     月华消息终端（挂载于 /，其 mobile/ 子树即月华移动端）
+//	clients/crystal/   琉璃桌面（挂载于 /desktop/，含 file-runner/ 编辑运行等内置子页）
+//	clients/reliance/  前端共享依赖（挂载于 /reliance/，字体图标 / 高亮 / 公式 / 音乐库 / 渲染引擎）
+//
+// reliance（依赖）里放的是**没有 metadata.json、不属于扩展包**的前端资源：
+// 它们不参与 LTPX 安装与更新包分发，只随程序本体一起编译。
 //
 // 归属原则：一个 go:embed 指令只能嵌入**本包目录之下**的文件，所以"资源树"与
 // "内嵌它的包"必须同处一层。clients 包落在 clients/clients.go 正是为此——
@@ -23,7 +27,7 @@ import (
 // 历史缺陷正是两边不一致——指令写 `web/*`，读取方却按 "assets/xxx" 取，
 // go 编译器与 tsc 都不报错，只有真跑一遍 handler 才暴露 500。
 //
-//go:embed crystal/* lunar/*
+//go:embed crystal/* lunar/* reliance/*
 var EmbeddedFiles embed.FS
 
 // CrystalFS 琉璃桌面的静态文件系统（crystal/ 子树）。
@@ -36,6 +40,12 @@ func CrystalFS() http.FileSystem {
 // 由装配层经 server.StaticRoots 挂载于根路径 /。
 func LunarFS() http.FileSystem {
 	return subFS("lunar")
+}
+
+// RelianceFS 前端共享依赖的静态文件系统（reliance/ 子树）。
+// 由装配层经 server.StaticRoots 挂载于 /reliance/，供三个前端与扩展包按 URL 引用。
+func RelianceFS() http.FileSystem {
+	return subFS("reliance")
 }
 
 // subFS 把内嵌文件系统投影为某个前端子树的根。

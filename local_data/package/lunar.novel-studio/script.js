@@ -23,7 +23,7 @@
                 wordMax: 4000,
                 paragraphTarget: 400,
                 editChangeThreshold: 50,
-                memoryTableName: 'novel_knowledge'
+                knowledgeTableName: 'novel_knowledge'
             },
             outline: '',
             criteria: '',
@@ -44,7 +44,7 @@
         constructor() {
             this.state = createDefaultState();
             this.config = null;
-            this.memory = null;
+            this.knowledgeStore = null;
             this.knowledge = null;
             this.creative = null;
             this.workflow = null;
@@ -62,7 +62,7 @@
         async init() {
             // 1. 创建模块实例
             this.config = new global.ConfigManager(this);
-            this.memory = new global.MemoryClient(this);
+            this.knowledgeStore = new global.KnowledgeStore(this);
             this.knowledge = new global.KnowledgePanel(this);
             this.creative = new global.CreativeBuilder(this);
             this.workflow = new global.Workflow(this);
@@ -83,11 +83,11 @@
             // 5. 加载 AI 配置（本地部署固定值）
             await this.config.loadAgentConfig();
 
-            // 6. 初始化记忆库
+            // 6. 初始化知识点表
             try {
-                await this.memory.ensureInitialized();
+                await this.knowledgeStore.ensureTable();
             } catch (e) {
-                console.warn('记忆库初始化失败:', e);
+                console.warn('知识点表初始化失败:', e);
             }
 
             // 7. 渲染

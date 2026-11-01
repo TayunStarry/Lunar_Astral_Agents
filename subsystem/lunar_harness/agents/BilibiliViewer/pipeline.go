@@ -24,7 +24,6 @@ func (r *runner) startup() (text string, err error) {
 		if err != nil {
 			r.cleanup()
 			r.finished = true
-			dispatchBeforeLifeEnds(r, "failed", err.Error())
 		}
 	}()
 
@@ -69,7 +68,6 @@ func (r *runner) startup() (text string, err error) {
 			r.finished = true
 			r.cleanup()
 			recordRoundMemory(r)
-			dispatchBeforeLifeEnds(r, "finished", "")
 			return r.resultText(), nil
 		}
 		r.collectVideos(candidates)
@@ -79,7 +77,6 @@ func (r *runner) startup() (text string, err error) {
 		r.finished = true
 		r.cleanup()
 		recordRoundMemory(r)
-		dispatchBeforeLifeEnds(r, "finished", "")
 		return r.resultText(), nil
 	}
 
@@ -120,7 +117,6 @@ func (r *runner) startup() (text string, err error) {
 		r.finished = true
 		r.cleanup()
 		recordRoundMemory(r)
-		dispatchBeforeLifeEnds(r, "finished", "")
 		return r.resultText(), nil
 	}
 

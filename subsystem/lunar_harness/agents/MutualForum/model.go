@@ -19,6 +19,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
 // SetModelObserver 注入实况观察者与模型计量（nil 表示不接入）。
@@ -110,6 +111,8 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 
 	callCtx, cancel := context.WithTimeout(ctx, modelTimeout)
 	defer cancel()
+	// 循环输出监管：思考与正文分别按节点检查，命中持续复读立即取消本次请求
+	guard := loopguard.New(cancel, loopguard.DefaultOptions())
 	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, modelURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("构造模型请求失败: %w", err)
@@ -128,7 +131,7 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 	}
 
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
-		return readToolsStream(resp.Body, body, start, round)
+		return readToolsStream(resp.Body, body, start, round, guard)
 	}
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
@@ -149,6 +152,10 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 		ToolCalls: message.ToolCalls,
 	}
 	fillToolCallDefaults(result, round)
+	// 非流式整包：按末尾节点静态判定一次，命中同样按循环输出处理
+	if loopguard.Detected(result.Reasoning+result.Content, loopguard.DefaultOptions()) {
+		return nil, loopguard.ErrLoop
+	}
 	observeDelta("think", result.Reasoning)
 	observeDelta("content", result.Content)
 	reportModelCall(body, result.Content+result.Reasoning, completion.Usage, time.Since(start))
@@ -156,7 +163,8 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 }
 
 // readToolsStream 读取 SSE 流：正文/思考实时上报，工具调用增量按 index 合并。
-func readToolsStream(body io.Reader, requestBody []byte, start time.Time, round int) (*modelResponse, error) {
+// guard 命中持续复读时会取消请求，这里按循环输出返回。
+func readToolsStream(body io.Reader, requestBody []byte, start time.Time, round int, guard *loopguard.Guard) (*modelResponse, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	var content, reasoning strings.Builder
@@ -185,10 +193,12 @@ func readToolsStream(body io.Reader, requestBody []byte, start time.Time, round 
 		for _, choice := range chunk.Choices {
 			if text := choice.Delta.ReasoningContent; text != "" {
 				reasoning.WriteString(text)
+				guard.Feed(loopguard.KindThink, text)
 				observeDelta("think", text)
 			}
 			if text := choice.Delta.Content; text != "" {
 				content.WriteString(text)
+				guard.Feed(loopguard.KindContent, text)
 				observeDelta("content", text)
 			}
 			for _, delta := range choice.Delta.ToolCalls {
@@ -210,6 +220,10 @@ func readToolsStream(body io.Reader, requestBody []byte, start time.Time, round 
 				item.Function.Arguments += delta.Function.Arguments
 			}
 		}
+	}
+	guard.Stop()
+	if guard.Hit() {
+		return nil, loopguard.ErrLoop
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("读取模型流失败: %w", err)

@@ -123,39 +123,6 @@ func (b *Broker) Call(ctx context.Context, tool string, args map[string]any) (lt
 	return b.Await(ctx, requestID)
 }
 
-// Event 推送「xx事件发生前」负载并同步取回 LTP9 插件处理结果（原 /ltpx/event）。
-// 无插件订阅 / 未改写 / 未回传时 returned=false、modified=false，调用方回退本地默认处理。
-func (b *Broker) Event(topic string, payload any) ltpx.EventResult {
-	payloadBody, err := json.Marshal(LTPXRemoteEventRequest{Topic: topic, Payload: payload})
-	if err != nil {
-		logger.Warn("CrystalAstral", "LTPX 事件 %s 序列化失败: %v", topic, err)
-		return ltpx.EventResult{}
-	}
-
-	code, body := invokeEndpoint(LTPRemoteEventHandler, http.MethodPost, "/ltpx/event", payloadBody)
-	if code != http.StatusOK {
-		return ltpx.EventResult{}
-	}
-
-	var resp struct {
-		OK       bool `json:"ok"`
-		Modified bool `json:"modified"`
-		Data     any  `json:"data"`
-		Returned bool `json:"returned"`
-		Return   any  `json:"return"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return ltpx.EventResult{}
-	}
-
-	return ltpx.EventResult{
-		Modified: resp.Modified,
-		Data:     resp.Data,
-		Returned: resp.Returned,
-		Return:   resp.Return,
-	}
-}
-
 // ltpxFirstNonEmpty 返回首个非空字符串（错误信息兜底）
 func ltpxFirstNonEmpty(values ...string) string {
 	for _, v := range values {

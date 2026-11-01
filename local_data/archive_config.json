@@ -41,7 +41,7 @@
 		"*.go"
 	],
 	"exclude_dirs_with": [
-		"permissions.key"
+		"metadata.json"
 	],
 	"archive": [
 		"./local_data/package/archive/7z.exe",

@@ -14,50 +14,9 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/memory"
 
-	"github.com/dop251/goja"
-
 	// SQLite 驱动
 	_ "github.com/mattn/go-sqlite3"
 )
-
-// ==== 广播 signal.all/target → signal.subscribe ====
-
-// engineBroadcast 把一条内容分发给指定运行时（或 __all__）的广播订阅器。
-func engineBroadcast(target string, payload any) {
-	for _, p := range snapshotRuntimes() {
-		if target != "__all__" && target != p.ID {
-			continue
-		}
-		p.mu.Lock()
-		loaded := p.loaded
-		subs := append([]*eventSub(nil), p.signalSubs...)
-		p.mu.Unlock()
-		if !loaded {
-			continue
-		}
-		for _, cb := range subs {
-			go p.loop.RunOnLoop(func(vm *goja.Runtime) {
-				if f, ok := goja.AssertFunction(cb.handler); ok {
-					arg := vm.ToValue(payload)
-					f(goja.Undefined(), arg)
-				}
-			})
-		}
-	}
-}
-
-// ==== 事件发布 event.publish ====
-
-// enginePublish 在私有运行时事件总线上发起事件：派发给其它运行时的订阅器。
-// 异步分发（fire-and-forget）：publish 自身不阻塞；跳过发起运行时自身订阅器，避免回调内自锁。
-func enginePublish(from *plugin, topic string, payload any) {
-	for _, q := range snapshotRuntimes() {
-		if q == from {
-			continue
-		}
-		go q.fireEvent(topic, payload)
-	}
-}
 
 // ==== 图片记忆 memory.searchImage/storeImage/randomImage（全局图像类型检索） ====
 
@@ -129,25 +88,7 @@ func memoryRandomImage(query string) (any, error) {
 	return map[string]any{"success": true, "base64": pick.Base64}, nil
 }
 
-// ==== 跨运行时调用 callFunction ====
-
-// engineCall 调用目标运行时的导出函数。目标不存在或未导出 → 抛「xxx 运行时拒绝响应」。
-func engineCall(id, fnName string, args []any) (any, error) {
-	p := runtimeFor(id)
-	if p == nil {
-		return nil, fmt.Errorf("%s 运行时拒绝响应", id)
-	}
-	return p.callExport(fnName, args)
-}
-
-// ==== 前端智能体 agent.synergy（私有运行时不再连接前端包） ====
-
-func engineAgent(id, text string) (any, error) {
-	_ = text
-	return nil, fmt.Errorf("%s 运行时拒绝响应（私有 js 运行时未接入前端智能体通道）", id)
-}
-
-// ==== 加解密桥见 api_encoding.go（encoding.lunarEncoder / encoding.lunarDecoder） ====
+// ==== 编解码见 api_encoding.go（encoding.base64* / encoding.url*） ====
 
 // ==== 文件 file.write/read/delete（路径限定插件数据目录） ====
 

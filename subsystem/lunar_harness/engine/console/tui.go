@@ -16,7 +16,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/archive"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/console/ltpxmarket"
+
 	"LunarSubsystem/LunarHarness/engine/console/portrelease"
 	"LunarSubsystem/LunarHarness/engine/console/proxy"
 	"LunarSubsystem/LunarHarness/engine/console/updatepack"
@@ -74,7 +74,6 @@ const (
 	screenArchive
 	screenUpdate
 	screenPorts
-	screenMarket
 	screenDump
 	screenTools
 )
@@ -90,8 +89,8 @@ type menuItem struct {
 	screen screenID // 目标屏幕；值为 screenMenu 时表示退出程序（哨兵）
 }
 
-// menuItems 主菜单条目表：顺序即显示顺序，按「运行观测 / 系统管理 / 更新与发布 / 会话」
-// 分组组织：先用得上的是观测与运维，发布类动作沉到管理项之后，最后才是退出。
+// menuItems 主菜单条目表：顺序即显示顺序，按「运行观测 / 系统管理 / 更新与退出」
+// 分组组织：先用得上的是观测与运维，发布与退出沉到最后同一个分区。
 //
 // 快捷键按显示顺序依次占用 0-9、a-z：用户只需记住「第几个」即可，不必再记
 // 每屏各自的历史助记键。新增条目时按顺序追加，不要插空或跳号。
@@ -116,12 +115,9 @@ var menuItems = []menuItem{
 	{key: "8", title: "端口释放", group: "系统管理", screen: screenPorts,
 		desc: "扫描指定端口范围，终止占用进程并验证释放"},
 
-	{key: "9", title: "资源更新", group: "更新与发布", screen: screenUpdate,
+	{key: "9", title: "资源更新", group: "更新与退出", screen: screenUpdate,
 		desc: "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希），更新含主程序时自动重启"},
-	{key: "a", title: "应用市场", group: "更新与发布", screen: screenMarket,
-		desc: "浏览 / 标签筛选 / 安装 / 发布 LTPX 工具包（Gitee Release 通道）"},
-
-	{key: "b", title: "退出程序", group: "会话", screen: screenMenu,
+	{key: "a", title: "退出程序", group: "更新与退出", screen: screenMenu,
 		desc: "关闭控制台并优雅停止全部子系统（感谢使用「星月智能 · 控制台」）"},
 }
 
@@ -166,7 +162,6 @@ type appModel struct {
 	archive  archiveState
 	update   updateState
 	ports    portsState
-	market   marketState
 	dump     dumpState
 	engine   engineState
 	tools    toolsState
@@ -188,7 +183,6 @@ func newAppModel() appModel {
 		archive:  newArchiveState(),
 		update:   newUpdateState(),
 		ports:    newPortsState(),
-		market:   newMarketState(),
 	}
 }
 
@@ -332,8 +326,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateUpdate(msg)
 	case screenPorts:
 		return m.updatePorts(msg)
-	case screenMarket:
-		return m.updateMarket(msg)
 	case screenDump:
 		return m.updateDump(msg)
 	case screenTools:
@@ -387,11 +379,6 @@ func (m *appModel) handleGlobalKey(key tea.KeyMsg) (bool, tea.Cmd) {
 // 而不是往端口号里塞一个非法字符。
 func (m appModel) inputFocused() bool {
 	switch m.screen {
-	case screenMarket:
-		switch m.market.mode {
-		case marketInputTag, marketInputQuery, marketInputArchive, marketInputDesc, marketInputToken:
-			return true
-		}
 	case screenArchive:
 		return m.archive.inputMode
 	case screenUpdate:
@@ -414,8 +401,6 @@ func (m *appModel) applyProgress(percent int) {
 		m.update.progress = percent
 	case screenProxy:
 		m.proxy.progress = percent
-	case screenMarket:
-		m.market.progress = percent
 	}
 }
 
@@ -495,8 +480,6 @@ func (m *appModel) enterScreen(id screenID) tea.Cmd {
 		m.ports.activated = true
 		m.applyPortsFocus(0)
 		return textinput.Blink
-	case screenMarket:
-		return m.marketEnter()
 	case screenDump:
 		return m.dumpEnter()
 	case screenTools:
@@ -540,8 +523,6 @@ func (m *appModel) quitCleanup() {
 	portrelease.SetLogHook(nil)
 	updatepack.SetLogHook(nil)
 	updatepack.SetProgressHook(nil)
-	ltpxmarket.SetLogHook(nil)
-	ltpxmarket.SetProgressHook(nil)
 }
 
 // ErrNoTerminal 控制台输出未连接到终端（无法渲染界面）
@@ -677,8 +658,6 @@ func Run() error {
 	portrelease.SetLogHook(taskLog)
 	updatepack.SetLogHook(taskLog)
 	updatepack.SetProgressHook(func(percent int) { prog.Send(progressMsg(percent)) })
-	ltpxmarket.SetLogHook(taskLog)
-	ltpxmarket.SetProgressHook(func(percent int) { prog.Send(progressMsg(percent)) })
 
 	// 终止信号 → 优雅退出
 	sigCh := make(chan os.Signal, 1)
@@ -747,8 +726,6 @@ func (m appModel) View() string {
 		return m.viewUpdate()
 	case screenPorts:
 		return m.viewPorts()
-	case screenMarket:
-		return m.viewMarket()
 	case screenDump:
 		return m.viewDump()
 	case screenTools:
@@ -778,8 +755,6 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 		return "更新包", updateContext(m.update), updateKeys(m.update)
 	case screenPorts:
 		return "端口释放", "", portsKeys()
-	case screenMarket:
-		return "LTPX 应用市场", marketContext(m.market), marketKeys(m.market)
 	case screenDump:
 		return "数据导出", dumpContextLine(m.dump), dumpKeys(m.dump)
 	case screenTools:
@@ -793,10 +768,18 @@ func menuKeys() []keyHint {
 	return []keyHint{
 		kh("↑/↓", "选择"),
 		kh("Enter/→", "进入"),
-		kh("0-9 a-b", "直达"),
+		kh("0-9 a", "直达"),
 		kh("?", "帮助"),
 		kh("q", "退出"),
 	}
+}
+
+// dashIfEmpty 空快捷键在详情栏显示为破折号
+func dashIfEmpty(s string) string {
+	if s == "" {
+		return "—"
+	}
+	return s
 }
 
 // menuDetail 主菜单右侧详情：说明 + 元信息（宽屏两栏布局的右栏）
@@ -808,7 +791,7 @@ func (m appModel) menuDetail(idx, w, h int) []string {
 	lines := []string{
 		selectStyle.Render("✦ " + it.title),
 		"",
-		kvRow("快捷键", fitWidth(marketOrDash(it.key), 4), 8),
+		kvRow("快捷键", fitWidth(dashIfEmpty(it.key), 4), 8),
 		kvRow("分组", it.group, 8),
 		kvRow("入口", "Enter 或 ["+it.key+"]", 8),
 		"",

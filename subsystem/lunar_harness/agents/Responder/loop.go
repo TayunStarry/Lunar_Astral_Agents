@@ -1,25 +1,14 @@
 package Responder
 
-// loop.go 循环输出检测：非流式响应拿不到增量，改为在整段文本上识别
-// 「同一段内容连续重复」——把文本按空行切成段落，若某一段原文重复出现
-// 达到阈值（默认 4 次）且占据大段篇幅，判定为复读。
+// loop.go 空回答判定与辅助函数。
+//
+// 循环输出检测统一由 engine/model/loopguard 承担（流式按节点实时截断、
+// 整包按末尾节点静态判定），本文件不再自行实现段落计数。
 
 import (
 	"encoding/json"
 	"errors"
 	"strings"
-)
-
-// errLoopOutput 推理循环：同一段落在回复里反复出现。
-var errLoopOutput = errors.New("检测到循环输出")
-
-const (
-	// loopRepeatLimit 同一段落允许出现的最大次数
-	loopRepeatLimit = 4
-	// loopMinRunes 触发判定所需的最小段落长度
-	loopMinRunes = 24
-	// loopMinTextRunes 文本过短时不做判定
-	loopMinTextRunes = 240
 )
 
 // hasToolCalls 判断响应是否携带工具调用。
@@ -50,24 +39,4 @@ func emptyTurn(result Result) bool {
 		return true
 	}
 	return result.FinishReason == "length"
-}
-
-// loopDetected 判断回复是否卡在复读。
-func loopDetected(text string) bool {
-	text = strings.TrimSpace(text)
-	if len([]rune(text)) < loopMinTextRunes {
-		return false
-	}
-	counts := map[string]int{}
-	for _, paragraph := range strings.Split(text, "\n\n") {
-		key := strings.Join(strings.Fields(paragraph), " ")
-		if len([]rune(key)) < loopMinRunes {
-			continue
-		}
-		counts[key]++
-		if counts[key] >= loopRepeatLimit {
-			return true
-		}
-	}
-	return false
 }

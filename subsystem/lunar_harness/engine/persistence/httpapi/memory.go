@@ -32,6 +32,7 @@ import (
 //	DELETE /memory/messages             按 id 删除记忆
 //	GET    /memory/entries              逐条列举（id=按 ID；type/offset/limit；limit=0 全部）
 //	POST   /memory/fuse                 权重融合（把集合内超高相似度的文本条目合并为一条并重算向量）
+//	DELETE /memory/{name}               删除集合
 //	GET    /memory/{name}/stats         集合统计
 //	GET    /memory/{name}/documents     集合内文档分页（管理用途）
 //	POST   /memory/{name}/rebuild       重建集合内容向量
@@ -50,7 +51,7 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 
 	parts := strings.Split(path, "/")
 
-	// 单段路径：全局端点，或旧版集合创建/删除
+	// 单段路径：全局端点，或按分组名删除集合
 	if len(parts) == 1 {
 		switch parts[0] {
 		case "init":
@@ -75,18 +76,19 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 		case "fuse":
 			handleMemoryFuse(w, r)
 			return
-		default:
-			writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 未知的记忆库端点: %s", parts[0]))
+		}
+		if r.Method == http.MethodDelete {
+			handleMemoryDeleteCollection(w, r, parts[0])
 			return
 		}
+		writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 未知的记忆库端点: %s", parts[0]))
+		return
 	}
 
 	// 两段路径：/memory/{name}/{action}
 	collectionName := parts[0]
 	action := parts[1]
 	switch action {
-	case "messages":
-		writeError(w, http.StatusGone, "记忆库请求[ERROR] -> 已不再按集合读写记忆，请改用 /memory/messages（type 指定返回类型）")
 	case "stats":
 		handleMemoryCollectionStats(w, r, collectionName)
 	case "documents":
@@ -670,6 +672,24 @@ func handleMemoryReloadCollection(w http.ResponseWriter, r *http.Request, collec
 	}
 	writeSuccess(w, map[string]string{
 		"message": fmt.Sprintf("分组 [%s] 已从磁盘重新加载", collectionName),
+	})
+}
+
+// handleMemoryDeleteCollection DELETE /memory/{name} — 删除集合
+func handleMemoryDeleteCollection(w http.ResponseWriter, r *http.Request, collectionName string) {
+	if !memory.Ready() {
+		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
+		return
+	}
+
+	if err := memory.DeleteCollection(collectionName); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 删除集合失败: %v", err))
+		return
+	}
+
+	logger.Info("FileManager", "集合 [%s] 删除成功", collectionName)
+	writeSuccess(w, map[string]string{
+		"message": fmt.Sprintf("集合 [%s] 已删除", collectionName),
 	})
 }
 

@@ -139,6 +139,8 @@ func ChatWithRetryOptions(role string, messages []Message, tools []ToolDefinitio
 			time.Sleep(retryWait)
 		}
 	}
+	// 重试仍失败：交给智能修复（循环截断与主动取消由接收方过滤）
+	reportFailure(role, lastErr)
 	return "", lastErr
 }
 

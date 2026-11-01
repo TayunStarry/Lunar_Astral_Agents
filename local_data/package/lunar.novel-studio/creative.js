@@ -377,7 +377,7 @@
             if (!knowledgeItems || knowledgeItems.length === 0) return;
 
             // 批量入库
-            await this.app.memory.addBulkKnowledge(knowledgeItems);
+            await this.app.knowledgeStore.addBulkKnowledge(knowledgeItems);
 
             // 刷新知识库列表
             await this.app.knowledge.loadAndRender();

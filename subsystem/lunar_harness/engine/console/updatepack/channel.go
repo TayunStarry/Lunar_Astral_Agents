@@ -43,6 +43,5 @@ func updateAssets(r giteeRelease) []giteeAsset {
 // 共用仓库后「tag 撞到另一条通道」是可预期的操作失误，错误信息必须把
 // 因由与出路讲清楚，否则会被误当成网络故障反复重试。
 func channelMismatchError(tag string, got channel.Kind) error {
-	return fmt.Errorf("Release %s 属于「%s」通道，不是更新包；"+
-		"更新包与 LTPX 应用市场共用同一仓库，请确认 tag，或在 TUI 的「LTPX 应用市场」中操作", tag, got)
+	return fmt.Errorf("Release %s 属于「%s」通道，不是更新包；请确认 tag", tag, got)
 }

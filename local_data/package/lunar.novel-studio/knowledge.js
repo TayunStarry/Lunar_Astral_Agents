@@ -27,7 +27,7 @@
 
             el.spAddBtn.disabled = true;
             try {
-                await this.app.memory.addKnowledge(content, 'user');
+                await this.app.knowledgeStore.addKnowledge(content, 'user');
                 el.spContentInput.value = '';
                 this.app.showToast('知识点已入库');
                 await this.loadAndRender();
@@ -87,7 +87,7 @@
                 this.app.showToast('AI 拆解出 ' + knowledgeItems.length + ' 个知识点，正在入库...');
 
                 // 批量入库
-                var results = await this.app.memory.addBulkKnowledge(knowledgeItems);
+                var results = await this.app.knowledgeStore.addBulkKnowledge(knowledgeItems);
                 el.bulkTextInput.value = '';
                 this.app.showToast('已入库 ' + results.length + ' 个知识点');
                 await this.loadAndRender();
@@ -138,7 +138,7 @@
             if (this._loading) return;
             this._loading = true;
             try {
-                var data = await this.app.memory.listKnowledge(this._currentPage * this._pageSize, this._pageSize);
+                var data = await this.app.knowledgeStore.listKnowledge(this._currentPage * this._pageSize, this._pageSize);
                 this._totalCount = data.total || 0;
                 this.renderList(data.documents || []);
             } catch (e) {
@@ -168,7 +168,7 @@
                 return '<div class="memory-item" data-id="' + self._escapeAttr(doc.id) + '">' +
                     '<div class="memory-content">' + self._escapeHtml(preview) + '</div>' +
                     '<div class="memory-meta">' +
-                        '<span class="memory-id">#' + self._escapeHtml(doc.id.substring(0, 8)) + '</span>' +
+                        '<span class="memory-id">#' + self._escapeHtml(doc.id) + '</span>' +
                         '<span class="memory-role">' + self._escapeHtml(doc.role) + '</span>' +
                     '</div>' +
                     '<button class="memory-delete-btn" data-id="' + self._escapeAttr(doc.id) + '" title="删除此知识点">' +
@@ -190,7 +190,7 @@
                 contentEl.addEventListener('click', function() {
                     var item = contentEl.closest('.memory-item');
                     var id = item.dataset.id;
-                    var doc = documents.find(function(d) { return d.id === id; });
+                    var doc = documents.find(function(d) { return String(d.id) === id; });
                     if (doc && contentEl.textContent.length < doc.content.length) {
                         if (contentEl.classList.contains('expanded')) {
                             contentEl.textContent = doc.content.substring(0, 80) + '...';
@@ -241,7 +241,7 @@
         async deleteAndRefresh(id) {
             if (!confirm('确定删除此知识点？')) return;
             try {
-                await this.app.memory.deleteKnowledge(id);
+                await this.app.knowledgeStore.deleteKnowledge(id);
                 this.app.showToast('知识点已删除');
                 await this.loadAndRender();
             } catch (e) {
@@ -257,7 +257,8 @@
         }
 
         _escapeAttr(text) {
-            return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return String(text === null || text === undefined ? '' : text)
+                .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
     }
 

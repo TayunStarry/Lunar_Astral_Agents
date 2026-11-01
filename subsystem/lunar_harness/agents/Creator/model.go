@@ -17,6 +17,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
 // errLoopOutput 推理循环：同一输出或工具调用重复过多。
@@ -78,6 +79,8 @@ func chatWithTools(ctx context.Context, role string, messages []chatMessage, too
 
 	callCtx, cancel := context.WithTimeout(ctx, modelTimeout)
 	defer cancel()
+	// 循环输出监管：思考与正文分别按节点检查，命中持续复读立即取消本次请求
+	guard := loopguard.New(cancel, loopguard.DefaultOptions())
 	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, modelURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("构造模型请求失败: %w", err)
@@ -94,7 +97,7 @@ func chatWithTools(ctx context.Context, role string, messages []chatMessage, too
 		return nil, &httpStatusError{Status: resp.StatusCode, Body: string(raw)}
 	}
 	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
-		return readToolsStream(resp.Body, role)
+		return readToolsStream(resp.Body, role, guard)
 	}
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
@@ -115,13 +118,18 @@ func chatWithTools(ctx context.Context, role string, messages []chatMessage, too
 		ToolCalls: message.ToolCalls,
 	}
 	fillToolCallDefaults(result)
+	// 非流式整包：按末尾节点静态判定一次，命中同样按循环输出处理
+	if loopguard.Detected(result.Reasoning+result.Content, loopguard.DefaultOptions()) {
+		return nil, loopguard.ErrLoop
+	}
 	console.StreamDelta(role, console.KindThink, result.Reasoning)
 	console.StreamDelta(role, console.KindContent, result.Content)
 	return result, nil
 }
 
 // readToolsStream 读取 SSE 流：思考/正文实时上报，工具调用增量按 index 合并。
-func readToolsStream(body io.Reader, role string) (*modelResponse, error) {
+// guard 命中持续复读时会取消请求，这里按循环输出返回。
+func readToolsStream(body io.Reader, role string, guard *loopguard.Guard) (*modelResponse, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	var content, reasoning strings.Builder
@@ -146,10 +154,12 @@ func readToolsStream(body io.Reader, role string) (*modelResponse, error) {
 		for _, choice := range chunk.Choices {
 			if text := choice.Delta.ReasoningContent; text != "" {
 				reasoning.WriteString(text)
+				guard.Feed(loopguard.KindThink, text)
 				console.StreamDelta(role, console.KindThink, text)
 			}
 			if text := choice.Delta.Content; text != "" {
 				content.WriteString(text)
+				guard.Feed(loopguard.KindContent, text)
 				console.StreamDelta(role, console.KindContent, text)
 			}
 			for _, delta := range choice.Delta.ToolCalls {
@@ -171,6 +181,10 @@ func readToolsStream(body io.Reader, role string) (*modelResponse, error) {
 				item.Function.Arguments += delta.Function.Arguments
 			}
 		}
+	}
+	guard.Stop()
+	if guard.Hit() {
+		return nil, loopguard.ErrLoop
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("读取模型流失败: %w", err)

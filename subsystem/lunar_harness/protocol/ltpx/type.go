@@ -33,15 +33,6 @@ type Result struct {
 	Error   string `json:"error"`
 }
 
-// EventResult 事件推送（xx事件发生前）的处理结果。
-// Returned 为订阅方回执标志，Return 为业务回传数据，Data 为插件改写后的负载。
-type EventResult struct {
-	Modified bool `json:"modified"`
-	Data     any  `json:"data"`
-	Returned bool `json:"returned"`
-	Return   any  `json:"return"`
-}
-
 // Broker 是 LTPX 协调的进程内契约：月华（消费方）只依赖本接口，
 // 琉璃（提供方）实现本接口，由装配层注入，从而彻底消除跨服务 HTTP 通道。
 type Broker interface {
@@ -53,6 +44,4 @@ type Broker interface {
 	Submit(tool string, args map[string]any) (string, error)
 	// Await 等待指定 request_id 的结果（进程内结果通道，替代 HTTP 轮询）
 	Await(ctx context.Context, requestID string) (Result, error)
-	// Event 推送「xx事件发生前」负载并同步取回 LTP9 插件处理结果
-	Event(topic string, payload any) EventResult
 }

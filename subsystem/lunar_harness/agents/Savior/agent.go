@@ -4,6 +4,7 @@ package Savior
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -46,6 +47,18 @@ func Report(agent string, err error) {
 	pending[agent] = &Failure{ID: seq, Agent: agent, Error: message, At: time.Now()}
 	order = append(order, agent)
 	logger.Warn(roleLabel, "[智能修复] 收到故障 #%d（%s）：%s", seq, agent, previewRunes(message, 160))
+}
+
+// ReportRun 上报一次运行失败。
+//
+// 与 Report 的区别：忽略「主动取消」与「循环输出截断」。
+// 前者是正常退出，后者已由各智能体自行重试或降级，都不属于上下文损坏，
+// 上报只会挤占故障队列、触发无意义的修复。
+func ReportRun(agent string, err error) {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, loopguard.ErrLoop) {
+		return
+	}
+	Report(agent, err)
 }
 
 // Pending 返回待修复故障数。

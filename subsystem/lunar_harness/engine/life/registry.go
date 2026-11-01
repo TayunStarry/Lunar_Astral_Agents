@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"time"
 
+	"LunarSubsystem/LunarHarness/engine/affection"
 	"LunarSubsystem/LunarHarness/engine/mood"
 )
 
@@ -22,18 +23,11 @@ func SetLastUserTextProvider(provider func() string) {
 	lastUserTextHook = provider
 }
 
-// SetLastUserNameProvider 注入最新用户发言的发送者名读取能力（由 lunar 包提供）。
-func SetLastUserNameProvider(provider func() string) {
+// SetDialogueRoundsProvider 注入各角色最近若干轮对话读取能力（由 lunar 包提供）。
+func SetDialogueRoundsProvider(provider func() []affection.Round) {
 	mu.Lock()
 	defer mu.Unlock()
-	lastUserNameHook = provider
-}
-
-// SetLastReplyTextProvider 注入上一轮月华回应读取能力（由 lunar 包提供）。
-func SetLastReplyTextProvider(provider func() string) {
-	mu.Lock()
-	defer mu.Unlock()
-	lastReplyTextHook = provider
+	dialogueRoundsHook = provider
 }
 
 // RegisterEvent 注册生活事件；重复 ID 忽略。

@@ -271,7 +271,6 @@ type RedPacketInfo struct {
 type WalletElement struct {
 	RedType       int            `json:"redType"`       // 1=群聊手气/口令, 2=私聊/普通
 	BillNo        string         `json:"billNo"`        // 红包流水号
-	Authkey       string         `json:"authkey"`       // 领取密钥（当前未使用）
 	Sessiontype   int            `json:"sessiontype"`   // 0=私聊, 1=群聊
 	MsgType       int            `json:"msgType"`       // 2=普通/私聊, 3=手气, 6=口令
 	RedChannel    int            `json:"redChannel"`    // 1=普通/手气, 32=口令

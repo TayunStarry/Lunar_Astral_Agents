@@ -10,7 +10,7 @@ func allScreens() []screenID {
 	return []screenID{
 		screenMenu, screenAgent, screenStats, screenLogs, screenEdit,
 		screenProxy, screenArchive,
-		screenUpdate, screenPorts, screenMarket, screenDump, screenTools,
+		screenUpdate, screenPorts, screenDump, screenTools,
 	}
 }
 

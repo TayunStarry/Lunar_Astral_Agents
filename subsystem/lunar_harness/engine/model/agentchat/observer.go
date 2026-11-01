@@ -21,6 +21,8 @@ type Observer struct {
 	End func(role string)
 	// Meter 模型调用计量
 	Meter func(prompt, completion, cached int64, generation time.Duration, estimated bool)
+	// Report 重试耗尽后的失败上报（交给智能修复；role 为实况角色标签）
+	Report func(role string, err error)
 }
 
 // SetObserver 注入实况观察者与计量回调（app 层启动时调用）
@@ -60,6 +62,19 @@ func observeEnd(role string) {
 	observerMu.Unlock()
 	if fn != nil {
 		fn(role)
+	}
+}
+
+// reportFailure 上报一次重试耗尽后的失败（由 app 层接到智能修复）。
+func reportFailure(role string, err error) {
+	if err == nil {
+		return
+	}
+	observerMu.Lock()
+	fn := observer.Report
+	observerMu.Unlock()
+	if fn != nil {
+		fn(role, err)
 	}
 }
 

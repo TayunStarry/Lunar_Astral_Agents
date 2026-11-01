@@ -20,8 +20,10 @@ import (
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
 // httpStatusError 模型服务返回非 200 状态。
@@ -39,7 +41,7 @@ func retryable(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, errLoopOutput) {
+	if errors.Is(err, loopguard.ErrLoop) {
 		return true
 	}
 	var statusErr *httpStatusError
@@ -75,6 +77,8 @@ func completeOnce(ctx context.Context, req *Request) (Result, error) {
 	}
 	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
+	// 循环输出监管：思考与正文分别按节点检查，命中持续复读立即取消本次请求
+	guard := loopguard.New(cancel, loopguard.DefaultOptions())
 	url := strings.TrimRight(config.AgentMultimodalURL, "/") + llamaChatPath
 	httpReq, err := http.NewRequestWithContext(callCtx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
@@ -130,10 +134,12 @@ func completeOnce(ctx context.Context, req *Request) (Result, error) {
 			delta := choice.Delta
 			if think := delta.ReasoningContent + delta.Reasoning; think != "" {
 				reasoning.WriteString(think)
+				guard.Feed(loopguard.KindThink, think)
 				console.StreamDelta(roleLabel, console.KindThink, think)
 			}
 			if delta.Content != "" {
 				content.WriteString(delta.Content)
+				guard.Feed(loopguard.KindContent, delta.Content)
 				console.StreamDelta(roleLabel, console.KindContent, delta.Content)
 			}
 			accumulator.ingest(delta.ToolCalls)
@@ -144,6 +150,11 @@ func completeOnce(ctx context.Context, req *Request) (Result, error) {
 		if chunk.Usage != nil {
 			usage = chunk.Usage
 		}
+	}
+	guard.Stop()
+	if guard.Hit() {
+		console.StreamEnd(roleLabel)
+		return Result{}, loopguard.ErrLoop
 	}
 	if err := scanner.Err(); err != nil {
 		console.StreamEnd(roleLabel)
@@ -221,7 +232,9 @@ func normalizeToolCalls(raw json.RawMessage) json.RawMessage {
 }
 
 // completeWithRetry 首次 + 三次重试；命中循环输出同样重试。
-func completeWithRetry(ctx context.Context, req *Request) (Result, error) {
+// 重试耗尽后的失败上报给智能修复（循环截断与主动取消不重复上报）。
+func completeWithRetry(ctx context.Context, req *Request) (out Result, err error) {
+	defer func() { Savior.ReportRun("responder", err) }()
 	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if ctx.Err() != nil {
@@ -239,8 +252,9 @@ func completeWithRetry(ctx context.Context, req *Request) (Result, error) {
 				lastErr = fmt.Errorf("%w（第 %d 次尝试：%s）", errEmptyOutput, attempt+1, finishLabel(result))
 				continue
 			}
-			if loopDetected(result.Content) {
-				lastErr = fmt.Errorf("%w（第 %d 次尝试）", errLoopOutput, attempt+1)
+			// 整包/短答：按末尾节点静态判定一次（流式路径已在节点边界实时截断）
+			if loopguard.Detected(result.Reasoning+result.Content, loopguard.DefaultOptions()) {
+				lastErr = fmt.Errorf("%w（第 %d 次尝试）", loopguard.ErrLoop, attempt+1)
 				continue
 			}
 			logResult(result, attempt)

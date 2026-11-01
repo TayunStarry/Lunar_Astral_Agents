@@ -4,13 +4,13 @@ package resource
 //
 // 设计依据：docs/adr/0001-统一资源寻址与三层存储.md
 // 三层职责：
-//   资源目录（store.go，SQLite archive.db）：句柄、元数据、段落结构
+//   资源目录（store.go，SQLite handles.db）：句柄、元数据、段落结构
 //   内容仓库（admit.go，文件系统 multimedia/ / audios/ / documents/）：资源原始字节
 //   记忆库（engine/memory）：会话经历 + 每资源一条卡片向量
 //
 // 句柄文法（唯一实现，Go 侧为权威定义）：
 //   resource-handle := "@" typecode "." seq3 [ anchor ]
-//   typecode        := "D" | "I" | "V" | "A" | "T" | "U"
+//   typecode        := "D" | "I" | "V" | "A" | "G" | "U"
 //   anchor          := "|§" section-ordinal | "|L" line-start "-" line-end
 
 import "database/sql"

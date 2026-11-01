@@ -29,17 +29,6 @@ function handleWebSocketMessage(msg) {
             addMessage({ id: generateId(), role: 'assistant', categories: ['music'], content: '', abcNotation: content, timestamp: Date.now() });
             return;
         }
-        if (subType === 'music_audio') {
-            try {
-                const audioData = JSON.parse(content || '{}');
-                if (audioData.type === 'audio_ready' && audioData.audio_url) {
-                    playRenderedAudio(audioData.audio_url, audioData.file_name);
-                }
-            } catch (e) {
-                console.warn('乐谱音频数据解析失败', e);
-            }
-            return;
-        }
         if (subType === 'action') {
             addMessage({ id: generateId(), role: 'assistant', categories: ['action'], content, actionType: subType, timestamp: Date.now() });
             return;

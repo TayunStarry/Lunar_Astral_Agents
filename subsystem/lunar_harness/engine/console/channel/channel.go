@@ -1,8 +1,8 @@
 // Package channel 定义 Gitee Release「发布通道」的划分与判别契约。
 //
-// 更新包与 LTPX 应用市场**共用同一仓库**（同一批 Release），因此每条发布都必须
-// 能判定归属，否则会出现「拉更新包拉到 LTPX 工具包」「版本列表混进市场包」这类串台。
-// 判别依据两条，互为兜底：
+// 更新包与历史上的 LTPX 市场包**共用同一仓库**（同一批 Release）。市场屏已下线、
+// 不再发布新市场包，但仓库里仍留有旧发布，因此每条发布都必须能判定归属，
+// 否则会出现「版本列表混进历史市场包」这类串台。判别依据两条，互为兜底：
 //
 //  1. 描述标记：更新包 body 含 [UPDATE]；市场包 body 含 [LTPX]
 //  2. 附件名前缀：更新包 lunar_updatepack_*；市场包 ltpx_*.ltpx
@@ -82,9 +82,6 @@ func Classify(assetNames []string, body string) Kind {
 
 // IsUpdateAsset 附件名是否属于更新包通道
 func IsUpdateAsset(name string) bool { return strings.HasPrefix(name, UpdateAssetPrefix) }
-
-// IsMarketAsset 附件名是否属于市场通道
-func IsMarketAsset(name string) bool { return strings.HasPrefix(name, MarketAssetPrefix) }
 
 // AssetNames 提取附件名列表（调用方各自映射自己的响应结构）
 func AssetNames[T any](assets []T, name func(T) string) []string {

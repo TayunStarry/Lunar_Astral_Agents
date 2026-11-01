@@ -38,9 +38,9 @@ var Instance *Hub
 // 缺省或 bus=0 表示仅接收结构化消息（月华消息终端、手机端即属此类）。
 const BusParam = "bus"
 
-// ChannelParam 总线频道声明参数（连接与 /write/engine 请求共用）。
+// ChannelParam 总线频道声明参数（连接 URL 声明）。
 //
-// 为何需要频道：同一进程内可能存在多个彼此独立的引擎实例
+// 为何需要频道：同一进程内存在多个彼此独立的引擎实例
 // （月华消息终端内嵌的渲染引擎、琉璃 studio 的编辑器引擎），
 // 它们各自的遥测/面板指令只能在**本实例的参与者之间**流动。
 // 合并为单进程后若只按「是否订阅」投递，两个实例的帧会互相串扰
@@ -49,7 +49,7 @@ const ChannelParam = "channel"
 
 // DefaultBusChannel 未声明频道时的归属频道。
 // 面向宿主的广播（ltpx_call、LTP9 调试回执、服务端主动 Emit）走此频道，
-// 由琉璃桌面与蓝图页等订阅者接收。
+// 由琉璃桌面等订阅者接收。
 const DefaultBusChannel = "lunar-engine-bus"
 
 // ChannelLunarTerminal 月华消息终端（含手机端）声明的接入频道。

@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// 公共类型（被 eventAPI / agentAPI 等按需引用）
+// 公共类型（被 agentAPI 按需引用）
 // ═══════════════════════════════════════════════════════════
 
 /** OpenAI 兼容消息 */
@@ -64,42 +64,3 @@ interface ToolMessage {
 	/** 执行结果文本 */
 	content: string
 }
-
-/** 事件负载 */
-interface EventLoad<P = unknown> {
-	/** 事件主题 */
-	type: string
-	/** 事件数据 */
-	payload: P
-}
-
-/** 事件回传：`{ return }` 即把业务结果交回宿主 */
-interface ReturnResult<R> {
-	/** 业务结果，格式见 eventAPI 对应事件 */
-	return: R
-}
-
-/** 放行 */
-interface PassResult { }
-
-/** 拦截：短路后续订阅器 */
-interface InterceptResult {
-	intercept: true
-}
-
-/** 改写：替换事件负载 */
-interface ModifyResult {
-	modifiedData: {
-		content?: string
-		senderName?: string
-		[key: string]: unknown
-	}
-}
-
-/** 撤回：事件不再派发 */
-interface CancelResult {
-	cancel: true
-}
-
-/** 订阅器可返回的结果（推荐 `{ return: 业务结果 }` 回传宿主） */
-type HandlerResult = PassResult | InterceptResult | ModifyResult | CancelResult | Record<string, unknown>

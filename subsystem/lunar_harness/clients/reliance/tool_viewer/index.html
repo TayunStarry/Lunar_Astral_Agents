@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』工具文档</title>
+    <!-- 标准样式库 -->
+    <link rel="stylesheet" href="/reliance/fontAwesome/css/all.min.css">
+    <link rel="stylesheet" href="/reliance/highlight/styles/github.css">
+    <link rel="stylesheet" href="/reliance/katex/katex.min.css">
+    <!-- 标注脚本库 -->
+    <script src="/reliance/marked.min.js"></script>
+    <script src="/reliance/echarts.min.js"></script>
+    <script src="/reliance/highlight/highlight.min.js"></script>
+    <script src="/reliance/katex/katex.min.js"></script>
+    <script src="/reliance/katex/contrib/auto-render.min.js"></script>
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="background"></div>
+    <div class="glass-effect"></div>
+
+    <div class="toolbar">
+        <button class="btn-back" id="btnBack" title="返回">
+            <i class="fas fa-arrow-left"></i>
+            <span>返回</span>
+        </button>
+        <h1 class="doc-title" id="docTitle">工具文档</h1>
+        <div class="toolbar-spacer"></div>
+    </div>
+
+    <div class="content-container">
+        <div class="markdown-body" id="markdownBody">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>正在加载文档...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

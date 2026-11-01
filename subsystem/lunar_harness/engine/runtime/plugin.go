@@ -5,7 +5,6 @@ package runtime
 import (
 	"fmt"
 	"os"
-	"sort"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
@@ -32,12 +31,10 @@ type callResult struct {
 // newPrivate 创建一个私有运行时实例（独立事件循环 + 隔离数据目录）。
 func newPrivate(id, title string) *plugin {
 	p := &plugin{
-		ID:       id,
-		Title:    title,
-		DataDir:  privateDataDir(id),
-		events:   map[string][]*eventSub{},
-		exports:  map[string]jsFunc{},
-		commands: map[string]*commandEntry{},
+		ID:      id,
+		Title:   title,
+		DataDir: privateDataDir(id),
+		exports: map[string]jsFunc{},
 	}
 	_ = os.MkdirAll(p.DataDir, 0o755)
 	p.loop = eventloop.NewEventLoop()
@@ -109,9 +106,7 @@ func (p *plugin) unload() {
 	}
 	p.mu.Lock()
 	p.loaded = false
-	p.events = map[string][]*eventSub{}
 	p.exports = map[string]jsFunc{}
-	p.signalSubs = nil
 	p.mu.Unlock()
 	logger.Info(ServiceName, "js 运行时已卸载: %s", p.ID)
 }
@@ -168,95 +163,8 @@ func isFunc(v goja.Value) bool {
 	return ok
 }
 
-// registerEvent 记录一次事件订阅，返回订阅 id（单调递增，供 unsubscribe 精确退订）。
-func (p *plugin) registerEvent(topic string, cb jsFunc, priority int) int {
-	p.subSeq++
-	id := p.subSeq
-	p.events[topic] = append(p.events[topic], &eventSub{topic: topic, orderID: id, handler: cb, priority: priority})
-	return id
-}
-
-// removeEvent 按订阅 id 移除事件订阅。
-func (p *plugin) removeEvent(topic string, id int) {
-	list := p.events[topic]
-	if len(list) == 0 {
-		return
-	}
-	kept := list[:0]
-	for _, s := range list {
-		if s.orderID != id {
-			kept = append(kept, s)
-		}
-	}
-	p.events[topic] = kept
-}
-
-// exportNames 返回当前已导出的函数名（排序后）。
-func (p *plugin) exportNames() []string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	out := make([]string, 0, len(p.exports))
-	for name := range p.exports {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// fireEvent 派发事件：按注册顺序同步调用订阅回调，支持拦截/改写/撤回。
-// 回调返回普通对象（非 Promise）；宿主同步阻塞拿到回调结果：
-//   - { intercept:true }   → 本次事件已被消费，短路该运行时后续订阅器
-//   - { modifiedData: X }  → 用 X 改写事件负载，供本运行时后续订阅器读取
-//   - { cancel:true }      → 撤回本次事件，停止派发
-//
-// 注意：执行回调（callFn）时不得持有 p.mu，否则回调内的 signal.all 会去 Lock 同一把锁而自锁。
-func (p *plugin) fireEvent(topic string, payload any) {
-	p.mu.Lock()
-	loaded := p.loaded
-	subs := append([]*eventSub(nil), p.events[topic]...)
-	p.mu.Unlock()
-	if !loaded {
-		return
-	}
-	sort.SliceStable(subs, func(i, j int) bool { return subOrderLess(subs[i], subs[j]) })
-	cur := payload
-	for _, s := range subs {
-		res, err := p.callFn(s.handler, map[string]any{"type": topic, "payload": cur})
-		if err != nil {
-			continue
-		}
-		if m, ok := res.(map[string]any); ok {
-			if m["cancel"] == true {
-				return
-			}
-			if v, has := m["modifiedData"]; has && v != nil {
-				cur = v
-			}
-			if m["intercept"] == true {
-				return
-			}
-		}
-	}
-}
-
-// subOrderLess 事件订阅器派发顺序：优先按优先级升序（0 最高）；同优先级按订阅时间（orderID）升序；
-// 未设置优先级的订阅视作最大优先级，排在所有设置者之后并保持彼此的时间顺序。
-func subOrderLess(a, b *eventSub) bool {
-	pa, pb := a.priority, b.priority
-	if pa == priorityUnset {
-		pa = 1 << 30
-	}
-	if pb == priorityUnset {
-		pb = 1 << 30
-	}
-	if pa != pb {
-		return pa < pb
-	}
-	return a.orderID < b.orderID
-}
-
-// callExport 调用运行时的导出函数（callFunction 目标）。
-// 注意：取到 handler 后须先释放 p.mu 再 callFn，避免导出函数内 signal.all 自锁。
+// callExport 调用运行时的导出函数（宿主 Runtime.Call 目标）。
+// 注意：取到 handler 后须先释放 p.mu 再 callFn。
 func (p *plugin) callExport(fnName string, args []any) (any, error) {
 	p.mu.Lock()
 	h, ok := p.exports[fnName]

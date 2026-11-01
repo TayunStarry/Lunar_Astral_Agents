@@ -20,8 +20,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/api-docs", Handler: docsHandler, Method: "GET", Description: "服务自述文档"},
 	{Path: "/window/focus", Handler: WindowFocusHandler, Method: "POST", Description: "置前指定桌面窗口（id: lunar/crystal）"},
 
-	// ==================== 引擎总线与消息队列 ====================
-	{Path: "/write/engine", Handler: EngineMessageHandler, Method: "POST", Description: "引擎/前端系统总线（反射观测 + 原样透传广播）"},
+	// ==================== 消息队列 ====================
 	{Path: "/write/message", Handler: LunarPersonality.MessageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
 
 	// ==================== 应用与资源 ====================
@@ -58,7 +57,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/api/module/inspect", Handler: CrystalPersonality.ModuleInspectHandler, Method: "POST", Description: "检查 HTML 项目内容（供 AI 生成模块元信息）"},
 
 	// ==================== 控制台数据导出 ====================
-	// TUI「数据导出」调用：把原始日志 / 实况轮次 / 智能体上下文落盘为 .log / .json，便于离线排查
 	{Path: "/debug/dump/logs", Handler: DataDumpLogsHandler, Method: "POST", Description: "导出原始日志为 JSON Lines（.log）"},
 	{Path: "/debug/dump/transcript", Handler: DataDumpTranscriptHandler, Method: "POST", Description: "导出核心智能实况的模型调用轮次（思考/输出/工具序列/时长）为 JSON（.json）"},
 	{Path: "/debug/dump/context", Handler: DataDumpContextHandler, Method: "POST", Description: "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）"},
@@ -83,7 +81,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/generate/scheme", Handler: image.DiffusionSchemeHandler, Method: "GET/POST", Description: "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）"},
 
 	// ==================== 模型服务与显存守卫 ====================
-	// 外部调用统一走 /agent（非流式、模型名固定）；Go 智能体直连 llama.cpp，不再对外转发 /v1
 	{Path: "/agent/chat/completions", Handler: AgentChatHandler, Method: "POST", Description: "外部多模态推理（非流式；模型名固定 primary_reasoning；请求经响应者智能体排队，由响应者独立 Tick 在主调度空档期依次处理）"},
 	{Path: "/agent/embeddings", Handler: AgentEmbeddingHandler, Method: "POST", Description: "外部文本嵌入（非流式；模型名固定 text_embedding）"},
 	{Path: "/vram/guard", Handler: llama.VRAMGuardHandler, Method: "POST", Description: "显存守卫（可用显存低于阈值时卸载已加载模型，一并释放 KV 缓存）"},
@@ -93,9 +90,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/proxy", Handler: LunarPersonality.ProxyHandler, Method: "POST", Description: "代理访问服务"},
 
 	// ==================== 语音播报（Broadcaster 统一链路） ====================
-	// 全部 TTS 调用强制收敛到 /broadcaster 端点族：唯一合成入口按请求 engine 参数
-	// （缺省 tts.engine 配置，默认 Qwen）选引擎；引擎槽位单载管理——目标引擎未在位时
-	// 自动执行「等待在位合成完毕 → 卸载 → 加载 → 合成」热切换。
 	{Path: "/broadcaster/synthesize", Handler: broadcaster.SynthesizeHandler, Method: "POST", Description: "语音合成统一入口（engine 参数选引擎 Qwen/Kokoro/OmniVoice，缺省 tts.engine 配置；引擎槽位单载自动切换）"},
 	{Path: "/broadcaster/status", Handler: broadcaster.StatusHandler, Method: "GET", Description: "播报引擎槽位观测（在位引擎/状态机/最近活动；零副作用）"},
 	{Path: "/broadcaster/activate", Handler: broadcaster.ActivateHandler, Method: "POST", Description: "显式激活播报引擎（预加载/切换槽位，body: engine）"},
@@ -107,22 +101,11 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/broadcaster/omnivoice/languages", Handler: broadcaster.OmniVoiceLanguagesHandler, Method: "GET", Description: "OmniVoice 支持的语言列表（自动激活 OmniVoice 槽位）"},
 
 	// ==================== LTPX 工具包调度 ====================
-	// 同时作为进程内 Broker 的 HTTP 调试入口
 	{Path: "/ltpx/tools", Handler: CrystalPersonality.LTPRemoteToolsHandler, Method: "GET", Description: "拉取工具链（动态扫描包 AtoA 能力）"},
 	{Path: "/ltpx/call", Handler: CrystalPersonality.LTPRemoteCallHandler, Method: "POST", Description: "调用工具（异步受理，立即返回 request_id）"},
 	{Path: "/ltpx/poll", Handler: CrystalPersonality.LTPRemotePendingHandler, Method: "GET", Description: "列出待定工具调用（调试端点，已不承担轮询取结果）"},
 	{Path: "/ltpx/result", Handler: CrystalPersonality.LTPRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
-	{Path: "/ltpx/event", Handler: CrystalPersonality.LTPRemoteEventHandler, Method: "POST", Description: "事件推送（xx事件发生前负载经 LTP9 插件处理）"},
 	{Path: "/mini-ltp-agent.js", Handler: CrystalPersonality.MiniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（Mini-LTP）"},
 	{Path: "/shared-input.js", Handler: CrystalPersonality.SharedInputHandler, Method: "GET", Description: "统一键鼠操作共享模块"},
 	{Path: "/self-ltp-agent.js", Handler: CrystalPersonality.SelfLTPAgentHandler, Method: "GET", Description: "自主页面操作智能体脚本（Self-LTP）"},
-
-	// ==================== WebView 网络搜索代理（后端驱动的顶层 WebView 会话） ====================
-	{Path: "/webview/open", Handler: CrystalPersonality.WebViewOpenHandler, Method: "POST", Description: "创建 WebView 网络搜索会话窗口"},
-	{Path: "/webview/navigate", Handler: CrystalPersonality.WebViewNavigateHandler, Method: "POST", Description: "网络搜索会话导航到指定 URL 并等待就绪"},
-	{Path: "/webview/eval", Handler: CrystalPersonality.WebViewEvalHandler, Method: "POST", Description: "网络搜索会话页面上下文执行脚本并取回 JSON 结果"},
-	{Path: "/webview/ready", Handler: CrystalPersonality.WebViewReadyHandler, Method: "POST", Description: "等待网络搜索会话页面就绪并返回状态"},
-	{Path: "/webview/screenshot", Handler: CrystalPersonality.WebViewScreenshotHandler, Method: "POST", Description: "网络搜索会话窗口区域截图（dataURL 返回）"},
-	{Path: "/webview/close", Handler: CrystalPersonality.WebViewCloseHandler, Method: "POST", Description: "关闭网络搜索会话窗口"},
-	{Path: "/webview/deepread", Handler: CrystalPersonality.WebViewDeepReadHandler, Method: "POST", Description: "网络搜索编排：导航→就绪→元素提取（可滚动）→截图→模型摘要"},
 }

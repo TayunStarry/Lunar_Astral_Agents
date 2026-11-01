@@ -25,8 +25,6 @@ func RegisterFlags() {
 	flag.StringVar(&KeyFile, "key-file", KeyFile, "私钥文件路径, 用于HTTPS加密通信")
 	flag.StringVar(&KnowledgeDBPath, "knowledge-db", KnowledgeDBPath, "知识库文件路径")
 	flag.StringVar(&ArchiveDBPath, "archive-db", ArchiveDBPath, "统一资源目录数据库路径")
-	flag.StringVar(&MediaDBPath, "media-db", MediaDBPath, "媒体派生数据库路径")
-	flag.StringVar(&WebDBPath, "web-db", WebDBPath, "网络检索缓存数据库路径")
 	flag.StringVar(&TextDBPath, "text-db", TextDBPath, "文本内容索引数据库路径")
 	flag.StringVar(&CharacterDBPath, "character-db", CharacterDBPath, "自定义角色库数据库路径")
 	flag.IntVar(&ArchiveQuotaMB, "archive-quota-mb", ArchiveQuotaMB, "统一资源内容仓库容量上限(MB)")

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>『 星月智能 』月岩引擎</title>
     <!-- 标准样式库 -->
-    <link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
+    <link rel="stylesheet" href="/reliance/fontAwesome/css/all.min.css">
     <!-- 项目私有样式 -->
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -51,7 +51,7 @@
 
         <!-- 引擎 iframe（中央 3D 视口） -->
         <main class="area-engine">
-            <iframe src="/file/read/package/lunar.rendering_engine/index.html?mode=editor&channel=lunar-engine-bus" name="engine-frame" allow="fullscreen" title="月岩引擎视口"></iframe>
+            <iframe src="/reliance/lunar.rendering_engine/index.html?mode=editor&channel=rendering-studio" name="engine-frame" allow="fullscreen" title="月岩引擎视口"></iframe>
         </main>
 
         <!-- 操纵面板容器（右侧 360px，4 个 iframe 一次性挂载） -->
@@ -113,6 +113,8 @@
     <!-- Toast 容器 -->
     <div class="toast" id="toast"></div>
 
+    <!-- 统一通信桥：基座、面板与引擎核心都走同一条 ws 通道（频道 rendering-studio） -->
+    <script src="/reliance/ws_bridge.js"></script>
     <!-- 项目私有脚本（ES Module） -->
     <script type="module" src="app.js"></script>
 </body>

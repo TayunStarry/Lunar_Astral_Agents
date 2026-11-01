@@ -15,6 +15,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
+	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 )
 
 var (
@@ -95,6 +96,10 @@ func chatWithTools(ctx context.Context, messages []chatMessage, tools []toolDefi
 		if strings.TrimSpace(result.ToolCalls[i].Type) == "" {
 			result.ToolCalls[i].Type = "function"
 		}
+	}
+	// 循环输出监管：整包响应按末尾节点静态判定，命中即当次调用作废
+	if loopguard.Detected(result.Reasoning+result.Content, loopguard.DefaultOptions()) {
+		return nil, loopguard.ErrLoop
 	}
 	console.StreamDelta(Module, console.KindThink, result.Reasoning)
 	console.StreamDelta(Module, console.KindContent, result.Content)
