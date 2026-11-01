@@ -28,21 +28,40 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/locator"
 	"LunarSubsystem/LunarHarness/engine/model/agentchat"
 	"LunarSubsystem/LunarHarness/engine/multimodal"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
+// ResolveHandle 把句柄或路径统一解析为资源句柄（路径支持完整 / 相对 / 纯文件名）
+func ResolveHandle(input string) (string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", fmt.Errorf("文件或句柄不能为空")
+	}
+	match, err := locator.ResolveToHandle(input, []string{resource.StorageRootDocuments, resource.StorageRootMultimedia})
+	if err != nil {
+		return "", err
+	}
+	return match.Handle, nil
+}
+
 // runMu 串行化视觉理解运行（共享模型通道与实况流）
 var runMu sync.Mutex
 
 // DescribeMedia 取回图片 / 动图的内容描述
 //
-// @param handle   资源句柄（@I.007）
+// @param input    资源句柄（@I.007），或完整 / 相对 / 纯文件名路径
 // @param question 可选定向问题（非空时不读缓存、不写缓存）
 // @return 描述文本；句柄失效或本体丢失时返回错误
-func DescribeMedia(handle, question string) (string, error) {
+func DescribeMedia(input, question string) (string, error) {
+	handle, err := ResolveHandle(input)
+	if err != nil {
+		return "", err
+	}
+
 	runMu.Lock()
 	defer runMu.Unlock()
 

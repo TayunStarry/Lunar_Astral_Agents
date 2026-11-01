@@ -14,7 +14,7 @@ func buildOutline(doc *docContext) []outlineItem {
 	if doc.Profile.Binary {
 		return nil
 	}
-	// 资源目录已有段落表（Markdown 标题等）：直接复用，保证与 use_resource 的章节大纲同源
+	// 资源目录已有段落表（Markdown 标题等）：直接复用，保证与 fetch_resources 的章节大纲同源
 	if doc.Handle != "" {
 		if sections, _, err := resource.Outline(doc.Handle); err == nil && len(sections) > 0 {
 			items := make([]outlineItem, 0, len(sections))

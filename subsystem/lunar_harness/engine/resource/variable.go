@@ -16,6 +16,7 @@ package resource
 import (
 	"regexp"
 	"sync"
+	"time"
 )
 
 // 资源类型码
@@ -40,7 +41,7 @@ const (
 
 // 解析文本状态
 const (
-	// ParseNone 尚未解析（use_resource 时才触发解读流程）
+	// ParseNone 尚未解析（fetch_resources 的 handle 模式才触发解读流程）
 	ParseNone = "none"
 	// ParseReady 已存在有效解析文本（直接返回，不再触发模型）
 	ParseReady = "ready"
@@ -79,6 +80,10 @@ const (
 	GCPointsUnusedStep = -1
 	// GCPointsUsedStep 上一轮被查询使用时的积分变化
 	GCPointsUsedStep = 1
+	// GCCycleHours 运行期 GC 的结算周期（小时）：不再依赖进程重启
+	GCCycleHours = 12
+	// gcRuntimeInterval 运行期结算间隔
+	gcRuntimeInterval = time.Duration(GCCycleHours) * time.Hour
 	// gcCurrentCallUsed GC 表 2「当前调用」标记：本轮被查询使用过
 	gcCurrentCallUsed = 1
 	// gcHashAudioNameLen audios 根目录哈希音频的文件名（去扩展名）长度

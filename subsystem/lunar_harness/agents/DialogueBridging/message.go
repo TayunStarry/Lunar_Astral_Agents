@@ -696,7 +696,7 @@ func localImageDataURI(path string) string {
 // admitInboundImage 把入站引用中的图片（合并转发 / 回复引用）收进统一资源归档层并返回持久句柄。
 //
 // 普通消息里的图片会作为多模态内容项直接进入思考链；而引用/转发里的图片不在正文
-// 内容项中，必须换成可回引的句柄，模型之后才能用 use_resource 查看。此处必须同时
+// 内容项中，必须换成可回引的句柄，模型之后才能用 fetch_resources 查看。此处必须同时
 // 兼容两种来源形态：
 //   - 远程直链（image.url）：按 url 来源下载；
 //   - 仅本地文件引用（image.file）：get_image 下载后得到 data URI，必须按 data 来源解码，

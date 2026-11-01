@@ -85,9 +85,6 @@ func (m *appModel) syncViewMetrics() {
 	case screenLogs:
 		w, _ := m.frameFor("", "", nil).bodySize()
 		m.logView.content(w)
-	case screenEdit:
-		w, h := m.frameFor("", "", nil).bodySize()
-		m.editView.sync(w, h)
 	case screenAgent:
 		w, _ := m.frameFor("", "", nil).bodySize()
 		m.agent.total = len(m.agentLines(maxInt(20, w-4), m.agent.expand))
@@ -562,6 +559,8 @@ func (m appModel) updateStats(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.frontendRelaunch("lunar")
 		case "2":
 			return m.frontendRelaunch("crystal")
+		case "3":
+			return m.frontendRelaunch("library")
 		case "i", "I", "x", "X":
 			return m.updateEngine(msg)
 		}

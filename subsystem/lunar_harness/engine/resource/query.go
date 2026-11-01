@@ -7,6 +7,7 @@ package resource
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -63,6 +64,51 @@ func (d *store) ListResources(kind string, limit int) ([]Resource, error) {
 		out = append(out, res)
 	}
 	return out, nil
+}
+
+// ListResourcesMatching 按文件名 / 路径 / 地址 / 标题子串过滤资源（kind 为空表示全部）
+//
+// keywords 之间取并集：任一关键词命中即列出，便于「文件名」「纯文件夹名」「相对路径」混用。
+func (d *store) ListResourcesMatching(kind string, keywords []string, limit int) ([]Resource, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	conds := make([]string, 0, len(keywords))
+	args := make([]any, 0, len(keywords)*4+1)
+	for _, raw := range keywords {
+		keyword := strings.TrimSpace(raw)
+		if keyword == "" {
+			continue
+		}
+		like := "%" + keyword + "%"
+		conds = append(conds, `(name LIKE ? OR blob_path LIKE ? OR url LIKE ? OR title LIKE ?)`)
+		args = append(args, like, like, like, like)
+	}
+	if len(conds) == 0 {
+		return d.ListResources(kind, limit)
+	}
+	sqlText := `SELECT ` + urlMasterColumns + ` FROM url_master WHERE bound_handle <> '' AND (` + strings.Join(conds, " OR ") + `)`
+	if kind != "" {
+		sqlText += ` AND kind = ?`
+		args = append(args, kind)
+	}
+	sqlText += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := d.db.Query(sqlText, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Resource{}
+	for rows.Next() {
+		res, scanErr := scanURLRecord(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		out = append(out, res)
+	}
+	return out, rows.Err()
 }
 
 // ListSections 读取资源段落表（按章节序号升序）

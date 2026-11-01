@@ -2,7 +2,7 @@ package FileEditor
 
 // fileops.go /document 根目录内的文件操作与句柄登记。
 // 所有路径都相对 /document（物理目录为 LocalDir/documents），
-// 绝对路径、.. 穿越与非法字符一律拒绝；每次操作后向控制台「编辑显示」屏上报。
+// 绝对路径、.. 穿越与非法字符一律拒绝；每次操作后向资源库状态中心上报。
 
 import (
 	"fmt"
@@ -13,7 +13,8 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/console"
+	"LunarSubsystem/LunarHarness/engine/library"
+	"LunarSubsystem/LunarHarness/engine/locator"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
@@ -27,10 +28,46 @@ func documentsAbsRoot() string {
 	return abs
 }
 
-// documentPath 校验并解析相对 /document 的路径。
-// 返回绝对路径与相对 LocalDir 的路径（用于句柄登记）。
+// documentPath 解析目标文件：句柄、完整路径、相对路径或纯文件名。
+//
+// 精确路径存在时直接使用；不存在时交给统一文件定位器做模糊匹配（纯文件名 / 路径后缀），
+// 同名的多个候选会返回带候选列表的歧义错误，供调用方选择。
 func documentPath(rel string) (full string, localRel string, err error) {
+	raw := strings.ReplaceAll(strings.TrimSpace(rel), "\\", "/")
+	// 句柄与空路径走严格解析
+	if strings.HasPrefix(raw, "@") || raw == "" || raw == "/document" {
+		return strictDocumentPath(raw)
+	}
+	full, localRel, err = strictDocumentPath(raw)
+	if err == nil {
+		if _, statErr := os.Stat(full); statErr == nil {
+			return full, localRel, nil
+		}
+	}
+	match, locateErr := locator.Resolve(raw, []string{documentsRootRel})
+	if locateErr == nil && strings.HasPrefix(match.Rel, documentsRootRel+"/") {
+		return match.Abs, match.Rel, nil
+	}
+	if _, ambiguous := locateErr.(*locator.AmbiguousError); ambiguous {
+		return "", "", locateErr
+	}
+	if err != nil {
+		return "", "", err
+	}
+	// 未命中已有文件：保留严格路径，供创建类操作使用
+	return full, localRel, nil
+}
+
+// strictDocumentPath 只做路径文法校验与拼接，不做模糊匹配。
+func strictDocumentPath(rel string) (full string, localRel string, err error) {
 	rel = strings.ReplaceAll(strings.TrimSpace(rel), "\\", "/")
+	if strings.HasPrefix(rel, "@") {
+		resolved, resolveErr := handleDocumentPath(rel)
+		if resolveErr != nil {
+			return "", "", resolveErr
+		}
+		rel = resolved
+	}
 	switch {
 	case rel == "/document":
 		rel = ""
@@ -39,6 +76,9 @@ func documentPath(rel string) (full string, localRel string, err error) {
 	case strings.HasPrefix(rel, "/"):
 		return "", "", fmt.Errorf("请使用相对 /document 的路径")
 	}
+	// 兼容调用方把文档库前缀写进路径（否则会落到 documents/documents/ 下）
+	rel = strings.TrimPrefix(rel, documentsRootRel+"/")
+	rel = strings.TrimPrefix(rel, "document/")
 	if strings.ContainsRune(rel, 0) {
 		return "", "", fmt.Errorf("路径包含非法字符")
 	}
@@ -57,6 +97,24 @@ func documentPath(rel string) (full string, localRel string, err error) {
 	return cleaned, local, nil
 }
 
+// handleDocumentPath 把 @D.xxx 句柄解析成相对 /document 的路径（忽略章节 / 行锚点）
+func handleDocumentPath(raw string) (string, error) {
+	parsed, ok := resource.ParseHandle(raw)
+	if !ok || parsed.Kind != resource.KindDocument {
+		return "", fmt.Errorf("只支持文档句柄（@D.xxx）：%s", raw)
+	}
+	handle := resource.FormatHandle(parsed.Kind, parsed.Seq)
+	entry, found := resource.Lookup(handle)
+	if !found {
+		return "", fmt.Errorf("句柄不存在：%s", handle)
+	}
+	blob := filepath.ToSlash(entry.BlobPath)
+	if !strings.HasPrefix(blob, documentsRootRel+"/") {
+		return "", fmt.Errorf("句柄 %s 不在 /document 文档库内", handle)
+	}
+	return strings.TrimPrefix(blob, documentsRootRel+"/"), nil
+}
+
 // docRelative 把相对 LocalDir 的路径转回相对 documents（用于控制台上报）。
 func docRelative(localRel string) string {
 	rel := strings.TrimPrefix(filepath.ToSlash(localRel), documentsRootRel+"/")
@@ -73,31 +131,39 @@ func normalizeDocPath(path string) string {
 	return path
 }
 
-// publish 向控制台「编辑显示」屏上报一次操作（读取类操作不提供改动片段）。
-func publish(localRel, op, snippet string, startLine, snippetLines int) {
-	rel := docRelative(localRel)
+// publish 向资源库上报一次操作（读取类操作不提供改动片段）。
+func publish(localRel, op, added, removed string, startLine, addedLines int) {
 	handle := registerHandle(localRel)
-	console.PublishFileEdit(console.FileEditNotice{
-		Path:         rel,
-		Op:           op,
-		Snippet:      snippet,
-		StartLine:    startLine,
-		SnippetLines: snippetLines,
-		Handle:       handle,
-		At:           time.Now(),
+	library.PublishEdit(library.EditNotice{
+		Path:      filepath.ToSlash(localRel),
+		Op:        op,
+		Added:     added,
+		Removed:   removed,
+		StartLine: startLine,
+		Lines:     addedLines,
+		Handle:    handle,
+		At:        time.Now(),
 	})
 }
 
-// publishRun 上报一次「运行项目文件」的结果（failed=true 时控制台文件名标红）。
+// publishRun 上报一次「运行项目文件」的结果（failed=true 时文件名标红）。
 func publishRun(localRel string, failed bool) {
-	rel := docRelative(localRel)
-	console.PublishFileEdit(console.FileEditNotice{
-		Path:   rel,
+	library.PublishEdit(library.EditNotice{
+		Path:   filepath.ToSlash(localRel),
 		Op:     "run",
 		Handle: registerHandle(localRel),
 		Failed: failed,
 		At:     time.Now(),
 	})
+}
+
+// existingText 读取操作前的内容（不存在、目录或超过读取上限时返回空串）。
+func existingText(rel string) string {
+	text, err := readDocument(rel)
+	if err != nil {
+		return ""
+	}
+	return text
 }
 
 // AbsPath 把相对 /document 的路径解析为绝对路径（供同进程内的其它子系统复用路径校验）。
@@ -189,6 +255,7 @@ func writeDocument(rel, content string, mustCreate bool) (string, string, error)
 	if err := persistence.WriteFileAtomic(localRel, []byte(content)); err != nil {
 		return "", "", fmt.Errorf("写入文件失败: %w", err)
 	}
+	locator.Invalidate()
 	return localRel, registerHandle(localRel), nil
 }
 
@@ -208,6 +275,7 @@ func deleteDocument(rel string) (string, error) {
 	if err := os.Remove(full); err != nil {
 		return "", fmt.Errorf("删除文件失败: %w", err)
 	}
+	locator.Invalidate()
 	resource.RemoveHandlesForPath(localRel)
 	return localRel, nil
 }
@@ -243,6 +311,7 @@ func moveDocument(from, target string) (string, error) {
 	if err := os.Rename(fullFrom, fullTarget); err != nil {
 		return "", fmt.Errorf("移动文件失败: %w", err)
 	}
+	locator.Invalidate()
 	resource.RewriteHandlesForMove(localFrom, localTarget)
 	return localTarget, nil
 }
@@ -330,24 +399,28 @@ func searchInFile(docRel, query, full string) ([]searchHit, error) {
 }
 
 // replaceRange 用 content 替换文件第 [start,end] 行（1 基、含端点；内容行数可任意增减）。
-// 返回新的起始行与写入片段行数，供控制台绿色高亮。
-func replaceRange(rel string, start, end int, content string) (string, int, int, error) {
+// 返回新的起始行、写入片段行数与被替换掉的原文，供资源库差异渲染。
+func replaceRange(rel string, start, end int, content string) (string, int, int, string, error) {
 	if start < 1 {
-		return "", 0, 0, fmt.Errorf("起始行必须 ≥ 1")
+		return "", 0, 0, "", fmt.Errorf("起始行必须 ≥ 1")
 	}
 	if end < start {
 		end = start
 	}
 	text, err := readDocument(rel)
 	if err != nil {
-		return "", 0, 0, err
+		return "", 0, 0, "", err
 	}
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	if start > len(lines)+1 {
-		return "", 0, 0, fmt.Errorf("起始行 %d 超出文件总行数 %d", start, len(lines))
+		return "", 0, 0, "", fmt.Errorf("起始行 %d 超出文件总行数 %d", start, len(lines))
 	}
 	if end > len(lines) {
 		end = len(lines)
+	}
+	removed := ""
+	if start <= len(lines) {
+		removed = strings.Join(lines[start-1:end], "\n")
 	}
 	replacement := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
 	next := make([]string, 0, len(lines)+len(replacement))
@@ -356,9 +429,9 @@ func replaceRange(rel string, start, end int, content string) (string, int, int,
 	next = append(next, lines[end:]...)
 	localRel, _, err := writeDocument(rel, strings.Join(next, "\n"), false)
 	if err != nil {
-		return "", 0, 0, err
+		return "", 0, 0, "", err
 	}
-	return localRel, start, len(replacement), nil
+	return localRel, start, len(replacement), removed, nil
 }
 
 // registerHandle 登记资源句柄（失败时返回空串）。

@@ -32,6 +32,9 @@ import (
 // desktopWatchInterval 桌面窗口存活检查间隔（兜底 Run() 不返回的情况）
 const desktopWatchInterval = 2 * time.Second
 
+// narrowWindowBreakpoint 移动端尺寸阈值（窗口内容区宽度，与页面 innerWidth 一致）
+const narrowWindowBreakpoint = 768
+
 // DesktopWindowSpec 桌面窗口规格
 type DesktopWindowSpec struct {
 	// ID 窗口标识（用于聚焦与去重，如 lunar / crystal）
@@ -47,12 +50,16 @@ type DesktopWindowSpec struct {
 	IconPath string
 	// InitJS 页面注入脚本（每个新文档创建时执行）
 	InitJS string
+	// StickyWhenNarrow 窗口缩到移动端尺寸时自动置顶（像桌面宠物一样不被遮挡）
+	StickyWhenNarrow bool
 }
 
 // desktopWindow 已打开的桌面窗口
 type desktopWindow struct {
 	spec DesktopWindowSpec
 	wv   webview.WebView
+	// stickyTopmost 当前是否已置顶（窄窗口守卫只在状态变化时调用 Win32）
+	stickyTopmost bool
 }
 
 var (
@@ -68,6 +75,8 @@ var (
 	desktopCloseOnce sync.Once
 	// desktopWatchOnce 保证窗口存活监视只启动一次
 	desktopWatchOnce sync.Once
+	// desktopStickyOnce 保证窄窗口置顶守卫只启动一次
+	desktopStickyOnce sync.Once
 )
 
 // BuildReturnButtonJS 生成「返回主页面」悬浮按钮的页面注入脚本。
@@ -107,6 +116,8 @@ func OpenDesktopWindow(spec DesktopWindowSpec) error {
 
 	// 兜底监视：webview 的 Run() 在部分窗口关闭后不返回，仅靠 Run() 无法感知关闭
 	desktopWatchOnce.Do(func() { go watchDesktopWindows() })
+	// 窄窗口置顶守卫：移动端尺寸时像桌面宠物一样不被其它程序遮挡
+	desktopStickyOnce.Do(func() { go watchStickyWindows() })
 
 	created := make(chan error, 1)
 	go func() {
@@ -216,6 +227,46 @@ func watchDesktopWindows() {
 				default:
 				}
 			})
+		}
+	}
+}
+
+// watchStickyWindows 周期检查窗口宽度：缩到移动端尺寸时置顶，放大后取消置顶。
+func watchStickyWindows() {
+	ticker := time.NewTicker(400 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		type candidate struct {
+			win *desktopWindow
+			wv  webview.WebView
+		}
+		items := make([]candidate, 0, len(desktopWindows))
+		desktopMu.Lock()
+		for _, win := range desktopWindows {
+			if win.spec.StickyWhenNarrow && win.wv != nil {
+				items = append(items, candidate{win: win, wv: win.wv})
+			}
+		}
+		desktopMu.Unlock()
+
+		for _, item := range items {
+			hwnd := uintptr(item.wv.Window())
+			if hwnd == 0 {
+				continue
+			}
+			width := windowContentWidth(hwnd)
+			if width <= 0 {
+				continue
+			}
+			want := width <= narrowWindowBreakpoint
+			desktopMu.Lock()
+			if item.win.stickyTopmost == want {
+				desktopMu.Unlock()
+				continue
+			}
+			item.win.stickyTopmost = want
+			desktopMu.Unlock()
+			setWindowTopmost(hwnd, want)
 		}
 	}
 }

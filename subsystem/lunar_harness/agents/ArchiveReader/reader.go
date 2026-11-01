@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/locator"
 	"LunarSubsystem/LunarHarness/engine/media"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
@@ -30,6 +31,9 @@ func IsGGUFExt(ext string) bool {
 }
 
 // ResolveFilePath 把 /document/…、相对 LocalDir 或 LocalDir 内绝对路径解析为绝对路径与相对路径
+//
+// 精确路径不存在时交给统一文件定位器：纯文件名、相对路径（notes/a.md）与路径后缀
+// 都能定位到已有文件；同名歧义返回带候选列表的错误。仍不命中则保留严格路径，供创建使用。
 func ResolveFilePath(target string) (abs, rel string, err error) {
 	trimmed := strings.TrimSpace(target)
 	if trimmed == "" {
@@ -38,6 +42,26 @@ func ResolveFilePath(target string) (abs, rel string, err error) {
 	if strings.HasPrefix(trimmed, "@") {
 		return "", "", fmt.Errorf("资源句柄请使用 ResolveArchivePath")
 	}
+	abs, rel, err = strictFilePath(trimmed)
+	if err != nil {
+		return "", "", err
+	}
+	if _, statErr := os.Stat(abs); statErr == nil {
+		return abs, rel, nil
+	}
+	match, locateErr := locator.Resolve(trimmed, nil)
+	if locateErr == nil {
+		return match.Abs, match.Rel, nil
+	}
+	if _, ambiguous := locateErr.(*locator.AmbiguousError); ambiguous {
+		return "", "", locateErr
+	}
+	return abs, rel, nil
+}
+
+// strictFilePath 只做路径文法校验与拼接，不做模糊匹配
+func strictFilePath(target string) (abs, rel string, err error) {
+	trimmed := strings.TrimSpace(target)
 	switch {
 	case trimmed == "/document" || strings.HasPrefix(trimmed, "/document/"):
 		sub := strings.TrimPrefix(trimmed, "/document")
@@ -197,14 +221,8 @@ func Summary(target string) (string, error) {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "【压缩包】%s\n", rel)
 	fmt.Fprintf(&builder, "条目：%d（文件 %d / 目录 %d）｜解压后 %d 字节｜压缩包 %d 字节\n", len(entries), files, dirs, totalSize, zipSize)
-	limit := len(entries)
-	if limit > maxListEntries {
-		limit = maxListEntries
-	}
-	preview := limit
-	if preview > maxPreviewEntries {
-		preview = maxPreviewEntries
-	}
+	limit := min(len(entries), maxListEntries)
+	preview := min(limit, maxPreviewEntries)
 	for _, entry := range entries[:preview] {
 		if entry.IsDir {
 			fmt.Fprintf(&builder, "  [目录] %s\n", entry.Name)

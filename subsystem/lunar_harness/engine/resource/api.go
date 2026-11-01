@@ -141,6 +141,17 @@ func List(kind string, limit int) ([]Resource, error) {
 	return archiveDB.ListResources(trimKind(kind), limit)
 }
 
+// ListMatching 按文件名 / 路径 / 地址 / 标题子串过滤资源（kind 为空表示全部）
+//
+// 与 Search 的区别：只做目录级过滤（不检索解析文本与段落），返回完整资源记录，
+// 供「按路径或文件夹名列出句柄」使用。
+func ListMatching(kind string, keywords []string, limit int) ([]Resource, error) {
+	if err := EnsureReady(); err != nil {
+		return nil, err
+	}
+	return archiveDB.ListResourcesMatching(trimKind(kind), keywords, limit)
+}
+
 // Search 跨资源搜索
 func Search(query, kind string, limit int) ([]SearchHit, error) {
 	if err := EnsureReady(); err != nil {
@@ -152,6 +163,29 @@ func Search(query, kind string, limit int) ([]SearchHit, error) {
 // HandleOf 由类型码与序号构造规范句柄
 func HandleOf(kind string, seq int64) string {
 	return FormatHandle(kind, seq)
+}
+
+// PointsOf 返回句柄在 GC 表中记录的调用积分（无记录视为 0）
+func PointsOf(handle string) int {
+	if handle == "" || EnsureReady() != nil {
+		return 0
+	}
+	return archiveDB.pointsOf(handle)
+}
+
+// GCTrackedPath 判断路径是否在积分回收范围（multimedia 根媒体 / audios 根哈希音频）
+func GCTrackedPath(rel, kind string) bool {
+	rel = normalizeRel(rel)
+	return gcTrackablePath(rel, kind)
+}
+
+// GCCyclesLeft 持续未使用时，距积分回收还剩几次结算
+func GCCyclesLeft(points int) int {
+	left := points - GCPointsMin
+	if left < 0 {
+		return 0
+	}
+	return left
 }
 
 // ByHash 按类型码与内容哈希解析资源
@@ -249,16 +283,4 @@ func RefreshDocumentSections(handle string) {
 	}
 	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(res.BlobPath))
 	refreshDocumentSections(res, abs)
-}
-
-// RecallParsedText 按关键词检索已有解析文本（记忆检索 / 已看视频回忆使用）
-func RecallParsedText(keywords []string, limit int) []Resource {
-	if EnsureReady() != nil {
-		return nil
-	}
-	rows, err := archiveDB.findURLWithParseText(keywords, limit)
-	if err != nil {
-		return nil
-	}
-	return rows
 }

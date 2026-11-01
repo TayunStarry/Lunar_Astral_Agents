@@ -47,7 +47,7 @@ func ReadFile(path string, offset, maxChars int) OpResult {
 		if handle := registerHandle(localRel); handle != "" {
 			handles = append(handles, handle)
 		}
-		publish(localRel, "read", "", 0, 0)
+		publish(localRel, "read", "", "", 0, 0)
 	}
 	detail := map[string]any{
 		"offset":      offset,
@@ -66,11 +66,12 @@ func ReadFile(path string, offset, maxChars int) OpResult {
 
 // WriteFile 写入文件（不存在则创建）。
 func WriteFile(path, content string) OpResult {
+	previous := existingText(path)
 	localRel, handle, err := writeDocument(path, content, false)
 	if err != nil {
 		return failResult(ToolWrite, path, err)
 	}
-	publish(localRel, "write", content, 1, lineCount(content))
+	publish(localRel, "write", content, previous, 1, lineCount(content))
 	handles := []string{}
 	if handle != "" {
 		handles = append(handles, handle)
@@ -86,7 +87,7 @@ func CreateFile(path, content string) OpResult {
 	if err != nil {
 		return failResult(ToolCreate, path, err)
 	}
-	publish(localRel, "create", content, 1, lineCount(content))
+	publish(localRel, "create", content, "", 1, lineCount(content))
 	handles := []string{}
 	if handle != "" {
 		handles = append(handles, handle)
@@ -98,11 +99,12 @@ func CreateFile(path, content string) OpResult {
 
 // DeleteFile 删除文件。
 func DeleteFile(path string) OpResult {
+	previous := existingText(path)
 	localRel, err := deleteDocument(path)
 	if err != nil {
 		return failResult(ToolDelete, path, err)
 	}
-	publish(localRel, "delete", "", 0, 0)
+	publish(localRel, "delete", "", previous, 0, 0)
 	return newResult(ToolDelete, path, "删除文件 "+path, nil, nil)
 }
 
@@ -112,7 +114,7 @@ func CopyFile(path, target string) OpResult {
 	if err != nil {
 		return failResult(ToolCopy, path, err)
 	}
-	publish(localRel, "copy", "", 0, 0)
+	publish(localRel, "copy", "", "", 0, 0)
 	handles := []string{}
 	if handle != "" {
 		handles = append(handles, handle)
@@ -126,7 +128,7 @@ func MoveFile(path, target string) OpResult {
 	if err != nil {
 		return failResult(ToolMove, path, err)
 	}
-	publish(localRel, "move", "", 0, 0)
+	publish(localRel, "move", "", "", 0, 0)
 	handles := []string{}
 	if handle := registerHandle(localRel); handle != "" {
 		handles = append(handles, handle)
@@ -154,7 +156,7 @@ func RenameFile(path, name string) OpResult {
 	if err != nil {
 		return failResult(ToolRename, path, err)
 	}
-	publish(localRel, "rename", "", 0, 0)
+	publish(localRel, "rename", "", "", 0, 0)
 	handles := []string{}
 	if handle := registerHandle(localRel); handle != "" {
 		handles = append(handles, handle)
@@ -172,7 +174,7 @@ func SearchContent(path, query string) OpResult {
 	if full, err := AbsPath(path); err == nil {
 		if info, statErr := os.Stat(full); statErr == nil && !info.IsDir() {
 			if _, localRel, pathErr := documentPath(path); pathErr == nil {
-				publish(localRel, "search", "", 0, 0)
+				publish(localRel, "search", "", "", 0, 0)
 			}
 		}
 	}
@@ -188,11 +190,11 @@ func SearchContent(path, query string) OpResult {
 
 // ReplaceAt 置换指定行区间的内容。
 func ReplaceAt(path string, start, end int, content string) OpResult {
-	localRel, newStart, snippetLines, err := replaceRange(path, start, end, content)
+	localRel, newStart, snippetLines, removed, err := replaceRange(path, start, end, content)
 	if err != nil {
 		return failResult(ToolReplace, path, err)
 	}
-	publish(localRel, "replace", content, newStart, snippetLines)
+	publish(localRel, "replace", content, removed, newStart, snippetLines)
 	handles := []string{}
 	if handle := registerHandle(localRel); handle != "" {
 		handles = append(handles, handle)
@@ -218,7 +220,7 @@ func FileAttr(path string) OpResult {
 	}
 	_, localRel, pathErr := documentPath(path)
 	if pathErr == nil {
-		publish(localRel, "info", "", 0, 0)
+		publish(localRel, "info", "", "", 0, 0)
 	}
 	return newResult(ToolInfo, path,
 		fmt.Sprintf("%s：%d 字节 / %v 行", path, toInt64(detail["size"]), detail["lines"]),

@@ -1,6 +1,6 @@
 package LunarPersonality
 
-// resource_convert_test.go 未读上下文的资源句柄化与 use_resource 分流
+// resource_convert_test.go 未读上下文的资源句柄化与 fetch_resources 分流
 //
 // 新体系：B 站链接 → @V 视频句柄（指向完整页面 URL）；普通网页 → @U 网页句柄；
 // 已有解析文本直接返回，缺失才按类型触发解读。

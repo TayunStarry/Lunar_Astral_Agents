@@ -12,7 +12,7 @@ import (
 )
 
 // 注：原独立「前端页面」屏已并入「运行状态」屏的右栏，
-// 状态探测与窗口唤起能力保持不变，入口键改为 1（月华）/ 2（琉璃）。
+// 状态探测与窗口唤起能力保持不变，入口键改为 1（月华）/ 2（琉璃）/ 3（资源库）。
 
 // ==== 前端窗口区块（并入「运行状态」屏） ====
 
@@ -20,6 +20,7 @@ import (
 type frontendState struct {
 	busyLunar   bool
 	busyCrystal bool
+	busyLibrary bool
 	msg         string
 }
 
@@ -33,16 +34,22 @@ func frontendOnline(probe func() bool) (online bool, known bool) {
 
 // frontendRelaunch 唤起指定前端（忙碌中忽略重复请求）
 func (m appModel) frontendRelaunch(which string) (tea.Model, tea.Cmd) {
-	if which == "lunar" {
+	switch which {
+	case "lunar":
 		if m.frontend.busyLunar {
 			return m, nil
 		}
 		m.frontend.busyLunar = true
-	} else {
+	case "crystal":
 		if m.frontend.busyCrystal {
 			return m, nil
 		}
 		m.frontend.busyCrystal = true
+	case "library":
+		if m.frontend.busyLibrary {
+			return m, nil
+		}
+		m.frontend.busyLibrary = true
 	}
 	m.frontend.msg = ""
 	m.setBusy("唤起前端窗口")
@@ -54,10 +61,13 @@ func relaunchFrontendCmd(which string) tea.Cmd {
 	return tea.Cmd(func() tea.Msg {
 		frontendStatusMu.RLock()
 		var fn func() error
-		if which == "lunar" {
+		switch which {
+		case "lunar":
 			fn = relaunchLunar
-		} else {
+		case "crystal":
 			fn = relaunchCrystal
+		case "library":
+			fn = relaunchLibrary
 		}
 		frontendStatusMu.RUnlock()
 
@@ -80,17 +90,20 @@ func statusBadge(online, known bool) string {
 }
 
 // viewFrontendSection 运行状态屏的「前端窗口」区块：
-// 在线绿 / 离线红 / 未知灰，唤起中用黄色「处理中」；[1]/[2] 直接重新唤起。
+// 在线绿 / 离线红 / 未知灰，唤起中用黄色「处理中」；[1]/[2]/[3] 直接重新唤起。
 func (m appModel) viewFrontendSection(w int) []string {
 	lunarOnline, lunarKnown := frontendOnline(statusLunar)
 	crystalOnline, crystalKnown := frontendOnline(statusCrystal)
+	libraryOnline, libraryKnown := frontendOnline(statusLibrary)
 
 	lines := []string{sectionRule("前端窗口", w), ""}
 	lines = append(lines, m.frontendRow(w, "1", "月华前端", "消息终端（/）",
 		lunarOnline, lunarKnown, m.frontend.busyLunar)...)
 	lines = append(lines, m.frontendRow(w, "2", "琉璃前端", "桌面工作台（/desktop/）",
 		crystalOnline, crystalKnown, m.frontend.busyCrystal)...)
-	// 重启入口已写在底部键位栏（1/2 重启前端），此处只回显操作结果，不再重复提示。
+	lines = append(lines, m.frontendRow(w, "3", "资源库", "按需弹出（/library/）",
+		libraryOnline, libraryKnown, m.frontend.busyLibrary)...)
+	// 重启入口已写在底部键位栏（1/2/3 重启前端），此处只回显操作结果，不再重复提示。
 	if m.frontend.msg != "" {
 		lines = append(lines, fitWidth("  "+m.frontend.msg, w))
 	}

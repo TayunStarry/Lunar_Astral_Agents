@@ -84,9 +84,7 @@ var agentLabels = map[string]string{
 
 const (
 	toolWebSearch      = "web_search"
-	toolMemorySearch   = "memory_search"
-	toolHandleSearch   = "handle_search"
-	toolHandleRead     = "handle_read"
+	toolFetchResources = "fetch_resources"
 	toolFileList       = "file_list"
 	toolFileRead       = "file_read"
 	toolFileCreate     = "file_create"
@@ -108,7 +106,7 @@ const (
 
 // plannerTools 调度者可调度的全部能力 + 计划提交。
 var plannerTools = []string{
-	toolWebSearch, toolMemorySearch, toolHandleSearch, toolHandleRead,
+	toolWebSearch, toolFetchResources,
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
 	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText, toolFileEdit,
 	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
@@ -117,7 +115,7 @@ var plannerTools = []string{
 
 // writerTools 文字创作者：文档与文学创作、素材查阅、内容调度。
 var writerTools = []string{
-	toolWebSearch, toolMemorySearch, toolHandleSearch, toolHandleRead,
+	toolWebSearch, toolFetchResources,
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
 	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText, toolFileEdit,
 	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
@@ -125,7 +123,7 @@ var writerTools = []string{
 
 // engineerTools 工程创作者：JS 项目与文件、脚本、开发文档。
 var engineerTools = []string{
-	toolWebSearch, toolMemorySearch, toolHandleSearch, toolHandleRead,
+	toolWebSearch, toolFetchResources,
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
 	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText, toolFileEdit,
 	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
@@ -134,13 +132,13 @@ var engineerTools = []string{
 
 // researcherTools 资料查阅者：只读取证，不改文件。
 var researcherTools = []string{
-	toolWebSearch, toolMemorySearch, toolHandleSearch, toolHandleRead,
+	toolWebSearch, toolFetchResources,
 	toolFileList, toolFileRead, toolCodeIndex, toolReadDTS,
 }
 
 // runnerTools 脚本运行者：运行、监控与必要的文件读写；同样可随时搜索与查记忆。
 var runnerTools = []string{
-	toolWebSearch, toolMemorySearch, toolFileList, toolFileRead,
+	toolWebSearch, toolFetchResources, toolFileList, toolFileRead,
 	toolFileCreate, toolFileRewrite, toolFileEdit, toolReadDTS, toolRunScript,
 	toolScriptStatus, toolSendGroupText,
 }

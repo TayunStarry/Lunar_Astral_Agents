@@ -66,8 +66,7 @@ func (role *DialogueRole) continueDialogue(cache *ChatCache, guardNote *PostMess
 		contextMessages = append(append([]PostMessage{}, role.RagMessages...), *guardNote)
 	}
 	tools := append([]ToolCall{}, agentControlTools...)
-	tools = append(tools, memoryTools...)
-	tools = append(tools, resourceTools...)
+	tools = append(tools, fetchResourceTools...)
 	tools = append(tools, scheduleTools...)
 	tools = append(tools, networkExploreToolCalls()...)
 	tools = append(tools, getCrystalRemoteTools()...)

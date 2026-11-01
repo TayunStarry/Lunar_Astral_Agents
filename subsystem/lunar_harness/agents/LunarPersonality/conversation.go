@@ -326,9 +326,6 @@ func recordAssistantContext(kind, content, audio string) {
 		record.Categories = []string{"music"}
 		record.Content = ""
 		record.ABCNotation = content
-	case "action":
-		record.Categories = []string{"action"}
-		record.ActionType = kind
 	case "text":
 		if audio != "" {
 			record.Categories = []string{"text", "voice"}
@@ -506,7 +503,6 @@ func normalizeRecord(raw map[string]any) *CachedMessage {
 	record.ImageLabel, _ = raw["imageLabel"].(string)
 	record.Audio, _ = raw["audio"].(string)
 	record.ABCNotation, _ = raw["abcNotation"].(string)
-	record.ActionType, _ = raw["actionType"].(string)
 	record.FileRef, _ = raw["fileRef"].(string)
 	record.FileLabel, _ = raw["fileLabel"].(string)
 	if record.Timestamp == 0 {

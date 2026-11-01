@@ -5,10 +5,13 @@
 //     接收走 /ws（宿主以 ?bus=0 退出原始总线订阅，仅消费结构化 engine 指令），
 //     收发都走同一条 /ws 连接；频道名通过 URL ?channel= 指定。
 //   - 初始化顺序：waitForPIXI → waitForLive2DPlugin → PIXI.Application →
-//     读取 setting.json → 加载模型 → 布局 → 广播 engine_ready
+//     读取 setting.json → 加载模型 → 自适应取景 → 广播 engine_ready
 //   - 入站 engine 指令：panel_ready 握手 / action 动作映射 / mode_changed 记录 /
 //     query_molang 回包；movement/rotation 等 3D 语义指令安全忽略
-//   - 尺寸自适应：容器变化时重算应用尺寸、模型缩放与位置
+//   - 取景：按模型实际尺寸与容器比例自适应缩放，完整可见时居中、
+//     容器偏窄时按「桌面宠物」取景（头顶贴近上沿、下半身自然裁切）
+//   - 交互：滚轮 / 双指缩放（以指针为中心）、鼠标 / 触屏拖动、
+//     双击或中键复位、resize 自动重排
 //   - 生命周期：重复加载/失败时安全销毁模型，避免 WebGL 上下文泄漏
 //
 // 注意：本文件是 ES Module，但三个依赖库均为 UMD 全局脚本，
@@ -24,8 +27,15 @@ const SOURCE_ENGINE = 'engine';
 // 模型基址（?model= 可覆盖，默认指向公共 Live2D 模型目录，与基岩引擎 /file/read/models/bedrock/ 对称）
 const MODEL_BASE_URL = urlParams.get('model') || '/file/read/models/live2d/';
 
+// ?scale= 存在时锁定为手动缩放，否则完全按容器自适应
+const MANUAL_SCALE = urlParams.has('scale') ? Number(urlParams.get('scale')) : null;
+
 // ==== 统一通信客户端 ====
 const channel = new WsBridge(CHANNEL_NAME);
+/** 前端动作匹配：后端只推送消息，动作由本引擎按 50% 概率自行匹配 */
+const actionMatcher = window.LunarActionMatcher
+    ? new window.LunarActionMatcher({ endpoint: '/agent/embeddings' })
+    : null;
 
 // ==== 状态 ====
 let app = null;
@@ -42,6 +52,17 @@ let setting = {
     mapping: {},
     autoInteract: true,
 };
+
+// 视图变换：base 为自适应基准缩放，zoom 为用户缩放倍率，pan 为平移（容器像素）
+const view = {
+    base: 0,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+};
+
+const MIN_ZOOM = 0.4;
+const MAX_ZOOM = 4;
 
 /** setting.json 缺失时的兜底动作映射（键 → 候选动作组，取首个模型确实存在的组） */
 const DEFAULT_MAPPING = {
@@ -61,12 +82,14 @@ async function init() {
         await waitForPIXI();
         await waitForLive2DPlugin();
         initApplication();
+        bindInteractions();
+        observeContainer();
         await loadSetting();
         await loadModel();
-        window.addEventListener('resize', () => reloadContainer());
+        resetView();
         setEmotion('idle');
         broadcast('engine_ready', { mode: 'embedded' });
-        // 模型加载完成即上报可用动作，月华无需再询问就能匹配动作名
+        // 模型加载完成即上报可用动作，供面板与总线参与者读取
         broadcastAnimationList();
     } catch (err) {
         console.error('[Live2D] 初始化失败:', err);
@@ -115,7 +138,7 @@ function initApplication() {
 /** 读取 setting.json（容忍注释与单引号，与基岩侧读取习惯一致） */
 async function loadSetting() {
     try {
-        const resp = fetch(MODEL_BASE_URL + 'setting.json');
+        const resp = await fetch(MODEL_BASE_URL + 'setting.json');
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const raw = await resp.text();
         const jsonText = raw
@@ -128,7 +151,6 @@ async function loadSetting() {
     }
     // URL 参数覆盖布局（便于不同容器尺寸实测微调）
     if (urlParams.get('name')) setting.name = urlParams.get('name');
-    if (urlParams.get('scale')) setting.scale = Number(urlParams.get('scale'));
     if (urlParams.get('x')) setting.x = Number(urlParams.get('x'));
     if (urlParams.get('y')) setting.y = Number(urlParams.get('y'));
 }
@@ -151,6 +173,8 @@ async function loadModel() {
         if (!m) throw new Error('Live2DModel.from 返回空结果');
         model = m;
         app.stage.addChild(model);
+        model.anchor.set(0.5, 0.5);
+        view.base = 0;
         applyLayout();
     } finally {
         loading = false;
@@ -165,28 +189,266 @@ function destroyModel() {
     model = null;
 }
 
-/** 布局：缩放 + 锚点居中 + 按容器比例定位 */
-function applyLayout() {
-    if (!model || !app) return;
+// ============================================================
+//  取景：自适应缩放 + 缩放 / 平移 / 复位
+// ============================================================
+
+/** 容器的可用像素尺寸（隐藏或 0 尺寸时回退到渲染器尺寸） */
+function containerSize() {
     const container = document.getElementById('live2d-container');
-    const w = container?.clientWidth || app.renderer.width;
-    const h = container?.clientHeight || app.renderer.height;
-    const baseScale = Number(setting.scale) || 0.15;
-    // 宿主容器高度差异大：桌面侧栏小方框（<500）额外缩小，移动全高容器用基准值
-    const scale = h < 500 ? baseScale * 0.65 : baseScale;
-    model.scale.set(scale);
-    model.anchor.set(0.5, 0.5);
-    model.x = w * (Number(setting.x) || 0.5);
-    model.y = h * (Number(setting.y) || 0.5);
+    const w = container?.clientWidth || app?.renderer?.width || window.innerWidth;
+    const h = container?.clientHeight || app?.renderer?.height || window.innerHeight;
+    return { w: Math.max(1, w), h: Math.max(1, h) };
 }
 
-/** 容器尺寸变化：重设应用尺寸并重算布局 */
+/** 模型在缩放 1 时的像素尺寸（pixi-live2d-display 的 internalModel 布局尺寸） */
+function modelSize() {
+    const inner = model?.internalModel;
+    return {
+        nw: Number(inner?.width) || 0,
+        nh: Number(inner?.height) || 0,
+    };
+}
+
+/**
+ * 自适应基准缩放。
+ * 优先完整可见（contain）；若容器偏宽导致模型只占一条竖带，
+ * 则按宽度放大到接近铺满，同时把纵向裁切限制在 2.2 倍以内，
+ * 让小窗口里也能看到「头 + 上半身」，而不是一个缩得很小的全身。
+ */
+function computeBaseScale(w, h, nw, nh) {
+    if (MANUAL_SCALE && Number.isFinite(MANUAL_SCALE) && MANUAL_SCALE > 0) {
+        return MANUAL_SCALE;
+    }
+    if (!nw || !nh) return 0.12;
+    const fitW = (w * 0.92) / nw;
+    const fitH = (h * 0.92) / nh;
+    let base = Math.min(fitW, fitH);
+    if (base * nw < w * 0.55) {
+        base = Math.min((w * 0.88) / nw, (h * 2.2) / nh, base * 2.6);
+    }
+    return base;
+}
+
+/** 模型中心在容器中的纵向基准位置：完整可见居中，超高时头顶贴近上沿 */
+function baseCenterY(scale, h, nh) {
+    const mh = nh * scale;
+    return mh >= h ? h * 0.04 + mh / 2 : h / 2;
+}
+
+/** 平移边界：至少保留 40px 模型在视野内，避免完全拖出屏幕 */
+function clampPan(w, h, mw, mh) {
+    const keep = 40;
+    const limitX = w / 2 + mw / 2 - keep;
+    const limitY = h / 2 + mh / 2 - keep;
+    view.panX = Math.min(limitX, Math.max(-limitX, view.panX));
+    view.panY = Math.min(limitY, Math.max(-limitY, view.panY));
+}
+
+/** 把视图状态同步到模型变换 */
+function applyLayout() {
+    if (!model || !app) return;
+    const { w, h } = containerSize();
+    const { nw, nh } = modelSize();
+    if (!nw || !nh) return;
+    if (!view.base) view.base = computeBaseScale(w, h, nw, nh);
+    const scale = view.base * view.zoom;
+    const mw = nw * scale;
+    const mh = nh * scale;
+    clampPan(w, h, mw, mh);
+    model.scale.set(scale);
+    model.anchor.set(0.5, 0.5);
+    model.x = w / 2 + view.panX;
+    model.y = baseCenterY(scale, h, nh) + view.panY;
+}
+
+/** 上一次的容器尺寸，用于区分「真实尺寸变化」与 ResizeObserver 的首帧回调 */
+let lastSize = { w: 0, h: 0 };
+
+/** 容器尺寸变化：重设应用尺寸并按新容器重算基准缩放（保留用户缩放与平移） */
 function reloadContainer() {
     if (!app) return;
     const container = document.getElementById('live2d-container');
     if (!container) return;
-    try { app.renderer.resize(container.clientWidth, container.clientHeight); } catch (e) { /* 忽略 */ }
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    if (w < 1 || h < 1) return;
+    const changed = lastSize.w > 0 && lastSize.h > 0 && (lastSize.w !== w || lastSize.h !== h);
+    lastSize = { w, h };
+    try { app.renderer.resize(w, h); } catch (e) { /* 忽略 */ }
+    const { nw, nh } = modelSize();
+    if (nw && nh) view.base = computeBaseScale(w, h, nw, nh);
     applyLayout();
+    if (changed) flashHint(2000);
+}
+
+/** 复位：回到自适应取景（双击 / 中键 / 宿主调用） */
+function resetView() {
+    const { w, h } = containerSize();
+    const { nw, nh } = modelSize();
+    view.zoom = 1;
+    view.panX = 0;
+    view.panY = 0;
+    if (nw && nh) view.base = computeBaseScale(w, h, nw, nh);
+    applyLayout();
+}
+
+/** 以容器内某点为锚点缩放（factor > 1 放大，< 1 缩小） */
+function zoomAt(factor, px, py) {
+    if (!model) return;
+    const { w, h } = containerSize();
+    const { nh } = modelSize();
+    if (!nh) return;
+    const oldScale = view.base * view.zoom;
+    const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.zoom * factor));
+    if (nextZoom === view.zoom) return;
+    const k = (view.base * nextZoom) / oldScale;
+    // 缩放前模型中心在容器中的位置
+    const cx = w / 2 + view.panX;
+    const cy = baseCenterY(oldScale, h, nh) + view.panY;
+    // 让锚点在缩放前后保持不动
+    const ncx = px + (cx - px) * k;
+    const ncy = py + (cy - py) * k;
+    view.zoom = nextZoom;
+    const newScale = view.base * nextZoom;
+    view.panX = ncx - w / 2;
+    view.panY = ncy - baseCenterY(newScale, h, nh);
+    applyLayout();
+}
+
+/** 按容器像素平移 */
+function panBy(dx, dy) {
+    if (!dx && !dy) return;
+    view.panX += dx;
+    view.panY += dy;
+    applyLayout();
+}
+
+// ============================================================
+//  交互：滚轮 / 双指缩放、拖动、双击与中键复位
+// ============================================================
+const pointers = new Map();
+let dragOrigin = null;
+let pinchState = null;
+
+function canvasPoint(event) {
+    const canvas = document.getElementById('live2d-canvas');
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function onWheel(event) {
+    event.preventDefault();
+    const point = canvasPoint(event);
+    const unit = event.deltaMode === 1 ? 0.05 : event.deltaMode === 2 ? 1 : 0.0012;
+    const factor = Math.exp(-event.deltaY * unit);
+    zoomAt(factor, point.x, point.y);
+}
+
+function onPointerDown(event) {
+    const canvas = event.currentTarget;
+    if (event.pointerType === 'mouse' && event.button === 1) {
+        // 中键：复位取景，同时屏蔽浏览器自动滚动
+        event.preventDefault();
+        resetView();
+        return;
+    }
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* 不支持时忽略 */ }
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.size === 1) {
+        dragOrigin = { x: event.clientX, y: event.clientY };
+        canvas.classList.add('dragging');
+    } else if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchState = { dist: distance(a, b), mid: midpoint(a, b) };
+        dragOrigin = null;
+        canvas.classList.add('dragging');
+    }
+}
+
+function onPointerMove(event) {
+    if (!pointers.has(event.pointerId)) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointers.size >= 2 && pinchState) {
+        const [a, b] = [...pointers.values()];
+        const dist = distance(a, b);
+        const mid = midpoint(a, b);
+        if (pinchState.dist > 0 && dist > 0) {
+            const point = canvasPoint({ clientX: mid.x, clientY: mid.y });
+            zoomAt(dist / pinchState.dist, point.x, point.y);
+        }
+        panBy(mid.x - pinchState.mid.x, mid.y - pinchState.mid.y);
+        pinchState = { dist, mid };
+        return;
+    }
+    if (!dragOrigin) return;
+    panBy(event.clientX - dragOrigin.x, event.clientY - dragOrigin.y);
+    dragOrigin = { x: event.clientX, y: event.clientY };
+}
+
+function onPointerEnd(event) {
+    pointers.delete(event.pointerId);
+    const canvas = event.currentTarget;
+    if (pointers.size === 0) {
+        dragOrigin = null;
+        pinchState = null;
+        canvas.classList.remove('dragging');
+        return;
+    }
+    const [rest] = [...pointers.values()];
+    dragOrigin = { x: rest.x, y: rest.y };
+    pinchState = null;
+}
+
+function distance(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function midpoint(a, b) {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function bindInteractions() {
+    const canvas = document.getElementById('live2d-canvas');
+    if (!canvas || canvas.dataset.bound === '1') return;
+    canvas.dataset.bound = '1';
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerup', onPointerEnd);
+    canvas.addEventListener('pointercancel', onPointerEnd);
+    canvas.addEventListener('dblclick', (event) => {
+        event.preventDefault();
+        resetView();
+    });
+    // 双击缩放与中键自动滚动都交给引擎处理
+    canvas.addEventListener('mousedown', (event) => {
+        if (event.button === 1) event.preventDefault();
+    });
+}
+
+/** 监听容器尺寸变化（iframe 内只依赖自身尺寸，用 ResizeObserver 更准） */
+function observeContainer() {
+    const container = document.getElementById('live2d-container');
+    if (window.ResizeObserver && container) {
+        new ResizeObserver(() => {
+            window.requestAnimationFrame(() => reloadContainer());
+        }).observe(container);
+    }
+    window.addEventListener('resize', () => reloadContainer());
+}
+
+// 操作提示：仅在容器尺寸变化时出现 2 秒
+let hintTimer = null;
+
+function flashHint(duration = 2000) {
+    const hint = document.getElementById('view-hint');
+    if (!hint) return;
+    hint.classList.add('visible');
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => hint.classList.remove('visible'), duration);
 }
 
 // ============================================================
@@ -200,7 +462,7 @@ function availableMotions() {
 
 /**
  * 上报可用动作（形状与基岩版引擎的 animation_list 一致）。
- * 月华据此「查询可用动作」：只列出确实有动作帧的组，空组不发。
+ * 后端不再消费该帧；保留给面板 / 工作室等总线参与者按需读取，只列出有动作帧的组。
  */
 function broadcastAnimationList() {
     const motions = availableMotions();
@@ -261,9 +523,19 @@ function isReady() { return !!model; }
 /** 取回底层模型实例 */
 function getModel() { return model; }
 
-// ============================================================
-//  统一总线：入站 / 出站
-// ============================================================
+/** 取回当前视图状态（调试用） */
+function getView() {
+    return {
+        base: view.base,
+        zoom: view.zoom,
+        panX: view.panX,
+        panY: view.panY,
+    };
+}
+
+ // ============================================================
+ //  统一总线：入站 / 出站
+ // ============================================================
 
 channel.onmessage = (event) => {
     const raw = event.data;
@@ -273,10 +545,26 @@ channel.onmessage = (event) => {
     if (raw.type === 'engine' && raw.data && raw.data.type) {
         msg = { type: raw.data.type, source: raw.data.source, payload: raw.data.payload };
     } else if (raw.type === 'context') {
-        return; // 展示类消息，引擎不执行
+        reactToPushedMessage(raw.data); // 展示类消息：引擎自行匹配动作，不执行指令
+        return;
     }
     handleChannelMessage(msg);
 };
+
+/**
+ * 后端推送的对话消息：按 50% 概率用嵌入模型在本地动作列表里挑选最匹配的动作。
+ * 后端不再下发 action 指令，匹配与播放完全由引擎侧完成。
+ */
+function reactToPushedMessage(data) {
+    if (!actionMatcher || !data || data.type !== 'text') return;
+    const text = String(data.content || '').trim();
+    if (!text) return;
+    const motions = availableMotions();
+    const names = Object.keys(motions)
+        .filter(name => Array.isArray(motions[name]) && motions[name].length > 0);
+    if (names.length === 0) return;
+    actionMatcher.consider(text, names, name => setEmotionWithTimeout(name, 9000));
+}
 
 /** 引擎指令分发（仅处理 Live2D 有意义的类型，其余安全忽略） */
 function handleChannelMessage(msg) {
@@ -347,6 +635,12 @@ window.Live2DEngine = {
     setEmotion,
     setEmotionWithTimeout,
     reloadContainer,
+    resetView,
+    zoomBy: (factor) => {
+        const { w, h } = containerSize();
+        zoomAt(factor, w / 2, h / 2);
+    },
+    getView,
     isReady,
     getModel,
 };

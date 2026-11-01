@@ -59,6 +59,10 @@ if (currentMode === 'editor') {
 // 所有参与者（月华消息终端、移动端、工作室基座与面板）都经同一条 /ws 连接、
 // 按 ?channel= 声明频道互通：上行 ws.send，下行由总线按频道投递。
 const channel = new WsBridge(CHANNEL_NAME);
+/** 前端动作匹配：后端只推送消息，动作由本引擎按 50% 概率自行匹配 */
+const actionMatcher = window.LunarActionMatcher
+    ? new window.LunarActionMatcher({ endpoint: '/agent/embeddings' })
+    : null;
 
 // ==== 核心模块 ====
 let renderer = null;
@@ -771,9 +775,26 @@ function handleIncoming(raw) {
     if (raw.type === 'engine' && raw.data && raw.data.type) {
         msg = { type: raw.data.type, source: raw.data.source, payload: raw.data.payload };
     } else if (raw.type === 'context') {
-        return; // pushContext 为展示类消息（对话/动作摘要），引擎不执行
+        reactToPushedMessage(raw.data); // 展示类消息：引擎自行匹配动作，不执行指令
+        return;
     }
     handleChannelMessage(msg);
+}
+
+/**
+ * 后端推送的对话消息：按 50% 概率用嵌入模型在本地动作列表里挑选最匹配的动作。
+ * 后端不再下发 action 指令，匹配与播放完全由引擎侧完成。
+ */
+function reactToPushedMessage(data) {
+    if (!actionMatcher || !data || data.type !== 'text') return;
+    const text = String(data.content || '').trim();
+    if (!text) return;
+    const names = Object.keys(buildActionDefinitions());
+    if (names.length === 0) return;
+    actionMatcher.consider(text, names, name => {
+        if (thirdPerson?.active) return;
+        enqueueCommand({ type: 'action', action: name });
+    });
 }
 
 async function handleChannelMessage(msg) {

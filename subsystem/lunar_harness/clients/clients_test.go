@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// 三个前端的入口页与关键资源必须都能在内嵌树中解析出来。
+// 四个前端的入口页与关键资源必须都能在内嵌树中解析出来。
 //
-// 三个前端现在各自独占 clients/ 下的子树（crystal/、lunar/，其中 mobile/ 是
-// 月华移动端），入口页取不到就等于整个前端白屏——而 go:embed 的模式写成
+// 四个前端现在各自独占 clients/ 下的子树（crystal/、lunar/、mobile/、library/），
+// 入口页取不到就等于整个前端白屏——而 go:embed 的模式写成
 // 目录名时丢失文件是编译期静默的，只有真去 Open 一次才会暴露。
 func TestFrontendEntrypointsAreEmbedded(t *testing.T) {
 	cases := []struct {
@@ -19,9 +19,12 @@ func TestFrontendEntrypointsAreEmbedded(t *testing.T) {
 		{"月华消息终端入口", LunarFS(), "/index.html"},
 		{"月华消息终端脚本", LunarFS(), "/js/main.js"},
 		{"月华消息终端样式", LunarFS(), "/css/layout.css"},
-		{"月华移动端入口", LunarFS(), "/mobile/index.html"},
+		{"月华移动端入口", MobileFS(), "/index.html"},
+		{"月华移动端脚本", MobileFS(), "/scripts/app.js"},
 		{"琉璃桌面入口", CrystalFS(), "/index.html"},
 		{"琉璃桌面脚本", CrystalFS(), "/script.js"},
+		{"资源库入口", LibraryFS(), "/index.html"},
+		{"资源库脚本", LibraryFS(), "/js/app.js"},
 		{"共享依赖·图标样式", RelianceFS(), "/fontAwesome/css/all.min.css"},
 		{"共享依赖·Markdown", RelianceFS(), "/marked.min.js"},
 		{"共享依赖·渲染引擎入口", RelianceFS(), "/lunar.rendering_engine/index.html"},
@@ -60,6 +63,10 @@ func TestFrontendTreesAreDisjoint(t *testing.T) {
 	if f, err := LunarFS().Open("/script.js"); err == nil {
 		f.Close()
 		t.Fatal("月华消息终端不应包含琉璃桌面的 script.js")
+	}
+	if f, err := LunarFS().Open("/mobile/index.html"); err == nil {
+		f.Close()
+		t.Fatal("月华消息终端不应包含移动端子目录")
 	}
 	if f, err := CrystalFS().Open("/mobile/index.html"); err == nil {
 		f.Close()

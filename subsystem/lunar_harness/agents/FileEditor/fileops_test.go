@@ -5,10 +5,12 @@ package FileEditor
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 func withTempLocalDir(t *testing.T) {
@@ -101,12 +103,47 @@ func TestHarnessMarkDetection(t *testing.T) {
 	}
 }
 
-func TestJSRunnerTemplateContainsCode(t *testing.T) {
-	page := jsRunnerTemplate("demo.js", `console.log("hi")`)
-	if !strings.Contains(page, `console.log("hi")`) {
-		t.Fatal("模板网页必须内联原始脚本，否则纯 js 无法运行")
+func TestLibraryRunnerURL(t *testing.T) {
+	target := libraryRunnerURL("demo.js", "js")
+	if !strings.Contains(target, "/library/?") || !strings.Contains(target, "run=documents%2Fdemo.js") {
+		t.Fatalf("资源库自动运行地址不正确: %s", target)
 	}
-	if !strings.Contains(page, "console") {
-		t.Fatal("模板网页必须接管 console 输出以便展示运行结果")
+	if !strings.Contains(target, "kind=js") {
+		t.Fatalf("地址应带上运行类型: %s", target)
+	}
+}
+
+// TestDocumentPathAcceptsHandleAndPrefix 句柄与 documents/ 前缀都能定位到同一文件。
+func TestDocumentPathAcceptsHandleAndPrefix(t *testing.T) {
+	origLocal, origArchive := config.LocalDir, config.ArchiveDBPath
+	config.LocalDir = t.TempDir()
+	config.ArchiveDBPath = filepath.Join(config.LocalDir, "database", "handles.db")
+	_ = resource.Close()
+	t.Cleanup(func() {
+		_ = resource.Close()
+		config.LocalDir, config.ArchiveDBPath = origLocal, origArchive
+	})
+	if err := resource.Init(config.ArchiveDBPath); err != nil {
+		t.Fatalf("初始化句柄库失败: %v", err)
+	}
+
+	created := CreateFile("notes/a.md", "hello\n")
+	if !created.OK || len(created.Handles) == 0 {
+		t.Fatalf("创建文件应登记句柄: %s", created.Summary)
+	}
+	handle := created.Handles[0]
+
+	text, err := ReadText(handle)
+	if err != nil || !strings.Contains(text, "hello") {
+		t.Fatalf("句柄路径应解析到文档库文件: %q（%v）", text, err)
+	}
+	if _, err := ReadText(handle + "|§1"); err != nil {
+		t.Fatalf("带锚点的句柄也应可解析: %v", err)
+	}
+	if _, err := ReadText("documents/notes/a.md"); err != nil {
+		t.Fatalf("documents/ 前缀应被兼容: %v", err)
+	}
+	if _, err := ReadText("documents/../documents/notes/a.md"); err == nil {
+		t.Fatal("带前缀的 .. 穿越仍应被拒绝")
 	}
 }

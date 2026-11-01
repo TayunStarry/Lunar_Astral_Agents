@@ -11,6 +11,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
 	"LunarSubsystem/LunarHarness/agents/ArchiveReader"
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
+	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/resource"
@@ -54,11 +55,6 @@ func TestCrossAgentArchiveFlow(t *testing.T) {
 	inspected, err := ArchiveReader.Inspect(created.Path, "")
 	if err != nil || !strings.Contains(inspected, "a.txt") {
 		t.Fatalf("确定性摘要失败: %v / %s", err, inspected)
-	}
-	// 归档操作复用归档解析的读取管线
-	read, err := ArchiveOps.Read(created.Path, "a.txt", 0)
-	if err != nil || !strings.Contains(read, "alpha") {
-		t.Fatalf("归档操作读取管线失败: %v / %q", err, read)
 	}
 }
 
@@ -108,19 +104,10 @@ func TestAgentCatalogsAreDisjoint(t *testing.T) {
 		}
 	}
 	seen := map[string]string{}
-	// 归档操作按需求 #3 明确可复用归档解析的读取管线，这两个工具名允许重叠。
-	shared := map[string]bool{"archive_list": true, "archive_read": true}
 	for agent, tools := range catalogs {
 		for _, tool := range tools {
 			if owner, ok := seen[tool]; ok {
-				if !shared[tool] {
-					t.Fatalf("工具 %s 同时属于 %s 与 %s", tool, owner, agent)
-				}
-				pair := owner + "+" + agent
-				if pair != "archive_reader+archive_ops" && pair != "archive_ops+archive_reader" {
-					t.Fatalf("工具 %s 的共享方非法: %s", tool, pair)
-				}
-				continue
+				t.Fatalf("工具 %s 同时属于 %s 与 %s", tool, owner, agent)
 			}
 			seen[tool] = agent
 		}
@@ -130,6 +117,20 @@ func TestAgentCatalogsAreDisjoint(t *testing.T) {
 		if strings.Contains(tool, "file_") || strings.Contains(tool, "archive_") || tool == "gguf_metadata" {
 			t.Fatalf("视觉理解越界持有 %s", tool)
 		}
+	}
+	// 文件编辑只保留 task_scheduling，归档能力全部由调度入口承担
+	fileTools := toolsOf(FileEditor.ToolCatalog())
+	hasSchedule := false
+	for _, tool := range fileTools {
+		if tool == "task_scheduling" {
+			hasSchedule = true
+		}
+		if strings.HasPrefix(tool, "archive_") || tool == "gguf_metadata" {
+			t.Fatalf("文件编辑不应再持有归档工具 %s", tool)
+		}
+	}
+	if !hasSchedule {
+		t.Fatal("文件编辑缺少 task_scheduling 调度入口")
 	}
 }
 

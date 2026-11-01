@@ -172,6 +172,9 @@ func TouchHandlesForRead(rel string) {
 	}
 	if existing, found := archiveDB.FindResourceByBlobPath(rel); found {
 		archiveDB.TouchResource(existing.ID)
+		// 读取即视为一次取用：资源库预览也会把「本轮已使用」记到 GC 档案，
+		// 下次结算 +1，避免用户常看的媒体仍按未使用一路减分。
+		archiveDB.markGCCurrentCall(existing.Handle)
 	}
 }
 

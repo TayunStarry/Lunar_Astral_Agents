@@ -167,26 +167,6 @@ func normalizeToolImage(image string) string {
 	return visionReference(admitted.Handle, admitted.BlobPath)
 }
 
-// performMatchedAction 执行匹配到的动作
-func performMatchedAction(query string) {
-	bestAction := matchActionName(strings.TrimSpace(query))
-	if bestAction == "" {
-		return
-	}
-	position := currentAgentPosition()
-	payload := map[string]any{
-		"position": map[string]any{
-			"x": position.X + randomFloat(-0.5, 0.5),
-			"y": position.Y,
-			"z": position.Z + randomFloat(-0.5, 0.5),
-		},
-		"resumeTracking": true,
-	}
-	sendToEngine("movement", safeJSON(payload, "{}"))
-	sendToEngine("action", safeJSON(map[string]any{"action": bestAction}, "{}"))
-	pushAssistantContext("action", "月华"+bestAction+"了", "", false)
-}
-
 // maybeSendFastAck 高耗时任务的快速应答
 func maybeSendFastAck(functionName string, args map[string]any) {
 	stateMu.Lock()

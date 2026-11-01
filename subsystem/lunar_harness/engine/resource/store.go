@@ -53,6 +53,8 @@ func Init(dbPath string) error {
 	if err := RunStartupGC(); err != nil {
 		logger.Warn("Persistence", "启动 GC 失败: %v", err)
 	}
+	// 运行期 GC：长时间不重启也按周期结算，避免只在启动时回收
+	startRuntimeGCDaemon()
 	return nil
 }
 
@@ -276,6 +278,7 @@ func (d *store) close() error {
 
 // Close 关闭全局句柄库实例（幂等）
 func Close() error {
+	stopRuntimeGCDaemon()
 	if archiveDB == nil {
 		return nil
 	}

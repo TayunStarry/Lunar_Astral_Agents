@@ -10,15 +10,15 @@ import (
 )
 
 func TestStatsScreenMergesFrontendSection(t *testing.T) {
-	SetFrontendHooks(func() bool { return true }, func() bool { return false }, nil, nil)
-	t.Cleanup(func() { SetFrontendHooks(nil, nil, nil, nil) })
+	SetFrontendHooks(func() bool { return true }, func() bool { return false }, nil, nil, nil, nil)
+	t.Cleanup(func() { SetFrontendHooks(nil, nil, nil, nil, nil, nil) })
 
 	m := newAppModel()
 	m.width, m.height = 140, 40
 	m.screen = screenStats
 	out := m.View()
 	for _, want := range []string{
-		"运行状态", "前端窗口", "[1] 月华前端", "[2] 琉璃前端",
+		"运行状态", "前端窗口", "[1] 月华前端", "[2] 琉璃前端", "[3] 资源库",
 		"● 在线", "○ 离线", "桌面操纵智能体", "总上下文", "输入", "输出",
 	} {
 		if !strings.Contains(out, want) {
@@ -35,8 +35,8 @@ func TestStatsScreenMergesFrontendSection(t *testing.T) {
 }
 
 func TestStatsHotkeyRelaunchFrontend(t *testing.T) {
-	SetFrontendHooks(nil, nil, func() error { return nil }, nil)
-	t.Cleanup(func() { SetFrontendHooks(nil, nil, nil, nil) })
+	SetFrontendHooks(nil, nil, nil, func() error { return nil }, nil, nil)
+	t.Cleanup(func() { SetFrontendHooks(nil, nil, nil, nil, nil, nil) })
 
 	m := newAppModel()
 	m.screen = screenStats

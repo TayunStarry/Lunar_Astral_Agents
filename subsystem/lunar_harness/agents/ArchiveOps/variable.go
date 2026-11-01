@@ -21,8 +21,17 @@ const (
 	OpAdd = "archive_add"
 	// OpRemove 压缩包内移除文件
 	OpRemove = "archive_remove"
-	// OpList 压缩包结构查询（转调归档解析智能体）
-	OpList = "archive_list"
-	// OpRead 压缩包条目读取（转调归档解析智能体）
-	OpRead = "archive_read"
+)
+
+// ==== 自然语言调度 ====
+
+const (
+	// ScheduleOp 调度入口名（文件编辑 task_scheduling 回执使用）
+	ScheduleOp = "archive_ops"
+	// roleLabel TUI 实况屏显示的角色标签
+	roleLabel = "归档操作"
+	// maxScheduleRounds 单条调度指令的工具轮次上限
+	maxScheduleRounds = 6
+	// maxToolResultRunes 单条工具结果回填模型时的字符上限
+	maxToolResultRunes = 6000
 )

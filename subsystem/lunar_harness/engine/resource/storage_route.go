@@ -49,8 +49,8 @@ func RouteStorageRel(rel string) string {
 		return rel
 	}
 	root := rel
-	if idx := strings.Index(rel, "/"); idx >= 0 {
-		root = rel[:idx]
+	if before, _, ok := strings.Cut(rel, "/"); ok {
+		root = before
 	}
 	switch {
 	case root == StorageRootUnknown:

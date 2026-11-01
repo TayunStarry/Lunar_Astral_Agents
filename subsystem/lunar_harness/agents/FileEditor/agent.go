@@ -7,6 +7,7 @@ package FileEditor
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -78,10 +79,12 @@ func systemPrompt() string {
 
 // dispatchTool 按工具名分派（自然语言模式使用）。
 func dispatchTool(ctx context.Context, name string, args map[string]any) OpResult {
-	// 压缩包步骤优先转发给归档智能体：文件编辑只用文本方式操作 /document，
-	// 不直接读写二进制容器。
-	if outcome, routed := routeArchive(name, args); routed {
-		return outcome
+	// 压缩包 / GGUF 属二进制容器：普通文件工具一律拒绝，引导走 task_scheduling
+	if isFileTool(name) {
+		if path := argString(args, "path"); isArchivePath(path) {
+			return failResult(name, path, fmt.Errorf(
+				"压缩包、GGUF 等二进制容器请用 %s（type=archive_ops / archive_reader）调度处理", ToolSchedule))
+		}
 	}
 	switch name {
 	case ToolList:
@@ -110,14 +113,10 @@ func dispatchTool(ctx context.Context, name string, args map[string]any) OpResul
 		return FileAttr(argString(args, "path"))
 	case ToolWeb:
 		return WebQuery(ctx, argString(args, "query"))
-	case ToolMemory:
-		return MemoryQuery(ctx, argString(args, "query"), argInt(args, "limit", 8))
-	case ToolHandleSr:
-		return HandleSearch(argString(args, "query"), argInt(args, "limit", 8))
-	case ToolHandleRd:
-		return HandleRead(argString(args, "handle"), argInt(args, "max_bytes", 0))
 	case ToolRunProj:
 		return RunProjectWithLimit(ctx, argString(args, "path"), argInt(args, "timeout_sec", 0))
+	case ToolSchedule:
+		return scheduleTask(ctx, args)
 	default:
 		return failResult(name, "", errUnknownTool)
 	}
@@ -142,6 +141,15 @@ func argInt(args map[string]any, key string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+// validKindCode 判断句柄类型码是否合法（D/I/G/A/V/U）。
+func validKindCode(code string) bool {
+	switch strings.ToUpper(strings.TrimSpace(code)) {
+	case "D", "I", "G", "A", "V", "U":
+		return true
+	}
+	return false
 }
 
 var (

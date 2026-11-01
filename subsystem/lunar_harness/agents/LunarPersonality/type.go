@@ -144,7 +144,7 @@ type ResourceAudioTask struct {
 }
 
 // urlExtractBudget 一次未读转换内的链接提炼配额：同一条消息里多条陌生链接时，
-// 只对前几条现场提炼，其余保留句柄与地址，等月华按需用 use_resource 取回。
+// 只对前几条现场提炼，其余保留句柄与地址，等月华按需用 fetch_resources 取回。
 type urlExtractBudget struct {
 	// used 已提炼次数
 	used int
@@ -283,7 +283,6 @@ type CachedMessage struct {
 	ImageLabel  string             `json:"imageLabel,omitempty"`
 	Audio       string             `json:"audio,omitempty"`
 	ABCNotation string             `json:"abcNotation,omitempty"`
-	ActionType  string             `json:"actionType,omitempty"`
 	FileRef     string             `json:"fileRef,omitempty"`
 	FileLabel   string             `json:"fileLabel,omitempty"`
 	Timestamp   int64              `json:"timestamp"`
@@ -553,13 +552,6 @@ type PushImageData struct {
 	Images  []string `json:"images"`
 }
 
-// AgentPositionData 智能体 3D 位置
-type AgentPositionData struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-	Z float64 `json:"z"`
-}
-
 // ==== LTPX 工具链 ====
 
 // LTPXRemoteToolRef 可调用应用（名称 + 能力描述）
@@ -625,12 +617,6 @@ type RuntimeGlobalMessage struct {
 	LifeRecord   string   `json:"life_record"`
 	PlanSummary  string   `json:"plan_summary"`
 	EmotionMarks []string `json:"emotion_marks,omitempty"`
-}
-
-// ActionDefinition 渲染引擎上报的可用动作
-type ActionDefinition struct {
-	Name          string `json:"name"`
-	MouseTracking bool   `json:"mouseTracking"`
 }
 
 // TextChunk 正文切片

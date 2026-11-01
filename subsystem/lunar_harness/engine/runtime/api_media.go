@@ -160,7 +160,7 @@ func videoSamplingPlan(duration float64, opts map[string]any) []float64 {
 		return multimodal.EquidistantTimes(multimodal.MaxVideoFrames, duration)
 	}
 	ts := make([]float64, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		ts = append(ts, float64(i)/fps)
 	}
 	return ts
@@ -177,7 +177,7 @@ func downloadVideoToTemp(url string) (string, error) {
 		return "", fmt.Errorf("下载视频失败: HTTP %d", resp.StatusCode)
 	}
 	ext := "mp4"
-	if pathPart := strings.SplitN(url, "?", 2)[0]; pathPart != "" {
+	if pathPart, _, _ := strings.Cut(url, "?"); pathPart != "" {
 		if i := strings.LastIndex(pathPart, "."); i >= 0 && i < len(pathPart)-1 {
 			cand := strings.ToLower(pathPart[i:])
 			if multimodal.IsSupportedVideoFormat("v" + cand) {
@@ -225,11 +225,11 @@ func dataVideoToTemp(uri string) (string, error) {
 // imageBytesFromSource 读取插件数据目录图片字节（path 为 data:base64 URI 时内联解码）。
 func imageBytesFromSource(p *plugin, path string) ([]byte, error) {
 	if strings.HasPrefix(path, "data:") {
-		comma := strings.Index(path, ",")
-		if comma < 0 {
+		_, after, ok := strings.Cut(path, ",")
+		if !ok {
 			return nil, fmt.Errorf("无效的 data URI")
 		}
-		return base64.StdEncoding.DecodeString(path[comma+1:])
+		return base64.StdEncoding.DecodeString(after)
 	}
 	real, err := scopedPath(p, path)
 	if err != nil {

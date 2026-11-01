@@ -50,18 +50,12 @@ type Hub struct {
 	Clients map[*WSClient]bool
 	// Bus 引擎总线原始帧通道（带频道，仅订阅者接收）
 	Bus chan BusFrame
-	// Inbound 入站消息通道（带频道，另经订阅者分发）
-	Inbound chan InboundFrame
 	// Register 注册通道
 	Register chan *WSClient
 	// Unregister 注销通道
 	Unregister chan *WSClient
 	// clientsMu 保护 Clients 的并发快照读取
 	clientsMu sync.RWMutex
-	// subsMu 保护入站订阅者列表
-	subsMu sync.RWMutex
-	// subs 入站订阅者（每个订阅者独立缓冲与消费协程，互不阻塞）
-	subs []*inboundSub
 }
 
 // BusFrame 一条待投递的引擎总线帧（频道 + 原始字节）
@@ -70,22 +64,4 @@ type BusFrame struct {
 	Channel string
 	// Data 原始帧字节（发什么转什么，不做改写）
 	Data []byte
-}
-
-// InboundFrame 一条入站消息（频道 + 原始字节）
-type InboundFrame struct {
-	// Channel 发送方声明的频道
-	Channel string
-	// Data 原始帧字节
-	Data []byte
-}
-
-// inboundSub 入站订阅者
-type inboundSub struct {
-	// name 订阅者名称（日志用）
-	name string
-	// ch 独立缓冲通道
-	ch chan InboundFrame
-	// fn 消费函数（频道 + 原始字节）
-	fn func(channel string, data []byte)
 }

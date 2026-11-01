@@ -4,6 +4,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/CrystalPersonality"
 	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
+	"LunarSubsystem/LunarHarness/engine/library"
 	media "LunarSubsystem/LunarHarness/engine/media/httpapi"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
@@ -41,6 +42,14 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/preview", Handler: file.PreviewHandler, Method: "GET", Description: "全局文件预览（图片/视频/文本）"},
 	{Path: "/file/organize", Handler: file.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
 	{Path: "/file/hash-rename", Handler: file.HashRenameHandler, Method: "POST", Description: "哈希命名（MD5前16位）"},
+
+	// ==================== 资源库（内嵌前端） ====================
+	{Path: "/library/api/tree", Handler: library.TreeHandler, Method: "GET", Description: "资源库递归清单（documents / audios / multimedia / unknown）"},
+	{Path: "/library/api/edits", Handler: library.EditsHandler, Method: "GET", Description: "资源库文件状态与最近 10 次 AI 操作"},
+	{Path: "/library/api/meta", Handler: library.MetaHandler, Method: "GET", Description: "资源库文件详情（入库时间 / 句柄 / 引用积分 / 描述状态）"},
+	{Path: "/library/api/rename", Handler: library.RenameHandler, Method: "POST", Description: "资源库重命名（限 4 个存储根）"},
+	{Path: "/library/api/move", Handler: library.MoveHandler, Method: "POST", Description: "资源库移动（限 4 个存储根）"},
+	{Path: "/library/api/delete", Handler: library.DeleteHandler, Method: "POST", Description: "资源库删除文件（同步清理句柄）"},
 
 	// ==================== 文件归档（ZIP） ====================
 	{Path: "/file/archive", Handler: file.ArchiveHandler, Method: "POST", Description: "文件归档"},

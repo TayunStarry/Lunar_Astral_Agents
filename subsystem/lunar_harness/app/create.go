@@ -14,6 +14,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/debugsnap"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
+	"LunarSubsystem/LunarHarness/engine/library"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/server"
 	"LunarSubsystem/LunarHarness/transport/ws"
@@ -34,22 +35,25 @@ func Assemble() {
 	go ws.Instance.Run()
 	logger.Info("LunarHarness", "统一 WebSocket 集线器已启动")
 
-	// ==== 传输层：引擎上行观测（ws 直连） ====
-	// 渲染引擎经各自 /ws 连接上行 animation_list / telemetry，月华在入站侧观测，
-	// 不再经 HTTP 中转：动作查询与动作执行都走同一条 WebSocket。
-	ws.Instance.SubscribeInbound("engine-observer", LunarPersonality.HandleEngineFrame)
-	logger.Info("LunarHarness", "引擎上行观测（ws 直连）已接入")
+	// ==== 传输层：结构化广播 ====
+	// 动作匹配由前端渲染引擎自行完成（嵌入模型 + 动作列表），后端不再观测引擎上行帧。
 
 	// ==== 跨层注入：结构化广播 & 下行桥接 ====
 	// 智能体下行走结构化广播（type/data），QQ 桥接挂在结构化旁路上（原始字节广播不触发）
 	LunarPersonality.PushMessageFunc = ws.Instance.BroadcastMessage
 	ws.OnStructuredMessage = DialogueBridging.BridgeStructuredMessage
 
-	// ==== 前端静态资源：月华消息终端（/）与琉璃桌面（/desktop/） ====
+	// ==== 跨层注入：资源库编辑状态实时推送 ====
+	// 文件编辑智能体每次操作都会写入资源库状态中心，这里把状态经同一条 /ws 推给前端。
+	library.SetBroadcast(ws.Instance.BroadcastMessage)
+
+	// ==== 前端静态资源：消息终端 / 移动端 / 琉璃桌面 / 资源库 ====
 	StaticRootsProvider = func() server.StaticRoots {
 		return server.StaticRoots{
 			Lunar:    lunarStaticRoot(),
+			Mobile:   clients.MobileFS(),
 			Crystal:  crystalStaticRoot(),
+			Library:  clients.LibraryFS(),
 			Reliance: clients.RelianceFS(),
 		}
 	}
@@ -122,6 +126,8 @@ func lunarWindowSpec() browser.DesktopWindowSpec {
 		Width:    lunarWindowWidth,
 		Height:   lunarWindowHeight,
 		IconPath: lunarIconPath,
+		// 缩到移动端尺寸时置顶，避免被其它程序遮挡（桌面宠物式常驻）
+		StickyWhenNarrow: true,
 	}
 }
 
@@ -140,10 +146,23 @@ func crystalWindowSpec() browser.DesktopWindowSpec {
 	}
 }
 
-// OpenFrontendWindows 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）。
+// libraryWindowSpec 资源库窗口规格（按需弹出；控制台「前端窗口」也可唤起）
+func libraryWindowSpec() browser.DesktopWindowSpec {
+	base := fmt.Sprintf("http://127.0.0.1:%d", config.BasicPort)
+	return browser.DesktopWindowSpec{
+		ID:     WindowLibrary,
+		URL:    base + server.LibraryPrefix,
+		Title:  "[星月智能] : 资源库",
+		Width:  1180,
+		Height: 820,
+	}
+}
+
+// OpenFrontendWindows 打开两个常驻前端窗口：月华消息终端（/）与琉璃桌面（/desktop）。
 //
 // 控制台（TUI）是程序主界面，这两个窗口是它的可视化前端：窗口全部关闭不会退出程序，
 // 用户可在控制台「运行状态」屏的前端窗口区块重新唤起（入口键 1 / 2）。
+// 资源库不随程序自动弹出，只在运行浏览器端代码或用户显式唤起时打开（控制台入口键 3）。
 func OpenFrontendWindows() {
 	for _, spec := range []browser.DesktopWindowSpec{lunarWindowSpec(), crystalWindowSpec()} {
 		if err := browser.OpenDesktopWindow(spec); err != nil {

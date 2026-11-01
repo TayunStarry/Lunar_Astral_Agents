@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』资源库</title>
+    <link rel="stylesheet" href="/reliance/fontAwesome/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="js/app.js"></script>
+</head>
+
+<body>
+    <div class="background"></div>
+    <div class="glass-effect"></div>
+
+    <main class="main-layout" id="main-layout">
+        <!-- ==== 顶栏 ==== -->
+        <header class="app-header">
+            <div class="brand">
+                <span class="brand-icon"><i class="fas fa-layer-group"></i></span>
+                <span class="brand-name">资源库</span>
+                <span class="brand-badge">只读</span>
+            </div>
+            <div class="search-row">
+                <i class="fas fa-search"></i>
+                <input id="search-input" type="text" placeholder="在当前目录搜索文件…" autocomplete="off" spellcheck="false">
+                <button id="search-clear" class="search-clear hidden" title="清除搜索"><i class="fas fa-xmark"></i></button>
+            </div>
+            <div class="header-actions">
+                <button id="details-btn" class="icon-btn details-toggle" title="详情面板">
+                    <i class="fas fa-circle-info"></i>
+                </button>
+                <button id="refresh-btn" class="icon-btn" title="刷新（F5）">
+                    <i class="fas fa-rotate"></i>
+                </button>
+                <button id="theme-btn" class="icon-btn" title="切换深色模式">
+                    <i class="fas fa-circle-half-stroke"></i>
+                </button>
+                <button id="help-btn" class="icon-btn" title="快捷键（F1）">
+                    <i class="fas fa-keyboard"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- ==== 左侧：4 个存储根 ==== -->
+        <aside class="panel sidebar">
+            <header class="panel-header">
+                <span class="panel-title"><i class="fas fa-folder-tree"></i> 存储根</span>
+                <span id="entry-count" class="panel-count">0</span>
+            </header>
+            <div class="panel-body">
+                <div id="tree" class="tree" role="tree" aria-label="资源库目录树"></div>
+            </div>
+            <footer class="panel-footer">
+                <span id="truncate-hint" class="footer-hint hidden">
+                    <i class="fas fa-triangle-exclamation"></i> 条目过多，仅展示前 2 万项
+                </span>
+            </footer>
+        </aside>
+
+        <!-- ==== 中间：预览 / 目录 ==== -->
+        <section class="panel content">
+            <header class="panel-header content-header">
+                <div class="crumb-row">
+                    <button id="back-btn" class="icon-btn" title="返回上级（Esc）"><i class="fas fa-arrow-left"></i></button>
+                    <nav id="crumbs" class="crumbs" aria-label="路径"></nav>
+                </div>
+                <div class="content-actions">
+                    <button id="rename-btn" class="btn-glass btn-sm" title="重命名（F2）" disabled>
+                        <i class="fas fa-pen"></i><span>重命名</span>
+                    </button>
+                    <button id="move-btn" class="btn-glass btn-sm" title="移动（Ctrl+M）" disabled>
+                        <i class="fas fa-folder-open"></i><span>移动</span>
+                    </button>
+                    <button id="delete-btn" class="btn-glass btn-sm danger" title="删除（Delete）" disabled>
+                        <i class="fas fa-trash"></i><span>删除</span>
+                    </button>
+                </div>
+            </header>
+            <div class="panel-body content-body">
+                <div class="content-meta">
+                    <div id="view-tabs" class="view-tabs hidden" role="tablist">
+                        <button class="view-tab active" data-tab="preview" role="tab">预览</button>
+                        <button class="view-tab" data-tab="changes" role="tab">变更</button>
+                    </div>
+                    <span id="content-summary" class="content-summary"></span>
+                </div>
+                <div id="view-preview" class="view-pane active"></div>
+                <div id="view-changes" class="view-pane"></div>
+            </div>
+        </section>
+
+        <!-- ==== 右侧：详情（窄窗时为抽屉） ==== -->
+        <aside class="panel details" id="details-panel">
+            <header class="panel-header">
+                <span class="panel-title"><i class="fas fa-circle-info"></i> 详情</span>
+                <button id="details-close" class="icon-btn details-close" title="关闭详情">
+                    <i class="fas fa-xmark"></i>
+                </button>
+            </header>
+            <div class="panel-body">
+                <div id="details" class="details-body">
+                    <div class="empty-state">
+                        <i class="fas fa-hand-pointer"></i>
+                        <p>选择左侧文件查看详情</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ==== 抽屉遮罩（仅窄窗显示） ==== -->
+        <div id="details-backdrop" class="details-backdrop hidden"></div>
+    </main>
+
+    <!-- ==== 运行沙箱 ==== -->
+    <div id="sandbox-panel" class="sandbox-panel hidden">
+        <header class="sandbox-head">
+            <span class="sandbox-title">
+                <i class="fas fa-play"></i>
+                <span id="sandbox-title">沙箱运行</span>
+            </span>
+            <button id="sandbox-close" class="sandbox-close" title="关闭沙箱（Esc）">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </header>
+        <iframe id="sandbox" sandbox="allow-scripts" title="代码运行沙箱"></iframe>
+    </div>
+
+    <!-- ==== 弹窗与提示 ==== -->
+    <div id="modal-root"></div>
+    <div id="toast" class="toast"></div>
+</body>
+
+</html>

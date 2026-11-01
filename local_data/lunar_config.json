@@ -23,7 +23,7 @@
 		}
 	},
 	"system": {
-		"developer": true,
+		"developer": false,
 		"allow_lan": false,
 		"insecure_tls": false,
 		"chat_vram_guard": true,

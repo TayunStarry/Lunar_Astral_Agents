@@ -9,10 +9,10 @@ import (
 // ToolCatalog 返回 lunar 包内全部 Go 角色的工具清单。
 //
 // 注意：记忆者不是独立智能体——它只是记忆入库与检索的后端流程，相关能力通过
-// 对话者的 search_memory 工具暴露，因此这里不再把它列为一个智能体。
+// 对话者的 fetch_resources 工具暴露，因此这里不再把它列为一个智能体。
 func ToolCatalog() []agentinfo.Agent {
 	dialogueCalls := concatToolCalls(
-		agentControlTools, memoryTools, resourceTools, scheduleTools, networkExploreToolCalls(),
+		agentControlTools, fetchResourceTools, scheduleTools, networkExploreToolCalls(),
 	)
 	// LTPX 远程工具是运行时从扩展应用同步来的，和静态工具一起拼进对话者清单。
 	// 应用清单不再逐条展开成「use_the_program · 应用名」条目：它们不是独立的工具，

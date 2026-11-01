@@ -118,7 +118,4 @@ func describeHandle(raw string) string {
 	return base
 }
 
-// grammarCheatsheet 工具描述拼接用的文法速查
-func grammarCheatsheet() string {
-	return "需要快速探查内容时，把需求填进 use_resource 的 ask 字段"
-}
+// ==== 工具参数小工具 ====

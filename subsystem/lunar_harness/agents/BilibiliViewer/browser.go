@@ -353,10 +353,7 @@ func scoreWithTags(links []videoLink, cfg Config) []videoLink {
 	if len(links) == 0 {
 		return links
 	}
-	limit := len(links)
-	if limit > tagScoreLimit {
-		limit = tagScoreLimit
-	}
+	limit := min(len(links), tagScoreLimit)
 	type scored struct{ idx, score int }
 	results := make(chan scored, limit)
 	var wg sync.WaitGroup

@@ -25,25 +25,25 @@ var toolDefinitions = map[string]toolDefinition{
 	ToolRead: toolDef(ToolRead,
 		"读取 /document 下的文本文件；大文件用 offset 分批读取。",
 		map[string]any{
-			"path":      strProp("相对 /document 的文件路径"),
+			"path":      strProp("相对 /document 的文件路径（也可写完整路径或纯文件名）"),
 			"offset":    intProp("起始字符偏移（默认 0）", 0, 1<<20),
 			"max_chars": intProp("本次返回字符数（默认 4000，最大 8000）", 1, fileReadChunkLimit),
 		}, []string{"path"}),
 	ToolWrite: toolDef(ToolWrite,
 		"写入 /document 下文件的完整内容（不存在则创建）；整篇覆盖前请先 file_read。",
 		map[string]any{
-			"path":    strProp("相对 /document 的文件路径"),
+			"path":    strProp("相对 /document 的文件路径（也可写完整路径或纯文件名）"),
 			"content": strProp("完整文件内容"),
 		}, []string{"path", "content"}),
 	ToolCreate: toolDef(ToolCreate,
 		"新建 /document 下的文件（已存在时报错，请改用 file_write）。",
 		map[string]any{
-			"path":    strProp("相对 /document 的文件路径"),
+			"path":    strProp("相对 /document 的文件路径（也可写完整路径或纯文件名）"),
 			"content": strProp("文件完整内容"),
 		}, []string{"path", "content"}),
 	ToolDelete: toolDef(ToolDelete,
 		"删除 /document 下的文件。",
-		map[string]any{"path": strProp("相对 /document 的文件路径")}, []string{"path"}),
+		map[string]any{"path": strProp("相对 /document 的文件路径（也可写完整路径或纯文件名）")}, []string{"path"}),
 	ToolCopy: toolDef(ToolCopy,
 		"复制文件到新路径（目标必须不存在）。",
 		map[string]any{
@@ -59,7 +59,7 @@ var toolDefinitions = map[string]toolDefinition{
 	ToolRename: toolDef(ToolRename,
 		"同目录内重命名文件（只改文件名，不含路径分隔符）。",
 		map[string]any{
-			"path": strProp("相对 /document 的文件路径"),
+			"path": strProp("相对 /document 的文件路径（也可写完整路径或纯文件名）"),
 			"name": strProp("新的文件名（含扩展名）"),
 		}, []string{"path", "name"}),
 	ToolSearch: toolDef(ToolSearch,
@@ -71,76 +71,34 @@ var toolDefinitions = map[string]toolDefinition{
 	ToolReplace: toolDef(ToolReplace,
 		"置换文件指定位置的内容：用 content 替换第 start_line 到 end_line 行（1 基、含端点，行数可增减）。",
 		map[string]any{
-			"path":       strProp("相对 /document 的文件路径"),
+			"path":       strProp("相对 /document 的文件路径（也可写完整路径或纯文件名）"),
 			"start_line": intProp("起始行（1 基）", 1, 1<<20),
 			"end_line":   intProp("结束行（含端点；等于 start_line 即单行替换）", 1, 1<<20),
 			"content":    strProp("替换后的纯文本内容（不带行号前缀）"),
 		}, []string{"path", "start_line", "content"}),
 	ToolInfo: toolDef(ToolInfo,
 		"查看文件属性：大小、行数、字符数、修改时间、扩展名与资源句柄。",
-		map[string]any{"path": strProp("相对 /document 的文件路径")}, []string{"path"}),
+		map[string]any{"path": strProp("相对 /document 的文件路径（也可写完整路径或纯文件名）")}, []string{"path"}),
 	ToolWeb: toolDef(ToolWeb,
 		"联网查询：给出查询意图，返回搜索摘要。需要外部资料时使用。",
 		map[string]any{"query": strProp("搜索查询，尽量具体")}, []string{"query"}),
-	ToolMemory: toolDef(ToolMemory,
-		"记忆库查询：检索历史记忆中的相关片段。",
-		map[string]any{
-			"query": strProp("检索关键词或自然语言问题"),
-			"limit": intProp("返回条数（1-20，默认 8）", 1, 20),
-		}, []string{"query"}),
-	ToolHandleSr: toolDef(ToolHandleSr,
-		"句柄系统检索：按关键词查找已登记的资源句柄与摘要。",
-		map[string]any{
-			"query": strProp("检索关键词"),
-			"limit": intProp("返回条数（1-20，默认 8）", 1, 20),
-		}, []string{"query"}),
-	ToolHandleRd: toolDef(ToolHandleRd,
-		"句柄系统读取：按资源句柄（如 @D.003）读取内容。",
-		map[string]any{
-			"handle":    strProp("资源句柄"),
-			"max_bytes": intProp("读取上限字节（默认 65536）", 1024, maxFileReadBytes),
-		}, []string{"handle"}),
 	ToolRunProj: toolDef(ToolRunProj,
-		"运行 js / html 项目文件：文件头含「//Engine: Lunar Harness」走月华私有 js 运行时；其余 js/html 走浏览器运行环境（纯 js 自动生成可展示结果的模板网页）。默认运行时长上限 120 秒，可用 timeout_sec 或文件首行 `timeout=120s` 覆盖。",
+		"运行 js / html 项目文件：文件头含「//Engine: Lunar Harness」走月华私有 js 运行时；其余 js/html 自动弹出「资源库」前端并在其 iframe 沙箱中运行。默认运行时长上限 120 秒，可用 timeout_sec 或文件首行 `timeout=120s` 覆盖。",
 		map[string]any{
 			"path":        strProp("相对 /document 的项目文件路径"),
 			"timeout_sec": intProp("运行时长上限（秒；默认 120，允许 5-3600；优先级高于文件首行声明）", 5, 3600),
 		}, []string{"path"}),
-	ToolArchiveList: toolDef(ToolArchiveList,
-		"查询压缩包内部文件结构：条目路径、原始大小、压缩大小与目录标记。任务会自动转发给归档解析智能体。",
-		map[string]any{"path": strProp("压缩包路径（相对 /document 或相对 LocalDir）")}, []string{"path"}),
-	ToolArchiveRead: toolDef(ToolArchiveRead,
-		"读取压缩包内指定条目的文本内容（单次最多 10000 字）。任务会自动转发给归档解析智能体。",
+	ToolSchedule: toolDef(ToolSchedule,
+		"单方面调度其他智能体完成任务：type 选定目标智能体，instruction 用自然语言说明要做什么；target 可选（路径或句柄，缺省时由本智能体从 instruction 中提取）。压缩包、GGUF、文档正文、图片 / 动图 / 视频一律走这里，不要用文件工具直接读写二进制容器。",
 		map[string]any{
-			"path":  strProp("压缩包路径"),
-			"entry": strProp("压缩包内条目名（含子目录，如 src/main.go）"),
-		}, []string{"path", "entry"}),
-	ToolArchiveCreate: toolDef(ToolArchiveCreate,
-		"创建压缩包：把 /document 下的文件或目录打包为 .zip / .ltpx。任务会自动转发给归档操作智能体。",
-		map[string]any{
-			"path":  strProp("要创建的压缩包路径（相对 /document，例如 pkg.zip）"),
-			"paths": arrayProp("要打包的文件 / 目录路径列表（相对 /document）"),
-		}, []string{"path", "paths"}),
-	ToolArchiveDelete: toolDef(ToolArchiveDelete,
-		"删除压缩包。任务会自动转发给归档操作智能体。",
-		map[string]any{"path": strProp("压缩包路径")}, []string{"path"}),
-	ToolArchiveAdd: toolDef(ToolArchiveAdd,
-		"在压缩包内新增或覆盖文件：可来自本地文件路径，也可直接写入文本内容。任务会自动转发给归档操作智能体。",
-		map[string]any{
-			"path":    strProp("压缩包路径"),
-			"entry":   strProp("压缩包内条目名（含子目录）"),
-			"source":  strProp("来源文件路径（相对 /document；与 content 二选一）"),
-			"content": strProp("要写入的文本内容（与 source 二选一）"),
-		}, []string{"path", "entry"}),
-	ToolArchiveRemove: toolDef(ToolArchiveRemove,
-		"从压缩包内移除指定条目。任务会自动转发给归档操作智能体。",
-		map[string]any{
-			"path":  strProp("压缩包路径"),
-			"entry": strProp("要移除的条目名（含子目录）"),
-		}, []string{"path", "entry"}),
-	ToolGGUF: toolDef(ToolGGUF,
-		"解析 GGUF 模型文件元数据（模型名、架构、量化、上下文长度等）。任务会自动转发给归档解析智能体。",
-		map[string]any{"path": strProp("GGUF 文件路径")}, []string{"path"}),
+			"type": map[string]any{
+				"type":        "string",
+				"enum":        []string{ScheduleArchiveOps, ScheduleArchiveReader, ScheduleDocumentReader, ScheduleVision},
+				"description": "archive_ops=归档操作（创建/删除压缩包、增删条目）；archive_reader=归档解析（压缩包结构/条目/GGUF）；document_reader=文献解析（理解文档正文）；vision=视觉理解（图片/动图/视频）",
+			},
+			"instruction": strProp("自然语言任务描述，写清要做什么、对哪个文件或句柄做什么"),
+			"target":      strProp("可选：目标路径或句柄；缺省时从 instruction 中提取"),
+		}, []string{"type", "instruction"}),
 }
 
 // toolDef 构造一条函数工具定义。
@@ -168,14 +126,6 @@ func strProp(description string) map[string]any {
 
 func intProp(description string, minimum, maximum int) map[string]any {
 	return map[string]any{"type": "integer", "description": description, "minimum": minimum, "maximum": maximum}
-}
-
-func arrayProp(description string) map[string]any {
-	return map[string]any{
-		"type":        "array",
-		"description": description,
-		"items":       map[string]any{"type": "string"},
-	}
 }
 
 // ToolCatalog 返回文件编辑智能体的工具清单（供控制台「工具列表」屏展示）。

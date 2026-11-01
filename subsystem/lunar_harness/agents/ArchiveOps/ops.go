@@ -17,6 +17,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/ArchiveReader"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/locator"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
@@ -54,6 +55,7 @@ func Create(target string, sources []string) Result {
 	if err != nil {
 		return failResult(OpCreate, target, err)
 	}
+	locator.Invalidate()
 	entries, _ := persistence.ReadZipFileList(saved.Path)
 	handles := []string{}
 	if saved.Handle != "" {
@@ -79,6 +81,7 @@ func Delete(target string) Result {
 	if err := os.Remove(abs); err != nil {
 		return failResult(OpDelete, target, fmt.Errorf("删除压缩包失败: %w", err))
 	}
+	locator.Invalidate()
 	resource.RemoveHandlesForPath(rel)
 	logger.SubInfo(Module, "Delete", "已删除压缩包 %s", rel)
 	return okResult(OpDelete, rel, "删除压缩包 "+rel, nil, 0, nil)
@@ -122,6 +125,7 @@ func AddEntry(target, entryName, sourcePath, content string) Result {
 	if err := persistence.WriteFileAtomic(rel, rebuilt); err != nil {
 		return failResult(OpAdd, target, fmt.Errorf("写入压缩包失败: %w", err))
 	}
+	locator.Invalidate()
 	handles := []string{}
 	if handle := registerArchiveHandle(rel); handle != "" {
 		handles = append(handles, handle)
@@ -169,6 +173,7 @@ func RemoveEntry(target, entryName string) Result {
 	if err := persistence.WriteFileAtomic(rel, rebuilt); err != nil {
 		return failResult(OpRemove, target, fmt.Errorf("写入压缩包失败: %w", err))
 	}
+	locator.Invalidate()
 	handles := []string{}
 	if handle := registerArchiveHandle(rel); handle != "" {
 		handles = append(handles, handle)
@@ -177,14 +182,4 @@ func RemoveEntry(target, entryName string) Result {
 	return okResult(OpRemove, rel,
 		fmt.Sprintf("移除条目 %s → %s（剩余 %d 个条目）", name, rel, len(kept)),
 		handles, len(kept), map[string]any{"entry": name})
-}
-
-// List 转调归档解析智能体查询压缩包结构
-func List(target string) ([]persistence.ZipEntryInfo, error) {
-	return ArchiveReader.ListEntries(target)
-}
-
-// Read 转调归档解析智能体读取压缩包条目内容
-func Read(target, entryName string, maxChars int) (string, error) {
-	return ArchiveReader.ReadEntry(target, entryName, maxChars)
 }

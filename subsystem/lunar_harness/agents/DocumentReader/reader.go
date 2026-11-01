@@ -14,16 +14,21 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/locator"
 	"LunarSubsystem/LunarHarness/engine/model/agentchat"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
-// InspectText 按文本句柄执行一次内容探查
+// InspectText 按句柄或路径执行一次内容探查
 //
-// @param handle  文本资源句柄（@D.xxx；表格与源码同样使用 @D）
+// @param input   文本资源句柄（@D.xxx），或完整 / 相对 / 纯文件名路径
 // @param request 对话者的自然语言需求
 // @return 文献解析给出的答复；句柄失效或非文本资源时返回错误
-func InspectText(handle, request string) (string, error) {
+func InspectText(input, request string) (string, error) {
+	handle, err := ResolveHandle(input)
+	if err != nil {
+		return "", err
+	}
 	request = strings.TrimSpace(request)
 	if request == "" {
 		request = "请概括这个文件讲了什么，并指出关键结构。"
@@ -63,6 +68,19 @@ func InspectText(handle, request string) (string, error) {
 		{Role: "user", Content: briefing},
 	}
 	return runToolLoop(doc, messages, fileToolDefs(), maxToolRounds)
+}
+
+// ResolveHandle 把句柄或路径统一解析为文本句柄（路径支持完整 / 相对 / 纯文件名）
+func ResolveHandle(input string) (string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", fmt.Errorf("文件或句柄不能为空")
+	}
+	match, err := locator.ResolveToHandle(input, []string{resource.StorageRootDocuments})
+	if err != nil {
+		return "", err
+	}
+	return match.Handle, nil
 }
 
 // ProfileOf 返回资源的内容格式画像（供句柄系统与集成测试直接查询）

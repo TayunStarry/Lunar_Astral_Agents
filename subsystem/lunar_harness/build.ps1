@@ -155,7 +155,9 @@ function Invoke-EndpointDocsGenerate {
         "-out", (Join-Path $ScriptDir "server\endpoint_docs.gen.json"),
         "-docs-path", "/api-docs",
         "-extra", "GET|/|月华消息终端静态前端（内嵌 clients/lunar 资源）",
+        "-extra", "GET|/mobile/|月华移动端静态前端（内嵌 clients/mobile 资源）",
         "-extra", "GET|/desktop/|琉璃桌面静态前端（内嵌 clients/crystal 资源）",
+        "-extra", "GET|/library/|资源库静态前端（内嵌 clients/library 资源，需手动打开）",
         "-extra", "GET|/reliance/|前端共享依赖（内嵌 clients/reliance 资源）",
         "-extra", "GET|/ws|WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的同频道连接）"
     )

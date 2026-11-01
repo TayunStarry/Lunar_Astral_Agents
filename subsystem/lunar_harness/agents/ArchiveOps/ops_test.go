@@ -52,7 +52,7 @@ func TestCreateAddRemoveDelete(t *testing.T) {
 	if !added.OK {
 		t.Fatalf("新增条目失败: %s", added.Summary)
 	}
-	text, err := Read(created.Path, "c.txt", 0)
+	text, err := ArchiveReader.ReadEntry(created.Path, "c.txt", 0)
 	if err != nil || !strings.Contains(text, "gamma") {
 		t.Fatalf("新增条目读取失败: %v / %q", err, text)
 	}
@@ -71,7 +71,7 @@ func TestCreateAddRemoveDelete(t *testing.T) {
 	if !removed.OK {
 		t.Fatalf("移除条目失败: %s", removed.Summary)
 	}
-	text, err = Read(created.Path, "b.txt", 0)
+	text, err = ArchiveReader.ReadEntry(created.Path, "b.txt", 0)
 	if err == nil {
 		t.Fatalf("已移除条目仍可读取: %q", text)
 	}
@@ -96,7 +96,7 @@ func TestCreateFromSourceFile(t *testing.T) {
 	if !added.OK {
 		t.Fatalf("从本地文件新增条目失败: %s", added.Summary)
 	}
-	text, err := Read(created.Path, "copied.txt", 0)
+	text, err := ArchiveReader.ReadEntry(created.Path, "copied.txt", 0)
 	if err != nil || !strings.Contains(text, "beta") {
 		t.Fatalf("本地文件条目内容错误: %v / %q", err, text)
 	}

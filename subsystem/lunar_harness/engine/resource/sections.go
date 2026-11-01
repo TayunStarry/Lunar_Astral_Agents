@@ -78,10 +78,7 @@ func fallbackSections(lines []string) []SectionDraft {
 	drafts := []SectionDraft{}
 	total := len(lines)
 	for start := 0; start < total; start += SectionBlockLines {
-		end := start + SectionBlockLines
-		if end > total {
-			end = total
-		}
+		end := min(start+SectionBlockLines, total)
 		drafts = append(drafts, SectionDraft{
 			Ordinal:   len(drafts) + 1,
 			Level:     0,

@@ -4,13 +4,14 @@ package resource
 //
 // 规则：
 //   - 链接进入系统时只做登记与句柄化，不在接入阶段解析内容；
-//   - 解析文本（parse_text）是该 URL 的唯一解读结果，写一次后 use_resource 直接返回；
+//   - 解析文本（parse_text）是该 URL 的唯一解读结果，写一次后 fetch_resources 直接返回；
 //   - B 站立句柄指向完整页面 URL（不使用分片地址、不用 BV 号做主键）；
 //   - 同一规范化 URL 复用同一句柄，数据库唯一索引兜底。
 
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 // RememberWebPage 登记一条检索访问记录（不建句柄，仅写 URL 主表）
 //
 // WebSearch 的「近期已访问」与页面摘要共用同一张 URL 主表，
-// 因此检索详情页不会额外占用句柄，但解析文本仍可被 use_resource 命中。
+// 因此检索详情页不会额外占用句柄，但解析文本仍可被 fetch_resources 命中。
 func RememberWebPage(rawURL, title, summary string) error {
 	if err := EnsureReady(); err != nil {
 		return err
@@ -241,10 +242,8 @@ func UpgradeCDNScheme(raw string) string {
 	if cut := strings.IndexAny(host, "/?#"); cut >= 0 {
 		host = host[:cut]
 	}
-	for _, candidate := range qqCDNHosts {
-		if host == candidate {
-			return "https://" + trimmed[len("http://"):]
-		}
+	if slices.Contains(qqCDNHosts, host) {
+		return "https://" + trimmed[len("http://"):]
 	}
 	return trimmed
 }

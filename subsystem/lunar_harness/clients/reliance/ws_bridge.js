@@ -107,8 +107,8 @@ class WsBridge {
 
     /**
      * 发送消息（兼容 BroadcastChannel API）
-     * 直接走 WebSocket 上行：后端把原始帧转给**同频道**的总线订阅者，
-     * 月华另经入站订阅观测 animation_list / telemetry。
+     * 直接走 WebSocket 上行：后端把原始帧转给**同频道**的总线订阅者；
+     * 动作匹配由各引擎自行完成，后端不再观测 animation_list / telemetry。
      * 连接尚未就绪时先进出站队列，连上后按序补发。
      * @param {*} message - 任意可序列化的消息对象
      */

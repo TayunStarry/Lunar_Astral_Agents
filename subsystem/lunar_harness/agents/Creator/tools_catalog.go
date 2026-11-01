@@ -20,24 +20,21 @@ var toolDefinitions = map[string]toolDefinition{
 	toolWebSearch: toolDef(toolWebSearch,
 		"联网搜索：给出查询意图，返回搜索摘要与参考链接。需要外部资料时使用。",
 		map[string]any{"query": strProp("搜索查询，尽量具体")}, []string{"query"}),
-	toolMemorySearch: toolDef(toolMemorySearch,
-		"记忆库查询：检索历史记忆中的相关片段。",
+	toolFetchResources: toolDef(toolFetchResources,
+		"统一资源检索。type=memory 检索长期记忆；type=handle 按句柄读取完整信息与内容；type=list 列出全部或指定类型的句柄。query 在 memory 模式填关键词数组，在 handle 模式填句柄数组，在 list 模式留空或填类型码 D/I/G/A/V/U。",
 		map[string]any{
-			"query": strProp("检索关键词或自然语言问题"),
-			"limit": intProp("返回条数（1-20，默认 8）", 1, 20),
-		}, []string{"query"}),
-	toolHandleSearch: toolDef(toolHandleSearch,
-		"句柄系统检索：按关键词查找已登记的资源句柄与摘要。",
-		map[string]any{
-			"query": strProp("检索关键词"),
-			"limit": intProp("返回条数（1-20，默认 8）", 1, 20),
-		}, []string{"query"}),
-	toolHandleRead: toolDef(toolHandleRead,
-		"句柄系统读取：按资源句柄（如 @D.003）读取内容。",
-		map[string]any{
-			"handle":    strProp("资源句柄"),
-			"max_bytes": intProp("读取上限字节（默认 65536）", 1024, maxFileReadBytes),
-		}, []string{"handle"}),
+			"type": map[string]any{
+				"type":        "string",
+				"enum":        []string{"memory", "handle", "list"},
+				"description": "memory=检索记忆；handle=按句柄读取；list=列出句柄",
+			},
+			"query": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "string"},
+				"description": "memory 填搜索关键词；handle 填句柄；list 留空或填单个类型码",
+			},
+			"limit": intProp("返回结果数量（默认 5）", 1, 50),
+		}, []string{"type"}),
 	toolFileList: toolDef(toolFileList,
 		"列出 /document 根目录下的文件与子目录。path 为空表示根目录。",
 		map[string]any{"path": strProp("相对 /document 的目录路径（可空）")}, nil),
@@ -111,7 +108,7 @@ var toolDefinitions = map[string]toolDefinition{
 			"name":  strProp("发送时显示的文件名（可空）"),
 		}, []string{"group", "path"}),
 	toolRunScript: toolDef(toolRunScript,
-		"代码运行：依次运行 /document 下的脚本文件；文件头含「//Engine: Lunar Harness」走月华私有 js 运行时，其余 js/html 走浏览器运行环境（纯 js 自动生成可展示结果的模板网页）。默认运行时长上限 120 秒，可用 timeout_sec 或文件首行 `timeout=120s` 覆盖。",
+		"代码运行：依次运行 /document 下的脚本文件；文件头含「//Engine: Lunar Harness」走月华私有 js 运行时，其余 js/html 自动弹出「资源库」前端并在其 iframe 沙箱中运行。默认运行时长上限 120 秒，可用 timeout_sec 或文件首行 `timeout=120s` 覆盖。",
 		map[string]any{
 			"scripts": map[string]any{
 				"type":        "array",

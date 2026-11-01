@@ -105,10 +105,14 @@ var (
 	statusLunar func() bool
 	// statusCrystal 琉璃前端在线探针
 	statusCrystal func() bool
+	// statusLibrary 资源库前端在线探针
+	statusLibrary func() bool
 	// relaunchLunar 月华前端唤起器
 	relaunchLunar func() error
 	// relaunchCrystal 琉璃前端唤起器
 	relaunchCrystal func() error
+	// relaunchLibrary 资源库前端唤起器
+	relaunchLibrary func() error
 )
 
 // ==== 功能子包日志/进度钩子（子包经 SetLogHook 注入，避免反向依赖） ====

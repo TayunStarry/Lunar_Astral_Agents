@@ -40,7 +40,7 @@ type Resource struct {
 	SectionCount int      `json:"section_count"` // 段落数（文档）
 	CreatedAt    int64    `json:"created_at"`
 	UsedAt       int64    `json:"used_at"`
-	// ParseText 该 URL 的唯一解析文本（use_resource 命中即直接返回）
+	// ParseText 该 URL 的唯一解析文本（fetch_resources 命中即直接返回）
 	ParseText string `json:"-"`
 	// ParseState 解析状态：none / ready / failed
 	ParseState string `json:"-"`

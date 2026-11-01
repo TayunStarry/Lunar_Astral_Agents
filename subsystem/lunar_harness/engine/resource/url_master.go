@@ -158,40 +158,6 @@ func (d *store) markURLParseFailed(raw string) {
 	_, _ = d.db.Exec(`UPDATE url_master SET parse_state = ? WHERE url = ?`, ParseFailed, norm)
 }
 
-// findURLWithParseText 按关键词检索已有解析文本（记忆检索 / 视频摘要回忆使用）
-func (d *store) findURLWithParseText(keywords []string, limit int) ([]Resource, error) {
-	if len(keywords) == 0 {
-		return nil, nil
-	}
-	if limit <= 0 {
-		limit = 5
-	}
-	out := []Resource{}
-	seen := map[int64]bool{}
-	for _, keyword := range keywords {
-		like := "%" + strings.TrimSpace(keyword) + "%"
-		rows, err := d.db.Query(`SELECT `+urlMasterColumns+` FROM url_master
-			WHERE parse_state = ? AND (url LIKE ? OR title LIKE ? OR parse_text LIKE ?)
-			ORDER BY id DESC LIMIT ?`, ParseReady, like, like, like, limit)
-		if err != nil {
-			return out, err
-		}
-		for rows.Next() {
-			res, scanErr := scanURLRecord(rows)
-			if scanErr != nil {
-				continue
-			}
-			if seen[res.ID] {
-				continue
-			}
-			seen[res.ID] = true
-			out = append(out, res)
-		}
-		rows.Close()
-	}
-	return out, nil
-}
-
 // tagsToJSON 序列化标签（nil 视为空数组）
 func tagsToJSON(tags []string) string {
 	raw, err := json.Marshal(tags)

@@ -5,17 +5,21 @@ import (
 	"net/http"
 )
 
-// StaticRoots 三个静态资源根（两个桌面前端 + 共享依赖）
+// StaticRoots 前端静态资源根（各前端 + 共享依赖）
 type StaticRoots struct {
 	// Lunar 月华消息终端（挂载于 /）
 	Lunar http.FileSystem
+	// Mobile 月华移动端（挂载于 /mobile/）
+	Mobile http.FileSystem
 	// Crystal 琉璃桌面（挂载于 /desktop/）
 	Crystal http.FileSystem
+	// Library 资源库（挂载于 /library/）
+	Library http.FileSystem
 	// Reliance 前端共享依赖（挂载于 /reliance/）
 	Reliance http.FileSystem
 }
 
-// Ready 两个桌面前端的静态资源是否均已就绪
+// Ready 月华消息终端与琉璃桌面的静态资源是否均已就绪
 func (r StaticRoots) Ready() bool {
 	return r.Lunar != nil && r.Crystal != nil
 }

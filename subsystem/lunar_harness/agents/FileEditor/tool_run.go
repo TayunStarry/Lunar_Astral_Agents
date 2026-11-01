@@ -4,8 +4,8 @@ package FileEditor
 //
 // 分流规则：
 //   - 文件首行含 `//Engine: Lunar Harness` 标识 → 交给月华私有 js 运行时执行；
-//   - 其余 .js / .html → 统一使用 engine/browser 浏览器运行环境；
-//     纯 js 自动套一层可展示运行结果的模板网页容器（控制台输出与异常都会显示在页面上）。
+//   - 其余 .js / .html → 打开「资源库」前端，并在其 iframe 沙箱中运行；
+//     资源库窗口会自动弹出并作为浏览器端代码的主页面。
 
 import (
 	"context"
@@ -20,7 +20,6 @@ import (
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/persistence"
 	runtime "LunarSubsystem/LunarHarness/engine/runtime"
 )
 
@@ -59,7 +58,7 @@ func runProject(ctx context.Context, path string, timeoutSec int) OpResult {
 	limit := resolveRunLimit(content, timeoutSec)
 	outcome := runProjectFile(ctx, path, ext, content, limit)
 	if localRel != "" {
-		// 运行结束再上报：成功保持黄色，报错/警告转为红色（供「编辑显示」文件名着色）。
+		// 运行结束再上报：成功保持绿色，报错/警告转为红色（供资源库文件名着色）。
 		publishRun(localRel, !outcome.OK)
 	}
 	return outcome
@@ -73,7 +72,7 @@ func runProjectFile(ctx context.Context, path, ext, content string, limit time.D
 	if ext == ".html" || ext == ".htm" {
 		return openInBrowser(path, "html")
 	}
-	return runJSInBrowser(path, content)
+	return runJSInBrowser(path)
 }
 
 // RunProjectPath 以默认运行时长运行指定项目文件（供创作管线等进程内调用方使用）。
@@ -163,7 +162,7 @@ func runWithHarness(ctx context.Context, path, code string, limit time.Duration)
 		"exports":       exports,
 		"limit_seconds": int(limit.Seconds()),
 	}
-	// 操作简述不写运行时长：TUI「编辑显示」只提供运行入口，不展示时长配置；
+	// 操作简述不写运行时长：资源库只展示运行结果，不展示时长配置；
 	// 时长信息放在结构化字段 limit_seconds 中，供调用方与排查使用。
 	summary := "已在月华私有 js 运行时执行 " + path
 	if containsString(exports, "main") {
@@ -225,35 +224,51 @@ func scheduleRuntimeClose(rt *runtime.Runtime, after time.Duration) {
 	}()
 }
 
-// runJSInBrowser 把纯 JS 套进模板网页容器后交给浏览器运行环境。
-func runJSInBrowser(path, code string) OpResult {
-	page := jsRunnerTemplate(path, code)
-	name := sanitizeID(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
-	localRel := filepath.ToSlash(filepath.Join("cache", "run", fmt.Sprintf("%s-%d.html", name, time.Now().UnixNano()%1_000_000)))
-	if err := persistence.WriteFileAtomic(localRel, []byte(page)); err != nil {
-		return failResult(ToolRunProj, path, fmt.Errorf("生成运行容器失败: %w", err))
-	}
-	target := webURL(localRel)
-	browser.OpenBrowser(target)
-	return newResult(ToolRunProj, path,
-		"已生成模板网页容器并在浏览器运行环境打开 "+path, nil,
-		map[string]any{"engine": "browser", "container": localRel, "url": target})
+// runJSInBrowser 把纯 JS 交给「资源库」前端，在页面内的 iframe 沙箱执行。
+func runJSInBrowser(path string) OpResult {
+	return openLibraryRunner(path, "js")
 }
 
-// openInBrowser 直接用浏览器运行环境打开 html 文件。
+// openInBrowser 用「资源库」前端打开 html 文件，并在沙箱中运行。
 func openInBrowser(path, kind string) OpResult {
-	localRel := filepath.ToSlash(filepath.Join(documentsRootRel, normalizeDocPath(path)))
-	target := webURL(localRel)
-	browser.OpenBrowser(target)
-	return newResult(ToolRunProj, path,
-		"已在浏览器运行环境打开 "+path, nil,
-		map[string]any{"engine": "browser", "kind": kind, "url": target})
+	return openLibraryRunner(path, kind)
 }
 
-// webURL 把 LocalDir 下的相对路径转成本机 Web 服务的只读地址（浏览器运行环境可直接渲染）。
-func webURL(localRel string) string {
-	escaped := (&url.URL{Path: "/file/read/" + filepath.ToSlash(localRel)}).EscapedPath()
-	return config.LocalBaseURL() + escaped
+// openLibraryRunner 打开（或聚焦）资源库窗口，并带上待运行文件。
+//
+// 资源库是浏览器端代码的唯一主页面：窗口不存在时自动弹出，已存在时重载到新地址，
+// 前端读取 run 参数后在 iframe 沙箱里执行，宿主机不额外起进程。
+func openLibraryRunner(path, kind string) OpResult {
+	target := libraryRunnerURL(path, kind)
+	spec := browser.DesktopWindowSpec{
+		ID:     libraryHostWindowID,
+		URL:    target,
+		Title:  "[星月智能] : 资源库",
+		Width:  libraryHostWindowWidth,
+		Height: libraryHostWindowHeight,
+	}
+	if err := browser.RestartDesktopWindow(spec); err != nil {
+		logger.Warn(Module, "[运行] 资源库窗口打开失败，回退系统浏览器: %v", err)
+		browser.OpenBrowser(target)
+	}
+	return newResult(ToolRunProj, path,
+		"已弹出「资源库」并在 iframe 沙箱中运行 "+path, nil,
+		map[string]any{"engine": "library", "run": libraryRunnerRel(path), "url": target})
+}
+
+// libraryRunnerRel 待运行文件相对 LocalDir 的路径。
+func libraryRunnerRel(path string) string {
+	return filepath.ToSlash(filepath.Join(documentsRootRel, normalizeDocPath(path)))
+}
+
+// libraryRunnerURL 资源库自动运行地址：/library/?run=<相对路径>&kind=<类型>。
+func libraryRunnerURL(path, kind string) string {
+	params := url.Values{}
+	params.Set("run", libraryRunnerRel(path))
+	if kind != "" {
+		params.Set("kind", kind)
+	}
+	return config.LocalBaseURL() + "/library/?" + params.Encode()
 }
 
 // sanitizeID 文件名 → 安全标识。
@@ -275,60 +290,4 @@ func containsString(items []string, target string) bool {
 		}
 	}
 	return false
-}
-
-// jsRunnerTemplate 纯 JS 运行容器：页面顶部标注文件与引擎，下方实时展示 console 输出与异常。
-func jsRunnerTemplate(path, code string) string {
-	escaped := strings.ReplaceAll(code, "</script>", "<\\/script>")
-	title := "JS 运行结果 · " + filepath.Base(path)
-	return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<title>` + title + `</title>
-<style>
-  :root { color-scheme: dark; }
-  body { margin:0; font:14px/1.6 "Microsoft YaHei","PingFang SC",sans-serif; background:#14121c; color:#e9e6f5; }
-  header { padding:14px 20px; border-bottom:1px solid #2a2740; display:flex; gap:14px; align-items:baseline; }
-  header b { color:#b39cff; }
-  header span { color:#8f8aa8; font-size:12px; }
-  #out { padding:16px 20px; white-space:pre-wrap; word-break:break-word; }
-  .line { padding:4px 8px; border-left:3px solid #3a3550; margin-bottom:6px; }
-  .log { border-color:#7ec8ff; }
-  .warn { border-color:#ffc069; color:#ffc069; }
-  .error { border-color:#ff7b8a; color:#ff9aa5; }
-  .done { color:#7ee2a8; margin-top:14px; }
-</style>
-</head>
-<body>
-<header><b>JS 运行结果</b><span>` + filepath.ToSlash(path) + ` · 浏览器运行环境</span></header>
-<div id="out"></div>
-<script>
-(function(){
-  var out = document.getElementById('out');
-  function push(cls, args){
-    var line = document.createElement('div');
-    line.className = 'line ' + cls;
-    line.textContent = Array.prototype.map.call(args, function(v){
-      if (typeof v === 'object') { try { return JSON.stringify(v); } catch(e) { return String(v); } }
-      return String(v);
-    }).join(' ');
-    out.appendChild(line);
-  }
-  var orig = { log: console.log, warn: console.warn, error: console.error, info: console.info };
-  console.log = function(){ push('log', arguments); orig.log.apply(console, arguments); };
-  console.info = function(){ push('log', arguments); orig.info.apply(console, arguments); };
-  console.warn = function(){ push('warn', arguments); orig.warn.apply(console, arguments); };
-  console.error = function(){ push('error', arguments); orig.error.apply(console, arguments); };
-  window.addEventListener('error', function(e){ push('error', ['运行异常: ' + (e.message || e.error)]); });
-  try {
-` + escaped + `
-    push('done', ['执行完成']);
-  } catch (e) {
-    push('error', ['运行异常: ' + (e && e.stack ? e.stack : e)]);
-  }
-})();
-</script>
-</body>
-</html>`
 }

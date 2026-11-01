@@ -15,6 +15,12 @@ const (
 	documentsRootRel = "documents"
 	// maxFileReadBytes 单次文件读取上限
 	maxFileReadBytes = 256 << 10
+	// libraryHostWindowID 资源库窗口标识（浏览器端代码的主页面，已存在时重载）
+	libraryHostWindowID = "library"
+	// libraryHostWindowWidth 资源库窗口宽度
+	libraryHostWindowWidth = 1180
+	// libraryHostWindowHeight 资源库窗口高度
+	libraryHostWindowHeight = 820
 	// fileReadChunkRunes 单次 file_read 返回给模型的默认字符数
 	fileReadChunkRunes = 4000
 	// fileReadChunkLimit 单次 file_read 允许的最大字符数
@@ -45,40 +51,37 @@ const (
 // ==== 工具名 ====
 
 const (
-	ToolList     = "file_list"
-	ToolRead     = "file_read"
-	ToolWrite    = "file_write"
-	ToolCreate   = "file_create"
-	ToolDelete   = "file_delete"
-	ToolCopy     = "file_copy"
-	ToolMove     = "file_move"
-	ToolRename   = "file_rename"
-	ToolSearch   = "file_search"
-	ToolReplace  = "file_replace_at"
-	ToolInfo     = "file_info"
-	ToolWeb      = "web_search"
-	ToolMemory   = "memory_search"
-	ToolHandleSr = "handle_search"
-	ToolHandleRd = "handle_read"
-	ToolRunProj  = "run_project"
+	ToolList    = "file_list"
+	ToolRead    = "file_read"
+	ToolWrite   = "file_write"
+	ToolCreate  = "file_create"
+	ToolDelete  = "file_delete"
+	ToolCopy    = "file_copy"
+	ToolMove    = "file_move"
+	ToolRename  = "file_rename"
+	ToolSearch  = "file_search"
+	ToolReplace = "file_replace_at"
+	ToolInfo    = "file_info"
+	ToolWeb     = "web_search"
+	ToolRunProj = "run_project"
+	// ToolSchedule 统一调度其他智能体（归档操作 / 归档解析 / 文献解析 / 视觉理解）
+	ToolSchedule = "task_scheduling"
+)
 
-	// 归档类工具：统一转发给归档操作 / 归档解析智能体
-	ToolArchiveList   = "archive_list"
-	ToolArchiveRead   = "archive_read"
-	ToolArchiveCreate = "archive_create"
-	ToolArchiveDelete = "archive_delete"
-	ToolArchiveAdd    = "archive_add"
-	ToolArchiveRemove = "archive_remove"
-	ToolGGUF          = "gguf_metadata"
+// ==== 调度目标 ====
+
+const (
+	ScheduleArchiveOps     = "archive_ops"
+	ScheduleArchiveReader  = "archive_reader"
+	ScheduleDocumentReader = "document_reader"
+	ScheduleVision         = "vision"
 )
 
 // allTools 全部工具（供自然语言模式与工具列表屏展示）。
 var allTools = []string{
 	ToolList, ToolRead, ToolWrite, ToolCreate, ToolDelete, ToolCopy, ToolMove,
-	ToolRename, ToolSearch, ToolReplace, ToolInfo, ToolWeb, ToolMemory,
-	ToolHandleSr, ToolHandleRd, ToolRunProj,
-	ToolArchiveList, ToolArchiveRead, ToolArchiveCreate, ToolArchiveDelete,
-	ToolArchiveAdd, ToolArchiveRemove, ToolGGUF,
+	ToolRename, ToolSearch, ToolReplace, ToolInfo, ToolWeb,
+	ToolRunProj, ToolSchedule,
 }
 
 var (

@@ -69,7 +69,6 @@ const (
 	screenAgent
 	screenStats
 	screenLogs
-	screenEdit
 	screenProxy
 	screenArchive
 	screenUpdate
@@ -101,23 +100,21 @@ var menuItems = []menuItem{
 		desc: "运行环境 / 模型计量 / 前端窗口 / 桌面操纵；状态按绿黄红区分"},
 	{key: "2", title: "系统日志", group: "运行观测", screen: screenLogs,
 		desc: "统一日志屏：左右方向键切换 原始 / 警告 / 绘图 / 对话 / 生活 / 后勤"},
-	{key: "3", title: "编辑显示", group: "运行观测", screen: screenEdit,
-		desc: "文档库文件内容展示（触碰文件黄色高亮、改动片段绿色标记）；可运行文件按 R 直接运行"},
-	{key: "4", title: "数据导出", group: "运行观测", screen: screenDump,
+	{key: "3", title: "数据导出", group: "运行观测", screen: screenDump,
 		desc: "导出原始日志、推理实况、以及 Go 智能体上下文"},
 
-	{key: "5", title: "工具列表", group: "系统管理", screen: screenTools,
+	{key: "4", title: "工具列表", group: "系统管理", screen: screenTools,
 		desc: "扫描并展示全部 Go 智能体的工具与说明"},
-	{key: "6", title: "局域共享", group: "系统管理", screen: screenProxy,
+	{key: "5", title: "局域共享", group: "系统管理", screen: screenProxy,
 		desc: "WSS → WS 反向代理，支持 IP 选择与手机扫码接入"},
-	{key: "7", title: "打包归档", group: "系统管理", screen: screenArchive,
+	{key: "6", title: "打包归档", group: "系统管理", screen: screenArchive,
 		desc: "项目文件 7z 分卷打包，支持进度显示"},
-	{key: "8", title: "端口释放", group: "系统管理", screen: screenPorts,
+	{key: "7", title: "端口释放", group: "系统管理", screen: screenPorts,
 		desc: "扫描指定端口范围，终止占用进程并验证释放"},
 
-	{key: "9", title: "资源更新", group: "更新与退出", screen: screenUpdate,
+	{key: "8", title: "资源更新", group: "更新与退出", screen: screenUpdate,
 		desc: "发布更新包到 Gitee / 拉取更新包（主程序 + 指定文件夹，覆盖后自动重启）"},
-	{key: "a", title: "退出程序", group: "更新与退出", screen: screenMenu,
+	{key: "9", title: "退出程序", group: "更新与退出", screen: screenMenu,
 		desc: "关闭控制台并优雅停止全部子系统（感谢使用「星月智能 · 控制台」）"},
 }
 
@@ -151,10 +148,9 @@ type appModel struct {
 
 	spinner spinner.Model
 
-	// 系统日志：单一屏 + 分类（左右方向键切换）；编辑显示为纯展示层
+	// 系统日志：单一屏 + 分类（左右方向键切换）
 	logCat   LogSource
 	logView  logsState
-	editView editState
 	agent    agentState
 	stats    statsState
 	frontend frontendState
@@ -173,16 +169,15 @@ type appModel struct {
 // newAppModel 构建初始模型
 func newAppModel() appModel {
 	return appModel{
-		screen:   screenMenu,
-		spinner:  newSpinner(),
-		agent:    agentState{follow: true}, // 实况屏默认跟随最新轮次
-		logCat:   SourceRaw,
-		logView:  newLogsState(SourceRaw),
-		editView: newEditState(),
-		proxy:    newProxyState(),
-		archive:  newArchiveState(),
-		update:   newUpdateState(),
-		ports:    newPortsState(),
+		screen:  screenMenu,
+		spinner: newSpinner(),
+		agent:   agentState{follow: true}, // 实况屏默认跟随最新轮次
+		logCat:  SourceRaw,
+		logView: newLogsState(SourceRaw),
+		proxy:   newProxyState(),
+		archive: newArchiveState(),
+		update:  newUpdateState(),
+		ports:   newPortsState(),
 	}
 }
 
@@ -231,21 +226,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncViewMetrics()
 		return m, nil
 
-	case editRunMsg:
-		// 运行回执在顶层处理：用户运行期间切屏也照样收尾，避免「running 卡住」。
-		m.editView.running = false
-		if msg.err != nil {
-			m.setNotice("运行失败："+msg.path, true)
-			return m, nil
-		}
-		m.setNotice(msg.summary, false)
-		return m, nil
-
 	case statsTickMsg:
 		m.stats.snap = GetSnapshot()
-		// 每秒采样同时也是「编辑显示」文件清单/元数据的刷新时机：
-		// 旧实现这里直接 return，跳过了 syncViewMetrics，导致进入编辑屏后
-		// 必须等某条日志/流事件到达才会首次扫描文档库（表现为「好一会才加载出来」）。
 		m.syncViewMetrics()
 		return m, tickStats()
 
@@ -259,6 +241,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.frontend.busyLunar = false
 		case "crystal":
 			m.frontend.busyCrystal = false
+		case "library":
+			m.frontend.busyLibrary = false
 		}
 		if msg.err != nil {
 			m.frontend.msg = errStyle.Render("✗ 唤起失败: " + msg.err.Error())
@@ -316,8 +300,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateStats(msg)
 	case screenLogs:
 		return m.updateLogs(msg)
-	case screenEdit:
-		return m.updateEdit(msg)
 	case screenProxy:
 		return m.updateProxy(msg)
 	case screenArchive:
@@ -466,10 +448,6 @@ func (m *appModel) enterScreen(id screenID) tea.Cmd {
 		return tickStats()
 	case screenLogs:
 		m.logView.reset()
-	case screenEdit:
-		m.editView.reset()
-		// 进入编辑屏立即扫描一次文档库：首帧就要有文件，而不是等下一次 Tick/日志唤醒。
-		m.syncViewMetrics()
 	case screenProxy:
 		return m.proxyEnter()
 	case screenArchive:
@@ -716,8 +694,6 @@ func (m appModel) View() string {
 		return m.viewStats()
 	case screenLogs:
 		return m.viewSystemLogs()
-	case screenEdit:
-		return m.viewEdit()
 	case screenProxy:
 		return m.viewProxy()
 	case screenArchive:
@@ -745,8 +721,6 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 		return "运行状态", "", engineKeys(m.engine)
 	case screenLogs:
 		return "系统日志 · " + logCategoryTitles[m.logCat], "", logsKeys()
-	case screenEdit:
-		return "编辑显示", "", editKeys()
 	case screenProxy:
 		return "HTTPS 代理", proxyContext(m.proxy), proxyKeys(m.proxy)
 	case screenArchive:

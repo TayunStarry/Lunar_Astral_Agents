@@ -13,6 +13,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
 	"LunarSubsystem/LunarHarness/agents/ArchiveReader"
 	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
+	"LunarSubsystem/LunarHarness/agents/Creator"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
@@ -51,6 +52,10 @@ func WireTUIFrontendHooks() {
 		func() bool {
 			return ws.Instance != nil && ws.Instance.ChannelBusCount(ws.DefaultBusChannel) > 0
 		},
+		// 资源库探针：独立频道（?channel=library）的连接数
+		func() bool {
+			return ws.Instance != nil && ws.Instance.ChannelClientCount(libraryTerminalChannel) > 0
+		},
 		// 月华窗口唤起器（重启语义：存活重载页面，残留死窗口清理重建）
 		func() error {
 			return browser.RestartDesktopWindow(lunarWindowSpec())
@@ -58,6 +63,10 @@ func WireTUIFrontendHooks() {
 		// 琉璃窗口唤起器
 		func() error {
 			return browser.RestartDesktopWindow(crystalWindowSpec())
+		},
+		// 资源库窗口唤起器（未打开时创建，已打开时重载）
+		func() error {
+			return browser.RestartDesktopWindow(libraryWindowSpec())
 		},
 	)
 }
@@ -106,16 +115,6 @@ func WireTUIDataDumpHooks() {
 func WireTUIEngineHooks() {
 	// 「工具列表」屏：宿主汇总全部 Go 智能体的工具目录（控制台只负责展示）。
 	console.SetToolCatalogHook(buildToolCatalog)
-
-	// 「编辑显示」屏的 R 键运行入口：委托文件编辑智能体按默认运行时长执行。
-	// 控制台只发起运行与展示回执，不提供编辑、也不设置 / 显示运行时长。
-	console.SetFileRunHook(func(rel string) (string, error) {
-		outcome := FileEditor.RunProjectPath("/document/" + rel)
-		if !outcome.OK {
-			return outcome.Summary, errors.New(outcome.Summary)
-		}
-		return outcome.Summary, nil
-	})
 
 	// 哔哩观影的模型调用也进「推理实况」，用户不用只盯着日志干等。
 	// 计量回调让这些 Go 侧调用一并计入「运行状态」的模型计量。
@@ -198,6 +197,8 @@ func agentIDByRole(role string) string {
 		return "vision"
 	case strings.Contains(role, "文献"):
 		return "document_reader"
+	case strings.Contains(role, "归档操作"):
+		return "archive_ops"
 	case strings.Contains(role, "归档"):
 		return "archive_reader"
 	}
@@ -212,6 +213,7 @@ func buildToolCatalog() []agentinfo.Agent {
 	out = append(out, ArchiveReader.ToolCatalog()...)
 	out = append(out, ArchiveOps.ToolCatalog()...)
 	out = append(out, FileEditor.ToolCatalog()...)
+	out = append(out, Creator.ToolCatalog()...)
 	out = append(out, DialogueBridging.ToolCatalog()...)
 	out = append(out, WebSearch.ToolCatalog()...)
 	out = append(out, BilibiliViewer.ToolCatalog()...)

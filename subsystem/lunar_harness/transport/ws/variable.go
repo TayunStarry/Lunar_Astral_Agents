@@ -24,10 +24,6 @@ const (
 	SendBuffer = 256
 	// BroadcastBuffer 原始广播通道缓冲深度
 	BroadcastBuffer = 256
-	// InboundBuffer 入站通道缓冲深度
-	InboundBuffer = 1024
-	// SubscriberBuffer 单个入站订阅者缓冲深度
-	SubscriberBuffer = 256
 )
 
 // Instance 全局集线器实例（装配期赋值）

@@ -16,14 +16,13 @@ func NewHub() *Hub {
 	return &Hub{
 		Clients:    make(map[*WSClient]bool),
 		Bus:        make(chan BusFrame, BroadcastBuffer),
-		Inbound:    make(chan InboundFrame, InboundBuffer),
 		Register:   make(chan *WSClient),
 		Unregister: make(chan *WSClient),
 	}
 }
 
 // Run 启动集线器主循环（在 goroutine 中运行）。
-// 客户端注册/注销/原始广播/入站分发均在本循环内串行处理，保证顺序性。
+// 客户端注册/注销与原始广播均在本循环内串行处理，保证顺序性。
 func (h *Hub) Run() {
 	for {
 		select {
@@ -50,9 +49,6 @@ func (h *Hub) Run() {
 
 		case frame := <-h.Bus:
 			h.BroadcastBus(frame.Channel, frame.Data)
-
-		case frame := <-h.Inbound:
-			h.dispatchInbound(frame.Channel, frame.Data)
 		}
 	}
 }
@@ -131,50 +127,6 @@ func (h *Hub) BroadcastMessage(msgType string, data any) {
 		select {
 		case c.Send <- msgBytes:
 		case <-c.Done:
-		}
-	}
-}
-
-// ==================== 上行：入站分发 ====================
-
-// SubscribeInbound 注册入站消息订阅者（回调带频道）。
-// 每个订阅者持有独立缓冲通道与消费协程：互不阻塞，也不阻塞集线器主循环；
-// 通道满时丢弃该条入站消息（与旧的非阻塞入站语义一致）。
-func (h *Hub) SubscribeInbound(name string, fn func(channel string, data []byte)) {
-	sub := &inboundSub{
-		name: name,
-		ch:   make(chan InboundFrame, SubscriberBuffer),
-		fn:   fn,
-	}
-	h.subsMu.Lock()
-	h.subs = append(h.subs, sub)
-	h.subsMu.Unlock()
-
-	go func() {
-		for frame := range sub.ch {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						logger.Error("StudioHub", "入站订阅者 [%s] 处理异常: %v", sub.name, r)
-					}
-				}()
-				sub.fn(frame.Channel, frame.Data)
-			}()
-		}
-	}()
-}
-
-// dispatchInbound 把入站消息扇出到所有订阅者（非阻塞）
-func (h *Hub) dispatchInbound(channel string, message []byte) {
-	h.subsMu.RLock()
-	subs := make([]*inboundSub, len(h.subs))
-	copy(subs, h.subs)
-	h.subsMu.RUnlock()
-
-	for _, sub := range subs {
-		select {
-		case sub.ch <- InboundFrame{Channel: channel, Data: message}:
-		default:
 		}
 	}
 }
@@ -290,15 +242,11 @@ func (c *WSClient) readPump(h *Hub) {
 			}
 			return
 		}
-		// 控制帧（ping/pong）由 gorilla 内部处理，不会走到这里；仅数据帧继续进总线与入站。
+		// 控制帧（ping/pong）由 gorilla 内部处理，不会走到这里；仅数据帧继续进总线。
 		// 总线回流只服务总线参与者（bus=1）：引擎/工作室面板之间的帧按发送方频道投递，
-		// 消息终端等 bus=0 连接只上行给入站订阅者，不参与总线互投。
+		// 消息终端等 bus=0 连接不参与总线互投。
 		if c.bus {
 			h.Bus <- BusFrame{Channel: c.channel, Data: message}
-		}
-		select {
-		case h.Inbound <- InboundFrame{Channel: c.channel, Data: message}:
-		default:
 		}
 	}
 }

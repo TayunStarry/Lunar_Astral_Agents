@@ -41,20 +41,18 @@ const (
 // qq_send 仍只在 QQ 桥接器连接成功时加入枚举。
 func networkExploreToolCalls() []ToolCall {
 	subTools := []string{networkWebSearchTool, networkBilibiliTool, networkMutualForumTool}
-	summaryParts := []string{"web_search", "bilibili_viewer", "mutual_forum"}
 	descriptionParts := []string{
+		"bilibili_viewer=哔哩观影",
+		"mutual_forum=互助论坛",
 		"web_search=网页检索",
-		"bilibili_viewer=哔哩观影（安排下一轮去 B 站看视频，可用 instruction 引导选片方向）",
-		"mutual_forum=互助论坛（安排下一轮去论坛逛逛，可用 instruction 引导话题与行动）",
 	}
 	if DialogueBridging.Ready() {
 		subTools = append(subTools, networkQQSendTool)
-		summaryParts = append(summaryParts, "qq_send")
 		descriptionParts = append(descriptionParts, "qq_send=向指定 QQ 群/好友发送文本、图片或文件（图片/文件使用句柄）")
 	}
 	return []ToolCall{
 		functionTool(networkExploreToolName,
-			"联网探索：tool 选择 "+strings.Join(summaryParts, "、")+"，instruction 用自然语言说明任务；",
+			"使用自然语言去调度专用子智能体进行联网探索",
 			map[string]any{
 				"tool": map[string]any{
 					"type":        "string",

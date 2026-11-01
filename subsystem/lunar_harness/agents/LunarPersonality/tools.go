@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/locator"
 	"LunarSubsystem/LunarHarness/engine/memory"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
@@ -35,7 +35,7 @@ const (
 )
 
 var agentControlTools = []ToolCall{
-	functionTool(techniqueToolName, "技法创作：type 选择 painter、musician、screenshoter、file_editor，instruction 用自然语言说明任务；",
+	functionTool(techniqueToolName, "使用自然语言去调度专用子智能体进行技法创作",
 		map[string]any{
 			"type": map[string]any{
 				"type":        "string",
@@ -53,31 +53,28 @@ var agentControlTools = []ToolCall{
 		}, []string{"type", "instruction"}),
 }
 
-var memoryTools = []ToolCall{
-	functionTool("search_memory", "只读长期记忆与资源目录中已保存的标题/摘要：回忆用户说过什么、之前看过什么时用它。没有记录就直接说“不记得”，不要改用 use_resource 现场查看。",
+var fetchResourceTools = []ToolCall{
+	functionTool("fetch_resources", "对文件内容与长期记忆进行检索：type=memory 查记忆、type=handle 按句柄或文件路径读内容、type=list 列句柄或按名称/路径过滤。",
 		map[string]any{
-			"keywords": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "用自然语言描述，或直接给视频 URL / BV 号；提供 1-4 种不同表述能显著提高命中率"},
-			"exclude":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "结果正文命中任意一个词就丢弃"},
-			"topK":     map[string]any{"type": "number", "description": "希望返回的条目数，默认 8，最大 30"},
-		}, []string{"keywords"}),
-}
-
-var resourceTools = []ToolCall{
-	functionTool("use_resource", "按句柄读取或探查资源。规则：已有解析文本直接返回；文件直接返回原文；图片/动图返回描述；音频返回转写；视频给出视频印象；网页链接给出实时摘要。"+grammarCheatsheet(),
-		map[string]any{
-			"handles": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "资源句柄数组"},
-			"ask":     map[string]any{"type": "string", "description": "可选：交给解析智能体的自然语言需求"},
-		}, []string{"handles"}),
-	functionTool("browse_resources", "浏览资源目录或跨资源检索。不传 query 时按 kind 列出句柄 + 类型 + 标题/描述 + 内容状态；传 query 时在标题、解析文本、标签与段落标题中匹配。",
-		map[string]any{
-			"query": map[string]any{"type": "string", "description": "可选：搜索关键词"},
-			"kind":  map[string]any{"type": "string", "description": "可选：D 文件 / I 图片 / G 动图 / A 音频 / V 视频 / U 网页"},
-			"limit": map[string]any{"type": "number", "description": "返回条目数量上限"},
-		}, []string{}),
+			"type": map[string]any{
+				"type":        "string",
+				"enum":        []string{"memory", "handle", "list"},
+				"description": "memory=检索长期记忆；handle=按句柄或文件路径读取文件内容；list=列出句柄",
+			},
+			"query": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "string"},
+				"description": "memory 填 1-4 个搜索关键词；handle 填句柄或文件名 / 路径；list 留空列全部，填类型码 D/I/G/A/V/U 只列该类型，填文件名 / 路径则按名称与路径过滤",
+			},
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "返回结果数量，默认 5",
+			},
+		}, []string{"type"}),
 }
 
 var scheduleTools = []ToolCall{
-	functionTool("schedule", "计划表综合工具：创建、编辑、删除与查询计划项。查询支持关键词数组与时间范围。",
+	functionTool("schedule", "创建、编辑、删除与查询计划项",
 		map[string]any{
 			"action":   map[string]any{"type": "string", "enum": []string{"create", "edit", "delete", "query"}, "description": "要执行的动作"},
 			"id":       map[string]any{"type": "string", "description": "计划项ID（edit/delete 必填）"},
@@ -167,7 +164,7 @@ func dispatchPainter(description, referenceTag string) ToolResult {
 	if tag := strings.TrimSpace(referenceTag); tag != "" {
 		handle, source, desc, ok := resolveImageRef(tag)
 		if !ok {
-			return ToolResult{Text: "绘画任务调度失败：图片句柄 " + tag + " 不存在，请用 browse_resources（kind=\"I\"）查看可引用的图片句柄后重试"}
+			return ToolResult{Text: "绘画任务调度失败：图片句柄 " + tag + " 不存在，请用 fetch_resources（type=\"list\", query=[\"I\"]）查看可引用的图片句柄后重试"}
 		}
 		if source == "" {
 			note := ""
@@ -205,19 +202,19 @@ func dispatchScreenshoter(requirement string) ToolResult {
 
 // ==== 记忆检索 ====
 
-func handleSearchMemory(args map[string]any) ToolResult {
-	keywords := stringListArg(args, "keywords")
+// fetchMemory 记忆模式：只检索长期记忆库，不混入资源目录或句柄查询。
+func fetchMemory(keywords []string, limit int) ToolResult {
 	if len(keywords) == 0 {
-		return ToolResult{Text: "记忆检索失败：keywords 不能为空"}
+		return ToolResult{Text: "fetch_resources(memory) 失败：query 需要 1-4 个搜索关键词"}
 	}
-	topK := int(numberArg(args, "topK"))
+	topK := limit
 	if topK <= 0 {
-		topK = 8
+		topK = 5
 	}
 	if topK > 30 {
 		topK = 30
 	}
-	exclude := stringListArg(args, "exclude")
+	exclude := []string(nil)
 	if !ensureMemoryReady() {
 		return ToolResult{Text: "记忆库未就绪，无法检索。请稍后再试一次。"}
 	}
@@ -234,31 +231,20 @@ func handleSearchMemory(args map[string]any) ToolResult {
 	if len(hits) > topK {
 		hits = hits[:topK]
 	}
-	videoSummaries := findVideoSummaries(extractVideoKeys(keywords))
-	resourceMemories := findResourceMemories(keywords)
-	if len(hits) == 0 && len(videoSummaries) == 0 && len(resourceMemories) == 0 {
-		return ToolResult{Text: "记忆库与资源目录中都没有相关记录, 可以换一种表述再试一次；"}
+	if len(hits) == 0 {
+		return ToolResult{Text: "记忆库中没有相关记录，可以换一种表述再试一次；"}
 	}
-	sections := make([]string, 0)
-	if len(hits) > 0 {
-		lines := make([]string, 0, len(hits))
-		for i, hit := range hits {
-			meta := fmt.Sprintf("角色=%s｜时间=%s｜相关度=%.3f", roleLabel(hit.Role), formatMemoryTime(hit.Timestamp), hit.Similarity)
-			lines = append(lines, fmt.Sprintf("[%d] %s\n%s", i+1, meta, previewText(hit.Content, 400)))
-		}
-		viaFallback := ""
-		if len(fallbackHits) > 0 && len(vectorHits) < topK {
-			viaFallback = fmt.Sprintf("（语义检索 %d 条 + 关键词补足 %d 条）", len(vectorHits), len(fallbackHits))
-		}
-		sections = append(sections, fmt.Sprintf("检索到 %d 条相关记忆%s：\n%s", len(hits), viaFallback, strings.Join(lines, "\n\n")))
+	lines := make([]string, 0, len(hits))
+	for i, hit := range hits {
+		meta := fmt.Sprintf("角色=%s｜时间=%s｜相关度=%.3f", roleLabel(hit.Role), formatMemoryTime(hit.Timestamp), hit.Similarity)
+		lines = append(lines, fmt.Sprintf("[%d] %s\n%s", i+1, meta, previewText(hit.Content, 400)))
 	}
-	if len(videoSummaries) > 0 {
-		sections = append(sections, fmt.Sprintf("已看视频摘要 %d 条（月华自己刷B站时留下的观看理解）：\n%s", len(videoSummaries), strings.Join(videoSummaries, "\n\n")))
+	viaFallback := ""
+	if len(fallbackHits) > 0 && len(vectorHits) < topK {
+		viaFallback = fmt.Sprintf("（语义检索 %d 条 + 关键词补足 %d 条）", len(vectorHits), len(fallbackHits))
 	}
-	if len(resourceMemories) > 0 {
-		sections = append(sections, fmt.Sprintf("资源目录中已保存的内容记忆 %d 条：\n%s", len(resourceMemories), strings.Join(resourceMemories, "\n\n")))
-	}
-	text := strings.Join(sections, "\n\n") + "\n\n只依据以上原文回答；原文不足以回答用户问题时，直接说明不记得/没有找到相关信息，不要编造，也不要为了补记忆而调用 use_resource。"
+	text := fmt.Sprintf("检索到 %d 条相关记忆%s：\n%s", len(hits), viaFallback, strings.Join(lines, "\n\n"))
+	text += "\n\n只依据以上原文回答；原文不足以回答用户问题时，直接说明不记得/没有找到相关信息，不要编造，也不要改用 handle 模式现场读取。"
 	return ToolResult{Text: text}
 }
 
@@ -290,83 +276,6 @@ func formatMemoryTime(timestamp int64) string {
 
 func previewText(text string, limit int) string {
 	return truncateRunes(text, limit)
-}
-
-func extractVideoKeys(keywords []string) []string {
-	found := make([]string, 0)
-	seen := map[string]bool{}
-	for _, keyword := range keywords {
-		trimmed := strings.TrimSpace(keyword)
-		lower := strings.ToLower(trimmed)
-		// 用户直接贴视频 URL 时，把 URL 本身也作为查询键（短链/带参数的 URL 也能按原文匹配）
-		if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.Contains(lower, "b23.tv/") {
-			if trimmed != "" && !seen[trimmed] {
-				seen[trimmed] = true
-				found = append(found, trimmed)
-			}
-		}
-		matches := regexpVideoKey.FindAllString(trimmed, -1)
-		for _, match := range matches {
-			upper := strings.ToUpper(match)
-			if !seen[upper] {
-				seen[upper] = true
-				found = append(found, match)
-			}
-		}
-	}
-	return found
-}
-
-func findVideoSummaries(keys []string) []string {
-	if len(keys) == 0 {
-		return nil
-	}
-	found := make([]string, 0)
-	seenText := map[string]bool{}
-	for _, res := range resource.RecallParsedText(keys, 8) {
-		text := strings.TrimSpace(res.ParseText)
-		if text == "" || seenText[text] {
-			continue
-		}
-		seenText[text] = true
-		found = append(found, "[已看视频摘要] "+res.URL+"\n"+previewText(text, 400))
-	}
-	return found
-}
-
-var resourceMemoryHandleRegex = regexp.MustCompile(resource.HandlePattern)
-
-// findResourceMemories 只读资源目录中已保存的标题与摘要，不触发任何观看/搜索。
-func findResourceMemories(keywords []string) []string {
-	seen := map[string]bool{}
-	out := make([]string, 0)
-	add := func(handle, title, summary string) {
-		handle = strings.TrimSpace(handle)
-		summary = strings.TrimSpace(summary)
-		if handle == "" || summary == "" || seen[handle] {
-			return
-		}
-		seen[handle] = true
-		if strings.TrimSpace(title) == "" {
-			title = handle
-		}
-		out = append(out, fmt.Sprintf("[%s] %s\n%s", handle, title, previewText(summary, 400)))
-	}
-	for _, keyword := range keywords {
-		for _, match := range resourceMemoryHandleRegex.FindAllString(keyword, -1) {
-			if res, ok := resource.Lookup(match); ok {
-				title := res.Title
-				if title == "" {
-					title = res.Name
-				}
-				add(res.Handle, title, res.ParseText)
-			}
-		}
-		for _, hit := range searchResources(keyword, "", 5) {
-			add(hit.Handle, hit.Title, hit.Summary)
-		}
-	}
-	return out
 }
 
 func vectorSearch(keywords []string, topK int, exclude []string) []MemorySearchHit {
@@ -479,26 +388,73 @@ func keywordFallback(keywords []string, topK int, exclude []string, known map[st
 
 // ==== 资源工具 ====
 
-func handleUseResource(args map[string]any) ToolResult {
-	handles := stringListArg(args, "handles")
-	if len(handles) == 0 {
-		if single := strings.TrimSpace(stringArg(args, "handle")); single != "" {
-			handles = []string{single}
-		}
+// handleFetchResources 统一资源入口：memory / handle / list。
+func handleFetchResources(args map[string]any) ToolResult {
+	mode := strings.ToLower(strings.TrimSpace(stringArg(args, "type")))
+	query := stringListArg(args, "query")
+	limit := int(numberArg(args, "limit"))
+	if limit <= 0 {
+		limit = 5
 	}
-	if len(handles) == 0 {
-		return ToolResult{Text: "请提供资源句柄，例如 [\"@D.003\"]；需要解析智能体协助时把需求写进 ask 字段"}
+	switch mode {
+	case "memory":
+		return fetchMemory(query, limit)
+	case "handle":
+		return fetchHandles(query, limit)
+	case "list":
+		return fetchList(query, limit)
+	default:
+		return ToolResult{Text: "fetch_resources 失败：type 只能取 memory / handle / list"}
 	}
-	ask := strings.TrimSpace(stringArg(args, "ask"))
+}
 
+// fetchHandles 句柄模式：按句柄返回完整信息与可读内容。
+func fetchHandles(handles []string, limit int) ToolResult {
+	if len(handles) == 0 {
+		return ToolResult{Text: "fetch_resources(handle) 失败：query 需要句柄，例如 [\"@D.003\"]"}
+	}
+	if limit > 0 && len(handles) > limit {
+		handles = handles[:limit]
+	}
 	blocks := make([]string, 0)
 	missing := make([]string, 0)
 	for _, raw := range handles {
-		if block := readHandleBlock(raw, ask, &missing); block != "" {
+		if block := readHandleBlock(raw, "", &missing); block != "" {
 			blocks = append(blocks, block)
 		}
 	}
 	return finishResourceBlocks(blocks, missing)
+}
+
+// fetchList 列表模式：query 为空列出全部；首项为类型码时只列该类型；
+// 其余项按文件名 / 纯文件夹名 / 路径过滤（多项取并集）。
+func fetchList(query []string, limit int) ToolResult {
+	kind := ""
+	rest := query
+	if len(query) > 0 {
+		if code := strings.ToUpper(strings.TrimSpace(query[0])); isKnownKind(code) {
+			kind = code
+			rest = query[1:]
+		}
+	}
+	keywords := make([]string, 0, len(rest))
+	for _, raw := range rest {
+		if keyword := normalizeListKeyword(raw); keyword != "" {
+			keywords = append(keywords, keyword)
+		}
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if len(keywords) == 0 {
+		return ToolResult{Text: listResourcesText(kind, limit)}
+	}
+	return ToolResult{Text: listResourcesTextMatching(kind, keywords, limit)}
+}
+
+// normalizeListKeyword 归一化过滤词：去空白、反斜杠转正斜杠、去首尾路径分隔符
+func normalizeListKeyword(raw string) string {
+	return strings.Trim(strings.ReplaceAll(strings.TrimSpace(raw), `\`, "/"), "/")
 }
 
 // readHandleBlock 单个句柄的取回 / 解读
@@ -507,6 +463,15 @@ func handleUseResource(args map[string]any) ToolResult {
 // audio_transcriber / WebSearch 直驱 / B 站直驱。
 func readHandleBlock(raw, ask string, missing *[]string) string {
 	parsed := parseHandle(raw)
+	if parsed == nil {
+		// 非句柄输入：复用统一文件定位器，按文件名 / 路径定位后再登记句柄
+		match, resolveErr := locator.ResolveToHandle(raw, nil)
+		if resolveErr != nil {
+			*missing = append(*missing, raw+"（"+resolveErr.Error()+"）")
+			return ""
+		}
+		parsed = parseHandle(match.Handle)
+	}
 	if parsed == nil {
 		*missing = append(*missing, raw)
 		return ""
@@ -735,7 +700,7 @@ func kindFromNormalized(handle string) string {
 
 func finishResourceBlocks(blocks, missing []string) ToolResult {
 	if len(blocks) == 0 {
-		return ToolResult{Text: "取回失败：" + strings.Join(missing, "、") + " —— " + handleInvalidNotice + "。请先用 browse_resources 确认可用句柄"}
+		return ToolResult{Text: "取回失败：" + strings.Join(missing, "、") + " —— " + handleInvalidNotice + "。请先用 fetch_resources（type=\"list\"）确认可用句柄"}
 	}
 	text := strings.Join(blocks, "\n\n---\n\n")
 	if len(missing) > 0 {
@@ -744,33 +709,18 @@ func finishResourceBlocks(blocks, missing []string) ToolResult {
 	return ToolResult{Text: text}
 }
 
-func handleBrowseResources(args map[string]any) ToolResult {
-	kind := strings.ToUpper(strings.TrimSpace(stringArg(args, "kind")))
-	if !isKnownKind(kind) && kind != "" {
-		return ToolResult{Text: "类型码无效：" + kind + "。可用类型码：D 文件 / I 图片 / G 动图 / A 音频 / V 视频 / U 网页"}
-	}
-	query := strings.TrimSpace(stringArg(args, "query"))
-	limit := int(numberArg(args, "limit"))
-	if query != "" {
-		if limit <= 0 {
-			limit = 10
-		}
-		if limit > 50 {
-			limit = 50
-		}
-		return ToolResult{Text: searchResourcesText(query, kind, limit)}
-	}
-	if limit <= 0 {
-		limit = 30
-	}
-	if limit > 200 {
-		limit = 200
-	}
-	return ToolResult{Text: listResourcesText(kind, limit)}
+func listResourcesText(kind string, limit int) string {
+	return renderResourceList(listResources(kind, limit), "当前可用资源", "资源目录为空：当前没有已收录的资源")
 }
 
-func listResourcesText(kind string, limit int) string {
-	entries := listResources(kind, limit)
+// listResourcesTextMatching 过滤模式：按文件名 / 路径列出匹配的句柄
+func listResourcesTextMatching(kind string, keywords []string, limit int) string {
+	hint := "没有匹配「" + strings.Join(keywords, "、") + "」的资源；可用 fetch_resources（type=\"list\"）查看全部目录"
+	return renderResourceList(listResourcesMatching(kind, keywords, limit), "匹配的资源", hint)
+}
+
+// renderResourceList 目录统一格式化：自动清理失效句柄，输出句柄 / 类型 / 标题 / 摘要
+func renderResourceList(entries []ResourceEntry, head, emptyHint string) string {
 	valid := make([]ResourceEntry, 0, len(entries))
 	purged := 0
 	for _, entry := range entries {
@@ -787,7 +737,7 @@ func listResourcesText(kind string, limit int) string {
 		if purged > 0 {
 			note = fmt.Sprintf("（已自动清理 %d 条源文件丢失的失效句柄）", purged)
 		}
-		return "资源目录为空：当前没有已收录的资源" + note + "。"
+		return emptyHint + note + "。"
 	}
 	stats := resourceStatistics()
 	lines := make([]string, 0, len(valid))
@@ -810,39 +760,9 @@ func listResourcesText(kind string, limit int) string {
 	if stats != nil {
 		statsNote = fmt.Sprintf("；目录总计 %d 条 / %s", stats.Total, formatBytes(stats.Bytes))
 	}
-	head := fmt.Sprintf("当前可用资源（共 %d 条，按收录时间倒序，越靠前越新%s%s）：", len(valid), purgeNote, statsNote)
-	tail := "\n" + grammarCheatsheet() + "。需要内容时用 use_resource 按句柄取回。"
-	return head + "\n" + strings.Join(lines, "\n") + tail
-}
-
-func searchResourcesText(query, kind string, limit int) string {
-	hits := searchResources(query, kind, limit)
-	if len(hits) == 0 {
-		return "未找到与「" + query + "」相关的资源。可用 browse_resources 查看全部资源。"
-	}
-	lines := make([]string, 0, len(hits))
-	for _, hit := range hits {
-		line := fmt.Sprintf("%s [%s] %s", hit.Handle, kindLabel(hit.Kind), hit.Title)
-		if hit.Summary != "" {
-			line += "：" + previewText(strings.Join(strings.Fields(hit.Summary), " "), 120)
-		}
-		if len(hit.Sections) > 0 {
-			line += "\n  命中章节："
-			for i, section := range hit.Sections {
-				if i >= 5 {
-					break
-				}
-				parsed := parseHandle(hit.Handle)
-				anchor := hit.Handle
-				if parsed != nil {
-					anchor = sectionHandle(parsed.Kind, parsed.Seq, section.Ordinal)
-				}
-				line += fmt.Sprintf("\n    %s %s（第 %d-%d 行）", anchor, section.Path, section.LineStart, section.LineEnd)
-			}
-		}
-		lines = append(lines, line)
-	}
-	return fmt.Sprintf("与「%s」相关的资源（共 %d 条）：\n%s\n\n下一步：用 use_resource 按上述句柄取回正文", query, len(hits), strings.Join(lines, "\n"))
+	header := fmt.Sprintf("%s（共 %d 条，按收录时间倒序，越靠前越新%s%s）：", head, len(valid), purgeNote, statsNote)
+	tail := "\n需要内容时用 fetch_resources（type=\"handle\", query=[句柄]）取回。"
+	return header + "\n" + strings.Join(lines, "\n") + tail
 }
 
 // ==== 计划表工具 ====
@@ -962,27 +882,9 @@ func scheduleDelete(args map[string]any) ToolResult {
 // registerDialogueTools 注册对话者可用的全部工具
 func registerDialogueTools() {
 	registerTool(techniqueToolName, handleDispatchTechnique)
-	registerTool("search_memory", handleSearchMemory)
-	registerTool("use_resource", handleUseResource)
-	registerTool("browse_resources", handleBrowseResources)
-	registerTool("list_resources", handleBrowseResources)
-	registerTool("search_resources", func(args map[string]any) ToolResult {
-		return ToolResult{Text: searchResourcesText(stringArg(args, "query"), stringArg(args, "kind"), 10)}
-	})
-	registerTool("read_resource", func(args map[string]any) ToolResult {
-		if stringArg(args, "handle") == "" {
-			return ToolResult{Text: "请提供资源句柄"}
-		}
-		return handleUseResource(args)
-	})
+	registerTool("fetch_resources", handleFetchResources)
 	registerTool("schedule", handleScheduleTool)
 	registerTool(networkExploreToolName, handleNetworkExplore)
 	registerTool(crystalToolName, handleUseTheProgram)
 	logger.Info(lunarCoreModule, "[工具] 对话者工具已注册")
-}
-
-var regexpVideoKey = mustVideoKeyRegexp()
-
-func mustVideoKeyRegexp() *regexp.Regexp {
-	return regexp.MustCompile(`BV[0-9A-Za-z]{10}`)
 }

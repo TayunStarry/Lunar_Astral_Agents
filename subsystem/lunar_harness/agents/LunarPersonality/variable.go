@@ -107,26 +107,6 @@ func init() {
 	}
 }
 
-// ==== 智能体 3D 位置 ====
-
-var (
-	// agentPosition 缓存的智能体最新 3D 位置
-	agentPosition AgentPositionData
-	// agentPositionMu 保护 agentPosition
-	agentPositionMu sync.RWMutex
-)
-
-// ==== 动画列表缓存 ====
-
-var (
-	// animMu 保护动画列表缓存
-	animMu sync.RWMutex
-	// animActions 当前可用动作
-	animActions []ActionDefinition
-	// animUpdatedAt 最近更新时间（毫秒）
-	animUpdatedAt int64
-)
-
 // ==== LTPX 工具链缓存 ====
 
 var (

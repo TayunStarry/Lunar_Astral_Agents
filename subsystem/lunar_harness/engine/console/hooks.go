@@ -9,15 +9,18 @@ import (
 )
 
 // SetFrontendHooks 注入前端管理能力（宿主在 TUI 启动前调用）：
-//   - lunarProbe / crystalProbe：在线探针（nil 表示未知状态）
-//   - lunarRelaunch / crystalRelaunch：窗口唤起器（nil 表示不支持重启）
-func SetFrontendHooks(lunarProbe, crystalProbe func() bool, lunarRelaunch, crystalRelaunch func() error) {
+//   - lunarProbe / crystalProbe / libraryProbe：在线探针（nil 表示未知状态）
+//   - lunarRelaunch / crystalRelaunch / libraryRelaunch：窗口唤起器（nil 表示不支持重启）
+func SetFrontendHooks(lunarProbe, crystalProbe, libraryProbe func() bool,
+	lunarRelaunch, crystalRelaunch, libraryRelaunch func() error) {
 	frontendStatusMu.Lock()
 	defer frontendStatusMu.Unlock()
 	statusLunar = lunarProbe
 	statusCrystal = crystalProbe
+	statusLibrary = libraryProbe
 	relaunchLunar = lunarRelaunch
 	relaunchCrystal = crystalRelaunch
+	relaunchLibrary = libraryRelaunch
 }
 
 // ==== 更新包配置注入 ====
@@ -108,33 +111,6 @@ func DumpContext(target string) (DataDumpResult, error) {
 		return DataDumpResult{}, errNotWired
 	}
 	return hook(target)
-}
-
-// ==== 文件运行入口（「编辑显示」屏） ====
-
-var (
-	// fileRunMu 保护文件运行钩子
-	fileRunMu sync.RWMutex
-	// fileRunHook 由宿主注入：按相对 documents 的路径运行项目文件，返回操作简述
-	fileRunHook func(rel string) (string, error)
-)
-
-// SetFileRunHook 注入「运行当前文件」能力（宿主在 TUI 启动前调用；nil 表示不支持）。
-func SetFileRunHook(hook func(rel string) (string, error)) {
-	fileRunMu.Lock()
-	defer fileRunMu.Unlock()
-	fileRunHook = hook
-}
-
-// RunFile 运行指定文档（rel 为相对 documents 的路径），返回操作简述。
-func RunFile(rel string) (string, error) {
-	fileRunMu.RLock()
-	hook := fileRunHook
-	fileRunMu.RUnlock()
-	if hook == nil {
-		return "", errNotWired
-	}
-	return hook(rel)
 }
 
 // ==== Go 智能体工具目录 ====

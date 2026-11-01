@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.305.1025",
+    "version": "2026.305.2156",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -788,6 +788,95 @@
         }
       }
     },
+    "/library/": {
+      "get": {
+        "summary": "资源库静态前端（内嵌 clients/library 资源，需手动打开）",
+        "description": "资源库静态前端（内嵌 clients/library 资源，需手动打开）",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/library/api/delete": {
+      "post": {
+        "summary": "资源库删除文件（同步清理句柄）",
+        "description": "资源库删除文件（同步清理句柄）",
+        "operationId": "library.DeleteHandler",
+        "x-handler": "library.DeleteHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/library/api/edits": {
+      "get": {
+        "summary": "资源库文件状态与最近 10 次 AI 操作",
+        "description": "资源库文件状态与最近 10 次 AI 操作",
+        "operationId": "library.EditsHandler",
+        "x-handler": "library.EditsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/library/api/meta": {
+      "get": {
+        "summary": "资源库文件详情（入库时间 / 句柄 / 引用积分 / 描述状态）",
+        "description": "资源库文件详情（入库时间 / 句柄 / 引用积分 / 描述状态）",
+        "operationId": "library.MetaHandler",
+        "x-handler": "library.MetaHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/library/api/move": {
+      "post": {
+        "summary": "资源库移动（限 4 个存储根）",
+        "description": "资源库移动（限 4 个存储根）",
+        "operationId": "library.MoveHandler",
+        "x-handler": "library.MoveHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/library/api/rename": {
+      "post": {
+        "summary": "资源库重命名（限 4 个存储根）",
+        "description": "资源库重命名（限 4 个存储根）",
+        "operationId": "library.RenameHandler",
+        "x-handler": "library.RenameHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/library/api/tree": {
+      "get": {
+        "summary": "资源库递归清单（documents / audios / multimedia / unknown）",
+        "description": "资源库递归清单（documents / audios / multimedia / unknown）",
+        "operationId": "library.TreeHandler",
+        "x-handler": "library.TreeHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
     "/load/application": {
       "post": {
         "summary": "加载应用",
@@ -945,6 +1034,17 @@
         "description": "通用页面操作智能体脚本（Mini-LTP）",
         "operationId": "CrystalPersonality.MiniLTPAgentHandler",
         "x-handler": "CrystalPersonality.MiniLTPAgentHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/mobile/": {
+      "get": {
+        "summary": "月华移动端静态前端（内嵌 clients/mobile 资源）",
+        "description": "月华移动端静态前端（内嵌 clients/mobile 资源）",
         "responses": {
           "200": {
             "description": "成功"

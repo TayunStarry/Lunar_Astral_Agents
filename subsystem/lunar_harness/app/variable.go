@@ -19,6 +19,10 @@ const (
 	WindowLunar = "lunar"
 	// WindowCrystal 琉璃桌面窗口
 	WindowCrystal = "crystal"
+	// WindowLibrary 资源库窗口（按需弹出，也用于控制台前端窗口列表）
+	WindowLibrary = "library"
+	// libraryTerminalChannel 资源库前端的 WebSocket 频道（在线探针依据）
+	libraryTerminalChannel = "library"
 )
 
 // ==== WebSocket 总线频道（与前端页面声明的 channel 参数对齐） ====

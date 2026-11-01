@@ -159,7 +159,7 @@ func (r *runner) focusTopVideo() {
 
 // directVideoLink 从指令里提取指定观看的 B 站视频。
 //
-// use_resource 取到「从未看过、也没有摘要」的 B 站链接时会安排强制观影事件，
+// fetch_resources 取到「从未看过、也没有摘要」的 B 站链接时会安排强制观影事件，
 // 指令里带着该视频地址；这里按 BV 号直接观看，而不是把它当搜索关键词再随机选片。
 func directVideoLink(instruction string) (videoLink, bool) {
 	bvid := bvidRe.FindString(instruction)

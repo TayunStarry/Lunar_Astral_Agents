@@ -95,7 +95,7 @@ async function handleSend() {
         }
         // ---- 组装引用与主用户文本（一次导入/引用只显示一个气泡）----
         // 文档引用统一为规范句柄 @D.003：文件在 Go 侧或前端上传后入库时即已分配，
-        // 消息里只传句柄，正文由月华按需用 read_resource 读取。
+        // 消息里只传句柄，正文由月华按需用 fetch_resources 读取。
         const handleRefs = [
             ...referencedFiles,
             ...documentRefs.map(item => item.handle)

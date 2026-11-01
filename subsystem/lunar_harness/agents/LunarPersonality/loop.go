@@ -125,7 +125,7 @@ func pullContext() []PostMessage {
 		return nil
 	}
 	// 进入上下文前统一资源化：图片→缩影链接；动图/视频/音频/URL/BV→句柄文本；
-	// 文件→句柄。资源在接入阶段已完成下载、校验与句柄绑定，解析留到 use_resource。
+	// 文件→句柄。资源在接入阶段已完成下载、校验与句柄绑定，解析留到 fetch_resources。
 	return ResourcesConversionHandle(messages)
 }
 
@@ -195,12 +195,8 @@ func runDialogueTurn(incoming []PostMessage) {
 		replyText = cleaned
 	}
 
+	// 动作由前端引擎根据推送消息自行匹配；对话链只负责表情包
 	if len(parsed.ActionBlocks) > 0 {
-		query := strings.TrimSpace(strings.Join(parsed.ActionBlocks, " "))
-		if query == "" {
-			query = cleaned
-		}
-		performMatchedAction(query)
 		if sticker := queryEmotionSticker(cleaned); sticker != "" {
 			pushAssistantImage([]string{sticker}, true)
 		}

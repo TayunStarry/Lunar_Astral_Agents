@@ -86,7 +86,7 @@ func dumpCoreContext(includeImages bool) (any, error) {
 	sections["memory"] = map[string]any{
 		"label":         "记忆入库与检索",
 		"message_count": 0,
-		"note":          "记忆者不是独立智能体：它只负责写入长期记忆与生成检索摘要，能力通过对话者的 search_memory 工具暴露",
+		"note":          "记忆者不是独立智能体：它只负责写入长期记忆与生成检索摘要，能力通过对话者的 fetch_resources 工具暴露",
 	}
 
 	return map[string]any{

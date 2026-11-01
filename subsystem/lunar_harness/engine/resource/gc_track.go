@@ -15,6 +15,16 @@ import (
 	"time"
 )
 
+// pointsOf 读取句柄的调用积分（无记录返回 0）。
+func (d *store) pointsOf(handle string) int {
+	if handle == "" {
+		return 0
+	}
+	var points int
+	_ = d.db.QueryRow(`SELECT call_points FROM gc_media_score WHERE handle = ?`, handle).Scan(&points)
+	return points
+}
+
 // takeFreeOrNextSeqLocked 优先从 GC 表 1 的空闲池取句柄，池空时分配新序号。
 // 调用方须持有 archiveMu。
 func (d *store) takeFreeOrNextSeqLocked(kind string) (seq int64, handle string, err error) {

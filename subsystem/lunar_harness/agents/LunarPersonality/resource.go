@@ -174,6 +174,19 @@ func listResources(kind string, limit int) []ResourceEntry {
 	return entries
 }
 
+// listResourcesMatching 按文件名 / 路径过滤资源目录
+func listResourcesMatching(kind string, keywords []string, limit int) []ResourceEntry {
+	if limit <= 0 {
+		limit = 50
+	}
+	entries, err := resource.ListMatching(kind, keywords, limit)
+	if err != nil {
+		logger.Warn(lunarCoreModule, "[资源] 过滤目录失败: %v", err)
+		return nil
+	}
+	return entries
+}
+
 // searchResources 跨资源搜索
 func searchResources(query, kind string, limit int) []ResourceSearchHit {
 	query = strings.TrimSpace(query)

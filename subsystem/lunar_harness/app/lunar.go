@@ -56,7 +56,7 @@ func shutdownLunar() {
 	llama.Close()
 }
 
-// lunarStaticRoot 月华消息终端的静态资源根（clients/lunar 子树，mobile/ 即月华移动端）
+// lunarStaticRoot 月华消息终端的静态资源根（clients/lunar 子树）。
 func lunarStaticRoot() http.FileSystem {
 	return clients.LunarFS()
 }

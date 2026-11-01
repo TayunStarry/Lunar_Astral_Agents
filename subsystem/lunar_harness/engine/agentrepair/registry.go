@@ -3,9 +3,9 @@ package agentrepair
 // registry.go 注册与调用入口。
 
 import (
-	"slices"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
 

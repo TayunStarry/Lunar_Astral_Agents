@@ -15,12 +15,8 @@ func (s *session) executeTool(ctx context.Context, name string, args map[string]
 	switch name {
 	case toolWebSearch:
 		return s.webSearch(args)
-	case toolMemorySearch:
-		return s.memorySearch(ctx, args)
-	case toolHandleSearch:
-		return handleSearch(args)
-	case toolHandleRead:
-		return handleRead(args)
+	case toolFetchResources:
+		return s.fetchResources(ctx, args)
 	case toolFileList:
 		return fileList(args)
 	case toolFileRead:

@@ -13,11 +13,15 @@
             overflow: hidden;
             background: transparent;
             font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            overscroll-behavior: none;
         }
 
         #live2d-container {
             position: absolute;
             inset: 0;
+            overflow: hidden;
         }
 
         #live2d-canvas {
@@ -25,6 +29,37 @@
             width: 100%;
             height: 100%;
             touch-action: none;
+            cursor: grab;
+        }
+
+        #live2d-canvas.dragging {
+            cursor: grabbing;
+        }
+
+        /* 操作提示：交互时短暂出现，避免长期遮挡画面 */
+        #view-hint {
+            position: fixed;
+            left: 50%;
+            bottom: 12px;
+            transform: translateX(-50%) translateY(6px);
+            padding: 4px 12px;
+            border-radius: 999px;
+            background: rgba(15, 17, 24, 0.52);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            color: rgba(244, 244, 245, 0.88);
+            font-size: 11px;
+            line-height: 1.6;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            z-index: 4;
+        }
+
+        #view-hint.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
         }
 
         /* 加载遮罩 */
@@ -72,6 +107,9 @@
         <canvas id="live2d-canvas" tabindex="0"></canvas>
     </div>
 
+    <!-- 操作提示 -->
+    <div id="view-hint">拖动移动 · 滚轮 / 双指缩放 · 双击或中键复位</div>
+
     <!-- 加载遮罩 -->
     <div id="loading-mask">
         <span class="spinner"></span>
@@ -84,6 +122,8 @@
     <script src="./vendor/pixi-live2d-display-cubism4.min.js"></script>
     <!-- 统一通信客户端（与基岩引擎同款） -->
     <script src="/reliance/ws_bridge.js"></script>
+    <!-- 前端动作匹配（消息推送 → 嵌入模型 → 动作名） -->
+    <script src="/reliance/action_matcher.js"></script>
     <!-- 引擎入口（ES Module：禁止 import pixi，须使用上面的全局 window.PIXI） -->
     <script type="module" src="./engine.js"></script>
 </body>
