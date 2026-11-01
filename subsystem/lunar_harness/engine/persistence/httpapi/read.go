@@ -86,12 +86,12 @@ func parseRange(rangeHeader string, size int64) (start, end int64, ok bool) {
 	if idx := strings.Index(spec, ","); idx >= 0 {
 		spec = spec[:idx]
 	}
-	dashIdx := strings.Index(spec, "-")
-	if dashIdx < 0 {
+	before, after, ok := strings.Cut(spec, "-")
+	if !ok {
 		return 0, 0, false
 	}
-	startStr := strings.TrimSpace(spec[:dashIdx])
-	endStr := strings.TrimSpace(spec[dashIdx+1:])
+	startStr := strings.TrimSpace(before)
+	endStr := strings.TrimSpace(after)
 	if startStr == "" {
 		// 后缀范围：bytes=-N 表示最后 N 字节
 		suffix, err := strconv.ParseInt(endStr, 10, 64)

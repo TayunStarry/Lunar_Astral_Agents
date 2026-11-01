@@ -263,11 +263,11 @@ func decodeDataURI(raw string) ([]byte, error) {
 	if !strings.HasPrefix(raw, "data:") {
 		return nil, fmt.Errorf("非法的 data URI")
 	}
-	comma := strings.Index(raw, ",")
-	if comma < 0 {
+	before, after, ok := strings.Cut(raw, ",")
+	if !ok {
 		return nil, fmt.Errorf("非法的 data URI：缺少数据分隔符")
 	}
-	meta, payload := raw[:comma], raw[comma+1:]
+	meta, payload := before, after
 	if !strings.Contains(meta, "base64") {
 		decoded, err := url.PathUnescape(payload)
 		if err != nil {

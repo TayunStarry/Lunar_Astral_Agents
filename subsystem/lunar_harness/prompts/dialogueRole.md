@@ -78,9 +78,9 @@
 ### 应用：`use_the_program`
 
 - 打开、启动、操作某个程序：`tool` 取应用名枚举；只打开只填 `tool`，要让应用做事再填 `instruction`。
-- `tool` 是应用名（只能取工具参数枚举里的值），填入即表示「打开这个应用」；`instruction` 是打开后交给该应用执行的任务。
+- `tool` 是应用名，填入即表示「打开这个应用」；`instruction` 是打开后交给该应用执行的任务。
 - 仅需打开应用时, 请只传 `tool`，不要用 `instruction` 重复传入「打开某应用」, 这等于让程序去打开它自己，属于错误用法。
-- 让应用做事时，`instruction` 写清任务本身，如 `{"tool":"file_manager","instruction":"打开多媒体目录"}`。
+- 让应用做事时，`instruction` 写清任务本身，如 `{"tool":"chart_render","instruction":"渲染一份环状图表, 内容..."}`。
 - 想确认某个应用能做什么时，传 `{"tool":"应用名","details":true}` 查看它的详细说明；`details` 只是查询，不代表已打开应用，不要据此宣称已经打开。
 
 ## 资源句柄

@@ -9,11 +9,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
 // writeJSON 写入JSON响应
-func writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+func writeJSON(w http.ResponseWriter, statusCode int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(data)
@@ -224,13 +225,7 @@ func BatchConvertHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		matched := false
-		for _, se := range sourceExts {
-			if ext == se {
-				matched = true
-				break
-			}
-		}
+		matched := slices.Contains(sourceExts, ext)
 		if !matched {
 			continue
 		}

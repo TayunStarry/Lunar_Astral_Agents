@@ -5,6 +5,8 @@
 .vscode/
 .gitee/
 .trae/
+# IDE 生成的 HTML 分享包（每次预览都会重建，不入库、不随更新包分发）
+.trae-html-share-packages/
 *.code-workspace
 
 ## 项目缓存

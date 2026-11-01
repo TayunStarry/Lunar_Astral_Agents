@@ -186,8 +186,8 @@ func executeMerge(basePath, source, target, localDir string) error {
 	}
 
 	// 确保目标目录存在
-	if err := os.MkdirAll(tgtPath, 0755); err != nil {
-		return fmt.Errorf("创建目标目录失败: %w", err)
+	if err1 := os.MkdirAll(tgtPath, 0755); err1 != nil {
+		return fmt.Errorf("创建目标目录失败: %w", err1)
 	}
 
 	// 遍历源目录，移动所有内容
@@ -281,8 +281,8 @@ func copyFile(src, dst string) error {
 	}
 	defer dstFile.Close()
 
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		return fmt.Errorf("复制文件内容失败: %w", err)
+	if _, err1 := io.Copy(dstFile, srcFile); err1 != nil {
+		return fmt.Errorf("复制文件内容失败: %w", err1)
 	}
 
 	// 保留文件权限

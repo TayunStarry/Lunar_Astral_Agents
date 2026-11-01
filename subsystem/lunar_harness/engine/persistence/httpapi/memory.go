@@ -180,7 +180,7 @@ func handleMemoryListCollections(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeSuccess(w, map[string]interface{}{
+	writeSuccess(w, map[string]any{
 		"collections": infos,
 		"total":       len(infos),
 	})
@@ -410,8 +410,7 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	logger.Info("FileManager", "全局查询完成（类型 %s，%s）, 查询: %s, 结果数: %d",
-		mediaType, memoryQueryModeText(forceGlobal), queryText, len(results))
+	logger.Info("FileManager", "全局查询完成（类型 %s，%s）, 查询: %s, 结果数: %d", mediaType, memoryQueryModeText(forceGlobal), queryText, len(results))
 
 	writeSuccess(w, memoryQueryData{
 		Query:       queryText,
@@ -519,7 +518,7 @@ func handleMemoryEntries(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeSuccess(w, map[string]interface{}{
+	writeSuccess(w, map[string]any{
 		"entries": list,
 		"total":   total,
 		"offset":  offset,
@@ -621,7 +620,7 @@ func handleMemoryDocuments(w http.ResponseWriter, r *http.Request, collectionNam
 		})
 	}
 
-	writeSuccess(w, map[string]interface{}{
+	writeSuccess(w, map[string]any{
 		"documents": docList,
 		"total":     total,
 		"offset":    offset,
@@ -650,7 +649,7 @@ func handleMemoryRebuild(w http.ResponseWriter, r *http.Request, collectionName 
 	count := memory.DocCount(collectionName)
 	logger.Info("FileManager", "集合 [%s] rebuild 完成, 剩余 %d 条文档", collectionName, count)
 
-	writeSuccess(w, map[string]interface{}{
+	writeSuccess(w, map[string]any{
 		"rebuilt": count,
 		"message": fmt.Sprintf("集合 [%s] 重建完成, 剩余 %d 条文档", collectionName, count),
 	})
@@ -676,7 +675,7 @@ func handleMemoryReloadCollection(w http.ResponseWriter, r *http.Request, collec
 }
 
 // handleMemoryDeleteCollection DELETE /memory/{name} — 删除集合
-func handleMemoryDeleteCollection(w http.ResponseWriter, r *http.Request, collectionName string) {
+func handleMemoryDeleteCollection(w http.ResponseWriter, _ *http.Request, collectionName string) {
 	if !memory.Ready() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
@@ -728,8 +727,8 @@ func memoryQueryModeText(forceGlobal bool) string {
 	return "快速检索"
 }
 
-// getStringField 从 map[string]interface{} 安全获取字符串字段
-func getStringField(m map[string]interface{}, key string) string {
+// getStringField 从 map[string]any 安全获取字符串字段
+func getStringField(m map[string]any, key string) string {
 	if m == nil {
 		return ""
 	}
@@ -741,8 +740,8 @@ func getStringField(m map[string]interface{}, key string) string {
 	return ""
 }
 
-// getIntField 从 map[string]interface{} 安全获取整数字段
-func getIntField(m map[string]interface{}, key string) int {
+// getIntField 从 map[string]any 安全获取整数字段
+func getIntField(m map[string]any, key string) int {
 	if m == nil {
 		return 0
 	}
@@ -757,8 +756,8 @@ func getIntField(m map[string]interface{}, key string) int {
 	return 0
 }
 
-// getBoolField 从 map[string]interface{} 安全获取布尔字段
-func getBoolField(m map[string]interface{}, key string) bool {
+// getBoolField 从 map[string]any 安全获取布尔字段
+func getBoolField(m map[string]any, key string) bool {
 	if m == nil {
 		return false
 	}

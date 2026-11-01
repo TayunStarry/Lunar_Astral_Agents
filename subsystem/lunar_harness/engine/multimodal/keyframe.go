@@ -100,8 +100,7 @@ func VideoKeyframeExtraction(inputFile string) ([]KeyFrame, error) {
 	}
 
 	totalElapsed := time.Since(startTime)
-	logger.Info(LogModuleMedia, "关键帧筛选完成，从 %d 帧中保留 %d 帧，总耗时: %v",
-		len(allFrames), len(keyFrames), totalElapsed)
+	logger.Info(LogModuleMedia, "关键帧筛选完成，从 %d 帧中保留 %d 帧，总耗时: %v", len(allFrames), len(keyFrames), totalElapsed)
 
 	if len(keyFrames) == 0 {
 		return nil, fmt.Errorf("未提取到关键帧，请检查视频文件是否正常")
@@ -200,7 +199,7 @@ func GetVideoDuration(inputFile string) (float64, error) {
 		return 0, fmt.Errorf("解析ffprobe输出失败: %w", err)
 	}
 
-	if format, ok := output["format"].(map[string]interface{}); ok {
+	if format, ok := output["format"].(map[string]any); ok {
 		if durationStr, ok := format["duration"].(string); ok {
 			duration, err := strconv.ParseFloat(durationStr, 64)
 			if err != nil {

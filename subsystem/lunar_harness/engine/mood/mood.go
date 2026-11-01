@@ -5,6 +5,7 @@ package mood
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -37,9 +38,7 @@ func Snapshot() MoodSnapshot {
 		label = defaultLabel
 	}
 	weights := make(map[string]float64, len(state.Weights))
-	for key, value := range state.Weights {
-		weights[key] = value
-	}
+	maps.Copy(weights, state.Weights)
 	return MoodSnapshot{Label: label, Weights: weights, Vector: append([]float32(nil), state.Vector...)}
 }
 

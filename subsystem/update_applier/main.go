@@ -3,7 +3,7 @@ package main
 // ==== 更新器入口 ====
 //
 // 与主程序同层编译（程序根目录），复用资源修复同款图标。由主程序在拉取到
-// 「含主程序文件的更新包」后以运行参数拉起；不带参数直接运行（误双击等）
+// 更新包后以运行参数拉起；不带参数直接运行（误双击等）
 // 时播放失败音效并自动退出。
 //
 // 流程（-updatepack 指向拉取到的更新包 7z 分卷起始卷 .7z.001）：
@@ -111,6 +111,7 @@ func main() {
 	if err := os.RemoveAll(staging); err != nil {
 		logf("[WARN] 清理暂存目录失败：%v", err)
 	}
+	removeLocalDevLeftovers(*targetDir)
 	if *packDir != "" && *packDir != *targetDir {
 		if err := os.RemoveAll(*packDir); err != nil {
 			logf("[WARN] 清理更新包临时目录失败：%v", err)

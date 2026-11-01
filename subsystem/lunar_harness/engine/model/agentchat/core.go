@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
@@ -124,7 +123,7 @@ func ChatWithRetry(role string, messages []Message, tools []ToolDefinition, labe
 // ChatWithRetryOptions 带调用选项的对话重试：允许指定模型与租约状态。
 func ChatWithRetryOptions(role string, messages []Message, tools []ToolDefinition, label string, opts ChatOptions) (string, error) {
 	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := range 2 {
 		message, err := ChatStreamWithOptions(role, messages, tools, opts)
 		if err == nil {
 			if text := strings.TrimSpace(StringOf(message.Content)); text != "" {
@@ -257,7 +256,7 @@ func normalizeToolCalls(calls []ToolCall) {
 			calls[i].Type = "function"
 		}
 		if calls[i].ID == "" {
-			calls[i].ID = fmt.Sprintf("call_%d", atomic.AddInt64(&toolCallSeq, 1))
+			calls[i].ID = fmt.Sprintf("call_%d", toolCallSeq.Add(1))
 		}
 	}
 }

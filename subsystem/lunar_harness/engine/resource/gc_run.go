@@ -41,9 +41,7 @@ func RunStartupGC() error {
 	tracked := archiveDB.seedGCMediaScoresLocked()
 	quotaRemoved := archiveDB.runQuotaGCLocked()
 
-	logger.Info("Persistence",
-		"启动 GC 完成：空闲句柄池=%d 清理孤儿=%d 新登记孤儿=%d 可清理媒体=%d 失效档案=%d 积分删除=%d 配额回收=%d",
-		orphans, removed, archived, tracked, pruned, scoreRemoved, quotaRemoved)
+	logger.Info("Persistence", "启动 GC 完成：空闲句柄池=%d 清理孤儿=%d 新登记孤儿=%d 可清理媒体=%d 失效档案=%d 积分删除=%d 配额回收=%d", orphans, removed, archived, tracked, pruned, scoreRemoved, quotaRemoved)
 	return nil
 }
 

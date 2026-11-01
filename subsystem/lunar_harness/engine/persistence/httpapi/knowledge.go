@@ -17,15 +17,15 @@ func writeJSON(w http.ResponseWriter, statusCode int, resp any) {
 
 // writeError 写入错误响应（success: false）
 func writeError(w http.ResponseWriter, statusCode int, message string) {
-	writeJSON(w, statusCode, map[string]interface{}{
+	writeJSON(w, statusCode, map[string]any{
 		"success": false,
 		"error":   message,
 	})
 }
 
 // writeSuccess 写入成功响应（success: true, data: ...）
-func writeSuccess(w http.ResponseWriter, data interface{}) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+func writeSuccess(w http.ResponseWriter, data any) {
+	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"data":    data,
 	})

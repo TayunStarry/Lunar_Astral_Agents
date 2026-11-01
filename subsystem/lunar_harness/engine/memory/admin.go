@@ -38,10 +38,7 @@ func (d *Store) Documents(collectionName string, offset, limit int) ([]DocumentE
 		return nil, total
 	}
 
-	end := offset + limit
-	if end > total {
-		end = total
-	}
+	end := min(offset+limit, total)
 
 	entries := make([]DocumentEntry, end-offset)
 	for i := offset; i < end; i++ {
@@ -186,7 +183,7 @@ func (d *Store) Collections() []string {
 }
 
 // CollectionInfo 返回指定集合的详细元数据信息
-func (d *Store) CollectionInfo(collectionName string) map[string]interface{} {
+func (d *Store) CollectionInfo(collectionName string) map[string]any {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return nil
@@ -195,7 +192,7 @@ func (d *Store) CollectionInfo(collectionName string) map[string]interface{} {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return map[string]interface{}{
+	return map[string]any{
 		"name":                     c.Name,
 		"embedding_dimension":      c.Dimension,
 		"name_embedding_model":     c.NameEmbeddingModel,

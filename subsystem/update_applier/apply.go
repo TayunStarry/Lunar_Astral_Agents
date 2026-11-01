@@ -224,6 +224,23 @@ func pruneBackups(targetDir string, n int) {
 	}
 }
 
+// localDevShareDir IDE 预览/分享 HTML 时生成的分享包目录名。
+// 它属于开发机残留，不随程序发布；一次更新完成后不应留在程序根目录。
+const localDevShareDir = ".trae-html-share-packages"
+
+// removeLocalDevLeftovers 清理开发期残留目录（失败只记日志，不影响更新结果）。
+func removeLocalDevLeftovers(targetDir string) {
+	dir := filepath.Join(targetDir, localDevShareDir)
+	if !fileExists(dir) {
+		return
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		logf("[WARN] 清理开发期残留目录失败（%s）：%v", localDevShareDir, err)
+		return
+	}
+	logf("已清理开发期残留目录：%s", localDevShareDir)
+}
+
 // restartProgram 启动目标可执行文件（工作目录设为该文件所在目录，随后更新器自身退出）。
 //
 // 必须显式接回控制台句柄：os/exec 的 Std* 为 nil 时会把子进程的标准流接到 NUL 设备，

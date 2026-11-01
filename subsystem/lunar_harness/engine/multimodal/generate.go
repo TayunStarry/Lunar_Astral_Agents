@@ -479,9 +479,9 @@ func UpscaleImage(imageData []byte) (map[string]any, error) {
 	}
 	inputPath := inputFile.Name()
 	defer os.Remove(inputPath)
-	if _, err := inputFile.Write(imageData); err != nil {
+	if _, err1 := inputFile.Write(imageData); err1 != nil {
 		inputFile.Close()
-		return nil, fmt.Errorf("写入超分输入临时文件失败: %v", err)
+		return nil, fmt.Errorf("写入超分输入临时文件失败: %v", err1)
 	}
 	inputFile.Close()
 
@@ -507,9 +507,9 @@ func UpscaleImage(imageData []byte) (map[string]any, error) {
 	go func() { _, _ = io.Copy(stdoutWriter, stdout); stdoutWriter.Close() }()
 	go func() { _, _ = io.Copy(stderrWriter, stderr); stderrWriter.Close() }()
 
-	if err := cmd.Run(); err != nil {
-		logger.Error(LogModuleDraw, "图像超分执行失败: %v", err)
-		return nil, fmt.Errorf("超分执行失败: %v", err)
+	if err1 := cmd.Run(); err1 != nil {
+		logger.Error(LogModuleDraw, "图像超分执行失败: %v", err1)
+		return nil, fmt.Errorf("超分执行失败: %v", err1)
 	}
 
 	// 读取放大结果
@@ -555,10 +555,7 @@ func normalizeImageSide(side int) int {
 	if side > maxSide {
 		side = maxSide
 	}
-	side = (side + align/2) / align * align
-	if side > maxSide {
-		side = maxSide
-	}
+	side = min((side+align/2)/align*align, maxSide)
 	return side
 }
 

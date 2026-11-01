@@ -14,6 +14,8 @@ package BilibiliViewer
 
 import (
 	"math/rand"
+	"strings"
+	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
@@ -121,9 +123,38 @@ func (r *runner) startup() (text string, err error) {
 	}
 
 	r.buildSteps()
+	// 采集阶段逐个打开了候选详情页，浏览器会停在最后一条；观看阶段应停在评分最高的那条。
+	r.focusTopVideo()
 	logger.Info("BilibiliViewer", "启动阶段完成：通过 %d 个视频，共 %d 个 Tick 步骤",
 		len(r.approved), len(r.steps))
 	return r.resultText(), nil
+}
+
+// focusTopVideo 把浏览器切回本轮评分最高的视频页，供观看阶段停留。
+//
+// approved 按综合匹配度降序排列，第一条即评分最高且通过审核的视频；
+// 切换失败只记日志并保持当前页面，不影响后续切片观看。
+func (r *runner) focusTopVideo() {
+	if r == nil || r.browser == nil || len(r.approved) == 0 {
+		return
+	}
+	top := r.approved[0]
+	if top == nil {
+		return
+	}
+	target := strings.TrimSpace(top.Link.Href)
+	if target == "" {
+		target = strings.TrimSpace(top.Info.URL)
+	}
+	if target == "" {
+		return
+	}
+	r.setProgress("切换到评分最高的视频页…")
+	if err := r.browser.navigate(target, 30*time.Second); err != nil {
+		logger.Warn("BilibiliViewer", "切换评分最高视频页失败（保持当前页）: %v", err)
+		return
+	}
+	r.browser.wait(1200 * time.Millisecond)
 }
 
 // directVideoLink 从指令里提取指定观看的 B 站视频。

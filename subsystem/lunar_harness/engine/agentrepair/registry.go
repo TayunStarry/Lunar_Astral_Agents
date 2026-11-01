@@ -3,6 +3,7 @@ package agentrepair
 // registry.go 注册与调用入口。
 
 import (
+	"slices"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -83,10 +84,5 @@ func lookup(id string) (Handler, bool) {
 
 // contains 判断字符串是否在切片中。
 func contains(items []string, target string) bool {
-	for _, item := range items {
-		if item == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(items, target)
 }

@@ -212,7 +212,6 @@ func init() {
 		log.Printf("[Config][WARN] -> 解析 %s 失败，发布通道保持未配置: %v", ReleaseConfigFile, rerr)
 	} else if ok {
 		applyReleaseConfig(fileCfg)
-		log.Printf("[Config] 发布通道配置来自 local_data/%s", ReleaseConfigFile)
 	} else {
 		log.Printf("[Config][INFO] -> 未找到 local_data/%s，发布通道未配置", ReleaseConfigFile)
 	}

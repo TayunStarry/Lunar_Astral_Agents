@@ -309,8 +309,7 @@ func (w *webSession) selectVideo(cfg Config, seen map[string]bool) (videoLink, e
 	}
 	if len(home) == 0 {
 		if len(cfg.DesireKeywords) > 0 {
-			return videoLink{}, fmt.Errorf("没有找到符合本轮要求（%s）的视频",
-				strings.Join(cfg.DesireKeywords, "、"))
+			return videoLink{}, fmt.Errorf("没有找到符合本轮要求（%s）的视频", strings.Join(cfg.DesireKeywords, "、"))
 		}
 		return videoLink{}, fmt.Errorf("没有可看的视频（30 天已看记录可能把候选全部排除了）")
 	}

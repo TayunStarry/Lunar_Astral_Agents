@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -38,8 +39,7 @@ func (r *runner) runNextStep() {
 	if err != nil {
 		r.stepRetry++
 		if r.stepRetry <= sliceRetryLimit {
-			logger.Warn("BilibiliViewer", "步骤失败，下一个 Tick 重试（%d/%d）: %v",
-				r.stepRetry, sliceRetryLimit, err)
+			logger.Warn("BilibiliViewer", "步骤失败，下一个 Tick 重试（%d/%d）: %v", r.stepRetry, sliceRetryLimit, err)
 			return
 		}
 		logger.Warn("BilibiliViewer", "步骤重试仍失败，跳过: %v", err)
@@ -58,7 +58,10 @@ func (r *runner) runWatchStep(step pipelineStep) error {
 		return err
 	}
 	if step.Slice >= len(video.Segments) {
-		return fmt.Errorf("切片下标越界（%d/%d）", step.Slice, len(video.Segments))
+		// 计划表按接口时长估算选片数，实际切片数取决于下载文件的真实时长，
+		// 末尾不足 1 秒的尾巴会被丢弃，因此可能比计划少一片，属于正常偏差。
+		logger.Info("BilibiliViewer", "《%s》计划第 %d 片超出实际切分数 %d，跳过该片", video.Info.Title, step.Slice+1, len(video.Segments))
+		return nil
 	}
 	if len(video.Summaries) < len(video.Segments) {
 		video.Summaries = make([]string, len(video.Segments))
@@ -68,8 +71,7 @@ func (r *runner) runWatchStep(step pipelineStep) error {
 	}
 
 	segment := video.Segments[step.Slice]
-	r.setProgress(fmt.Sprintf("正在看《%s》第 %d/%d 段…",
-		video.Info.Title, step.Slice+1, len(video.Segments)))
+	r.setProgress(fmt.Sprintf("正在看《%s》第 %d/%d 段…", video.Info.Title, step.Slice+1, len(video.Segments)))
 	text, err := understandOneSlice(video.LocalPath, video.Info, segment, step.Slice+1, len(video.Segments))
 	if err != nil {
 		if errors.Is(err, loopguard.ErrLoop) {
@@ -83,8 +85,7 @@ func (r *runner) runWatchStep(step pipelineStep) error {
 	}
 	video.Summaries[step.Slice] = text
 	// 按要求把该片段的理解内容输出到运行日志（Tick 成果）
-	logger.Info("BilibiliViewer", "《%s》第 %d/%d 段理解：%s",
-		video.Info.Title, step.Slice+1, len(video.Segments), truncate(text, 300))
+	logger.Info("BilibiliViewer", "《%s》第 %d/%d 段理解：%s", video.Info.Title, step.Slice+1, len(video.Segments), truncate(text, 300))
 	return nil
 }
 
@@ -115,6 +116,7 @@ func (r *runner) prepareSegments(video *videoRecord) error {
 	}
 	video.LocalPath = local
 	video.Segments = segments
+	video.Slices = len(segments)
 	return nil
 }
 
@@ -139,8 +141,7 @@ func (r *runner) runMergeStep(step pipelineStep) error {
 		storeVideoSummary(video.Info, video.WatchSummary)
 		recordWatchMemory(video)
 	} else {
-		logger.Warn("BilibiliViewer", "《%s》观影感受生成失败，跳过摘要库与记忆写入（机械切片文本不落库）",
-			video.Info.Title)
+		logger.Warn("BilibiliViewer", "《%s》观影感受生成失败，跳过摘要库与记忆写入", video.Info.Title)
 	}
 
 	video.Segments = nil
@@ -157,8 +158,7 @@ func (r *runner) runMergeStep(step pipelineStep) error {
 		Where: "《" + video.Info.Title + "》",
 		Reply: truncate(reply, 200),
 	})
-	logger.Info("BilibiliViewer", "《%s》观影感受已入库：%s",
-		video.Info.Title, truncate(reply, 200))
+	logger.Info("BilibiliViewer", "《%s》观影感受已入库：%s", video.Info.Title, truncate(reply, 200))
 	return nil
 }
 
@@ -265,10 +265,8 @@ func (r *runner) generateShareComment() string {
 	if summary == "" {
 		summary = video.Impression.Summary
 	}
-	task := "写一句想把这一轮挑中的视频分享给朋友的话，像跟熟人随口安利，一句话、30 字内；" +
-		"不复述视频内容、不提记忆里其他事。只输出正文；不要 @、不要链接。"
-	material := fmt.Sprintf("视频：《%s》\nUP主：%s\n我的初步印象：%s\n",
-		video.Info.Title, video.Info.Owner, truncate(summary, 300))
+	task := "写一句想把这一轮挑中的视频分享给朋友的话，像跟熟人随口安利，一句话、30 字内；不复述视频内容、不提记忆里其他事。只输出正文；不要 @、不要链接。"
+	material := fmt.Sprintf("视频：《%s》\nUP主：%s\n我的初步印象：%s\n", video.Info.Title, video.Info.Owner, truncate(summary, 300))
 	text, err := chatTextModel(modelPrimary, task, material)
 	if err != nil {
 		logger.Warn("BilibiliViewer", "生成分享评论失败: %v", err)
@@ -284,10 +282,7 @@ func (r *runner) pickMentionTargets() []MentionTarget {
 		logger.Info("BilibiliViewer", "特别关注列表为空，本条分享不 @ 人")
 		return nil
 	}
-	limit := mentionMaxCount
-	if limit > len(followings) {
-		limit = len(followings)
-	}
+	limit := min(mentionMaxCount, len(followings))
 	want := mentionMinCount + randIntn(limit-mentionMinCount+1)
 	rand.Shuffle(len(followings), func(i, j int) {
 		followings[i], followings[j] = followings[j], followings[i]
@@ -303,9 +298,7 @@ func (w *webSession) specialFollowings(mid int64) []MentionTarget {
 	out := make([]MentionTarget, 0, 8)
 	seen := make(map[int64]bool, 8)
 	for page := 1; page <= 5; page++ {
-		target := fmt.Sprintf(
-			"https://api.bilibili.com/x/relation/followings?vmid=%d&pn=%d&ps=50",
-			mid, page)
+		target := fmt.Sprintf("https://api.bilibili.com/x/relation/followings?vmid=%d&pn=%d&ps=50", mid, page)
 		raw, err := w.pageFetchText("GET", target, "", "", 20*time.Second)
 		if err != nil {
 			logger.Warn("BilibiliViewer", "读取特别关注列表失败: %v", err)
@@ -357,12 +350,7 @@ func mentionNote(targets []MentionTarget) string {
 }
 
 func containsInt64(values []int64, want int64) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, want)
 }
 
 // finishRound 一轮结束：写本轮记忆（此时观看已全部完成）、清理浏览器。

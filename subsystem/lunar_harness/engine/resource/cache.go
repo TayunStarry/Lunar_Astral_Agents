@@ -27,8 +27,7 @@ func cacheVariant(base string, number int) string {
 func (d *store) cacheGet(kind, sourceURL, variant string) (CacheEntry, bool) {
 	var entry CacheEntry
 	entry.Kind, entry.SourceURL, entry.Variant = kind, NormalizeURL(sourceURL), variant
-	err := d.db.QueryRow(`SELECT path, bytes FROM cache WHERE kind = ? AND source_url = ? AND variant = ?`,
-		entry.Kind, entry.SourceURL, variant).Scan(&entry.Path, &entry.Bytes)
+	err := d.db.QueryRow(`SELECT path, bytes FROM cache WHERE kind = ? AND source_url = ? AND variant = ?`, entry.Kind, entry.SourceURL, variant).Scan(&entry.Path, &entry.Bytes)
 	if err != nil {
 		return CacheEntry{}, false
 	}
@@ -48,8 +47,7 @@ func (d *store) cachePut(entry CacheEntry) error {
 
 // cacheTouch 缓存命中续期
 func (d *store) cacheTouch(kind, sourceURL, variant string) {
-	_, _ = d.db.Exec(`UPDATE cache SET used_at = ? WHERE kind = ? AND source_url = ? AND variant = ?`,
-		time.Now().Unix(), kind, NormalizeURL(sourceURL), variant)
+	_, _ = d.db.Exec(`UPDATE cache SET used_at = ? WHERE kind = ? AND source_url = ? AND variant = ?`, time.Now().Unix(), kind, NormalizeURL(sourceURL), variant)
 }
 
 // cacheEvict 容量超限时按 LRU 淘汰（连簿记行与磁盘文件一起清理）

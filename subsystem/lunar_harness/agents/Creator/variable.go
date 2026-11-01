@@ -38,6 +38,10 @@ const (
 	maxErrors = 20
 	// maxMemos 规划日志保留的备忘条数
 	maxMemos = 20
+	// maxDirectives 规划日志保留的用户要求条数
+	maxDirectives = 6
+	// maxDirectiveRunes 单条用户要求最大字符数
+	maxDirectiveRunes = 400
 	// maxReferenceRunes 单条参考资料最大字符数
 	maxReferenceRunes = 1200
 	// maxSummaryRunes 规划日志「上一轮收尾」的最大字符数

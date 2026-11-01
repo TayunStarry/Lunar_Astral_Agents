@@ -12,7 +12,8 @@ import (
 )
 
 // Run 执行一轮完整创作：读取历史规划日志，由调度者编排，再按顺序调用专属智能体。
-func Run(ctx context.Context, instruction string) (string, error) {
+// userTexts 为用户最近的发言，其中明确要求会并入日志并优先于遗留事项。
+func Run(ctx context.Context, instruction string, userTexts []string) (string, error) {
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
 		return "", errors.New("请用自然语言说明本次创作要做什么")
@@ -25,6 +26,7 @@ func Run(ctx context.Context, instruction string) (string, error) {
 	defer cancel()
 
 	history := loadJournal()
+	history.Directives = mergeDirectives(history.Directives, userTexts)
 	runSession := &session{}
 	plan, err := runSession.planRound(runCtx, instruction, history)
 	if err != nil {
@@ -42,6 +44,7 @@ func Run(ctx context.Context, instruction string) (string, error) {
 	summary := summarizeSteps(results, plan)
 	saveJournal(journal{
 		Version:     1,
+		Directives:  history.Directives,
 		LastPlans:   plan.Steps,
 		Memos:       mergeMemos(plan, runSession.memos),
 		References:  append([]string(nil), runSession.refs...),

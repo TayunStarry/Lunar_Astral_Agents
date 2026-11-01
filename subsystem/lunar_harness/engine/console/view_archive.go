@@ -360,7 +360,7 @@ const handoverSeconds = 6
 
 // handoverNote 主程序更新交接说明。
 //
-// 为什么要它：含主程序的更新必须「控制台退出 → 更新器覆盖 → 重启」，控制台一退，
+// 为什么要它：更新包必然含主程序，覆盖必须「控制台退出 → 更新器覆盖 → 重启」，控制台一退，
 // 屏幕就只剩一个空终端——用户看到的完全是黑盒（本次故障正是如此）。
 // 因此交接信息落两处：屏上倒计时（退出前）+ 退出后打印到真实终端（可回看、可复制）。
 type handoverNote struct {
@@ -391,10 +391,10 @@ var updateMenuEntries = []struct {
 	title string
 	desc  string
 }{
-	{"1", "发布更新包", "收集本地资源 / 主程序 → 打包 → 上传 Gitee Release（需输入令牌）"},
-	{"2", "拉取最新", "取最新 Release 附件并解压到应用目标目录"},
-	{"3", "按 tag 拉取", "输入版本标签拉取指定发布"},
-	{"4", "按哈希拉取", "输入 commit 哈希（zipball 兜底通道）"},
+	{"1", "发布更新包", "收集主程序与指定文件夹 → 打包 → 上传 Gitee Release（需输入令牌）"},
+	{"2", "拉取最新", "下载最新更新包，关闭本程序后由更新器备份覆盖并重启"},
+	{"3", "按 tag 拉取", "输入版本标签拉取指定更新包"},
+	{"4", "按哈希拉取", "输入 commit 哈希（需该提交已发布更新包标签）"},
 	{"5", "版本列表", "查看仓库已发布的更新包，可选中后直接拉取"},
 }
 
@@ -678,7 +678,10 @@ func runUpdateCmd(kind, value string) tea.Cmd {
 			// 传入副本以免污染全局配置
 			cfgCopy := *cfg
 			cfgCopy.GiteeToken = value
-			err = updatepack.Publish(cfgCopy, "")
+			if perr := updatepack.Publish(cfgCopy, ""); perr != nil {
+				return updateDoneMsg{err: perr}
+			}
+			return updateDoneMsg{}
 		case "latest":
 			res, err = updatepack.Pull(*withSessionTokenUpdate(cfg), updatepack.PullSpec{Kind: updatepack.PullLatest})
 		case "tag":
@@ -689,24 +692,22 @@ func runUpdateCmd(kind, value string) tea.Cmd {
 		if err != nil {
 			return updateDoneMsg{err: err}
 		}
-		// 含主程序的更新包：拉起更新应用器后退出 TUI，由应用器在本进程释放文件占用后覆盖并重启
-		if res.NeedsRestart {
-			if aerr := updatepack.ApplyProgramUpdate(res, *cfg); aerr != nil {
-				return updateDoneMsg{err: aerr}
-			}
-			// 记录交接说明：控制台退出后打印到真实终端，避免「程序凭空消失」
-			self, _ := os.Executable()
-			note := &handoverNote{
-				PackFile: filepath.Base(res.PackPath),
-				Program:  self,
-				Root:     updatepack.ProgramRoot(*cfg),
-				Files:    res.ProgramFiles,
-				LogPath:  updatepack.ApplyLogPath(*cfg),
-				Applier:  updatepack.ApplierPath(),
-			}
-			return updateDoneMsg{restart: true, handover: note}
+		// 更新包恒含主程序：拉起更新应用器后退出 TUI，
+		// 由应用器在本进程释放文件占用后覆盖并重启
+		if aerr := updatepack.ApplyProgramUpdate(res, *cfg); aerr != nil {
+			return updateDoneMsg{err: aerr}
 		}
-		return updateDoneMsg{err: nil}
+		// 记录交接说明：控制台退出后打印到真实终端，避免「程序凭空消失」
+		self, _ := os.Executable()
+		note := &handoverNote{
+			PackFile: filepath.Base(res.PackPath),
+			Program:  self,
+			Root:     updatepack.ProgramRoot(*cfg),
+			Files:    res.ProgramFiles,
+			LogPath:  updatepack.ApplyLogPath(*cfg),
+			Applier:  updatepack.ApplierPath(),
+		}
+		return updateDoneMsg{restart: true, handover: note}
 	}
 }
 
@@ -895,7 +896,7 @@ func (m appModel) updateMenuBody(w, h int) []string {
 	lines, _ := m.update.menuPl.layoutView(blocks, idx, w, maxInt(1, h-len(head)-2))
 	body := append([]string{}, head...)
 	body = append(body, lines...)
-	body = append(body, "", "  "+dimStyle.Render("含主程序的更新包会自动关闭本程序、备份覆盖并重启"))
+	body = append(body, "", "  "+dimStyle.Render("更新包会自动关闭本程序、备份覆盖并重启"))
 	return fitLines(body, h)
 }
 
@@ -908,7 +909,7 @@ func (m appModel) updateInputBody(w int) []string {
 		hint = "例如 v2026.10.14；对应 Gitee Release 的 tag 名"
 	case updateInputHash:
 		prompt = "输入要拉取的 commit 哈希（留空回车返回）："
-		hint = "支持短哈希前缀；Release 通道不可用时走 zipball 兜底"
+		hint = "支持短哈希前缀；需该提交已发布更新包（按 tag 匹配）"
 	default:
 		prompt = "输入 Gitee 私人令牌（发布需 Release 读写权限，留空回车取消）："
 		hint = "release.json 已保存令牌时自动预填，可直接回车发布；令牌只用于本次请求"

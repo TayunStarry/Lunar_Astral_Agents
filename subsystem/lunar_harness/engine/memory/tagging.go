@@ -90,7 +90,7 @@ func (d *Store) generateTagsFromMedia(ctx context.Context, mediaRefs []string, o
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < MaxTagRetries; attempt++ {
+	for attempt := range MaxTagRetries {
 		tags, err := d.generateTagsFromMediaOnce(ctx, mediaRefs, orientation, custom)
 		if err == nil && len(tags) > 0 {
 			return tags, nil
@@ -180,8 +180,8 @@ func (d *Store) postTagRequest(ctx context.Context, messages []chatMessage) ([]s
 	}
 
 	var chatResp chatResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return nil, fmt.Errorf("解析 LLM 响应失败: %w", err)
+	if err1 := json.Unmarshal(respBody, &chatResp); err1 != nil {
+		return nil, fmt.Errorf("解析 LLM 响应失败: %w", err1)
 	}
 
 	if len(chatResp.Choices) == 0 {

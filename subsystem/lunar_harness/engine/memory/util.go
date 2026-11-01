@@ -23,14 +23,13 @@ func generateUUID() string {
 	if _, err := rand.Read(b); err != nil {
 		logger.Warn("FileManager", "crypto/rand 失败, 退化为时间UUID: %v", err)
 		t := time.Now().UnixNano()
-		for i := 0; i < 16; i++ {
+		for i := range 16 {
 			b[i] = byte(t >> (i * 4))
 		}
 	}
 	b[6] = (b[6] & 0x0f) | 0x40 // 版本 4
 	b[8] = (b[8] & 0x3f) | 0x80 // 变体 10
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // =============================================================================
@@ -63,7 +62,7 @@ func cosineSimilarity(a, b []float32) float32 {
 // =============================================================================
 
 // readJSONFile 读取 JSON 文件并反序列化到目标结构
-func readJSONFile(path string, target interface{}) error {
+func readJSONFile(path string, target any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -72,7 +71,7 @@ func readJSONFile(path string, target interface{}) error {
 }
 
 // atomicWriteJSON 原子写入 JSON 文件（先写临时文件，再重命名；单行紧凑存储，不格式化）
-func atomicWriteJSON(path string, data interface{}) error {
+func atomicWriteJSON(path string, data any) error {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("JSON 序列化失败: %w", err)

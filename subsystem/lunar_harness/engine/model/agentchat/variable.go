@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -37,5 +38,5 @@ var (
 	placeholderPattern = regexp.MustCompile(`\{[A-Za-z0-9_\-]+\}`)
 
 	// toolCallSeq 为缺失 ID 的工具调用分配唯一序号
-	toolCallSeq int64
+	toolCallSeq atomic.Int64
 )

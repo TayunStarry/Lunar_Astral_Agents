@@ -79,12 +79,12 @@
 	"gitee_owner": "Gitee 仓库属主",
 	"gitee_repo": "Gitee 仓库名",
 	"gitee_token": "Gitee 私人令牌(留空则发布时输入)",
-	"include": "更新包资源目录",
+	"include": "随主程序覆盖的文件夹",
 	"exclude": "更新包排除规则",
 	"exclude_dirs_with": "含此文件的目录整体排除",
 	"backup_keep": "覆盖前备份保留次数",
-	"program_files": "主程序文件清单",
+	"program_files": "主程序文件清单(必填)",
 	"restart_args": "重启主程序参数",
-	"target_dir": "资源/程序根目录",
+	"target_dir": "程序根目录",
 	"package_dir": "LTPX 包根目录"
 }

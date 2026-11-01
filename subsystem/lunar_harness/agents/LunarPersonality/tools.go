@@ -54,7 +54,7 @@ var agentControlTools = []ToolCall{
 }
 
 var memoryTools = []ToolCall{
-	functionTool("search_memory", "只读长期记忆与资源目录中已保存的标题/摘要：回忆用户说过什么、之前看过什么时用它。不会触发视频观看、网页搜索或任何实时读取；没有记录就直接说“不记得”，不要改用 use_resource 现场查看。",
+	functionTool("search_memory", "只读长期记忆与资源目录中已保存的标题/摘要：回忆用户说过什么、之前看过什么时用它。没有记录就直接说“不记得”，不要改用 use_resource 现场查看。",
 		map[string]any{
 			"keywords": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "用自然语言描述，或直接给视频 URL / BV 号；提供 1-4 种不同表述能显著提高命中率"},
 			"exclude":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "结果正文命中任意一个词就丢弃"},
@@ -63,7 +63,7 @@ var memoryTools = []ToolCall{
 }
 
 var resourceTools = []ToolCall{
-	functionTool("use_resource", "按句柄读取或探查资源。规则：已有解析文本直接返回；文件直接返回原文（带 ask 时文本交给文献解析、压缩包交给归档解析）；图片/动图返回描述；音频返回转写；视频按本地副本走观看管线、B 站链接走视频印象；网页链接走现场读取。"+grammarCheatsheet(),
+	functionTool("use_resource", "按句柄读取或探查资源。规则：已有解析文本直接返回；文件直接返回原文；图片/动图返回描述；音频返回转写；视频给出视频印象；网页链接给出实时摘要。"+grammarCheatsheet(),
 		map[string]any{
 			"handles": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "资源句柄数组"},
 			"ask":     map[string]any{"type": "string", "description": "可选：交给解析智能体的自然语言需求"},

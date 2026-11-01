@@ -21,13 +21,13 @@ func StripDataURI(base64Image string) (mimeType string, raw []byte, err error) {
 		return "", nil, fmt.Errorf("图片数据为空")
 	}
 	if strings.HasPrefix(s, "data:") {
-		comma := strings.Index(s, ",")
-		if comma < 0 {
+		before, after, ok := strings.Cut(s, ",")
+		if !ok {
 			return "", nil, fmt.Errorf("data URI 格式非法（缺少逗号分隔）")
 		}
-		header := s[:comma]
+		header := before
 		mimeType = strings.TrimPrefix(strings.Split(header, ";")[0], "data:")
-		raw, err = base64.StdEncoding.DecodeString(s[comma+1:])
+		raw, err = base64.StdEncoding.DecodeString(after)
 		if err != nil {
 			return "", nil, fmt.Errorf("base64 解码失败: %v", err)
 		}

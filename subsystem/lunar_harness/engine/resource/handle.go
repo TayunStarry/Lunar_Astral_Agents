@@ -22,10 +22,7 @@ func (h Handle) FullText() string {
 	case h.HasSection && h.SectionOrdinal > 0:
 		return text + "|§" + strconv.Itoa(h.SectionOrdinal)
 	case h.HasLine && h.LineStart > 0:
-		end := h.LineEnd
-		if end < h.LineStart {
-			end = h.LineStart
-		}
+		end := max(h.LineEnd, h.LineStart)
 		return text + "|L" + strconv.Itoa(h.LineStart) + "-" + strconv.Itoa(end)
 	}
 	return text

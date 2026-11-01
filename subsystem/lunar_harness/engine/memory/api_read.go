@@ -71,7 +71,7 @@ func Collections() []string {
 }
 
 // CollectionInfo 全局获取集合信息
-func CollectionInfo(collectionName string) map[string]interface{} {
+func CollectionInfo(collectionName string) map[string]any {
 	if globalStore == nil {
 		return nil
 	}

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -52,8 +53,7 @@ func selectMemoryCandidates(items []memoryItem, now time.Time) ([]memoryItem, st
 		}
 	}
 	if len(eligible) < memoryBatchItems {
-		return nil, fmt.Sprintf("入库满 %d 天的记忆仅 %d 条，不足单次整理的 %d 条",
-			memoryMinAgeDays, len(eligible), memoryBatchItems)
+		return nil, fmt.Sprintf("入库满 %d 天的记忆仅 %d 条，不足单次整理的 %d 条", memoryMinAgeDays, len(eligible), memoryBatchItems)
 	}
 	// listAllTextMemories 已按入库时间升序排列，前 memoryBatchItems 条即最久的一批
 	return eligible[:memoryBatchItems], ""
@@ -253,12 +253,7 @@ func writeNewTexts(ctx context.Context, journal *memoryJournal) error {
 }
 
 func idIn(id string, list []string) bool {
-	for _, value := range list {
-		if value == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, id)
 }
 
 // ==== 意图日志 ====

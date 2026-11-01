@@ -29,12 +29,25 @@ func Publish(cfg Config, version string) error {
 	reportProgress(-1)
 	logf("开始发布更新包 %s（仓库 %s/%s）", version, cfg.GiteeOwner, cfg.GiteeRepo)
 
-	// ==== 1. 校验资源目录/程序文件存在 ====
-	// 打包范围 = include（资源，相对 target_dir）+ program_files（主程序，相对 target_dir）
+	// ==== 1. 校验：更新包必须含主程序，指定文件夹缺失只告警 ====
+	// 打包范围 = program_files（主程序）+ include（随主程序覆盖的文件夹）
 	targetDir := resolveTargetDir(cfg)
-	candidates := make([]string, 0, len(cfg.Include)+len(cfg.ProgramFiles))
-	candidates = append(candidates, cfg.Include...)
+	if len(cfg.ProgramFiles) == 0 {
+		return fmt.Errorf("未配置 program_files：更新包必须包含主程序文件")
+	}
+	missingPrograms := make([]string, 0, len(cfg.ProgramFiles))
+	for _, rel := range cfg.ProgramFiles {
+		if !fileExists(filepath.Join(targetDir, strings.TrimSpace(rel))) {
+			missingPrograms = append(missingPrograms, rel)
+		}
+	}
+	if len(missingPrograms) > 0 {
+		return fmt.Errorf("主程序文件缺失，无法发布更新包: %s", strings.Join(missingPrograms, "、"))
+	}
+
+	candidates := make([]string, 0, len(cfg.ProgramFiles)+len(cfg.Include))
 	candidates = append(candidates, cfg.ProgramFiles...)
+	candidates = append(candidates, cfg.Include...)
 
 	var include []string
 	for _, rel := range candidates {
@@ -43,13 +56,13 @@ func Publish(cfg Config, version string) error {
 		}
 		full := filepath.Join(targetDir, rel)
 		if !fileExists(full) {
-			logf("  [WARN] 资源/文件不存在，跳过: %s", full)
+			logf("  [WARN] 文件夹不存在，跳过: %s", full)
 			continue
 		}
 		include = append(include, full)
 	}
 	if len(include) == 0 {
-		return fmt.Errorf("没有可打包的资源目录（include/program_files 清单为空或全部缺失，target_dir=%s）", targetDir)
+		return fmt.Errorf("没有可打包的内容（program_files/include 清单为空或全部缺失，target_dir=%s）", targetDir)
 	}
 
 	// ==== 2. 打包到临时目录（统一 7z 分卷：小资源产出单个 .7z.001，大资源自动分卷） ====

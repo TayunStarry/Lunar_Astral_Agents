@@ -28,14 +28,15 @@ type ReleaseConfig struct {
 	GiteeOwner string `json:"gitee_owner"` // Gitee 仓库属主
 	GiteeRepo  string `json:"gitee_repo"`  // Gitee 仓库名
 	GiteeToken string `json:"gitee_token"` // Gitee 私人令牌（需 Release 读写权限；TUI 发布时会自动预填）
-	// ==== 更新包（资源 + 主程序） ====
-	Include []string `json:"include"` // 打包包含的资源目录（相对 target_dir）
+	// ==== 更新包（主程序 + 指定文件夹） ====
+	Include []string `json:"include"` // 随主程序一起覆盖的文件夹（相对 target_dir）
 	// 打包排除规则（空时用默认清单）与「含这些文件的目录整体排除」（空时默认 metadata.json）
 	Exclude         []string `json:"exclude"`
 	ExcludeDirsWith []string `json:"exclude_dirs_with"`
 	// 覆盖前备份的保留次数（nil=默认 3；0 或负数=不备份）
 	BackupKeep *int `json:"backup_keep,omitempty"`
-	// 主程序文件清单（相对程序根目录）：发布时纳入包，拉取时判定是否走「关程序→应用器→重启」
+	// 主程序文件清单（相对程序根目录）：更新包必含，发布时缺失即报错；
+	// 拉取后统一由更新器等待这些文件释放后覆盖并重启
 	ProgramFiles []string `json:"program_files"`
 	// 重启主程序时携带的命令行参数
 	RestartArgs []string `json:"restart_args"`
@@ -103,7 +104,7 @@ var ReleaseGiteeRepo string
 // 来自独立的 release.json；TUI 发布时自动预填，允许直接用配置里的令牌。
 var ReleaseGiteeToken string
 
-// ReleaseInclude 更新包包含的资源目录清单（相对 target_dir）
+// ReleaseInclude 随主程序一起覆盖的文件夹清单（相对 target_dir）
 var ReleaseInclude []string
 
 // ReleaseExclude 更新包打包排除规则（空时由 updatepack 使用默认清单）
@@ -116,7 +117,7 @@ var ReleaseExcludeDirsWith []string
 var ReleaseBackupKeep *int
 
 // ReleaseProgramFiles 主程序文件清单（相对程序根目录，如 Lunar_Astral_Agents.exe）：
-// 发布时纳入包，拉取时据其判定需走「关闭主程序 → 应用器覆盖 → 重启」流程
+// 更新包必含；拉取后统一走「关闭主程序 → 更新器覆盖 → 重启」流程
 var ReleaseProgramFiles []string
 
 // ReleaseRestartArgs 重启主程序时携带的命令行参数

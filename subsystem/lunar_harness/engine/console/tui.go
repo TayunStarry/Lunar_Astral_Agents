@@ -116,7 +116,7 @@ var menuItems = []menuItem{
 		desc: "扫描指定端口范围，终止占用进程并验证释放"},
 
 	{key: "9", title: "资源更新", group: "更新与退出", screen: screenUpdate,
-		desc: "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希），更新含主程序时自动重启"},
+		desc: "发布更新包到 Gitee / 拉取更新包（主程序 + 指定文件夹，覆盖后自动重启）"},
 	{key: "a", title: "退出程序", group: "更新与退出", screen: screenMenu,
 		desc: "关闭控制台并优雅停止全部子系统（感谢使用「星月智能 · 控制台」）"},
 }

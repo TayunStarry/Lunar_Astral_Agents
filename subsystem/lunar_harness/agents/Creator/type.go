@@ -125,8 +125,10 @@ type planResult struct {
 }
 
 // journal 创作事件的规划日志：记录上一轮的全部规划、备忘、参考资料与错误。
+// Directives 保存用户最近的发言，其中的明确要求优先于遗留事项与延续思路。
 type journal struct {
 	Version     int        `json:"version"`
+	Directives  []string   `json:"directives,omitempty"`
 	LastPlans   []planStep `json:"last_plans"`
 	Memos       []string   `json:"memos"`
 	References  []string   `json:"references"`

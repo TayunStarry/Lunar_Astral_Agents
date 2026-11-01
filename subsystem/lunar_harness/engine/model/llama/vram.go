@@ -180,7 +180,7 @@ func queryFreeVRAMMiB() (int, error) {
 	if err != nil {
 		// Windows 下 nvidia-smi 随驱动安装在 System32，个别环境 PATH 未包含该目录
 		smiPath = filepath.Join(os.Getenv("SystemRoot"), "System32", "nvidia-smi.exe")
-		if _, err := os.Stat(smiPath); err != nil {
+		if _, err1 := os.Stat(smiPath); err1 != nil {
 			return 0, fmt.Errorf("未找到 nvidia-smi")
 		}
 	}
@@ -198,7 +198,7 @@ func queryFreeVRAMMiB() (int, error) {
 // parseFreeVRAMMiB 解析 nvidia-smi 的 CSV 输出，返回各显卡空闲显存中的最大值（MiB）
 func parseFreeVRAMMiB(output string) (int, error) {
 	maxMiB := -1
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		fields := strings.Fields(strings.TrimSpace(line))
 		if len(fields) == 0 {
 			continue

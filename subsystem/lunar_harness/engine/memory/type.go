@@ -204,8 +204,8 @@ type chatRequest struct {
 
 // chatMessage 聊天消息
 type chatMessage struct {
-	Role    string      `json:"role"`
-	Content interface{} `json:"content"` // string 或 []chatContentPart
+	Role    string `json:"role"`
+	Content any    `json:"content"` // string 或 []chatContentPart
 }
 
 // chatContentPart 多模态消息内容部分

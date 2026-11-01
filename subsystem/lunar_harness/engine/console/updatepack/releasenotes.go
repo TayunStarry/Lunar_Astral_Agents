@@ -27,7 +27,7 @@ const (
 
 	// baselineURL 全量基线（完整发行版）的下载地址。
 	//
-	// 更新包是**增量**包：只含资源目录与主程序文件，供已经装好基线的用户升级；
+	// 更新包是**增量**包：只含主程序与指定文件夹，供已经装好基线的用户升级；
 	// 首次安装或基线被破坏的用户需要完整发行版，因此每份发行说明都必须带上这个地址，
 	// 否则用户拿到一个「覆盖到哪个目录」都无从下手的增量包。
 	// 与 RELEASE.md 的「下载」一节保持一致（改地址时两处一起改）。
@@ -43,8 +43,8 @@ func releaseBaseline() []string {
 		"> 链接：" + baselineURL,
 		"> 提取码：**" + baselineCode + "**",
 		"",
-		"增量更新包要求先有可用的基线程序；若尚未安装、或程序目录已不完整，",
-		"请先下载全量基线解压到目标目录，再用本更新包增量升级。",
+		"更新包只覆盖主程序与指定文件夹，不含模型等大型资源；",
+		"若尚未安装、或程序目录缺少模型资源，请先下载全量基线解压到目标目录，再用本更新包升级。",
 	}
 }
 
@@ -54,9 +54,8 @@ func releaseIntro() []string {
 		"**这是什么**",
 		releaseProductLine,
 		"",
-		"本附件是它的**资源更新包**（增量包，不是完整发行版）：内含模型资源目录、",
-		"LTPX 工具包与配置文件等运行时资源，覆盖到程序根目录即可生效；",
-		"包含主程序文件的更新会在拉取后自动关闭程序、备份覆盖并重启。",
+		"本附件是它的**更新包**（增量包，不是完整发行版）：内含主程序与指定文件夹，",
+		"覆盖到程序根目录即可生效；拉取后会自动关闭程序、备份覆盖并重启。",
 		"",
 		"**适用平台**：" + releasePlatform,
 	}
@@ -66,7 +65,7 @@ func releaseIntro() []string {
 func releaseUsage() []string {
 	return []string{
 		"**安装方式**",
-		"1. 推荐：控制台「资源更新 管理 → 拉取最新」，自动下载、备份并覆盖（含主程序时自动重启）。",
+		"1. 推荐：控制台「资源更新 → 拉取最新」，自动下载、备份并覆盖（完成后自动重启）。",
 		"2. 手动：下载全部分卷后从 `.7z.001` 起解压，将内容覆盖到程序根目录。",
 		"",
 		"**注意**：全部分卷需齐备后再解压；覆盖前旧文件会备份到 `.backup/<时间戳>/`。",
@@ -80,7 +79,7 @@ func releaseUsage() []string {
 func buildReleaseBody(cfg Config, version string, packFiles []string, shas map[string]string) string {
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "%s 星月智能 · 资源更新包 %s\n\n", channel.UpdateMarker, version)
+	fmt.Fprintf(&b, "%s 星月智能 · 更新包 %s\n\n", channel.UpdateMarker, version)
 	b.WriteString(strings.Join(releaseIntro(), "\n"))
 	b.WriteString("\n\n")
 
@@ -91,7 +90,7 @@ func buildReleaseBody(cfg Config, version string, packFiles []string, shas map[s
 	fmt.Fprintf(&b, "- 版本：%s\n", version)
 	fmt.Fprintf(&b, "- 时间：%s\n", time.Now().Format("2006-01-02 15:04:05"))
 	if len(cfg.Include) > 0 {
-		fmt.Fprintf(&b, "- 资源目录：%s\n", strings.Join(cfg.Include, "、"))
+		fmt.Fprintf(&b, "- 覆盖文件夹：%s\n", strings.Join(cfg.Include, "、"))
 	}
 	if len(cfg.ProgramFiles) > 0 {
 		fmt.Fprintf(&b, "- 主程序文件：%s\n", strings.Join(cfg.ProgramFiles, "、"))

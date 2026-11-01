@@ -72,13 +72,13 @@ func createZip(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Archive请求[ERROR] -> 保存路径越界", http.StatusBadRequest)
 			return
 		}
-		if err := os.MkdirAll(saveDir, 0755); err != nil {
-			http.Error(w, "Archive请求[ERROR] -> 创建保存目录失败: "+err.Error(), http.StatusInternalServerError)
+		if err1 := os.MkdirAll(saveDir, 0755); err1 != nil {
+			http.Error(w, "Archive请求[ERROR] -> 创建保存目录失败: "+err1.Error(), http.StatusInternalServerError)
 			return
 		}
 		fullSavePath := filepath.Join(saveDir, zipName)
-		if err := os.WriteFile(fullSavePath, zipData, 0644); err != nil {
-			http.Error(w, "Archive请求[ERROR] -> 保存ZIP文件失败: "+err.Error(), http.StatusInternalServerError)
+		if err2 := os.WriteFile(fullSavePath, zipData, 0644); err2 != nil {
+			http.Error(w, "Archive请求[ERROR] -> 保存ZIP文件失败: "+err2.Error(), http.StatusInternalServerError)
 			return
 		}
 		relPath, relErr := filepath.Rel(config.LocalDir, fullSavePath)
@@ -453,7 +453,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": "解析请求失败: " + err.Error(),
 		})
@@ -463,7 +463,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 	if req.PackageName == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": "包名不能为空",
 		})
@@ -477,7 +477,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 	if _, statErr := os.Stat(packageDir); os.IsNotExist(statErr) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": fmt.Sprintf("包 '%s' 不存在", req.PackageName),
 		})
@@ -489,7 +489,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": "打包失败: " + err.Error(),
 		})
@@ -514,7 +514,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 		if mkdirErr := os.MkdirAll(filepath.Dir(fullSavePath), 0755); mkdirErr != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"success": false,
 				"message": "创建保存目录失败: " + mkdirErr.Error(),
 			})
@@ -524,7 +524,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 		if writeErr := os.WriteFile(fullSavePath, zipData, 0644); writeErr != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"success": false,
 				"message": "保存文件失败: " + writeErr.Error(),
 			})
@@ -539,7 +539,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 		// 包导出（打包归档）产出成品：统一播放完成提示音
 		sound.Notify()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success":   true,
 			"message":   fmt.Sprintf("包 '%s' 已保存到 %s", req.PackageName, fullSavePath),
 			"save_path": fullSavePath,
@@ -572,7 +572,7 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": "解析请求失败: " + err.Error(),
 		})
@@ -582,7 +582,7 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 	if req.PackageName == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": "包名不能为空",
 		})
@@ -594,7 +594,7 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(packageName, "..") {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": "无效的包名",
 		})
@@ -607,7 +607,7 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(filepath.Clean(packageDir), filepath.Clean(filepath.Join(config.LocalDir, "package"))) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": "访问被拒绝",
 		})
@@ -617,7 +617,7 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 	if _, statErr := os.Stat(packageDir); os.IsNotExist(statErr) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": fmt.Sprintf("包 '%s' 不存在", packageName),
 		})
@@ -627,7 +627,7 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 	if err := os.RemoveAll(packageDir); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"message": "删除失败: " + err.Error(),
 		})
@@ -636,7 +636,7 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger.Info("FileManager", "包删除成功: %s", packageName)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"success":      true,
 		"message":      fmt.Sprintf("包 '%s' 已删除", packageName),
 		"package_name": packageName,

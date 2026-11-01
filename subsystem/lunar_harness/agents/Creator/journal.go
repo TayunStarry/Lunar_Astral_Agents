@@ -114,3 +114,25 @@ func (s *session) addMemo(memo string) {
 	}
 	s.memos = append(s.memos, clipAtSentence(memo, maxMemoRunes))
 }
+
+// mergeDirectives 把用户最近的发言并入日志：去重、限长，只保留最近的若干条。
+func mergeDirectives(existing, incoming []string) []string {
+	out := make([]string, 0, maxDirectives)
+	seen := map[string]bool{}
+	for _, item := range append(append([]string{}, existing...), incoming...) {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		item = clipAtSentence(item, maxDirectiveRunes)
+		if seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	if len(out) > maxDirectives {
+		out = out[len(out)-maxDirectives:]
+	}
+	return out
+}

@@ -130,16 +130,7 @@ func memoryMinKeep(count int) int {
 	if count <= 0 {
 		return 0
 	}
-	keep := count * memoryKeepPercent / 100
-	if keep < memoryKeepFloor {
-		keep = memoryKeepFloor
-	}
-	if keep > memoryKeepCeiling {
-		keep = memoryKeepCeiling
-	}
-	if keep > count {
-		keep = count
-	}
+	keep := min(min(max(count*memoryKeepPercent/100, memoryKeepFloor), memoryKeepCeiling), count)
 	return keep
 }
 

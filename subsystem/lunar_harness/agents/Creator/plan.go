@@ -45,7 +45,7 @@ func (s *session) planRound(ctx context.Context, instruction string, history jou
 
 // plannerPrompt 调度者的系统提示。
 func plannerPrompt(history journal) string {
-	return `你是「自由创作.调度者」，负责为月华的本轮创作统一推理与编排。
+	return `你是「自由创作.调度者」，负责为月华的本轮创作统一推理与编排。` + directiveBlock(history) + `
 
 工作方式：
 1. 先读懂规划日志里的上一轮规划、遗留备忘、参考资料与错误；需要补充事实时调用工具（联网搜索、记忆库、句柄、文件、代码索引、DTS 文档）。
@@ -56,7 +56,8 @@ func plannerPrompt(history journal) string {
    - engineer：JavaScript 项目创建与推进、代码文件维护
    - researcher：资料查阅、开发文档研究、目录与文件浏览
    - runner：脚本运行与结果查看、内容调度
-5. 若上一轮有未完成或遗留事项，优先延续之前的创作思路；也可以发起全新创作。
+5. 优先级：用户最近提出的明确要求 > 上一轮遗留事项 > 延续上一轮的创作思路。
+   与本轮指令或用户要求冲突时，不要继续上一轮的题材、文体或篇幅；用户没有新要求时，才延续遗留事项。
 6. 所有文件路径一律写相对 /document 的路径。
 7. 不要臆造工具结果；没有查到的资料就明确留待下一步查证。
 8. 把需要下一轮继续的期望写进 memos。
@@ -65,6 +66,21 @@ func plannerPrompt(history journal) string {
    表述，视为笔误，先纠正为月华本人状态再编排。
 
 历史日志已附在用户消息中。` + journalHint(history)
+}
+
+// directiveBlock 把用户最近的发言放到系统提示开头，明确其最高优先级。
+func directiveBlock(history journal) string {
+	if len(history.Directives) == 0 {
+		return "\n\n【用户最近的发言】\n（暂无，按遗留事项与创作思路自由编排）"
+	}
+	var b strings.Builder
+	b.WriteString("\n\n【用户最近的发言（其中明确的要求优先级最高，冲突时以此为准；闲聊可忽略）】\n")
+	for _, item := range history.Directives {
+		b.WriteString("- ")
+		b.WriteString(item)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 // journalHint 对历史日志做一句概括，帮助调度者抓重点。

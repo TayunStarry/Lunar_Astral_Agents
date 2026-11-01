@@ -1,9 +1,10 @@
-// Package updatepack 提供基于 Gitee Release 的更新包发布与拉取能力
-// （替代原 environment_repair 的「资源释放/补全」：资源不再嵌入程序，而是上传 Gitee 仓库）。
+// Package updatepack 提供基于 Gitee Release 的更新包发布与拉取能力。
 //
-// 发布：按配置收集资源目录 → 7z 打包 → 创建 Release（tag）→ 上传附件（含 SHA-256）。
-// 拉取：默认最新 Release 附件；可指定 tag；可指定 commit 哈希（优先匹配 tag，
-// 未命中走 zipball 通道 —— Gitee 官方 API 支持 ref=commit SHA 下载仓库 zip）。
+// 更新包统一形态：主程序文件 + 配置里指定的文件夹。
+// 拉取后不在运行中就地合并，一律交给更新器在进程退出后备份覆盖并重启。
+//
+// 发布：按配置收集主程序与指定文件夹 → 7z 打包 → 创建 Release（tag）→ 上传附件（含 SHA-256）。
+// 拉取：默认最新 Release 附件，或指定 tag / commit 哈希（需已发布对应 tag）。
 package updatepack
 
 // Config 更新包功能配置（宿主从 local_data/release.json 注入）
@@ -11,7 +12,7 @@ type Config struct {
 	GiteeOwner string   `json:"gitee_owner"` // Gitee 仓库属主
 	GiteeRepo  string   `json:"gitee_repo"`  // Gitee 仓库名
 	GiteeToken string   `json:"gitee_token"` // Gitee 私人令牌（发布必填；拉公开仓库可留空，TUI 发布时手动输入）
-	Include    []string `json:"include"`     // 打包包含的资源目录（相对 target_dir）
+	Include    []string `json:"include"`     // 随主程序一起覆盖的文件夹（相对 target_dir）
 	Exclude    []string `json:"exclude"`     // 打包排除规则（空时用默认排除清单）
 	// ExcludeDirsWith 含这些文件的目录整体排除（空时默认排除含 metadata.json 的目录，
 	// 即 LTPX 工具包：与 environment_repair 的资源同步规则一致）
@@ -27,15 +28,13 @@ type Config struct {
 	RestartArgs []string `json:"restart_args"`
 }
 
-// PullResult 拉取结果。NeedsRestart 为真表示更新包含主程序文件：
-// 已下载的分卷（7z.001 起始卷）未解压、未被合并，宿主须以该路径为参数拉起更新器
-// 并退出本进程，由更新器等待文件占用释放后自行解压覆盖并重启（PackPath 所在临时
-// 目录交由更新器接管，含全部分卷，勿删）。
+// PullResult 拉取结果：更新包恒含主程序，下载完成后必须交由更新器在进程退出后覆盖。
+//
+// 下载的分卷（7z.001 起始卷）保持原状未解压，宿主须以该路径为参数拉起更新器
+// 并退出本进程，由更新器等待文件占用释放后自行解压覆盖并重启（PackPath 所在
+// 临时目录交由更新器接管，含全部分卷，勿删）。
 type PullResult struct {
-	Updated      int      // 已直接合并（资源模式）的文件数
-	Skipped      []string // 未能更新的文件（被占用/失败）
-	NeedsRestart bool     // 是否需关闭主程序后由更新器覆盖并重启
-	PackPath     string   // 更新包 7z 分卷起始卷（.7z.001）路径（NeedsRestart 时非空）
+	PackPath     string   // 更新包 7z 分卷起始卷（.7z.001）路径
 	ProgramFiles []string // 需等待解锁的主程序文件（相对程序根目录）
 	BackupKeep   int      // 备份保留次数（交由更新器使用）
 }

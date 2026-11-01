@@ -73,8 +73,7 @@ func SaveFileEx(fileName string, opts SaveOptions, body io.Reader) (SaveResult, 
 			canonicalSize = info.Size()
 		}
 	}
-	logger.SubInfo("Persistence", "Save", "成功保存文件: %s, 覆盖: %t, 句柄: %s, 保留路径: %s",
-		fullPath, opts.Overwrite, handle, canonicalRel)
+	logger.SubInfo("Persistence", "Save", "成功保存文件: %s, 覆盖: %t, 句柄: %s, 保留路径: %s", fullPath, opts.Overwrite, handle, canonicalRel)
 	return SaveResult{
 		Name:    filepath.Base(canonicalRel),
 		Path:    canonicalAbs,

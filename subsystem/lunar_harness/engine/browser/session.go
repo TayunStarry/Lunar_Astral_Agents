@@ -98,7 +98,7 @@ func OpenWebViewSession(url string, title string, width int, height int) (*WebVi
 		applyDefaultWindowIcon(w)
 
 		// 结果回传绑定：Eval 注入的脚本通过 __lunarReport 把结果送回 Go（UI 线程回调，只做非阻塞投递）
-		_ = w.Bind("__lunarReport", func(args ...interface{}) interface{} {
+		_ = w.Bind("__lunarReport", func(args ...any) any {
 			if len(args) > 0 {
 				if str, ok := args[0].(string); ok {
 					s.resultMu.Lock()

@@ -142,7 +142,7 @@ func ensure() error {
 
 // executeRawSQLOn 在指定连接上执行原生 SQL（不依赖 Store 实例，领域库同样适用）
 // 支持带参数的占位符（params 为 []any），自动区分查询类与写操作类语句
-func executeRawSQLOn(dbHandle *sql.DB, op map[string]interface{}, tx *sql.Tx) OperationResult {
+func executeRawSQLOn(dbHandle *sql.DB, op map[string]any, tx *sql.Tx) OperationResult {
 	stmt, _ := op["sql"].(string)
 	stmt = strings.TrimSpace(stmt)
 
@@ -154,8 +154,8 @@ func executeRawSQLOn(dbHandle *sql.DB, op map[string]interface{}, tx *sql.Tx) Op
 		}
 	}
 
-	var params []interface{}
-	if rawParams, ok := op["params"].([]interface{}); ok {
+	var params []any
+	if rawParams, ok := op["params"].([]any); ok {
 		params = rawParams
 	}
 
@@ -193,10 +193,10 @@ func executeRawSQLOn(dbHandle *sql.DB, op map[string]interface{}, tx *sql.Tx) Op
 			}
 		}
 
-		var resultRows []map[string]interface{}
+		var resultRows []map[string]any
 		for rows.Next() {
-			values := make([]interface{}, len(columns))
-			valuePtrs := make([]interface{}, len(columns))
+			values := make([]any, len(columns))
+			valuePtrs := make([]any, len(columns))
 			for i := range columns {
 				valuePtrs[i] = &values[i]
 			}
@@ -207,7 +207,7 @@ func executeRawSQLOn(dbHandle *sql.DB, op map[string]interface{}, tx *sql.Tx) Op
 					Operation: "sql",
 				}
 			}
-			rowData := make(map[string]interface{})
+			rowData := make(map[string]any)
 			for i, col := range columns {
 				val := values[i]
 				if b, ok := val.([]byte); ok {

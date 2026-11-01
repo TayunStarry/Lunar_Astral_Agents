@@ -34,10 +34,7 @@ func SplitMediaSegments(duration float64, maxSlices int) []MediaSegment {
 	if duration <= 0 {
 		return nil
 	}
-	count := int(math.Ceil(duration / MediaChunkSeconds))
-	if count < 1 {
-		count = 1
-	}
+	count := max(int(math.Ceil(duration/MediaChunkSeconds)), 1)
 	if maxSlices <= 0 {
 		maxSlices = count
 	}
@@ -65,7 +62,7 @@ func pickSegments(segments []MediaSegment, max int) []MediaSegment {
 	}
 	picked := make([]MediaSegment, 0, max)
 	seen := make(map[int]bool, max)
-	for i := 0; i < max; i++ {
+	for i := range max {
 		index := (i * (len(segments) - 1)) / (max - 1)
 		if seen[index] {
 			continue
@@ -109,8 +106,7 @@ func SegmentImages(localPath string, segment MediaSegment, frameMax int) ([]stri
 		images = append(images, "data:image/jpeg;base64,"+base64.StdEncoding.EncodeToString(buf.Bytes()))
 	}
 	if len(images) == 0 {
-		return nil, fmt.Errorf("切片 %s-%s 未抽取到可用画面",
-			FormatSeconds(segment.Start), FormatSeconds(segment.End))
+		return nil, fmt.Errorf("切片 %s-%s 未抽取到可用画面", FormatSeconds(segment.Start), FormatSeconds(segment.End))
 	}
 	return images, nil
 }
@@ -152,8 +148,7 @@ func VideoToWatchSlices(inputFile string, maxSlices, frameMax int) ([]WatchSlice
 	if len(slices) == 0 {
 		return nil, fmt.Errorf("未能从 %s 中抽取到可用画面", inputFile)
 	}
-	logger.Info(LogModuleMedia, "VideoToWatchSlices: 时长 %.2fs → %d 片（每片按画面变化取 %d–%d 帧）, 来源=%s",
-		duration, len(slices), WatchFramesMin, WatchFramesMax, inputFile)
+	logger.Info(LogModuleMedia, "VideoToWatchSlices: 时长 %.2fs → %d 片（每片按画面变化取 %d–%d 帧）, 来源=%s", duration, len(slices), WatchFramesMin, WatchFramesMax, inputFile)
 	return slices, nil
 }
 
@@ -187,8 +182,7 @@ func AnimatedToWatchSlice(imgData []byte, frameMax int) (WatchSlice, error) {
 	if err != nil {
 		return WatchSlice{}, err
 	}
-	logger.Info(LogModuleMedia, "AnimatedToWatchSlice: %s(%d bytes, %.2fs) → %d 帧（长边≤%d）",
-		format, len(imgData), duration, len(images), MaxMediaWidth)
+	logger.Info(LogModuleMedia, "AnimatedToWatchSlice: %s(%d bytes, %.2fs) → %d 帧（长边≤%d）", format, len(imgData), duration, len(images), MaxMediaWidth)
 	return WatchSlice{Index: 1, Start: 0, End: duration, Images: images}, nil
 }
 
@@ -200,7 +194,7 @@ func SampleImages(images []string, max int) []string {
 	}
 	out := make([]string, 0, max)
 	step := float64(len(images)) / float64(max)
-	for i := 0; i < max; i++ {
+	for i := range max {
 		index := int(float64(i) * step)
 		if index >= len(images) {
 			index = len(images) - 1

@@ -20,10 +20,10 @@ func VoicesHandler(w http.ResponseWriter, r *http.Request) {
 	engine := GetEngine()
 	if engine == nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "TTS 引擎未初始化"})
+		json.NewEncoder(w).Encode(map[string]any{"success": false, "error": "TTS 引擎未初始化"})
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"voices":  engine.ListVoices(),
 		"count":   len(engine.voiceOrder),
@@ -43,13 +43,13 @@ func DictHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if pronunciationDict == nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "读音词典未初始化"})
+		json.NewEncoder(w).Encode(map[string]any{"success": false, "error": "读音词典未初始化"})
 		return
 	}
 
 	switch r.Method {
 	case "GET":
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
 			"count":   len(pronunciationDict.All()),
 			"entries": pronunciationDict.All(),
@@ -58,15 +58,15 @@ func DictHandler(w http.ResponseWriter, r *http.Request) {
 		var req DictRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "无效的请求格式"})
+			json.NewEncoder(w).Encode(map[string]any{"success": false, "error": "无效的请求格式"})
 			return
 		}
 		if err := pronunciationDict.Set(req.Word, req.Pinyin); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": err.Error()})
+			json.NewEncoder(w).Encode(map[string]any{"success": false, "error": err.Error()})
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
 			"word":    req.Word,
 			"pinyin":  pronunciationDict.All()[req.Word],
@@ -75,10 +75,10 @@ func DictHandler(w http.ResponseWriter, r *http.Request) {
 		word := r.URL.Query().Get("word")
 		if err := pronunciationDict.Delete(word); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": err.Error()})
+			json.NewEncoder(w).Encode(map[string]any{"success": false, "error": err.Error()})
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "word": word})
+		json.NewEncoder(w).Encode(map[string]any{"success": true, "word": word})
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -92,7 +92,7 @@ func GuessDictHandler(w http.ResponseWriter, r *http.Request) {
 	word := strings.TrimSpace(r.URL.Query().Get("word"))
 	if word == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "缺少 word 参数"})
+		json.NewEncoder(w).Encode(map[string]any{"success": false, "error": "缺少 word 参数"})
 		return
 	}
 
