@@ -52,6 +52,16 @@
     --text-primary: rgba(20, 28, 20, 1);
     --text-secondary: rgba(88, 92, 100, 1);
     --text-tertiary: rgba(132, 138, 148, 1);
+    /* 差异视图语法高亮（避开纯红/纯绿，保证压在红绿底色上仍可读） */
+    --code-comment: #5f6670;
+    --code-keyword: #8250df;
+    --code-string: #0a6f8f;
+    --code-number: #0550ae;
+    --code-title: #6639ba;
+    --code-attr: #7a4a00;
+    --code-tag: #0969da;
+    --code-var: #953800;
+    --code-meta: #57606a;
     /* 字体 */
     --font-ui: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
@@ -75,6 +85,15 @@
     --text-primary: rgba(240, 240, 244, 1);
     --text-secondary: rgba(178, 178, 188, 1);
     --text-tertiary: rgba(136, 136, 148, 1);
+    --code-comment: #8b949e;
+    --code-keyword: #d2a8ff;
+    --code-string: #a5d6ff;
+    --code-number: #79c0ff;
+    --code-title: #ffa657;
+    --code-attr: #ffa657;
+    --code-tag: #a5d6ff;
+    --code-var: #ffa657;
+    --code-meta: #8b949e;
     --shadow-glass: 0 1px 2px rgba(0, 0, 0, 0.25);
     --shadow-float: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
@@ -770,6 +789,82 @@ body {
     font-size: 0.72rem;
     color: var(--text-tertiary);
 }
+
+/* ===== 变更 / 预览语法高亮（红绿底色不变，仅叠加 token 颜色） ===== */
+.change-line .cl-mark {
+    margin-right: 8px;
+    font-weight: 600;
+    user-select: none;
+}
+
+.change-line.added .cl-mark { color: var(--success); }
+.change-line.removed .cl-mark { color: var(--danger); }
+
+.change-line .cl-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* 预览的行内文本与变更视图共用同一套 token 配色 */
+:is(.change-line, .text-line) .hljs-comment,
+:is(.change-line, .text-line) .hljs-quote {
+    color: var(--code-comment);
+    font-style: italic;
+}
+
+:is(.change-line, .text-line) .hljs-keyword,
+:is(.change-line, .text-line) .hljs-selector-tag,
+:is(.change-line, .text-line) .hljs-literal,
+:is(.change-line, .text-line) .hljs-type {
+    color: var(--code-keyword);
+}
+
+:is(.change-line, .text-line) .hljs-string,
+:is(.change-line, .text-line) .hljs-doctag,
+:is(.change-line, .text-line) .hljs-regexp,
+:is(.change-line, .text-line) .hljs-code,
+:is(.change-line, .text-line) .hljs-link {
+    color: var(--code-string);
+}
+
+:is(.change-line, .text-line) .hljs-number,
+:is(.change-line, .text-line) .hljs-symbol,
+:is(.change-line, .text-line) .hljs-bullet {
+    color: var(--code-number);
+}
+
+:is(.change-line, .text-line) .hljs-title,
+:is(.change-line, .text-line) .hljs-section,
+:is(.change-line, .text-line) .hljs-selector-id,
+:is(.change-line, .text-line) .hljs-selector-class {
+    color: var(--code-title);
+}
+
+:is(.change-line, .text-line) .hljs-attr,
+:is(.change-line, .text-line) .hljs-attribute,
+:is(.change-line, .text-line) .hljs-property {
+    color: var(--code-attr);
+}
+
+:is(.change-line, .text-line) .hljs-name,
+:is(.change-line, .text-line) .hljs-tag {
+    color: var(--code-tag);
+}
+
+:is(.change-line, .text-line) .hljs-variable,
+:is(.change-line, .text-line) .hljs-template-variable,
+:is(.change-line, .text-line) .hljs-params {
+    color: var(--code-var);
+}
+
+:is(.change-line, .text-line) .hljs-built_in,
+:is(.change-line, .text-line) .hljs-builtin-name,
+:is(.change-line, .text-line) .hljs-meta {
+    color: var(--code-meta);
+}
+
+:is(.change-line, .text-line) .hljs-strong { font-weight: 700; }
+:is(.change-line, .text-line) .hljs-emphasis { font-style: italic; }
 
 /* ===== 空态 ===== */
 .preview-empty,

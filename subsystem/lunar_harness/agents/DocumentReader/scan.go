@@ -7,18 +7,19 @@ package DocumentReader
 // 只在大文件、片数足够且配置开启时启用；其余情况仍走 reader.go 的直读流程。
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/model/agentchat"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
-	"LunarSubsystem/LunarHarness/engine/model/modellease"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
+	"LunarSubsystem/LunarHarness/protocol/modellease"
 )
 
 // scanAnswer 尝试轻量扫描通道；handled=false 表示调用方应继续走原直读流程
-func scanAnswer(doc *docContext, handle, request string) (string, bool, error) {
+func scanAnswer(ctx context.Context, doc *docContext, handle, request string) (string, bool, error) {
 	if !shouldScan(doc) {
 		return "", false, nil
 	}
@@ -36,13 +37,13 @@ func scanAnswer(doc *docContext, handle, request string) (string, bool, error) {
 	if !ok {
 		return "", false, nil
 	}
-	notes := scanSpans(doc, plan, spans)
+	notes := scanSpans(ctx, doc, plan, spans)
 	restore()
 	if len(notes) == 0 {
 		return "", false, nil
 	}
 
-	answer, err := mergeScanNotes(doc, handle, request, plan, chunks, spans, notes)
+	answer, err := mergeScanNotes(ctx, doc, handle, request, plan, chunks, spans, notes)
 	if err != nil || strings.TrimSpace(answer) == "" {
 		logger.Warn("CrystalAstral", "文献解析：扫描笔记归并失败，直接回吐笔记: %v", err)
 		return notesFallback(notes), true, nil
@@ -95,11 +96,14 @@ func acquireScanModel() (func(), bool) {
 }
 
 // scanSpans 逐片扫描；连续两片失败视为轻量模型不可用，提前结束
-func scanSpans(doc *docContext, plan scanPlan, spans []chunkSpan) []scanNote {
+func scanSpans(ctx context.Context, doc *docContext, plan scanPlan, spans []chunkSpan) []scanNote {
 	notes := make([]scanNote, 0, len(spans))
 	failures := 0
 	for _, span := range spans {
-		note, err := scanOne(doc, plan, span)
+		if ctx.Err() != nil {
+			break
+		}
+		note, err := scanOne(ctx, doc, plan, span)
 		if err != nil {
 			failures++
 			logger.Warn("CrystalAstral", "文献解析：片 #%d 扫描失败: %v", span.Index, err)
@@ -115,10 +119,10 @@ func scanSpans(doc *docContext, plan scanPlan, spans []chunkSpan) []scanNote {
 }
 
 // scanOne 扫描单个分片；每次请求只带当前片，不累积历史
-func scanOne(doc *docContext, plan scanPlan, span chunkSpan) (scanNote, error) {
+func scanOne(ctx context.Context, doc *docContext, plan scanPlan, span chunkSpan) (scanNote, error) {
 	text := chunkText(doc, span, config.DocumentScanChunkRunes)
-	system := agentchat.PromptText("documentScanRole.md")
-	user := agentchat.RenderPrompt(agentchat.PromptText("documentScanChunk.md"),
+	system := agentbase.PromptText("documentScanRole.md")
+	user := agentbase.RenderPrompt(agentbase.PromptText("documentScanChunk.md"),
 		"{goal}", plan.Goal,
 		"{mode}", plan.Mode,
 		"{focus}", strings.Join(plan.Focus, "、"),
@@ -131,11 +135,11 @@ func scanOne(doc *docContext, plan scanPlan, span chunkSpan) (scanNote, error) {
 		"{text}", text,
 	)
 	temperature := 0.2
-	message, err := agentchat.ChatStreamWithOptions(scanRoleLabel,
-		[]agentchat.Message{
+	message, err := agentbase.ChatStreamWithOptionsContext(ctx, scanRoleLabel,
+		[]agentbase.Message{
 			{Role: "system", Content: system},
 			{Role: "user", Content: user},
-		}, nil, agentchat.ChatOptions{
+		}, nil, agentbase.ChatOptions{
 			Model:       config.DocumentScanModel,
 			Temperature: &temperature,
 			MaxTokens:   scanNoteMaxTokens,
@@ -144,7 +148,7 @@ func scanOne(doc *docContext, plan scanPlan, span chunkSpan) (scanNote, error) {
 	if err != nil {
 		return scanNote{}, err
 	}
-	out := strings.TrimSpace(agentchat.StringOf(message.Content))
+	out := strings.TrimSpace(agentbase.StringOf(message.Content))
 	if out == "" {
 		return scanNote{}, fmt.Errorf("片 #%d 扫描结果为空", span.Index)
 	}
@@ -165,20 +169,20 @@ func chunkText(doc *docContext, span chunkSpan, limit int) string {
 	}
 	text := strings.Join(doc.Lines[start-1:end], "\n")
 	if len([]rune(text)) > limit {
-		text = agentchat.HardCutRunes(text, limit)
+		text = agentbase.HardCutRunes(text, limit)
 	}
 	return text
 }
 
 // mergeScanNotes 主模型归并笔记，并允许用查询工具回读原文核对
-func mergeScanNotes(doc *docContext, handle, request string, plan scanPlan, chunks, spans []chunkSpan, notes []scanNote) (string, error) {
-	system := agentchat.PromptText("documentScanMerge.md")
+func mergeScanNotes(ctx context.Context, doc *docContext, handle, request string, plan scanPlan, chunks, spans []chunkSpan, notes []scanNote) (string, error) {
+	system := agentbase.PromptText("documentScanMerge.md")
 	user := buildMergeBriefing(doc, handle, request, plan, chunks, spans, notes)
-	messages := []agentchat.Message{
+	messages := []agentbase.Message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: user},
 	}
-	return runToolLoop(doc, messages, fileToolDefs(), scanMergeRounds)
+	return runToolLoop(ctx, doc, messages, fileToolDefs(), scanMergeRounds)
 }
 
 // notesFallback 归并失败时的确定性兜底：按行区间回吐扫描笔记

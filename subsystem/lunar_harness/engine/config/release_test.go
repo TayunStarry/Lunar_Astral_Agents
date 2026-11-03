@@ -1,6 +1,6 @@
 package config
 
-// release_test.go 独立发布配置文件（local_data/release.json）的回归测试：
+// release_test.go 独立发布配置文件（local_data/config/release.json）的回归测试：
 // 文件缺失时安全返回、存在时读取并写入全局发布配置（含 gitee_token）。
 
 import (

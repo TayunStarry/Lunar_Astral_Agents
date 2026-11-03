@@ -3,11 +3,11 @@ package app
 import (
 	"net/http"
 
-	"LunarSubsystem/LunarHarness/agents/CrystalPersonality"
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
+	"LunarSubsystem/LunarHarness/engine/ltpxhost"
 	"LunarSubsystem/LunarHarness/engine/memory"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/protocol/ltpx"
@@ -39,14 +39,14 @@ func assembleCrystal() error {
 	initMemoryDatabase()
 
 	// ==== LTPX 协调：注入进程内实现，月华侧不再走 HTTP 通道 ====
-	ltpx.SetBroker(CrystalPersonality.NewBroker())
+	ltpx.SetBroker(ltpxhost.NewBroker())
 	logger.Info("LunarHarness", "LTPX 协调层已进程内化")
 
 	return nil
 }
 
 // initMemoryDatabase 初始化记忆库实例：一次性加载全部集合，并补齐默认分组与集合名向量。
-// 模型配置与月华共用 lunar_config.json 的 agent 分组；失败仅告警，不阻断服务启动。
+// 模型配置与月华共用 config/general.json 的 agent 分组；失败仅告警，不阻断服务启动。
 func initMemoryDatabase() {
 	if err := memory.EnsureReady(); err != nil {
 		logger.Warn("LunarHarness", "记忆库初始化失败: %v（可稍后通过 /memory/init 重试）", err)

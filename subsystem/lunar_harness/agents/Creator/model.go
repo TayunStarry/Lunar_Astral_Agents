@@ -1,306 +1,99 @@
 package Creator
 
-// model.go 模型调用：OpenAI 兼容 /chat/completions + function calling。
-// 同时兼容原始响应与 {success,data} 代理包装响应，并把 HTTP 状态保留到错误中，
-// 供执行层判断是否属于可重试的 500 类异常。
+// model.go 创作管线的模型调用：统一走 protocol/agentbase 的流式调用、
+// 推理实况、循环监管与智能修复，不再维护本地的 SSE / 观察者实现。
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/console"
-	"LunarSubsystem/LunarHarness/engine/model/loopguard"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
-
-// errLoopOutput 推理循环：同一输出或工具调用重复过多。
-var errLoopOutput = errors.New("检测到循环输出")
-
-// httpStatusError 模型服务返回非 200 状态。
-type httpStatusError struct {
-	Status int
-	Body   string
-}
-
-func (e *httpStatusError) Error() string {
-	return fmt.Sprintf("模型 HTTP %d: %s", e.Status, previewRunes(e.Body, 240))
-}
 
 // retryable 判定循环输出或 500 类异常。
 func retryable(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, errLoopOutput) {
+	if errors.Is(err, agentbase.ErrLoop) {
 		return true
 	}
-	var statusErr *httpStatusError
+	var statusErr *agentbase.StatusError
 	if errors.As(err, &statusErr) {
 		return statusErr.Status >= 500
 	}
 	return false
 }
 
-// resolveModel 解析主多模态模型端点（只解析一次）。
-func resolveModel() {
-	modelOnce.Do(func() {
-		modelName = config.AgentMultimodalModel
-		modelURL = strings.TrimRight(config.AgentMultimodalURL, "/")
-		if !strings.HasSuffix(modelURL, "/v1") {
-			modelURL += "/v1"
-		}
-	})
-}
-
-// chatWithTools 发起一次带工具的模型调用。
-//
-// 优先以 SSE 流式读取：思考与正文边收边推送「推理实况」，工具调用增量按 index 合并；
-// 若后端忽略 stream 直接返回整包 JSON，则退回整包解析并把结果一次性上报。
-func chatWithTools(ctx context.Context, role string, messages []chatMessage, tools []toolDefinition) (*modelResponse, error) {
-	resolveModel()
-	body, err := json.Marshal(map[string]any{
-		"model":          modelName,
-		"messages":       messages,
-		"tools":          tools,
-		"tool_choice":    "auto",
-		"stream":         true,
-		"stream_options": map[string]any{"include_usage": true},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("序列化模型请求失败: %w", err)
-	}
-
-	callCtx, cancel := context.WithTimeout(ctx, modelTimeout)
-	defer cancel()
-	// 循环输出监管：思考与正文分别按节点检查，命中持续复读立即取消本次请求
-	guard := loopguard.New(cancel, loopguard.DefaultOptions())
-	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, modelURL+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("构造模型请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("模型请求失败: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-		return nil, &httpStatusError{Status: resp.StatusCode, Body: string(raw)}
-	}
-	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
-		return readToolsStream(resp.Body, role, guard)
-	}
-
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return nil, fmt.Errorf("读取模型响应失败: %w", err)
-	}
-	completion, err := parseCompletion(raw)
-	if err != nil {
-		return nil, err
-	}
-	if len(completion.Choices) == 0 {
-		return nil, fmt.Errorf("模型响应缺少 choices")
-	}
-	message := completion.Choices[0].Message
-	result := &modelResponse{
-		Content:   strings.TrimSpace(message.Content),
-		Reasoning: strings.TrimSpace(message.ReasoningContent),
-		ToolCalls: message.ToolCalls,
-	}
-	fillToolCallDefaults(result)
-	// 非流式整包：按末尾节点静态判定一次，命中同样按循环输出处理
-	if loopguard.Detected(result.Reasoning+result.Content, loopguard.DefaultOptions()) {
-		return nil, loopguard.ErrLoop
-	}
-	console.StreamDelta(role, console.KindThink, result.Reasoning)
-	console.StreamDelta(role, console.KindContent, result.Content)
-	return result, nil
-}
-
-// readToolsStream 读取 SSE 流：思考/正文实时上报，工具调用增量按 index 合并。
-// guard 命中持续复读时会取消请求，这里按循环输出返回。
-func readToolsStream(body io.Reader, role string, guard *loopguard.Guard) (*modelResponse, error) {
-	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	var content, reasoning strings.Builder
-	partials := map[int]*toolCallItem{}
-	order := make([]int, 0, 4)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if data == "" || data == "[DONE]" {
-			continue
-		}
-		var chunk streamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
-		}
-		if chunk.Error != nil && strings.TrimSpace(chunk.Error.Message) != "" {
-			return nil, fmt.Errorf("模型错误: %s", chunk.Error.Message)
-		}
-		for _, choice := range chunk.Choices {
-			if text := choice.Delta.ReasoningContent; text != "" {
-				reasoning.WriteString(text)
-				guard.Feed(loopguard.KindThink, text)
-				console.StreamDelta(role, console.KindThink, text)
-			}
-			if text := choice.Delta.Content; text != "" {
-				content.WriteString(text)
-				guard.Feed(loopguard.KindContent, text)
-				console.StreamDelta(role, console.KindContent, text)
-			}
-			for _, delta := range choice.Delta.ToolCalls {
-				item, ok := partials[delta.Index]
-				if !ok {
-					item = &toolCallItem{}
-					partials[delta.Index] = item
-					order = append(order, delta.Index)
-				}
-				if delta.ID != "" {
-					item.ID = delta.ID
-				}
-				if delta.Type != "" {
-					item.Type = delta.Type
-				}
-				if delta.Function.Name != "" {
-					item.Function.Name = delta.Function.Name
-				}
-				item.Function.Arguments += delta.Function.Arguments
-			}
-		}
-	}
-	guard.Stop()
-	if guard.Hit() {
-		return nil, loopguard.ErrLoop
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("读取模型流失败: %w", err)
-	}
-	result := &modelResponse{
-		Content:   strings.TrimSpace(content.String()),
-		Reasoning: strings.TrimSpace(reasoning.String()),
-	}
-	for _, index := range order {
-		result.ToolCalls = append(result.ToolCalls, *partials[index])
-	}
-	if result.Content == "" && len(result.ToolCalls) == 0 {
-		return nil, fmt.Errorf("模型返回空响应")
-	}
-	fillToolCallDefaults(result)
-	return result, nil
-}
-
-// fillToolCallDefaults 补齐工具调用的 ID / Type（流式与整包两条路径共用）。
-func fillToolCallDefaults(result *modelResponse) {
-	for i := range result.ToolCalls {
-		if strings.TrimSpace(result.ToolCalls[i].ID) == "" {
-			result.ToolCalls[i].ID = fmt.Sprintf("call_%d", i)
-		}
-		if strings.TrimSpace(result.ToolCalls[i].Type) == "" {
-			result.ToolCalls[i].Type = "function"
-		}
-	}
-}
-
-// parseCompletion 兼容原始响应与 {success,data} 包装响应。
-func parseCompletion(raw []byte) (*chatCompletion, error) {
-	var direct chatCompletion
-	if err := json.Unmarshal(raw, &direct); err == nil && len(direct.Choices) > 0 {
-		return &direct, nil
-	}
-	var wrapper struct {
-		Success *bool           `json:"success"`
-		Data    json.RawMessage `json:"data"`
-		Error   *struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(raw, &wrapper); err != nil {
-		return nil, fmt.Errorf("解析模型响应失败: %w（响应：%s）", err, previewRunes(string(raw), 200))
-	}
-	if wrapper.Success != nil && !*wrapper.Success {
-		message := "未知错误"
-		if wrapper.Error != nil && strings.TrimSpace(wrapper.Error.Message) != "" {
-			message = wrapper.Error.Message
-		}
-		return nil, fmt.Errorf("模型返回失败: %s", message)
-	}
-	if len(wrapper.Data) == 0 {
-		return nil, fmt.Errorf("解析模型响应失败：%s", previewRunes(string(raw), 200))
-	}
-	var completion chatCompletion
-	if err := json.Unmarshal(wrapper.Data, &completion); err != nil {
-		return nil, fmt.Errorf("解析模型 data 失败: %w", err)
-	}
-	if completion.Error != nil && strings.TrimSpace(completion.Error.Message) != "" {
-		return nil, fmt.Errorf("模型错误: %s", completion.Error.Message)
-	}
-	return &completion, nil
-}
-
 // runToolLoop 通用工具推理循环：模型通过 function calling 逐步调用工具，
 // 同一输出/工具调用重复到上限即返回循环错误。
+//
+// 循环编排、重复检测与失败上报统一由 protocol/agentbase 的 RunToolLoop 承担；
+// 本函数只保留创作链特有的上下文预算、超限重试与步骤收尾文案。
 func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instruction string, tools []toolDefinition, handler toolHandlerFunc) (string, error) {
-	messages := []chatMessage{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: instruction},
-	}
-	seen := map[string]int{}
 	lastSummary := ""
 	limit := maxExecutorRounds
 	if role == plannerLabel {
 		limit = maxPlannerRounds
 	}
-	for round := 0; round < limit; round++ {
+	base := agentbase.NewAgent(agentbase.AgentConfig{
+		ID:                 "creative",
+		Label:              role,
+		MaxRounds:          limit,
+		MaxRepeats:         maxRepeats,
+		MaxToolResultRunes: -1, // 工具结果由 toolResultContent 截断，保留原有提示文案
+	})
+	result, err := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{
+		Messages: []agentbase.Message{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: instruction},
+		},
+		Tools: tools,
+		Stream: agentbase.StreamRequest{
+			Agent:       "creative",
+			Role:        role,
+			Timeout:     modelTimeout,
+			ReportTools: true,
+		},
 		// 每轮请求前收紧预算：工具结果累计过长时压缩较早内容，避免单次请求超出模型上下文
-		compactToolResults(messages)
-		// 生活系统（自由创作）的每次模型调用同样上报「推理实况」，
-		// 否则用户只能看到日志，看不到调度者与各专属智能体的思考/输出。
-		response, err := chatWithToolsStreamed(ctx, role, messages, tools)
-		if err != nil && isContextOverflow(err) {
-			// 模型仍报上下文超限：激进压缩历史后重试一次，避免整个步骤被跳过
-			shrinkMessages(messages)
-			response, err = chatWithToolsStreamed(ctx, role, messages, tools)
-		}
-		if err != nil {
-			return "", err
-		}
-		messages = append(messages, chatMessage{
-			Role:      "assistant",
-			Content:   response.Content,
-			ToolCalls: response.ToolCalls,
-		})
-		if len(response.ToolCalls) == 0 {
-			return strings.TrimSpace(response.Content), nil
-		}
-
-		key := signatureOf(response)
-		seen[key]++
-		if seen[key] >= maxRepeats {
-			return "", fmt.Errorf("%w（%s 第 %d 轮出现重复的工具调用）", errLoopOutput, role, round+1)
-		}
-
-		for _, call := range response.ToolCalls {
-			args, parseErr := parseToolArgs(call.Function.Arguments)
+		BeforeRound: func(_ int, messages []agentbase.Message) []agentbase.Message {
+			compactToolResults(messages)
+			return messages
+		},
+		// 生活系统（自由创作）的每次模型调用同样上报「推理实况」。
+		// 模型仍报上下文超限时，激进压缩历史后重试一次，避免整个步骤被跳过。
+		Call: func(ctx context.Context, _ int, messages []agentbase.Message, tools []agentbase.ToolDefinition) (agentbase.Reply, error) {
+			reply, streamErr := agentbase.Stream(ctx, agentbase.StreamRequest{
+				Agent:       "creative",
+				Role:        role,
+				Messages:    messages,
+				Tools:       tools,
+				Timeout:     modelTimeout,
+				ReportTools: true,
+			})
+			if streamErr != nil && isContextOverflow(streamErr) {
+				shrinkMessages(messages)
+				reply, streamErr = agentbase.Stream(ctx, agentbase.StreamRequest{
+					Agent:       "creative",
+					Role:        role,
+					Messages:    messages,
+					Tools:       tools,
+					Timeout:     modelTimeout,
+					ReportTools: true,
+				})
+			}
+			return reply, streamErr
+		},
+		// 工具自身的业务错误写入回填内容并继续循环（与迁移前一致）。
+		Execute: func(_ context.Context, call agentbase.ToolCall) (string, bool, error) {
+			args, parseErr := agentbase.ParseToolArgs(call.Function.Arguments)
 			if parseErr != nil {
 				outcome := toolOutcome{JSON: `{"error":"参数不是合法 JSON"}`, Summary: "参数解析失败"}
-				console.StreamToolResult(role, outcome.Summary)
-				messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Content: toolResultContent(outcome)})
 				lastSummary += outcome.Summary + "；"
-				continue
+				return toolResultContent(outcome), false, nil
 			}
 			outcome, done, execErr := handler(call.Function.Name, args)
 			if execErr != nil {
@@ -309,73 +102,27 @@ func (s *session) runToolLoop(ctx context.Context, role, systemPrompt, instructi
 					Summary: call.Function.Name + " 失败",
 				}
 			}
-			console.StreamToolResult(role, outcome.Summary)
 			if outcome.Reference != "" {
 				s.addReference(outcome.Reference)
 			}
-			messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Content: toolResultContent(outcome)})
 			lastSummary += outcome.Summary + "；"
-			if done {
-				return response.Content, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("%s 在 %d 轮内没有完成，已执行的步骤：%s", role, limit, strings.TrimSuffix(lastSummary, "；"))
-}
-
-// chatWithToolsStreamed 包装一次模型调用：思考与输出由 chatWithTools 边收边推送，
-// 这里只负责一轮实况的起止与工具调用的展示。
-func chatWithToolsStreamed(ctx context.Context, role string, messages []chatMessage, tools []toolDefinition) (*modelResponse, error) {
-	console.StreamBegin(role)
-	response, err := chatWithTools(ctx, role, messages, tools)
+			return toolResultContent(outcome), done, nil
+		},
+		// 步骤级失败保持原有「记录并跳过」语义，不额外触发智能修复。
+		DisableReport: true,
+	})
 	if err != nil {
-		console.StreamEnd(role)
-		return nil, err
+		if errors.Is(err, agentbase.ErrMaxRounds) {
+			return "", fmt.Errorf("%s 在 %d 轮内没有完成，已执行的步骤：%s", role, limit, strings.TrimSuffix(lastSummary, "；"))
+		}
+		return "", err
 	}
-	for _, call := range response.ToolCalls {
-		console.StreamTool(role, call.Function.Name, call.Function.Arguments)
-	}
-	console.StreamEnd(role)
-	return response, nil
-}
-
-// signatureOf 生成一轮响应的签名，用于循环检测。
-func signatureOf(response *modelResponse) string {
-	var b strings.Builder
-	b.WriteString(response.Content)
-	b.WriteByte('|')
-	for _, call := range response.ToolCalls {
-		b.WriteString(call.Function.Name)
-		b.WriteByte(':')
-		b.WriteString(call.Function.Arguments)
-		b.WriteByte(';')
-	}
-	return b.String()
-}
-
-// parseToolArgs 解析模型给出的 JSON 参数；空串视为空对象。
-func parseToolArgs(raw string) (map[string]any, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "null" {
-		return map[string]any{}, nil
-	}
-	var args map[string]any
-	if err := json.Unmarshal([]byte(raw), &args); err != nil {
-		return nil, err
-	}
-	if args == nil {
-		args = map[string]any{}
-	}
-	return args, nil
+	return strings.TrimSpace(result.Reply.Text), nil
 }
 
 // previewRunes 按字符截断。
 func previewRunes(text string, limit int) string {
-	runes := []rune(strings.TrimSpace(text))
-	if len(runes) <= limit {
-		return string(runes)
-	}
-	return string(runes[:limit]) + "…"
+	return agentbase.TruncateRunes(text, limit)
 }
 
 // clipAtSentence 按标点截断：优先在句末标点处收尾，其次在逗号/顿号等分句标点处收尾。

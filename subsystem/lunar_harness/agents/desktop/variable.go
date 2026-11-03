@@ -8,7 +8,6 @@ package desktop
 import (
 	"context"
 	"errors"
-	"net/http"
 	"sync"
 	"syscall"
 	"time"
@@ -91,18 +90,6 @@ const (
 	// uiaDumpTimeout 读取 UIA 树的最长执行时间。
 	uiaDumpTimeout = 5 * time.Second
 )
-
-// 模型配置缓存：惰性读取一次后端 lunar_config.json 中 agent 多模态字段。
-var autoConfigOnce sync.Once
-
-// autoModel 模型名称
-var autoModel string
-
-// autoURL 模型 API 地址
-var autoURL string
-
-// autoHTTPClient 共享的模型 API 客户端，带 120 秒超时。
-var autoHTTPClient = &http.Client{Timeout: 120 * time.Second}
 
 // uiaOnceDT UIA 客户端实例初始化一次
 var uiaOnceDT sync.Once

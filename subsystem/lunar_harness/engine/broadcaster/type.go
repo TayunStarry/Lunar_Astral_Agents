@@ -12,7 +12,7 @@ import (
 // textToSpeech 绑定、LTP9 包工具）强制收敛到本包 /broadcaster 端点族，单一合成
 // 入口按请求 engine 参数（缺省 tts.engine 配置，默认 Qwen）选择引擎执行。
 //
-// 参数层面统一：所有引擎共用同一套字段。lunar_config.json「tts」节仅作默认值
+// 参数层面统一：所有引擎共用同一套字段。config/general.json「tts」节仅作默认值
 // 来源——请求未携带的字段回退配置默认值，请求显式提供的值优先覆写配置。
 // 其中需区分「未携带」与「显式零值」的三个字段（speed/seed/disable_postproc）
 // 采用指针类型：nil 表示未携带（用配置默认），非 nil 表示显式覆写（即使为 0/false）；

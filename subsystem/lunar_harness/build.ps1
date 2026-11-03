@@ -81,7 +81,7 @@ function Invoke-NativeCommand {
     }
 }
 
-# ---------- 关闭已启动的核心人格服务 ----------
+# ---------- 关闭已启动的月华服务 ----------
 # 运行中的进程会占用输出可执行文件，且会锁住 TTS 引擎 DLL，必须先关闭。
 function Stop-RunningCore {
     $processes = @()
@@ -89,7 +89,7 @@ function Stop-RunningCore {
         $processes += Get-Process -Name $name -ErrorAction SilentlyContinue
     }
     if (-not $processes) {
-        Write-Host "未检测到运行中的核心人格服务" -ForegroundColor DarkGray
+        Write-Host "未检测到运行中的月华服务" -ForegroundColor DarkGray
         return
     }
 
@@ -97,10 +97,10 @@ function Stop-RunningCore {
         try {
             $process.Kill()
             $process.WaitForExit(5000) | Out-Null
-            Write-Host "已关闭核心人格服务 (PID $($process.Id))" -ForegroundColor Green
+            Write-Host "已关闭月华服务 (PID $($process.Id))" -ForegroundColor Green
         }
         catch {
-            Write-Host "关闭核心人格服务失败 (PID $($process.Id)): $_" -ForegroundColor Yellow
+            Write-Host "关闭月华服务失败 (PID $($process.Id)): $_" -ForegroundColor Yellow
         }
     }
 
@@ -180,7 +180,7 @@ try {
     # 编译图标
     Build-IconIfNeeded
 
-    # 关闭已启动的核心人格服务
+    # 关闭已启动的月华服务
     Stop-RunningCore
 
     $binaryName = "Lunar_Astral_Agents.exe"
@@ -189,10 +189,10 @@ try {
     # 按需构建两个 TTS 引擎库（统一入口 engine\broadcaster\native\build_tts.ps1；
     # 须在关闭服务之后：运行中的进程会锁住 DLL）
     Invoke-TtsLibBuildIfNeeded -Name "QwenTTS" `
-        -DllPath (Join-Path $repoRoot "local_data\models\Qwen3-TTS\qwen3tts.dll") `
+        -DllPath (Join-Path $repoRoot "local_data\models\broadcaster\qwen3tts.dll") `
         -BuildScript (Join-Path $ScriptDir "engine\broadcaster\qwen\build.ps1")
     Invoke-TtsLibBuildIfNeeded -Name "OmniVoiceTTS" `
-        -DllPath (Join-Path $repoRoot "local_data\models\OmniVoice\omnivoice.dll") `
+        -DllPath (Join-Path $repoRoot "local_data\models\broadcaster\omnivoice.dll") `
         -BuildScript (Join-Path $ScriptDir "engine\broadcaster\omnivoice\build.ps1")
 
     # 生成端点自述文档（须在设置 GOOS/GOARCH 之前）

@@ -8,7 +8,8 @@ package FileEditor
 //   document_reader  文献解析：理解文档正文
 //   vision           视觉理解：图片 / 动图 / 视频
 //
-// target 可选：给了就直接用；缺省时从 instruction 中提取句柄、压缩包路径或链接。
+// 输入严格使用统一原语 {type, instruction, handle, details}，
+// 输出统一为 {result, handle, error}；handle 给出目标路径或句柄，缺省时从 instruction 提取。
 
 import (
 	"context"
@@ -22,6 +23,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
 	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
 )
 
 // archiveTargetPattern instruction 中的压缩包 / GGUF 路径
@@ -30,101 +32,138 @@ var archiveTargetPattern = regexp.MustCompile(`(?i)[\p{L}\p{N}_./\\-]+\.(?:zip|l
 // urlPattern instruction 中的视频 / 网页链接
 var urlPattern = regexp.MustCompile(`https?://[^\s"'<>（）()，。；]+`)
 
-// scheduleTask 按 type 单方面调度目标智能体。
+// scheduleTask 按 type 单方面调度目标智能体，并序列化为统一输出。
 func scheduleTask(ctx context.Context, args map[string]any) OpResult {
-	kind := strings.ToLower(strings.TrimSpace(argString(args, "type")))
-	instruction := strings.TrimSpace(argString(args, "instruction"))
-	target := strings.TrimSpace(argString(args, "target"))
-	if instruction == "" {
-		return failResult(ToolSchedule, target, fmt.Errorf("instruction 不能为空，请用自然语言说明要做什么"))
+	call, err := agentdispatch.Parse(args)
+	if err != nil {
+		return agentResult(agentdispatch.Failure(err.Error(), nil))
+	}
+	kind := strings.ToLower(call.Type)
+	if call.Details {
+		if text, ok := scheduleScope(kind); ok {
+			return agentResult(agentdispatch.Success(text, nil))
+		}
+		return agentResult(agentdispatch.Failure("type 只能取 archive_ops / archive_reader / document_reader / vision", nil))
+	}
+	if call.Instruction == "" {
+		return agentResult(agentdispatch.Failure("instruction 不能为空，请用自然语言说明要做什么", nil))
 	}
 	switch kind {
 	case ScheduleArchiveOps:
-		return scheduleArchiveOps(ctx, instruction, target)
+		return agentResult(scheduleArchiveOps(ctx, call.Instruction, call.Handle))
 	case ScheduleArchiveReader:
-		return scheduleArchiveReader(instruction, target)
+		return agentResult(scheduleArchiveReader(call.Instruction, call.Handle))
 	case ScheduleDocumentReader:
-		return scheduleDocumentReader(instruction, target)
+		return agentResult(scheduleDocumentReader(ctx, call.Instruction, call.Handle))
 	case ScheduleVision:
-		return scheduleVision(instruction, target)
+		return agentResult(scheduleVision(call.Instruction, call.Handle))
 	default:
-		return failResult(ToolSchedule, target,
-			fmt.Errorf("type 只能取 archive_ops / archive_reader / document_reader / vision"))
+		return agentResult(agentdispatch.Failure("type 只能取 archive_ops / archive_reader / document_reader / vision", nil))
+	}
+}
+
+// scheduleScope 返回各调度目标的职能范围描述（details=true 专用，不产生副作用）。
+func scheduleScope(kind string) (string, bool) {
+	switch kind {
+	case ScheduleArchiveOps:
+		return "归档操作子智能体：创建 / 删除压缩包、增删压缩包条目。", true
+	case ScheduleArchiveReader:
+		return "归档解析子智能体：查看压缩包结构、读取条目内容、解析 GGUF 元数据。", true
+	case ScheduleDocumentReader:
+		return "文献解析子智能体：理解文档正文与结构，按需求查阅内容。", true
+	case ScheduleVision:
+		return "视觉理解子智能体：观看图片、动图与视频并给出描述。", true
+	}
+	return "", false
+}
+
+// agentResult 把统一输出原语包装成本智能体的操作结果：
+// 序列化时只输出 {result, handle, error}，Summary 仅供控制台展示。
+func agentResult(result agentdispatch.Result) OpResult {
+	summary := result.Result
+	if summary == "" {
+		summary = result.Error
+	}
+	return OpResult{
+		OK:       result.Error == "",
+		Op:       ToolSchedule,
+		Handles:  result.Handle,
+		Summary:  summary,
+		Dispatch: &result,
 	}
 }
 
 // scheduleArchiveOps 调度归档操作：自然语言指令交给归档操作智能体自行拆解
-func scheduleArchiveOps(ctx context.Context, instruction, target string) OpResult {
-	if target != "" {
-		instruction += "\n（目标：" + target + "）"
-	}
+func scheduleArchiveOps(ctx context.Context, instruction string, handles []string) agentdispatch.Result {
+	instruction = agentdispatch.WithHandles(instruction, handles)
 	result, err := ArchiveOps.Execute(ctx, instruction)
 	if err != nil {
-		return failResult(ToolSchedule, target, fmt.Errorf("归档操作调度失败: %w", err))
+		return agentdispatch.Failure("归档操作调度失败: "+err.Error(), nil)
 	}
 	if !result.OK {
-		return OpResult{
-			OK:      false,
-			Op:      ToolSchedule,
-			Path:    result.Path,
-			Handles: []string{},
-			Summary: result.Summary,
-			Detail:  result.Detail,
-		}
+		return agentdispatch.PartialFailure(fmt.Sprintf("归档操作未成功：%s", strings.TrimSpace(result.Summary)), result.Summary, result.Handles)
 	}
-	return newResult(ToolSchedule, result.Path, result.Summary, result.Handles, result.Detail)
+	return agentdispatch.Success(result.Summary, result.Handles)
 }
 
 // scheduleArchiveReader 调度归档解析：压缩包结构与 GGUF 由归档解析确定性返回
-func scheduleArchiveReader(instruction, target string) OpResult {
-	path := target
+func scheduleArchiveReader(instruction string, handles []string) agentdispatch.Result {
+	path := firstHandle(handles)
 	if path == "" {
 		path = archiveTargetPattern.FindString(instruction)
 	}
 	if path == "" {
-		return failResult(ToolSchedule, "", fmt.Errorf(
-			"请提供压缩包或 GGUF 路径（用 target 参数，或在 instruction 里写清路径）"))
+		return agentdispatch.Failure("请提供压缩包或 GGUF 路径（用 handle 参数，或在 instruction 里写清路径）", nil)
 	}
 	path = archiveTargetPath(path)
 	text, err := ArchiveReader.Inspect(path, instruction)
 	if err != nil {
-		return failResult(ToolSchedule, path, fmt.Errorf("归档解析失败: %w", err))
+		return agentdispatch.Failure("归档解析失败: "+err.Error(), nil)
 	}
-	return newResult(ToolSchedule, path, text, nil, nil)
+	return agentdispatch.Success(text, nil)
 }
 
 // scheduleDocumentReader 调度文献解析：理解文档正文与结构
-func scheduleDocumentReader(instruction, target string) OpResult {
-	handle, err := resolveDocumentHandle(target, instruction)
+func scheduleDocumentReader(ctx context.Context, instruction string, handles []string) agentdispatch.Result {
+	handle, err := resolveDocumentHandle(strings.Join(handles, " "), instruction)
 	if err != nil {
-		return failResult(ToolSchedule, target, err)
+		return agentdispatch.Failure(err.Error(), nil)
 	}
-	text, err := DocumentReader.InspectText(handle, instruction)
+	text, err := DocumentReader.InspectTextContext(ctx, handle, instruction)
 	if err != nil {
-		return failResult(ToolSchedule, handle, fmt.Errorf("文献解析失败: %w", err))
+		return agentdispatch.Failure("文献解析失败: "+err.Error(), []string{handle})
 	}
-	return newResult(ToolSchedule, handle, text, []string{handle}, nil)
+	return agentdispatch.Success(text, []string{handle})
 }
 
 // scheduleVision 调度视觉理解：图片 / 动图走观看管线，链接走视频印象
-func scheduleVision(instruction, target string) OpResult {
-	raw, isVideo := resolveVisualTarget(target, instruction)
+func scheduleVision(instruction string, handles []string) agentdispatch.Result {
+	raw, isVideo := resolveVisualTarget(strings.Join(handles, " "), instruction)
 	if raw == "" {
-		return failResult(ToolSchedule, "", fmt.Errorf(
-			"请提供图片 / 动图句柄或视频链接（用 target 参数，或在 instruction 里写清句柄）"))
+		return agentdispatch.Failure("请提供图片 / 动图句柄或视频链接（用 handle 参数，或在 instruction 里写清句柄）", nil)
 	}
 	if isVideo {
 		text, err := Vision.DescribeVideoURL(raw, instruction)
 		if err != nil {
-			return failResult(ToolSchedule, raw, fmt.Errorf("视觉理解失败: %w", err))
+			return agentdispatch.Failure("视觉理解失败: "+err.Error(), nil)
 		}
-		return newResult(ToolSchedule, raw, text, nil, nil)
+		return agentdispatch.Success(text, nil)
 	}
 	text, err := Vision.DescribeMedia(raw, instruction)
 	if err != nil {
-		return failResult(ToolSchedule, raw, fmt.Errorf("视觉理解失败: %w", err))
+		return agentdispatch.Failure("视觉理解失败: "+err.Error(), []string{raw})
 	}
-	return newResult(ToolSchedule, raw, text, []string{raw}, nil)
+	return agentdispatch.Success(text, []string{raw})
+}
+
+// firstHandle 取第一个非空目标（多句柄任务只用首个作为显式入口）。
+func firstHandle(handles []string) string {
+	for _, handle := range handles {
+		if text := strings.TrimSpace(handle); text != "" {
+			return text
+		}
+	}
+	return ""
 }
 
 // resolveDocumentHandle 取文档句柄：优先句柄，其次 /document 内的路径

@@ -60,6 +60,22 @@ func archiveOutputRel(rel string) string {
 	return resource.StorageRootUnknown + "/" + filepath.Base(rel)
 }
 
+// OutputPath 返回创建压缩包时的最终落点（相对 LocalDir）。
+//
+// 供上层流程在写入前抓取版本快照：创建操作的实际产物可能不在调用方给出的路径上，
+// 快照必须对准真实落点，回滚才能删掉/还原正确的文件。
+func OutputPath(target string) (string, error) {
+	_, rel, err := ArchiveReader.ResolveFilePath(target)
+	if err != nil {
+		return "", err
+	}
+	ext := strings.ToLower(filepath.Ext(rel))
+	if ext != ".zip" && ext != ".ltpx" {
+		return "", fmt.Errorf("压缩包仅支持 .zip / .ltpx 后缀，当前为 %s", ext)
+	}
+	return archiveOutputRel(rel), nil
+}
+
 // registerArchiveHandle 重新登记压缩包句柄（失败时返回空串）
 func registerArchiveHandle(rel string) string {
 	_, handle, err := resource.RegisterPath(rel)

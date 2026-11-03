@@ -1,0 +1,178 @@
+/* ============================================================
+   星月智能 · 共享音乐播放器样式（桌面端与移动端同一套视觉语言）
+   ============================================================ */
+
+.lunar-music-card {
+    --lunar-music-accent: var(--accent-color, #9d6bff);
+    --lunar-music-accent-2: var(--brand-color, #6c9bcf);
+    --lunar-music-ink: var(--text-primary, #1f2937);
+    --lunar-music-muted: var(--text-secondary, rgba(31, 41, 55, 0.62));
+    display: block;
+    margin: 8px 0;
+    padding: 12px 14px;
+    border-radius: var(--radius-md, 14px);
+    background: var(--badge-music-bg, rgba(157, 107, 255, 0.1));
+    border: 1px solid rgba(157, 107, 255, 0.26);
+    box-sizing: border-box;
+}
+
+.lunar-music-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.lunar-music-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--badge-music-color, var(--lunar-music-accent));
+}
+
+.lunar-music-title i {
+    font-size: 0.8rem;
+    opacity: 0.85;
+    flex-shrink: 0;
+}
+
+.lunar-music-title span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.lunar-music-summary {
+    margin-top: 4px;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: var(--lunar-music-muted);
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.lunar-music-player {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.lunar-music-toggle {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.82rem;
+    background: linear-gradient(135deg, var(--lunar-music-accent), var(--lunar-music-accent-2));
+    box-shadow: 0 4px 12px rgba(157, 107, 255, 0.32);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.lunar-music-toggle:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(157, 107, 255, 0.42);
+}
+
+.lunar-music-toggle:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    box-shadow: none;
+}
+
+.lunar-music-wave {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 46px;
+    cursor: pointer;
+    border-radius: 10px;
+    background: rgba(157, 107, 255, 0.08);
+    overflow: hidden;
+    touch-action: none;
+}
+
+.lunar-music-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.lunar-music-state {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    text-align: center;
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    color: var(--lunar-music-muted);
+    pointer-events: none;
+}
+
+.lunar-music-card[data-state="loading"] .lunar-music-state,
+.lunar-music-card[data-state="audio-error"] .lunar-music-state,
+.lunar-music-card[data-state="empty"] .lunar-music-state {
+    display: flex;
+}
+
+.lunar-music-card[data-state="loading"] .lunar-music-canvas,
+.lunar-music-card[data-state="audio-error"] .lunar-music-canvas,
+.lunar-music-card[data-state="empty"] .lunar-music-canvas {
+    opacity: 0.35;
+}
+
+.lunar-music-notice {
+    margin-top: 6px;
+    font-size: 0.66rem;
+    color: var(--lunar-music-muted);
+    opacity: 0.85;
+}
+
+.lunar-music-times {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--lunar-music-muted);
+}
+
+/* 深色模式（桌面端 body.dark-mode） */
+body.dark-mode .lunar-music-card {
+    --lunar-music-ink: #f2ecff;
+    --lunar-music-muted: rgba(242, 236, 255, 0.66);
+    background: rgba(157, 107, 255, 0.16);
+    border-color: rgba(157, 107, 255, 0.34);
+}
+
+/* 移动端窄屏：压缩高度与留白 */
+@media (max-width: 768px) {
+    .lunar-music-card {
+        padding: 10px 12px;
+        border-radius: 16px;
+    }
+
+    .lunar-music-toggle {
+        width: 34px;
+        height: 34px;
+    }
+
+    .lunar-music-wave {
+        height: 40px;
+    }
+}

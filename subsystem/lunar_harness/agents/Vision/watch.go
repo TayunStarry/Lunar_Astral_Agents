@@ -16,10 +16,10 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/model/agentchat"
 	"LunarSubsystem/LunarHarness/engine/multimodal"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // watchSlices 观看切片序列，返回整体感受（无定向问题时写回资源目录）
@@ -29,7 +29,7 @@ func watchSlices(res resource.Resource, slices []multimodal.WatchSlice, label, q
 	}
 	// 抽帧结果写入统一缓存表，同一视频再次解读时可直接复用
 	cacheSliceFrames(res, slices)
-	system := agentchat.PromptText("lifeRole.md")
+	system := agentbase.PromptText("lifeRole.md")
 	if strings.TrimSpace(question) != "" {
 		return watchQuestion(system, slices, question)
 	}
@@ -65,16 +65,16 @@ func watchSlices(res resource.Resource, slices []multimodal.WatchSlice, label, q
 // watchSlice 观看一个切片（失败自动重试一次）
 func watchSlice(system, label string, slice multimodal.WatchSlice, index, total int) (string, error) {
 	task := multimodal.WatchTask(index, total, slice, "这是"+label+"画面。")
-	parts := make([]agentchat.ContentPart, 0, len(slice.Images)+1)
-	parts = append(parts, agentchat.ContentPart{Type: "text", Text: task})
+	parts := make([]agentbase.ContentPart, 0, len(slice.Images)+1)
+	parts = append(parts, agentbase.ContentPart{Type: "text", Text: task})
 	for _, image := range slice.Images {
-		parts = append(parts, agentchat.ContentPart{Type: "image_url", ImageURL: &agentchat.ImageURL{URL: image}})
+		parts = append(parts, agentbase.ContentPart{Type: "image_url", ImageURL: &agentbase.ImageURL{URL: image}})
 	}
-	messages := []agentchat.Message{
+	messages := []agentbase.Message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: parts},
 	}
-	return agentchat.ChatWithRetry(roleLabel, messages, nil, fmt.Sprintf("%s 第 %d/%d 片", label, index, total))
+	return agentbase.ChatWithRetry(roleLabel, messages, nil, fmt.Sprintf("%s 第 %d/%d 片", label, index, total))
 }
 
 // watchQuestion 针对整段影像的定向提问：各片采样帧合并后再取一次等距子集，单次调用回答
@@ -87,16 +87,16 @@ func watchQuestion(system string, slices []multimodal.WatchSlice, question strin
 	if len(images) == 0 {
 		return "", fmt.Errorf("定向提问缺少可用画面")
 	}
-	parts := make([]agentchat.ContentPart, 0, len(images)+1)
-	parts = append(parts, agentchat.ContentPart{Type: "text", Text: multimodal.WatchQuestionTask(question)})
+	parts := make([]agentbase.ContentPart, 0, len(images)+1)
+	parts = append(parts, agentbase.ContentPart{Type: "text", Text: multimodal.WatchQuestionTask(question)})
 	for _, image := range images {
-		parts = append(parts, agentchat.ContentPart{Type: "image_url", ImageURL: &agentchat.ImageURL{URL: image}})
+		parts = append(parts, agentbase.ContentPart{Type: "image_url", ImageURL: &agentbase.ImageURL{URL: image}})
 	}
-	messages := []agentchat.Message{
+	messages := []agentbase.Message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: parts},
 	}
-	return agentchat.ChatWithRetry(roleLabel, messages, nil, "影像定向提问")
+	return agentbase.ChatWithRetry(roleLabel, messages, nil, "影像定向提问")
 }
 
 // cacheSliceFrames 把切片抽帧图落到 multimedia/footage 并登记统一缓存表（best-effort）
@@ -146,7 +146,7 @@ func cacheSliceFrames(res resource.Resource, slices []multimodal.WatchSlice) {
 func mergeImpressions(system string, total int, concatenated string) (string, error) {
 	task := fmt.Sprintf("%s\n\n以上是同一段影像按时间顺序的 %d 段观看记录：\n%s",
 		multimodal.WatchMergeTask(), total, concatenated)
-	merged, err := agentchat.ChatWithRetry(roleLabel, []agentchat.Message{
+	merged, err := agentbase.ChatWithRetry(roleLabel, []agentbase.Message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: task},
 	}, nil, "整体感受")

@@ -6,9 +6,11 @@ package WebSearch
 // 系统段是稳定的行为约束，用户模板只保留带 {占位符} 的数据骨架。
 
 import (
+	"strings"
+
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/prompts"
-	"strings"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // loadPrompt 读取提示词文本（读取失败返回空串）
@@ -37,14 +39,5 @@ func loadPromptPair(name string) (string, string) {
 //
 // 单次替换避免正文里的 `{xxx}` 被二次展开（网页正文含花括号很常见）。
 func renderPrompt(template string, pairs ...string) string {
-	values := make(map[string]string, len(pairs)/2)
-	for i := 0; i+1 < len(pairs); i += 2 {
-		values[pairs[i]] = pairs[i+1]
-	}
-	return placeholderPattern.ReplaceAllStringFunc(template, func(key string) string {
-		if value, ok := values[key]; ok {
-			return value
-		}
-		return key
-	})
+	return agentbase.RenderPrompt(template, pairs...)
 }

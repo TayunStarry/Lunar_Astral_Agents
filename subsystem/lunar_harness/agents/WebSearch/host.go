@@ -15,10 +15,10 @@ package WebSearch
 // 配置来自 engine/config 统一解析的 web_search 节。
 
 import (
-	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/weather"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"context"
 	"fmt"
 	"strconv"
@@ -29,7 +29,7 @@ import (
 // Run 执行一次网络搜索：月华自然语言指令 → 搜索报告（文本）。
 // 失败统一上报给智能修复（循环截断与主动取消已在 ReportRun 内过滤）。
 func Run(instruction string) (out string, err error) {
-	defer func() { Savior.ReportRun("web_search", err) }()
+	defer func() { agentbase.ReportRun("web_search", err) }()
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
 		return "", fmt.Errorf("空指令")
@@ -41,12 +41,14 @@ func Run(instruction string) (out string, err error) {
 	cfg := LoadConfig()
 	started := time.Now()
 	deadline := started.Add(time.Duration(cfg.MaxRunSeconds) * time.Second)
+	runCtx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
 	logger.Info("CrystalAstral", "Web-Search 网络搜索开始: %s", truncateRunes(instruction, 80))
 
 	// 步骤 0：卸载多模态模型、加载搜索模型，并在同一次调用里决定管线与检索词
 	profile, unloadSearchModel := prepareSearchModel(cfg)
 	defer unloadSearchModel()
-	decision := Route(instruction, profile)
+	decision := Route(runCtx, instruction, profile)
 	logger.Info("CrystalAstral", "Web-Search 路由决策: pipeline=%s 把握=%.2f query=%s",
 		decision.Pipeline, decisionConfidence(decision), truncateRunes(decision.Query, 60))
 
@@ -101,12 +103,20 @@ func Run(instruction string) (out string, err error) {
 	}
 
 	// 步骤 3：用「网页搜索:详情」同时打开全部详情页，全部加载后统一提取，随后统一关窗
-	captures, interrupted := collectDetailPages(targets, cfg, deadline)
+	// 总时长已用尽时不再开新窗口，直接用首页正文收尾，避免把整轮对话拖死。
+	captures := []PageCapture{}
+	interrupted := false
+	if !time.Now().After(deadline) {
+		captures, interrupted = collectDetailPages(targets, cfg, deadline)
+	} else {
+		interrupted = true
+		logger.SubWarn("CrystalAstral", "WebSearch", "总时长已用尽，跳过详情页采集")
+	}
 	cacheCaptures(cache, captures)
 
 	// 步骤 4：把全部页面正文拼接为长文，一次模型调用完成针对性摘要提取
 	// （以月华原始指令为准绳剔除噪音：只保留与所需信息直接相关的内容）
-	digest, digestErr := composeDigest(instruction, query, buildDigestSources(outcome.SearchText, captures), profile)
+	digest, digestErr := composeDigest(runCtx, instruction, query, buildDigestSources(outcome.SearchText, captures), profile)
 	if digestErr != nil {
 		loggerWarn("摘要提取失败，输出将走确定性兜底: %v", digestErr)
 	}

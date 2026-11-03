@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/transport/ws"
+	"LunarSubsystem/LunarHarness/engine/websocket"
 )
 
 // BridgeStructuredMessage 将统一集线器广播的结构化消息转发到 QQ（桥接未启用时直接返回）。
-// 由装配层注入为 ws.OnStructuredMessage：仅结构化广播触发，原始字节广播不触发。
-func BridgeStructuredMessage(response ws.WSResponse) {
+// 由装配层注入为 websocket.OnStructuredMessage：仅结构化广播触发，原始字节广播不触发。
+func BridgeStructuredMessage(response websocket.WSResponse) {
 	if !IsBridgingEnabled() {
 		return
 	}
@@ -30,6 +30,15 @@ func BridgeStructuredMessage(response ws.WSResponse) {
 		msgType, _ := dataMap["type"].(string)
 		content, _ := dataMap["content"].(string)
 		auto, _ := dataMap["auto"].(bool)
+		// 音乐消息没有 content，单独取音频字段转发；是否落到 QQ 由当前是否有 QQ 请求决定
+		if msgType == "music" {
+			audio, _ := dataMap["audio"].(string)
+			title, _ := dataMap["title"].(string)
+			summary, _ := dataMap["summary"].(string)
+			duration, _ := dataMap["duration"].(float64)
+			go HandleAgentMusicResponse(audio, title, summary, duration)
+			return
+		}
 		if content != "" {
 			go HandleAgentResponse(msgType, content, auto)
 		}

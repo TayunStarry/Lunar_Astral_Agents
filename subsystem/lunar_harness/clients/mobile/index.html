@@ -22,8 +22,11 @@
     <!-- 标准样式库 -->
     <link rel="stylesheet" href="/reliance/fontAwesome/css/all.min.css">
     <link rel="stylesheet" href="/reliance/multimedia_preview/styles.css">
+    <link rel="stylesheet" href="/reliance/music_player/music_player.css">
     <!-- 标准脚本库 -->
     <script src="/reliance/multimedia_preview/script.js"></script>
+    <!-- 共享音乐播放器（后端推送音频 + 波形显示） -->
+    <script src="/reliance/music_player/music_player.js"></script>
     <!-- 项目私有样式 -->
     <link rel="stylesheet" href="styles/variables.css">
     <link rel="stylesheet" href="styles/base.css">
@@ -70,6 +73,8 @@
 			</div>
 		</div>
 	</div>
+	<!-- 音乐播放器挂载区（后端推送的音乐） -->
+	<div class="music-dock" id="musicDock" hidden></div>
 	<!-- 通用悬浮消息组件 -->
 	<div class="toast-container" id="toastContainer"></div>
 	<!-- 错误提示条 -->

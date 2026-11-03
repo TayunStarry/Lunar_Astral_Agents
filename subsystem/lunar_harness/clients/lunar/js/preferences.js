@@ -19,7 +19,6 @@ function toggleTheme() {
     localStorage.setItem('message_terminal_theme', isDarkMode ? 'dark' : 'light');
     mermaidInitialized = false;
     initMermaid();
-    if (musicReady) musicChannel.postMessage({ type: 'theme', darkMode: isDarkMode });
 }
 
 function setupThemeToggle() {
@@ -145,11 +144,11 @@ function buildUserNamePrefix() {
 }
 
 // ---------- 角色渲染器 ----------
-// 从 lunar_config.json 的 system.character_renderer 读取；
+// 从 config/general.json 的 system.character_renderer 读取；
 // 非法或未定义时默认 bedrock（保持既有行为）
 async function loadCharacterRenderer() {
     try {
-        const res = await fetch('/file/read/lunar_config.json');
+        const res = await fetch('/file/read/config/general.json');
         if (!res.ok) return;
         const config = await res.json();
         const renderer = config && config.system ? config.system.character_renderer : null;

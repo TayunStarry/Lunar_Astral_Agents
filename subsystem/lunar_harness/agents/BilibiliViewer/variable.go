@@ -3,7 +3,7 @@ package BilibiliViewer
 // variable.go 哔哩观影的常量与全局状态集中管理。
 //
 // 数量类机制（候选几个、切片几段、记忆多长）都在这里定标；
-// 个人偏好放在 local_data/bilibili_life.json，不在代码里硬编码。
+// 个人偏好放在 local_data/config/bilibili.json，不在代码里硬编码。
 
 import (
 	"time"

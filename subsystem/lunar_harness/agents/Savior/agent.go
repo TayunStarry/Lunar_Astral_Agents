@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/model/loopguard"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
+	"LunarSubsystem/LunarHarness/protocol/loopguard"
 )
 
 // Report 上报一次智能体故障；同一智能体的故障只保留最新一条。
@@ -96,42 +97,55 @@ func repair(ctx context.Context, failure *Failure) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	messages := []chatMessage{
-		{Role: "system", Content: system},
-		{Role: "user", Content: fmt.Sprintf("请修复故障 #%d：%s 报错「%s」", failure.ID, failure.Agent, previewRunes(failure.Error, 300))},
-	}
-	seen := map[string]int{}
-	for round := 0; round < maxToolRounds; round++ {
-		response, callErr := chatWithTools(ctx, messages, repairTools())
-		if callErr != nil {
-			return "", callErr
-		}
-		messages = append(messages, chatMessage{
-			Role:      "assistant",
-			Content:   response.Content,
-			ToolCalls: response.ToolCalls,
-		})
-		if len(response.ToolCalls) == 0 {
-			text := strings.TrimSpace(response.Content)
-			if text == "" {
-				return "", fmt.Errorf("拯救者没有给出结论（%s）", previewRunes(response.Reasoning, 120))
-			}
-			return text, nil
-		}
-		key := signatureOf(response)
-		seen[key]++
-		if seen[key] >= 2 {
-			return "", fmt.Errorf("%w（第 %d 轮出现重复调用）", loopguard.ErrLoop, round+1)
-		}
-		for _, call := range response.ToolCalls {
+	finished := false
+	finishSummary := ""
+	base := agentbase.NewAgent(agentbase.AgentConfig{
+		ID:                 "savior",
+		Label:              roleLabel,
+		MaxRounds:          maxToolRounds,
+		MaxRepeats:         2,  // 与原实现一致：同一响应第二次出现即判定重复
+		MaxToolResultRunes: -1, // 工具结果原样回填
+	})
+	result, err := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{
+		Messages: []agentbase.Message{
+			{Role: "system", Content: system},
+			{Role: "user", Content: fmt.Sprintf("请修复故障 #%d：%s 报错「%s」", failure.ID, failure.Agent, previewRunes(failure.Error, 300))},
+		},
+		Tools: repairTools(),
+		Stream: agentbase.StreamRequest{
+			Agent:       "savior",
+			Role:        roleLabel,
+			Timeout:     modelTimeout,
+			ReportTools: true,
+		},
+		Execute: func(ctx context.Context, call agentbase.ToolCall) (string, bool, error) {
 			outcome := executeTool(ctx, failure, call.Function.Name, call.Function.Arguments)
-			messages = append(messages, chatMessage{Role: "tool", ToolID: call.ID, Content: outcome.JSON})
 			if outcome.Done {
-				return outcome.Summary, nil
+				finished = true
+				finishSummary = outcome.Summary
 			}
+			return outcome.JSON, outcome.Done, nil
+		},
+		// 修复器自身不上报，避免自修复递归。
+		DisableReport: true,
+	})
+	if err != nil {
+		if errors.Is(err, agentbase.ErrMaxRounds) {
+			return "", fmt.Errorf("在 %d 轮内没有完成修复", maxToolRounds)
 		}
+		if errors.Is(err, agentbase.ErrLoop) {
+			return "", fmt.Errorf("%w（第 %d 轮出现重复调用）", agentbase.ErrLoop, result.Rounds)
+		}
+		return "", err
 	}
-	return "", fmt.Errorf("在 %d 轮内没有完成修复", maxToolRounds)
+	if finished {
+		return finishSummary, nil
+	}
+	text := strings.TrimSpace(result.Reply.Text)
+	if text == "" {
+		return "", fmt.Errorf("拯救者没有给出结论（%s）", previewRunes(result.Reply.Reasoning, 120))
+	}
+	return text, nil
 }
 
 // take 取出最早的一条故障。
@@ -177,19 +191,6 @@ func silence(agent string) {
 	defer mu.Unlock()
 	cooldown[agent] = time.Now().Add(salvageCooldown)
 	logger.Warn(roleLabel, "[智能修复] %s 暂不修复（%d 次尝试未成功），静默 %v", agent, maxAttempts, salvageCooldown)
-}
-
-// signatureOf 生成一轮响应签名，用于循环检测。
-func signatureOf(response *modelResponse) string {
-	var b strings.Builder
-	b.WriteString(response.Content)
-	for _, call := range response.ToolCalls {
-		b.WriteString("|")
-		b.WriteString(call.Function.Name)
-		b.WriteString(":")
-		b.WriteString(call.Function.Arguments)
-	}
-	return b.String()
 }
 
 // previewRunes 按字符截断。

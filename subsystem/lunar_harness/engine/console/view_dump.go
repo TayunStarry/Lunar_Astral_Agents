@@ -12,7 +12,7 @@ import (
 // 上下文怎么涨的、日志里到底哪条先发生）。导出范围按「运行数据 / Go 智能体」重划：
 //   - 原始日志 → `.log`（JSON Lines）
 //   - 推理实况 → `.json`（模型调用轮次：思考全文 / 输出全文 / 工具序列 / 时长）
-//   - 核心人格 → `.json`（对话者 + 绘制者 + 演奏者 + 截图者 + 主上下文合并）
+//   - 对话者 → `.json`（对话者 + 月华主上下文）
 //   - 各 Go 智能体 → `.json`（网络搜索 / 哔哩观影 / 桌面操作 / 通讯桥接 / 互助论坛）
 //
 // 设计取舍：
@@ -22,7 +22,7 @@ import (
 //   - 数字/字母热键只是**快捷键**，条目的显示键位来自自身 hotkey 字段而非行号，
 //     因此今后插入新条目不会让既有热键发生位移。
 //   - 导出是**一次性动作**而非持续录制：出问题时按一下、拿到文件，不引入后台写盘任务；
-//   - 清单固定声明：导出目标来自 engine/agentdump 注册表，控制台不复制智能体实现；
+//   - 清单固定声明：导出目标来自 protocol/agentdump 注册表，控制台不复制智能体实现；
 //   - 只回显「文件 + 条数 + 大小」，不把内容打进 TUI。
 
 // dumpKind 导出项的取数通道
@@ -59,8 +59,8 @@ var dumpOptionList = []dumpOption{
 		desc:    "模型调用轮次：思考全文 / 输出全文 / 工具调用序列 / 每轮耗时，导出为 .json",
 		toolTip: "正在导出推理实况…"},
 
-	{kind: dumpKindContext, key: "core", hotkey: "03", group: "Go 智能体", title: "核心人格",
-		desc: "对话者 + 绘制者 + 演奏者 + 截图者 + 月华主上下文的合并快照"},
+	{kind: dumpKindContext, key: "dialogue", hotkey: "03", group: "Go 智能体", title: "对话者",
+		desc: "对话者与月华主上下文的合并快照"},
 	{kind: dumpKindContext, key: "file_editor", hotkey: "04", title: "文件编辑",
 		desc: "文件编辑的系统提示词、工具清单与文档库现状（按次执行，不保留上下文）"},
 	{kind: dumpKindContext, key: "creative", hotkey: "05", title: "自由创作",
@@ -339,7 +339,7 @@ func (m appModel) viewDump() string {
 		body = append(body, "  "+selectStyle.Render(m.spinner.View())+" "+valueStyle.Render("正在导出…"))
 	case m.dump.lastErr != "":
 		body = append(body, "  "+errStyle.Render("✗ 导出失败："+m.dump.lastErr),
-			"  "+dimStyle.Render("核心人格需要月华运行时就绪；其余智能体需先运行过对应功能才有内容可导"))
+			"  "+dimStyle.Render("对话者需要月华运行时就绪；其余智能体需先运行过对应功能才有内容可导"))
 	case m.dump.lastLabel != "":
 		body = append(body,
 			"  "+okStyle.Render("✓ 已写出 "+m.dump.lastResult.Path),

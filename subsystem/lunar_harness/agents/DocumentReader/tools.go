@@ -7,20 +7,20 @@ import (
 	"fmt"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/engine/model/agentchat"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // fileToolDefs 文件查询工具定义
-func fileToolDefs() []agentchat.ToolDefinition {
+func fileToolDefs() []agentbase.ToolDefinition {
 	noArgs := map[string]any{
 		"type":       "object",
 		"properties": map[string]any{},
 		"required":   []string{},
 	}
-	return []agentchat.ToolDefinition{
+	return []agentbase.ToolDefinition{
 		{
 			Type: "function",
-			Function: agentchat.ToolFunctionDef{
+			Function: agentbase.ToolFunctionDef{
 				Name:        ToolSummary,
 				Description: "读取该文件的已有摘要与自动识别出的格式画像；没有摘要时返回文件规模、结构要点与开头片段。",
 				Parameters:  noArgs,
@@ -28,7 +28,7 @@ func fileToolDefs() []agentchat.ToolDefinition {
 		},
 		{
 			Type: "function",
-			Function: agentchat.ToolFunctionDef{
+			Function: agentbase.ToolFunctionDef{
 				Name:        ToolProfile,
 				Description: "返回自动识别出的内容格式：按扩展名、内容结构、文件大小判定类型与处理策略。",
 				Parameters:  noArgs,
@@ -36,7 +36,7 @@ func fileToolDefs() []agentchat.ToolDefinition {
 		},
 		{
 			Type: "function",
-			Function: agentchat.ToolFunctionDef{
+			Function: agentbase.ToolFunctionDef{
 				Name:        ToolOutline,
 				Description: "返回文件的结构大纲：每一项都带行区间（L起始-结束）与内容标签，用于定位「从哪一行到哪一行是什么内容」。",
 				Parameters:  noArgs,
@@ -44,7 +44,7 @@ func fileToolDefs() []agentchat.ToolDefinition {
 		},
 		{
 			Type: "function",
-			Function: agentchat.ToolFunctionDef{
+			Function: agentbase.ToolFunctionDef{
 				Name:        ToolChunkPlan,
 				Description: "返回分批处理计划：文件超过 10000 字时按字符上限切分，每片给出行区间与字数，供 read_chunk 逐片读取。",
 				Parameters:  noArgs,
@@ -52,7 +52,7 @@ func fileToolDefs() []agentchat.ToolDefinition {
 		},
 		{
 			Type: "function",
-			Function: agentchat.ToolFunctionDef{
+			Function: agentbase.ToolFunctionDef{
 				Name:        ToolReadChunk,
 				Description: "按片序号读取一个分批片段（单次最多返回 10000 字）；适合超长文件的顺序处理。",
 				Parameters: map[string]any{
@@ -69,7 +69,7 @@ func fileToolDefs() []agentchat.ToolDefinition {
 		},
 		{
 			Type: "function",
-			Function: agentchat.ToolFunctionDef{
+			Function: agentbase.ToolFunctionDef{
 				Name:        ToolReadLines,
 				Description: "按行区间读取正文片段。文件较大时必须分片读取；单次最多返回 300 行 / 10000 字，超出会截断并提示。",
 				Parameters: map[string]any{
@@ -90,7 +90,7 @@ func fileToolDefs() []agentchat.ToolDefinition {
 		},
 		{
 			Type: "function",
-			Function: agentchat.ToolFunctionDef{
+			Function: agentbase.ToolFunctionDef{
 				Name:        ToolReferences,
 				Description: "返回该文件引用的其它文件：脚本 import / require、C 系 include、Markdown 链接、HTML src/href 等，并给出行号与解析结果。",
 				Parameters:  noArgs,
@@ -100,7 +100,7 @@ func fileToolDefs() []agentchat.ToolDefinition {
 }
 
 // executeFileTool 执行一次文件查询工具并返回文本结果
-func executeFileTool(doc *docContext, call agentchat.ToolCall) string {
+func executeFileTool(doc *docContext, call agentbase.ToolCall) string {
 	switch call.Function.Name {
 	case ToolSummary:
 		return docSummary(doc)
@@ -174,7 +174,7 @@ func docSummary(doc *docContext) string {
 		builder.WriteString("\n")
 	}
 	builder.WriteString("【开头片段】\n")
-	builder.WriteString(agentchat.HardCutRunes(firstMeaningfulLines(doc.Lines, 8), 800))
+	builder.WriteString(agentbase.HardCutRunes(firstMeaningfulLines(doc.Lines, 8), 800))
 	builder.WriteString("\n（尚无现成摘要：请结合结构要点与正文片段给出简述）")
 	return builder.String()
 }
@@ -216,7 +216,7 @@ func readChunk(doc *docContext, index int) string {
 	text := strings.Join(doc.Lines[start-1:end], "\n")
 	truncated := false
 	if len([]rune(text)) > maxToolReadChars {
-		text = agentchat.HardCutRunes(text, maxToolReadChars)
+		text = agentbase.HardCutRunes(text, maxToolReadChars)
 		truncated = true
 	}
 	note := ""
@@ -250,7 +250,7 @@ func readLineRange(doc *docContext, start, end int) string {
 	text := strings.Join(doc.Lines[start-1:end], "\n")
 	truncated := false
 	if len([]rune(text)) > maxToolReadChars {
-		text = agentchat.HardCutRunes(text, maxToolReadChars)
+		text = agentbase.HardCutRunes(text, maxToolReadChars)
 		truncated = true
 	}
 	note := ""
@@ -276,11 +276,7 @@ func firstMeaningfulLines(lines []string, n int) string {
 	return strings.Join(picked, "\n")
 }
 
-// truncateRunes 按字符截断
+// truncateRunes 按字符截断，统一使用基座实现。
 func truncateRunes(text string, limit int) string {
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	return string(runes[:limit]) + "…"
+	return agentbase.TruncateRunes(text, limit)
 }

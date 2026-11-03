@@ -20,12 +20,9 @@ const (
 	EngineOmniVoice = "OmniVoice"
 )
 
-// 模型目录名（位于 {LocalDir}/models 下）
-const (
-	qwenModelDirName   = "Qwen3-TTS"
-	kokoroModelDirName = "Kokoro-82M-v1.1-zh"
-	omniModelDirName   = "OmniVoice"
-)
+// 模型目录相对路径：三套引擎共用同一扁平目录 {LocalDir}/models/broadcaster，
+// 模型、DLL、voices/espeak、tokenizer 等资源直接平铺在该目录下（不再各自建子目录）。
+const broadcasterModelDirName = "broadcaster"
 
 // qwenDefaultRefAudio Qwen 默认参考音频（相对 LocalDir；历史行为沿用）
 const qwenDefaultRefAudio = "audios/lunar-template.wav"

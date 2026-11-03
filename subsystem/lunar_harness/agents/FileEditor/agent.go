@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/prompts"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // Run 用自然语言发布一次文件编辑需求，返回本轮操作简述。
@@ -31,7 +31,7 @@ func Run(ctx context.Context, instruction string) (string, error) {
 	summary, _, err := runToolLoop(runCtx, systemPrompt(), instruction)
 	if err != nil {
 		logger.Warn(Module, "[文件编辑] 执行失败: %v", err)
-		Savior.ReportRun("file_editor", err)
+		agentbase.ReportRun("file_editor", err)
 		return "", err
 	}
 	if summary == "" {
@@ -42,7 +42,9 @@ func Run(ctx context.Context, instruction string) (string, error) {
 }
 
 // Execute 用自然语言执行一次文件编辑，返回结构化结果（含资源句柄与操作简述）。
-// 供「月华-对话者」（dispatch_technique → file_editor）等进程内调用方使用。
+//
+// 兼容保留：对话者已改为统一指派「自由创作」（Creator），由 Creator 编排并调用
+// 本包的确定性能力；本入口不再处于生产调用链上，仅保留给旧调用方与回归测试。
 func Execute(ctx context.Context, instruction string) (OpResult, error) {
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
@@ -57,7 +59,7 @@ func Execute(ctx context.Context, instruction string) (OpResult, error) {
 	summary, handles, err := runToolLoop(runCtx, systemPrompt(), instruction)
 	if err != nil {
 		logger.Warn(Module, "[文件编辑] 执行失败: %v", err)
-		Savior.ReportRun("file_editor", err)
+		agentbase.ReportRun("file_editor", err)
 		return failResult("file_editor", "", err), err
 	}
 	if summary == "" {

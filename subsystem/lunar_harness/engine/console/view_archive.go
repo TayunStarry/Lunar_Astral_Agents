@@ -617,7 +617,7 @@ func (m appModel) updateMenuAction() (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
 		// 发布需 Gitee 私人令牌：先进入令牌输入态（不回显明文）
-		// 配置文件 release.json 已有令牌时预填，直接回车即可发布
+		// 配置文件 config/release.json 已有令牌时预填，直接回车即可发布
 		m.update.mode = updateInputToken
 		m.update.input.EchoMode = textinput.EchoPassword
 		m.update.input.SetValue(configuredGiteeToken())
@@ -668,7 +668,7 @@ func runUpdateCmd(kind, value string) tea.Cmd {
 	return func() tea.Msg {
 		cfg := GetUpdatePackConfig()
 		if cfg == nil {
-			return updateDoneMsg{err: fmt.Errorf("未配置发布通道（local_data/release.json 缺少仓库信息）")}
+			return updateDoneMsg{err: fmt.Errorf("未配置发布通道（local_data/config/release.json 缺少仓库信息）")}
 		}
 		var err error
 		var res updatepack.PullResult
@@ -722,7 +722,7 @@ func listVersionsCmd() tea.Cmd {
 		}
 		cfg := GetUpdatePackConfig()
 		if cfg == nil {
-			return updateVersionsMsg{err: fmt.Errorf("未配置发布通道（local_data/release.json 缺少仓库信息）")}
+			return updateVersionsMsg{err: fmt.Errorf("未配置发布通道（local_data/config/release.json 缺少仓库信息）")}
 		}
 		versions, err := updatepack.ListVersions(*withSessionTokenUpdate(cfg))
 		if err != nil {
@@ -912,7 +912,7 @@ func (m appModel) updateInputBody(w int) []string {
 		hint = "支持短哈希前缀；需该提交已发布更新包（按 tag 匹配）"
 	default:
 		prompt = "输入 Gitee 私人令牌（发布需 Release 读写权限，留空回车取消）："
-		hint = "release.json 已保存令牌时自动预填，可直接回车发布；令牌只用于本次请求"
+		hint = "config/release.json 已保存令牌时自动预填，可直接回车发布；令牌只用于本次请求"
 	}
 	boxW := minInt(w, 78)
 	body := []string{

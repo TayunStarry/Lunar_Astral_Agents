@@ -2,7 +2,7 @@ package BilibiliViewer
 
 // seen.go 跨轮已看记录：避免连续几轮刷到同一条视频。
 //
-// 记录落在 local_data/database/bilibili_life/seen.json（bvid → 最近一次观看的 Unix 秒）。
+// 记录落在 local_data/database/bilibili/seen.json（bvid → 最近一次观看的 Unix 秒）。
 // 保留 30 天、最多 500 条：短视频的推荐池变化快，太久以前的记录继续拦只会让候选越来越少。
 
 import (
@@ -31,7 +31,7 @@ type seenStore struct {
 var seenMu sync.Mutex
 
 func seenFile() string {
-	return filepath.Join(localRoot(), "database", "bilibili_life", "seen.json")
+	return filepath.Join(localRoot(), "database", "bilibili", "seen.json")
 }
 
 // loadSeenLocked 读取已看记录（文件不存在或损坏时返回空记录，调用方需持有 seenMu）

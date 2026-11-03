@@ -3,7 +3,7 @@ package ltpx
 import "context"
 
 // ToolDef 聚合工具定义（use_the_program）：工具名 + 功能简述。
-// 参数 schema（{details, tool, instruction} 与 tool 枚举）由月华按应用清单统一构建，
+// 参数 schema（{type, instruction, handle, details} 与 type 枚举）由月华按应用清单统一构建，
 // 提供方只负责返回清单，不再重复携带 schema。
 type ToolDef struct {
 	Name        string `json:"name"`
@@ -12,7 +12,7 @@ type ToolDef struct {
 }
 
 // ToolRef 聚合工具可调用的单个应用（名称 + 能力描述）。
-// 月华把全部 Name 写进 use_the_program 的 tool 参数枚举，并可按名回查 Description。
+// 月华把全部 Name 写进 use_the_program 的 type 参数枚举，并可按名回查 Description。
 type ToolRef struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`

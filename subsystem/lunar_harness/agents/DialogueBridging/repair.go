@@ -6,8 +6,8 @@ package DialogueBridging
 // 避免损坏的记录一直被当作「当前桥接上下文」导出。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {

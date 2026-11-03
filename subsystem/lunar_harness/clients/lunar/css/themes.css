@@ -63,8 +63,6 @@
     --badge-voice-color: #b8860b;
     --badge-music-bg: rgba(157, 107, 255, 0.18);
     --badge-music-color: #7b52e0;
-    --badge-action-bg: rgba(255, 107, 156, 0.16);
-    --badge-action-color: #d0457c;
 
     /* 搜索高亮 */
     --search-highlight-bg: rgba(255, 214, 92, 0.55);
@@ -110,8 +108,6 @@
     --badge-voice-color: #eab308;
     --badge-music-bg: rgba(157, 107, 255, 0.22);
     --badge-music-color: #b794f4;
-    --badge-action-bg: rgba(255, 107, 156, 0.2);
-    --badge-action-color: #f472b6;
 
     --search-highlight-bg: rgba(234, 179, 8, 0.45);
 }

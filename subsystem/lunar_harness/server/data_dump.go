@@ -9,18 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/agentdump"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
 // ==== 数据导出端点（TUI「数据导出」调用） ====
 //
 // 控制台需要把运行期数据落到磁盘以便离线排查，而两类数据的**产出位置不同**：
 //   - 原始日志：已在 TUI 日志管线（同进程内存环形缓冲）里 → 本包直接序列化落盘；
-//   - 智能体上下文：Go 对话链在进程内持有 → 经 LunarPersonality.DumpAgentContext 直接导出
+//   - 智能体上下文：Go 对话链在进程内持有 → 经 Dialogue.DumpAgentContext 直接导出
 //     事件循环上取回 JSON 文本，再落盘。
 //
 // 因此这里只做「取数 → 写文件 → 回执」三件事，导出内容的构造分别由上两处负责，
@@ -142,8 +142,9 @@ func DataDumpTranscriptHandler(w http.ResponseWriter, r *http.Request) {
 
 // DataDumpContextHandler 导出 Go 智能体上下文/状态为 JSON（POST /debug/dump/context?agent=xxx）。
 //
-// agent 取值来自 engine/agentdump 的注册表：core（核心人格集合）、web_search、
-// bilibili、desktop、dialogue_bridging、mutual_forum 等。分角色的旧目标已合并到 core。
+// agent 取值来自 protocol/agentdump 的注册表：dialogue（对话者与主上下文）、web_search、
+// bilibili、desktop、dialogue_bridging、mutual_forum 等。旧目标 core / lunar 作为兼容
+// 别名映射到 dialogue（保留一个发布周期，待调用方与文档全部迁移后移除）。
 // include_images=1 时保留图片原始 base64（体积很大，仅深度排查用）。
 func DataDumpContextHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -151,8 +152,9 @@ func DataDumpContextHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	agent := strings.TrimSpace(r.URL.Query().Get("agent"))
-	if agent == "" {
-		agent = "core"
+	switch agent {
+	case "", "core", "lunar":
+		agent = "dialogue"
 	}
 	includeImages := r.URL.Query().Get("include_images") == "1"
 

@@ -1,7 +1,8 @@
 // Package agents 收纳月华与琉璃两个人格局及其内部智能体，Go 与 JS 实现同处一层：
 //
-//	agents/LunarPersonality/ 月华人格局（Go：对话链 / 资源转换 / Tick 调度 / 语音播报）
-//	agents/CrystalPersonality/ 琉璃人格局（Go：LTPX 协调 / 模块创建 / WebView 会话 / 前端守卫）
+//	agents/Dialogue/ 对话者智能体（Go：对话链 / 资源转换 / Tick 调度 / 语音播报）
+//	agents/Screenshoter/  截图智能体（Go：显示器/窗口枚举、区域截图、多帧推送与主帧回传）
+//	engine/ltpxhost/       琉璃协议宿主（Go：LTPX 协调 / 模块创建 / WebView 会话 / 前端守卫）
 //	agents/desktop/        桌面操纵智能体（Go：UIA / 输入 / 进程 / 窗口）
 //	agents/WebSearch/         网络搜索智能体（Go：引擎 / 过滤 / 文本摘要 / 报告 / 缓存）
 //	agents/Vision/           视觉理解智能体（Go：图片 / 动图 / 视频的视觉副本、观看与描述）
@@ -12,12 +13,13 @@
 //	agents/DialogueBridging/ 通讯桥接智能体（Go：向群/好友发送文本、图片、文件）
 //	agents/MutualForum/      互助论坛智能体（Go：论坛浏览/发帖/回复的多轮工具执行）
 //	agents/FileEditor/       文件编辑智能体（Go：/document 文档库读写与项目运行）
+//	agents/PlanManager/      计划管理智能体（Go：计划表新增 / 删除 / 改写 / 查询）
 //	agents/*.js            页面注入型智能体（JS：Mini-LTP / Self-LTP / SharedInput）
 //
 // 之所以把 JS 脚本从"前端静态资源"里搬出来：它们不是前端页面的一部分，而是
 // 由三个 handler 单独下发、注入到 iframe 里运行的智能体本体。放在前端目录里时，
 // 资源在 web/、而读取方写的是 "assets/xxx"，编译器与 tsc 都不报错，只有真跑
-// 一遍 handler 才暴露 500（见 agents/CrystalPersonality/asset_serve_test.go 覆盖的历史缺陷）。
+// 一遍 handler 才暴露 500（见 engine/ltpxhost/asset_serve_test.go 覆盖的历史缺陷）。
 // 现在"脚本"与"内嵌脚本的代码"同处 agents/ 下，前缀错配在结构上不再可能发生。
 package agents
 

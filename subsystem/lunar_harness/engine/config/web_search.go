@@ -1,6 +1,6 @@
 package config
 
-// ==== 网络搜索智能体（lunar_config.json 的 web_search 节） ====
+// ==== 网络搜索智能体（config/general.json 的 web_search 节） ====
 //
 // 这些字段由本包的 init → applyConfig 统一解析，Web-LTP 只读取解析结果。
 // 指针字段用于区分「未配置」与「显式关闭」；数值字段 0 表示未配置，沿用默认值。

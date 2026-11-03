@@ -2,7 +2,7 @@ package MutualForum
 
 // config.go 独立配置文件的读取、缓存与校验。
 //
-// 配置文件默认是 local_data/mutual_forum.json；测试或特殊部署可通过
+// 配置文件默认是 local_data/config/forum.json；测试或特殊部署可通过
 // 环境变量 mutual_forum_CONFIG 指向别处。
 //
 // 这里刻意不依赖 engine/config 的统一配置：论坛的开关、地址、加入码与凭证

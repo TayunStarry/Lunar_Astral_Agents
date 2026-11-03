@@ -2,6 +2,7 @@
 
 import { fileURL } from './api.js';
 import { humanSize, formatTime, kindOf, statusClass, isRunnable } from './model.js';
+import { languageOf, highlightCode, highlightLines } from './syntax.js';
 
 const MAX_TEXT_CHARS = 400000;
 const OP_LABELS = {
@@ -38,8 +39,12 @@ async function renderText(container, entry, fileState) {
     if (content.length > MAX_TEXT_CHARS) {
         content = content.slice(0, MAX_TEXT_CHARS);
     }
-    const lines = content.replace(/\r\n/g, '\n').split('\n');
+    const normalized = content.replace(/\r\n/g, '\n');
+    const lines = normalized.split('\n');
     const range = addedRange(fileState);
+    // 预览是整份文件：整段高亮一次后按行拆分；未知语言 / 超大文件 / 拆分失败时返回 null，回退纯文本
+    const language = languageOf(entry.path || '');
+    const highlighted = highlightLines(normalized, language);
     const pre = document.createElement('pre');
     pre.className = 'text-view';
     lines.forEach((line, index) => {
@@ -54,7 +59,9 @@ async function renderText(container, entry, fileState) {
         gutter.textContent = String(no);
         const text = document.createElement('span');
         text.className = 'tx';
-        text.textContent = line === '' ? ' ' : line;
+        const html = highlighted && line !== '' ? highlighted[index] : '';
+        if (html) text.innerHTML = html;
+        else text.textContent = line === '' ? ' ' : line;
         row.append(gutter, text);
         pre.append(row);
     });
@@ -106,6 +113,7 @@ export function renderChanges(container, fileState) {
     const list = document.createElement('div');
     list.className = 'change-list';
     const records = [...fileState.records].reverse();
+    const language = languageOf(fileState.path || '');
     for (const record of records) {
         const item = document.createElement('div');
         item.className = 'change-item';
@@ -119,8 +127,8 @@ export function renderChanges(container, fileState) {
         head.append(op, time);
         const body = document.createElement('div');
         body.className = 'change-body';
-        if (record.added) body.append(changeLine('added', '+ ' + record.added));
-        if (record.removed) body.append(changeLine('removed', '− ' + record.removed));
+        if (record.added) body.append(changeLine('added', record.added, language));
+        if (record.removed) body.append(changeLine('removed', record.removed, language));
         if (!record.added && !record.removed) {
             const empty = document.createElement('div');
             empty.className = 'change-empty';
@@ -261,7 +269,7 @@ function gcStatusRow(meta) {
         return wrap;
     }
     if (!meta.gc_tracked) {
-        value.textContent = '不在回收范围（文档 / 子目录 / 命名音频）';
+        value.textContent = '不在回收范围';
         return wrap;
     }
     if (meta.state === 'lost') {
@@ -300,10 +308,19 @@ function row(key, value) {
     return wrap;
 }
 
-function changeLine(kind, text) {
+// changeLine 一条新增 / 删除片段：保留红绿底色与 +/- 标记，代码部分叠加语法高亮。
+function changeLine(kind, text, language) {
     const line = document.createElement('div');
     line.className = `change-line ${kind}`;
-    line.textContent = text;
+    const mark = document.createElement('span');
+    mark.className = 'cl-mark';
+    mark.textContent = kind === 'added' ? '+' : '−';
+    const code = document.createElement('span');
+    code.className = 'cl-text';
+    const html = highlightCode(text, language);
+    if (html) code.innerHTML = html;
+    else code.textContent = text;
+    line.append(mark, code);
     return line;
 }
 

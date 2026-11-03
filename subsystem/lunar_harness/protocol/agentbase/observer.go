@@ -1,0 +1,159 @@
+package agentbase
+
+// observer.go 模型调用的实况推送与计量回调。
+//
+// 各智能体传入自己的角色标签（如「视觉理解」「文献解析」），控制台据此在同一块
+// 实况屏里区分来源；计量回调让 Go 侧智能体的模型调用一并进入「运行状态」统计。
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"LunarSubsystem/LunarHarness/protocol/loopguard"
+)
+
+// Observer 实况观察者与模型计量回调
+type Observer struct {
+	// Begin 实况开始
+	Begin func(role string)
+	// Delta 实况增量（kind: think/content）
+	Delta func(role, kind, text string)
+	// End 实况结束
+	End func(role string)
+	// Tool 工具调用登记（名称 + 原始参数串），由装配层桥接到控制台实况。
+	Tool func(role, name, args string)
+	// Meter 模型调用计量
+	Meter func(prompt, completion, cached int64, generation time.Duration, estimated bool)
+	// Report 重试耗尽后的失败上报（交给智能修复；role 为实况角色标签）
+	Report func(role string, err error)
+}
+
+// SetObserver 注入实况观察者与计量回调（app 层启动时调用）
+func SetObserver(o Observer) {
+	observerMu.Lock()
+	defer observerMu.Unlock()
+	observer = o
+}
+
+// observeBegin 通知实况开始
+func observeBegin(role string) {
+	observerMu.Lock()
+	fn := observer.Begin
+	observerMu.Unlock()
+	if fn != nil {
+		fn(role)
+	}
+}
+
+// observeDelta 通知实况增量（kind: think/content）
+func observeDelta(role, kind, text string) {
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	observerMu.Lock()
+	fn := observer.Delta
+	observerMu.Unlock()
+	if fn != nil {
+		fn(role, kind, text)
+	}
+}
+
+// observeTool 通知一次工具调用（未注入 Tool 回调时静默）。
+func observeTool(role, name, args string) {
+	observerMu.Lock()
+	fn := observer.Tool
+	observerMu.Unlock()
+	if fn != nil {
+		fn(role, name, args)
+	}
+}
+
+// observeEnd 通知实况结束
+func observeEnd(role string) {
+	observerMu.Lock()
+	fn := observer.End
+	observerMu.Unlock()
+	if fn != nil {
+		fn(role)
+	}
+}
+
+// SetRepairHook 注入智能修复上报回调（由装配层接到 Savior.ReportRun）。
+func SetRepairHook(fn func(agent string, err error)) {
+	repairMu.Lock()
+	defer repairMu.Unlock()
+	repairHook = fn
+}
+
+// Report 上报一次故障；同一智能体的故障由修复层去重。
+func Report(agent string, err error) {
+	if err == nil {
+		return
+	}
+	agent = strings.TrimSpace(agent)
+	if agent == "" {
+		agent = "unknown"
+	}
+	repairMu.Lock()
+	hook := repairHook
+	repairMu.Unlock()
+	if hook != nil {
+		hook(agent, err)
+		return
+	}
+	// 兼容旧注入：没有修复回调时退回观察者的 Report
+	observerMu.Lock()
+	fn := observer.Report
+	observerMu.Unlock()
+	if fn != nil {
+		fn(agent, err)
+	}
+}
+
+// ReportRun 上报一次运行失败，忽略主动取消与循环输出截断。
+func ReportRun(agent string, err error) {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, loopguard.ErrLoop) {
+		return
+	}
+	Report(agent, err)
+}
+
+// reportFailure 上报一次重试耗尽后的失败（由 app 层接到智能修复）。
+func reportFailure(role string, err error) {
+	if err == nil {
+		return
+	}
+	Report(role, err)
+}
+
+// reportModelCall 把一次调用计入「运行状态」的模型计量：
+// 优先用服务端回传的真实 usage，缺失时按请求体与输出文本长度估算（标记 estimated）。
+func reportModelCall(requestBody []byte, reply Reply, elapsed time.Duration) {
+	observerMu.Lock()
+	fn := observer.Meter
+	observerMu.Unlock()
+	if fn == nil {
+		return
+	}
+	if reply.Usage != nil && (reply.Usage.Prompt > 0 || reply.Usage.Completion > 0) {
+		cached := reply.Usage.PromptCacheHitTokens
+		if cached <= 0 {
+			cached = reply.Usage.CachedTokens
+		}
+		if reply.Usage.PromptTokensDetails != nil {
+			cached = reply.Usage.PromptTokensDetails.CachedTokens
+		}
+		fn(reply.Usage.Prompt, reply.Usage.Completion, cached, elapsed, false)
+		return
+	}
+	completion := int64(utf8.RuneCountInString(StringOf(reply.Message.Content)) +
+		utf8.RuneCountInString(reply.Reasoning))
+	for _, call := range reply.Message.ToolCalls {
+		completion += int64(utf8.RuneCountInString(call.Function.Arguments))
+	}
+	prompt := int64(utf8.RuneCountInString(string(requestBody))) / 3
+	fn(prompt, completion, 0, elapsed, true)
+}

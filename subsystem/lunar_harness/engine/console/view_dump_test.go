@@ -101,8 +101,8 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 			t.Fatalf("编号 %q 未指向期望的导出类型", want.hotkey)
 		}
 	}
-	if got := dumpHotkeyIndex("03"); dumpOptionList[got].key != "core" {
-		t.Fatal("编号 03 应指向核心人格")
+	if got := dumpHotkeyIndex("03"); dumpOptionList[got].key != "dialogue" {
+		t.Fatal("编号 03 应指向对话者")
 	}
 	if got := dumpHotkeyIndex("04"); dumpOptionList[got].key != "file_editor" {
 		t.Fatal("编号 04 应指向文件编辑")

@@ -32,28 +32,6 @@ type Result struct {
 	Err          error
 }
 
-// chatMessage 模型返回的消息体
-type chatMessage struct {
-	Role             string          `json:"role"`
-	Content          string          `json:"content"`
-	ReasoningContent string          `json:"reasoning_content"`
-	ToolCalls        json.RawMessage `json:"tool_calls"`
-}
-
-// chatChoice 模型返回的选项
-type chatChoice struct {
-	Message      chatMessage `json:"message"`
-	FinishReason string      `json:"finish_reason"`
-}
-
-// chatCompletion 非流式补全响应
-type chatCompletion struct {
-	Choices []chatChoice `json:"choices"`
-	Error   *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
 // drainContext 一轮处理所需的上下文与统计
 type drainContext struct {
 	ctx      context.Context

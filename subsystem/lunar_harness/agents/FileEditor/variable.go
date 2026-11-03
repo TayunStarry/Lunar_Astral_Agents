@@ -3,7 +3,6 @@ package FileEditor
 // variable.go 文件编辑智能体的常量、工具名与工具分组。
 
 import (
-	"net/http"
 	"sync"
 	"time"
 )
@@ -87,6 +86,4 @@ var allTools = []string{
 var (
 	// runMu 串行化自然语言文件编辑，避免同一文档库并发写入
 	runMu sync.Mutex
-	// httpClient 模型调用客户端
-	httpClient = &http.Client{Timeout: modelTimeout}
 )

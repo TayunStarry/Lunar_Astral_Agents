@@ -39,18 +39,6 @@ type chatMessage struct {
 	Content string `json:"content"`
 }
 
-// modelUsage 流式响应中的 token 用量
-type modelUsage struct {
-	Prompt              int64               `json:"prompt_tokens"`
-	Completion          int64               `json:"completion_tokens"`
-	PromptTokensDetails *promptTokenDetails `json:"prompt_tokens_details,omitempty"`
-}
-
-// promptTokenDetails 输入 token 的细分（提示缓存命中数）
-type promptTokenDetails struct {
-	CachedTokens int64 `json:"cached_tokens"`
-}
-
 // resolvedTarget 解析后的投递目标
 type resolvedTarget struct {
 	Kind string // group / user
@@ -77,7 +65,7 @@ type deliveryRecord struct {
 
 // ==================== 桥接器配置类型 ====================
 
-// BridgingConfig 桥接器配置，从 napcat_config.json 读取
+// BridgingConfig 桥接器配置，从 config/napcat.json 读取
 type BridgingConfig struct {
 	BridgingType                    string   `json:"bridging_type"`
 	BridgingPath                    string   `json:"bridging_path"`

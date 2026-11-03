@@ -3,7 +3,6 @@ import { AudioQueue } from './tts.js';
 import { VoiceChat } from './voice.js';
 import { Toast } from './toast.js';
 import { sendMessages } from './fetch.js';
-import { initMusicRenderer, renderMusicScore } from './music_renderer.js';
 import { initUserName, getUserNamePrefix } from './username.js';
 import { FilePreviewManager } from './file-manager.js';
 
@@ -26,7 +25,7 @@ class LunarCoreApp {
 		this.initEventListeners();
 		this.initWebSocket();
 		this.setupRendererFrame();
-		initMusicRenderer();
+		this.restoreLatestMusic();
 	}
 
 	initElements() {
@@ -151,7 +150,7 @@ class LunarCoreApp {
 	}
 
 	/**
-	 * 渲染引擎 iframe：按 lunar_config.json 的 system.character_renderer 选择
+	 * 渲染引擎 iframe：按 config/general.json 的 system.character_renderer 选择
 	 * 基岩版模型引擎（lunar.rendering_engine）或 Live2D 引擎层（lunar.live2d_engine）。
 	 * WsBridge 连接同源 /ws，与主 WebSocket 连接保持一致（与电脑端 main.js 一致）；
 	 * 配置读取失败或取值非法时回退 bedrock。
@@ -161,7 +160,7 @@ class LunarCoreApp {
 		if (!frame) return;
 		let renderer = 'bedrock';
 		try {
-			const res = await fetch('/file/read/lunar_config.json');
+			const res = await fetch('/file/read/config/general.json');
 			if (res.ok) {
 				const config = await res.json();
 				const value = config && config.system ? config.system.character_renderer : null;
@@ -220,12 +219,12 @@ class LunarCoreApp {
 	/** 处理 context 类型消息：不显示文本内容，仅处理语音播报与音乐 */
 	async handleContextMessage(data) {
 		const subType = data.type || 'text';
-		const content = data.content || '';
 		const audio = data.audio || '';
 
-		// 音乐创作消息
+		// 音乐创作消息：后端已渲染音频，统一交给共享播放器展示（播放器 + 波形）
 		if (subType === 'music') {
-			if (content) renderMusicScore(content);
+			this.showMusic(data);
+			this.setLoadingState(false);
 			return;
 		}
 		// 文本响应不显示，仅播报携带的 TTS 语音
@@ -234,6 +233,42 @@ class LunarCoreApp {
 			VoiceChat.onAudioPlaybackChange();
 		}
 		this.setLoadingState(false);
+	}
+
+	/** 展示后端推送的音乐：直接复用共享播放器（与电脑端同一套播放器 + 波形） */
+	showMusic(data) {
+		const dock = document.getElementById('musicDock');
+		if (!dock || !window.LunarMusicPlayer) return;
+		dock.innerHTML = '';
+		dock.appendChild(window.LunarMusicPlayer.createCard({
+			title: data.title || '月华演奏曲',
+			summary: data.summary || '',
+			duration: Number(data.duration) || 0,
+			audio: data.audio || ''
+		}));
+		dock.hidden = false;
+	}
+
+	/** 启动时恢复最近一条音乐记录（手机端无消息列表，重开页面仍可继续播放） */
+	async restoreLatestMusic() {
+		try {
+			const res = await fetch('/file/read/database/messages.json');
+			if (!res.ok) return;
+			const records = await res.json();
+			if (!Array.isArray(records)) return;
+			const latest = records.slice().reverse().find(item => item
+				&& Array.isArray(item.categories) && item.categories.includes('music')
+				&& item.audio);
+			if (!latest) return;
+			this.showMusic({
+				title: latest.musicTitle || '',
+				summary: latest.musicSummary || '',
+				duration: latest.musicDuration,
+				audio: latest.audio
+			});
+		} catch (e) {
+			// 历史文件不可用时静默：不影响实时推送
+		}
 	}
 
 	async handleSend() {

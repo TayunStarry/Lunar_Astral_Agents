@@ -3,6 +3,7 @@ package FileEditor
 // catalog.go 暴露给模型的工具定义目录，以及控制台「工具列表」屏的展示清单。
 
 import (
+	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
@@ -88,17 +89,23 @@ var toolDefinitions = map[string]toolDefinition{
 			"path":        strProp("相对 /document 的项目文件路径"),
 			"timeout_sec": intProp("运行时长上限（秒；默认 120，允许 5-3600；优先级高于文件首行声明）", 5, 3600),
 		}, []string{"path"}),
-	ToolSchedule: toolDef(ToolSchedule,
-		"单方面调度其他智能体完成任务：type 选定目标智能体，instruction 用自然语言说明要做什么；target 可选（路径或句柄，缺省时由本智能体从 instruction 中提取）。压缩包、GGUF、文档正文、图片 / 动图 / 视频一律走这里，不要用文件工具直接读写二进制容器。",
-		map[string]any{
-			"type": map[string]any{
-				"type":        "string",
-				"enum":        []string{ScheduleArchiveOps, ScheduleArchiveReader, ScheduleDocumentReader, ScheduleVision},
-				"description": "archive_ops=归档操作（创建/删除压缩包、增删条目）；archive_reader=归档解析（压缩包结构/条目/GGUF）；document_reader=文献解析（理解文档正文）；vision=视觉理解（图片/动图/视频）",
-			},
-			"instruction": strProp("自然语言任务描述，写清要做什么、对哪个文件或句柄做什么"),
-			"target":      strProp("可选：目标路径或句柄；缺省时从 instruction 中提取"),
-		}, []string{"type", "instruction"}),
+	ToolSchedule: schemaDef(ToolSchedule,
+		"单方面调度其他智能体完成任务：type 选定目标智能体，instruction 用自然语言说明要做什么，handle 传目标路径或句柄。压缩包、GGUF、文档正文、图片 / 动图 / 视频一律走这里，不要用文件工具直接读写二进制容器。",
+		agentdispatch.Schema(
+			"archive_ops=归档操作（创建/删除压缩包、增删条目）；archive_reader=归档解析（压缩包结构/条目/GGUF）；document_reader=文献解析（理解文档正文）；vision=视觉理解（图片/动图/视频）",
+			[]string{ScheduleArchiveOps, ScheduleArchiveReader, ScheduleDocumentReader, ScheduleVision},
+			"自然语言任务描述，写清要做什么、对哪个文件或句柄做什么",
+			"目标路径或句柄（如 /document/pkg.zip、@D.003）；缺省时由本智能体从 instruction 中提取。",
+		)),
+}
+
+// schemaDef 用完整参数 schema 构造一条函数工具定义（聚合工具统一走这里）。
+func schemaDef(name, description string, parameters map[string]any) toolDefinition {
+	return toolDefinition{Type: "function", Function: toolFunction{
+		Name:        name,
+		Description: description,
+		Parameters:  parameters,
+	}}
 }
 
 // toolDef 构造一条函数工具定义。

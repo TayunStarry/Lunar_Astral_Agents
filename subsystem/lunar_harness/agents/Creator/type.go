@@ -2,101 +2,20 @@ package Creator
 
 // type.go 创作体系的类型定义。
 
-import "time"
+import (
+	"time"
+
+	"LunarSubsystem/LunarHarness/engine/fileflow"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
+)
 
 // ==== 模型调用类型 ====
 
-// chatMessage OpenAI 兼容消息（支持 assistant.tool_calls 与 tool 回填）。
-type chatMessage struct {
-	Role       string         `json:"role"`
-	Content    string         `json:"content,omitempty"`
-	ToolCalls  []toolCallItem `json:"tool_calls,omitempty"`
-	ToolCallID string         `json:"tool_call_id,omitempty"`
-}
+// toolDefinition 发给模型的函数工具定义（统一复用基座类型）。
+type toolDefinition = agentbase.ToolDefinition
 
-// toolCallItem 模型返回的工具调用。
-type toolCallItem struct {
-	ID       string           `json:"id"`
-	Type     string           `json:"type"`
-	Function toolCallFunction `json:"function"`
-}
-
-// toolCallFunction 工具名与 JSON 参数。
-type toolCallFunction struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
-}
-
-// toolDefinition 发给模型的函数工具定义。
-type toolDefinition struct {
-	Type     string       `json:"type"`
-	Function toolFunction `json:"function"`
-}
-
-// toolFunction 函数描述与参数 Schema。
-type toolFunction struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Parameters  map[string]any `json:"parameters"`
-}
-
-// modelResponse 一次模型调用的结果。
-type modelResponse struct {
-	Content   string
-	Reasoning string
-	ToolCalls []toolCallItem
-}
-
-// streamToolDelta 流式响应里的工具调用增量（同一 index 的多段需拼接）。
-type streamToolDelta struct {
-	Index    int    `json:"index"`
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
-}
-
-// streamChunk 流式响应分片（正文、思考与工具调用增量）。
-type streamChunk struct {
-	Choices []struct {
-		Delta struct {
-			Content          string            `json:"content"`
-			ReasoningContent string            `json:"reasoning_content"`
-			ToolCalls        []streamToolDelta `json:"tool_calls"`
-		} `json:"delta"`
-	} `json:"choices"`
-	Usage *modelUsage `json:"usage"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// assistantWire 响应中的 assistant 消息。
-type assistantWire struct {
-	Role             string         `json:"role"`
-	Content          string         `json:"content"`
-	ReasoningContent string         `json:"reasoning_content"`
-	ToolCalls        []toolCallItem `json:"tool_calls"`
-}
-
-// chatCompletion OpenAI 兼容响应（含代理包装前的原始结构）。
-type chatCompletion struct {
-	Choices []struct {
-		Message assistantWire `json:"message"`
-	} `json:"choices"`
-	Usage *modelUsage `json:"usage"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// modelUsage token 用量。
-type modelUsage struct {
-	Prompt     int64 `json:"prompt_tokens"`
-	Completion int64 `json:"completion_tokens"`
-}
+// toolFunction 函数描述与参数 Schema（统一复用基座类型）。
+type toolFunction = agentbase.ToolFunctionDef
 
 // ==== 工具执行类型 ====
 
@@ -116,6 +35,8 @@ type toolHandlerFunc func(name string, args map[string]any) (outcome toolOutcome
 type planStep struct {
 	Agent string `json:"agent"` // writer / engineer / researcher / runner
 	Task  string `json:"task"`  // 自然语言执行目标与操作要求
+	// Expect 规划预期：该步骤完成后应满足的客观事实，用于自动审查
+	Expect []fileflow.Expect `json:"expect,omitempty"`
 }
 
 // planResult 调度者输出的本轮计划。
@@ -125,9 +46,11 @@ type planResult struct {
 }
 
 // journal 创作事件的规划日志：记录上一轮的全部规划、备忘、参考资料与错误。
-// Directives 保存用户最近的发言，其中的明确要求优先于遗留事项与延续思路。
+// Directives 保存本轮创作参考（来自 life_planning 的字符串变量），一次性消费。
+// 操作记录不再写入日志：改由 engine/fileflow 的增量库按需查询内容级差异。
 type journal struct {
 	Version     int        `json:"version"`
+	Mode        string     `json:"mode,omitempty"`
 	Directives  []string   `json:"directives,omitempty"`
 	LastPlans   []planStep `json:"last_plans"`
 	Memos       []string   `json:"memos"`
@@ -144,6 +67,8 @@ type stepResult struct {
 	Result  string `json:"result,omitempty"`
 	Skipped bool   `json:"skipped"`
 	Error   string `json:"error,omitempty"`
+	// ReviewFailures 本步骤内审查失败并回滚的上下文
+	ReviewFailures []string `json:"review_failures,omitempty"`
 }
 
 // session 一次创作运行的临时状态：收集参考资料与错误，供日志归档。
@@ -153,6 +78,48 @@ type session struct {
 	memos     []string
 	plan      planResult
 	planReady bool
+	mode      fileflow.Mode
+	flowID    string
+	flow      *fileflow.Context
+	current   *planStep
+	stepIndex int
+}
+
+// ==== 路由与文件操作流程类型 ====
+
+// routeKind 承接操作的智能体。
+type routeKind string
+
+// routeDecision 一次路由决策。
+type routeDecision struct {
+	// Kind 承接智能体
+	Kind routeKind
+	// Abs 目标绝对路径（去掉压缩包条目后缀）
+	Abs string
+	// Rel 相对本地目录的路径
+	Rel string
+	// IsDir 目标是否为目录
+	IsDir bool
+	// Large 目录 / 文件是否达到大型阈值
+	Large bool
+	// Entry 压缩包内条目（目标写成 pkg.zip/entry 时提取）
+	Entry string
+	// Reason 路由依据（供流程记录与模型理解）
+	Reason string
+}
+
+// mutationResult 统一封装各能力智能体的写操作结果。
+type mutationResult struct {
+	// OK 操作是否成功
+	OK bool
+	// Path 操作后的目标路径
+	Path string
+	// Summary 操作简述
+	Summary string
+	// Handles 本次涉及的资源句柄
+	Handles []string
+	// Detail 操作细节
+	Detail map[string]any
 }
 
 // ==== 文件与代码索引类型 ====

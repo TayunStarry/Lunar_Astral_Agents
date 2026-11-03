@@ -1,7 +1,7 @@
 package runtime
 
 // ==== 扩展能力实现：JWT / 摘要 / Ed25519 / 图像 / LLM ====
-// LLM 配置读取 lunar_config.json 的 agent 字段（engine/config 同源），不硬编码。
+// LLM 配置读取 config/general.json 的 agent 字段（engine/config 同源），不硬编码。
 
 import (
 	"bytes"

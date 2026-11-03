@@ -22,9 +22,20 @@ import (
 func searchWithFallback(sess *browser.WebViewSession, query string, homeTextMax int, cfg Config, deadline time.Time) (searchOutcome, error) {
 	var lastErr error
 	for _, e := range engineFallbackOrder {
+		// 总时长已用尽时不再打开新的引擎页面：否则 404 / 反爬页面会把
+		// bing → baidu → sogou 逐个拖满，整轮对话看起来像卡死。
+		if time.Now().After(deadline) {
+			lastErr = fmt.Errorf("搜索总时长已超限")
+			logger.Info("CrystalAstral", "Web-Search 总时长已超限，停止尝试后续引擎")
+			break
+		}
 		searchURL := e.searchURL + url.QueryEscape(query)
 
-		if err := navTo(sess, searchURL, 20*time.Second, 1500*time.Millisecond); err != nil {
+		readyTimeout := 20 * time.Second
+		if remaining := time.Until(deadline); remaining < readyTimeout {
+			readyTimeout = remaining
+		}
+		if err := navTo(sess, searchURL, readyTimeout, 1500*time.Millisecond); err != nil {
 			lastErr = fmt.Errorf("%s 导航失败: %w", e.name, err)
 			logger.Info("CrystalAstral", "Web-Search [%s] 导航失败，尝试下一引擎: %v", e.name, err)
 			continue

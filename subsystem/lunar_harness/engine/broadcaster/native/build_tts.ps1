@@ -68,7 +68,7 @@ function Get-EngineSpec {
                 GGMLBuild   = Join-Path $NativeDir "build\ggml\qwen"
                 BuildDir    = Join-Path $NativeDir "build\qwen"
                 DllName     = "qwen3tts.dll"
-                ModelDir    = "Qwen3-TTS"
+                ModelDir    = "broadcaster"
                 BuildGGML   = $true
             }
         }
@@ -81,7 +81,7 @@ function Get-EngineSpec {
                 GGMLBuild   = Join-Path $NativeDir "build\omnivoice"
                 BuildDir    = Join-Path $NativeDir "build\omnivoice"
                 DllName     = "omnivoice.dll"
-                ModelDir    = "OmniVoice"
+                ModelDir    = "broadcaster"
                 BuildGGML   = $false
             }
         }

@@ -11,11 +11,13 @@ const (
 	// Module 生活体系日志模块名
 	Module = "Life"
 	// stateFile 生活状态文件（相对 LocalDir）
-	stateFile = "database/life_chain/life_state.json"
+	stateFile = "database/life/life_state.json"
 	// memoryPlanFile 记忆整理批次计划（相对 LocalDir）
-	memoryPlanFile = "database/life_chain/memory_plan.json"
+	memoryPlanFile = "database/life/memory_plan.json"
+	// creativeIntentFile 生活创作的参考字符串（相对 LocalDir）
+	creativeIntentFile = "database/life/creative_intent.txt"
 	// memoryJournalDir 记忆整理批次意图日志目录（相对 LocalDir）
-	memoryJournalDir = "database/life_chain/memory_journal"
+	memoryJournalDir = "database/life/memory_journal"
 	// defaultIdleThreshold 默认生活冷却：600 个空闲 Tick（10 分钟）
 	defaultIdleThreshold = 600
 	// planWindow 未来计划摘要窗口
@@ -71,6 +73,9 @@ var (
 	mu       sync.Mutex
 	state    = State{Version: 1, Used: map[string]int{}}
 	registry []Event
+
+	// creativeMu 保护创作参考字符串的读写与条件重置
+	creativeMu sync.Mutex
 
 	// planDueHook 到期计划入队（由 lunar 注入，返回入队条数）
 	planDueHook func() int

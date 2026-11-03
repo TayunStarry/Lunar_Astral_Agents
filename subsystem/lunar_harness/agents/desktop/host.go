@@ -18,8 +18,8 @@ package desktop
 //   - 连续两轮无变化即判定停滞并暂停，而不是耗尽轮次。
 
 import (
-	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -38,7 +38,7 @@ func Run(ctx context.Context, instruction string) (resultText string, err error)
 		if errors.Is(err, ErrCanceled) {
 			return
 		}
-		Savior.ReportRun("desktop", err)
+		agentbase.ReportRun("desktop", err)
 	}()
 
 	if err := ctx.Err(); err != nil {

@@ -1,7 +1,6 @@
 package desktop
 
 import (
-	"strings"
 	"time"
 )
 
@@ -61,88 +60,6 @@ type ltpFuncDef struct {
 	Name        string         `json:"name"`        // 函数名
 	Description string         `json:"description"` // 函数描述
 	Parameters  map[string]any `json:"parameters"`  // 参数结构（键值对）
-}
-
-// ltpChatRequest 发往模型 /chat/completions 的请求体。
-type ltpChatRequest struct {
-	Model         string            `json:"model"`                    // 模型名称
-	Messages      []chatMessage     `json:"messages"`                 // 对话消息序列
-	Tools         []ltpToolDef      `json:"tools,omitempty"`          // 工具定义序列（可选）
-	Stream        bool              `json:"stream"`                   // 是否流式输出
-	StreamOptions *ltpStreamOptions `json:"stream_options,omitempty"` // 流式选项（可选）
-}
-
-// ltpStreamOptions 流式请求选项。
-type ltpStreamOptions struct {
-	IncludeUsage bool `json:"include_usage"` // 流末回传 token 用量
-}
-
-// ltpUsage 模型响应的 token 用量。
-type ltpUsage struct {
-	Prompt              int64               `json:"prompt_tokens"`
-	Completion          int64               `json:"completion_tokens"`
-	PromptTokensDetails *promptTokenDetails `json:"prompt_tokens_details,omitempty"`
-}
-
-// promptTokenDetails 输入 token 的细分（提示缓存命中数）。
-type promptTokenDetails struct {
-	CachedTokens int64 `json:"cached_tokens"`
-}
-
-// ltpStreamToolCall 流式响应中工具调用分片（按 index 聚合）。
-type ltpStreamToolCall struct {
-	Index    int    `json:"index"`
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
-}
-
-// ltpChatChunk 流式响应的单个分片。
-type ltpChatChunk struct {
-	Choices []struct {
-		Delta struct {
-			Content          string              `json:"content"`
-			ReasoningContent string              `json:"reasoning_content"`
-			ToolCalls        []ltpStreamToolCall `json:"tool_calls"`
-		} `json:"delta"`
-	} `json:"choices"`
-	Usage *ltpUsage         `json:"usage"`
-	Error *ltpChatRespError `json:"error"`
-}
-
-// ltpToolCallAccum 工具调用分片的聚合缓冲。
-type ltpToolCallAccum struct {
-	ID        string
-	Type      string
-	Name      string
-	Arguments strings.Builder
-}
-
-// ltpChatResponse 模型 /chat/completions 的响应体（含选择结果或错误）。
-type ltpChatResponse struct {
-	Choices []ltpChatRespChoice `json:"choices"` // 选择项序列
-	Usage   *ltpUsage           `json:"usage"`   // token 用量（可选）
-	Error   *ltpChatRespError   `json:"error"`   // 错误信息（可选）
-}
-
-// ltpChatRespChoice 响应体中的单个选择项。
-type ltpChatRespChoice struct {
-	Message ltpChatRespMessage `json:"message"` // 消息（包含角色/内容/工具调用）
-}
-
-// ltpChatRespMessage 响应体中选择项携带的消息。
-type ltpChatRespMessage struct {
-	Role      string        `json:"role"`       // 角色（user/assistant/system）
-	Content   any           `json:"content"`    // 内容（文本或图片）
-	ToolCalls []ltpToolCall `json:"tool_calls"` // 工具调用请求（可选）
-}
-
-// ltpChatRespError 响应体中的错误信息。
-type ltpChatRespError struct {
-	Message string `json:"message"` // 错误信息
 }
 
 // ltpToolResult 工具执行结果（成功标记 + 文本/错误）。

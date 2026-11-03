@@ -8,13 +8,14 @@ package WebSearch
 // 本函数的输出就是递交给对话者的最终内容，不再有报告撰写等后续模型调用。
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
 
 // composeDigest 统一摘要入口：拼接全部来源页正文为长文，一次模型调用完成提取。
-// instruction 是月华的原始指令，作为噪音剔除的准绳。
-func composeDigest(instruction, query string, sources []digestSource, profile summaryProfile) (string, error) {
+// instruction 是月华的原始指令，作为噪音剔除的准绳；ctx 绑定本轮总时长预算。
+func composeDigest(ctx context.Context, instruction, query string, sources []digestSource, profile summaryProfile) (string, error) {
 	if len(sources) == 0 {
 		return "", fmt.Errorf("无可摘要的页面正文")
 	}
@@ -24,7 +25,7 @@ func composeDigest(instruction, query string, sources []digestSource, profile su
 		"{instruction}", instruction,
 		"{query}", query,
 		"{longtext}", encodeSources(sources))
-	text, err := chatWithOptions([]chatMessage{
+	text, err := chatWithOptions(ctx, []chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: user},
 	}, profileChatOptions(profile))

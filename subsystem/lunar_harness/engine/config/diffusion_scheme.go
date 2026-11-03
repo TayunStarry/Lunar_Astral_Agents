@@ -70,7 +70,7 @@ func SetDiffusionSchemes(defaultName string, schemes map[string]DiffusionScheme)
 	for name, scheme := range schemes {
 		key := normalizeSchemeName(name)
 		if key == "" || strings.TrimSpace(scheme.DiffusionModel) == "" {
-			log.Printf("[Config][WARN] -> models.schemes.%s 缺少 diffusion_model，已忽略该方案", name)
+			log.Printf("[Config][WARN] -> painter.json 方案 %q 缺少 diffusion_model，已忽略该方案", name)
 			continue
 		}
 		scheme.Name = key
@@ -94,7 +94,7 @@ func SetDiffusionSchemes(defaultName string, schemes map[string]DiffusionScheme)
 	key := normalizeSchemeName(defaultName)
 	if _, ok := normalized[key]; !ok {
 		key = order[0]
-		log.Printf("[Config][WARN] -> models.default_scheme=%q 不存在，回退到 %s", defaultName, key)
+		log.Printf("[Config][WARN] -> painter.json default_scheme=%q 不存在，回退到 %s", defaultName, key)
 	}
 	defaultDiffusionScheme = key
 	activeDiffusionScheme = key
@@ -153,7 +153,7 @@ func SetActiveDiffusionScheme(name string) error {
 	diffusionSchemeMu.Lock()
 	defer diffusionSchemeMu.Unlock()
 	if len(diffusionSchemes) == 0 {
-		return fmt.Errorf("配置中没有可切换的绘图模型方案（models.schemes 为空）")
+		return fmt.Errorf("配置中没有可切换的绘图模型方案（painter.json 未定义顶层方案键）")
 	}
 	scheme, ok := diffusionSchemes[key]
 	if !ok {

@@ -9,18 +9,18 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/transport/ws"
+	"LunarSubsystem/LunarHarness/engine/websocket"
 )
 
 // Start 装配路由并启动 HTTP 服务（非阻塞，监听成功后立即返回）。
 // 单一监听端口：BasicPort（默认 36789）；allow_lan 时放开回环绑定限制。
 func Start(roots StaticRoots) (*http.Server, error) {
-	if ws.Instance == nil {
+	if websocket.Instance == nil {
 		return nil, errors.New("WebSocket 集线器未初始化")
 	}
 
 	// 默认仅绑定 127.0.0.1 回环地址：/ws 无鉴权且承载调试面，对局域网开放等于开放控制面。
-	// 跨机部署时经 lunar_config.json 的 server.allow_lan 显式放开。
+	// 跨机部署时经 config/general.json 的 server.allow_lan 显式放开。
 	bindHost := "127.0.0.1"
 	if config.AllowLAN {
 		bindHost = ""
@@ -46,7 +46,7 @@ func Start(roots StaticRoots) (*http.Server, error) {
 	httpMux = http.NewServeMux()
 
 	// ==== WebSocket：唯一端点，两个前端共用 ====
-	httpMux.HandleFunc("/ws", ws.Instance.HandleWebSocket)
+	httpMux.HandleFunc("/ws", websocket.Instance.HandleWebSocket)
 
 	// ==== 静态前端资源 ====
 	registerStatic(httpMux, roots)
@@ -68,7 +68,7 @@ func Start(roots StaticRoots) (*http.Server, error) {
 		}
 	}()
 
-	logger.Info("LunarHarness", "核心人格服务正运行在 http://%s:%d", urlHost, config.BasicPort)
+	logger.Info("LunarHarness", "月华服务正运行在 http://%s:%d", urlHost, config.BasicPort)
 	return srv, nil
 }
 

@@ -539,7 +539,7 @@ func testConfig(t *testing.T, serverURL string) Config {
 
 func installConfig(t *testing.T, cfg Config) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "mutual_forum.json")
+	path := filepath.Join(t.TempDir(), "forum.json")
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatalf("序列化测试配置失败: %v", err)

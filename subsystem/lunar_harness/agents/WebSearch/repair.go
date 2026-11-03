@@ -6,8 +6,8 @@ package WebSearch
 // 可修的是「最近一次检索记录」与页面正文缓存等运行期痕迹。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {

@@ -115,7 +115,7 @@ func sendSSEEvent(w http.ResponseWriter, data any) error {
 // DiffusionSchemeHandler 查询/切换绘图模型方案。
 //
 // 状态只保存在 Go 层（general_config），智能体工具与图像工坊前端读写的是同一份状态；
-// 不写回 lunar_config.json —— 切换属于运行期偏好，重启后回到配置的默认方案。
+// 不写回 config/painter.json —— 切换属于运行期偏好，重启后回到配置的默认方案。
 //
 //	GET  /generate/scheme          当前方案 + 全部方案
 //	POST /generate/scheme {"scheme":"turbo"}  切换并返回最新状态

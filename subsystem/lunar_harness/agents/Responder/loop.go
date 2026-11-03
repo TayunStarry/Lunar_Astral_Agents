@@ -2,7 +2,7 @@ package Responder
 
 // loop.go 空回答判定与辅助函数。
 //
-// 循环输出检测统一由 engine/model/loopguard 承担（流式按节点实时截断、
+// 循环输出检测统一由 protocol/loopguard 承担（流式按节点实时截断、
 // 整包按末尾节点静态判定），本文件不再自行实现段落计数。
 
 import (

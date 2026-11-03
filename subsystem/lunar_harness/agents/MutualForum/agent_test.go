@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/protocolwire"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 /* ---------------- 假论坛 ---------------- */
@@ -369,7 +371,7 @@ func setupAgent(t *testing.T, modelScript *stubModel) *stubForum {
 	t.Helper()
 	forum := newStubForum(t)
 
-	cfgPath := filepath.Join(t.TempDir(), "mutual_forum.json")
+	cfgPath := filepath.Join(t.TempDir(), "forum.json")
 	cfg := map[string]any{
 		"enabled":                   true,
 		"base_url":                  forum.URL(),
@@ -397,8 +399,8 @@ func setupAgent(t *testing.T, modelScript *stubModel) *stubForum {
 		config.AgentMultimodalModel = oldModel
 	})
 
-	modelOnce = sync.Once{}
-	modelName, modelURL = "", ""
+	protocolwire.Wire()
+	agentbase.ResetModelCache()
 	ResetContext()
 	return forum
 }
@@ -554,10 +556,10 @@ func TestToolSchemasAndArgumentErrors(t *testing.T) {
 		}
 	}
 
-	if _, err := parseToolArgs(`{"title":`); err == nil {
+	if _, err := agentbase.ParseToolArgs(`{"title":`); err == nil {
 		t.Fatal("非法 JSON 参数应报错")
 	}
-	args, err := parseToolArgs("")
+	args, err := agentbase.ParseToolArgs("")
 	if err != nil || len(args) != 0 {
 		t.Fatalf("空参数应解析为空对象: %v %#v", err, args)
 	}

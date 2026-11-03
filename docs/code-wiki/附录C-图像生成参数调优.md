@@ -69,7 +69,7 @@
 | 参数 | 说明 | 默认值 | 建议 |
 |------|------|--------|------|
 | `sd_image_size` | 生成尺寸（宽高须为 32 的倍数） | 1024×1024 | 常规 1024，画质优先 2048 |
-| `sd_steps` | 迭代步数（调用方未指定且方案无推荐步数时的兜底） | 40 | 30 草图 / 40 常规 / 50~60 精细；`models.schemes.<name>.steps` 优先于它 |
+| `sd_steps` | 迭代步数（调用方未指定且方案无推荐步数时的兜底） | 40 | 30 草图 / 40 常规 / 50~60 精细；`<name>.steps` 优先于它 |
 | `sd_sampler` | 采样器 | auto（不传参） | 保持 auto，对比实验再显式指定 |
 | `sd_scheduler` | 调度器 | auto（不传参） | 保持 auto |
 | `sd_flow_shift` | 动态偏移 | 0（auto） | 保持 auto，对比实验试 1.5 / 3.0 |
@@ -86,7 +86,7 @@
 | `sd_diffusion_fa` | 扩散 flash attention | 开启 | 保持开启；排查伪影时可关闭对比 |
 | 随机种子 | 复现指定构图 | 空 / 0 = 随机 | 复现实验时填固定值 |
 
-完整 CLI 参数见 [附录 B](附录B-stable-diffusion.cpp参数参考.md)；配置字段键名与含义（位于 `lunar_config.json` 的 `diffusion` 分组）见 [05 绘画机制](05-绘画机制.md)。
+完整 CLI 参数见 [附录 B](附录B-stable-diffusion.cpp参数参考.md)；配置字段键名与含义（位于 `config/painter.json` 顶层，扩散参数与方案键平铺）见 [05 绘画机制](05-绘画机制.md)。
 
 ---
 

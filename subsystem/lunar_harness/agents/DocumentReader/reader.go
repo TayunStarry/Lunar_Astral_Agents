@@ -6,6 +6,7 @@ package DocumentReader
 // 交给模型；正文超出 10000 字时一律走分批工具，避免一次性撑爆上下文与内存。
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,17 +15,24 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/locator"
-	"LunarSubsystem/LunarHarness/engine/model/agentchat"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/resourcehub"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // InspectText 按句柄或路径执行一次内容探查
 //
+// Deprecated: 使用 InspectTextContext；本入口固定 context.Background()，无法随调用方取消。
+func InspectText(input, request string) (string, error) {
+	return InspectTextContext(context.Background(), input, request)
+}
+
+// InspectTextContext 带调用上下文的内容探查。
+//
 // @param input   文本资源句柄（@D.xxx），或完整 / 相对 / 纯文件名路径
 // @param request 对话者的自然语言需求
 // @return 文献解析给出的答复；句柄失效或非文本资源时返回错误
-func InspectText(input, request string) (string, error) {
+func InspectTextContext(ctx context.Context, input, request string) (string, error) {
 	handle, err := ResolveHandle(input)
 	if err != nil {
 		return "", err
@@ -53,7 +61,7 @@ func InspectText(input, request string) (string, error) {
 	}
 
 	// 大文件优先走轻量扫描通道：主模型规划、轻量模型逐片摘要、主模型归并
-	if answer, handled, scanErr := scanAnswer(doc, handle, request); handled {
+	if answer, handled, scanErr := scanAnswer(ctx, doc, handle, request); handled {
 		if scanErr != nil {
 			logger.Warn("CrystalAstral", "文献解析：轻量扫描失败，回退直读流程: %v", scanErr)
 		} else if strings.TrimSpace(answer) != "" {
@@ -61,13 +69,13 @@ func InspectText(input, request string) (string, error) {
 		}
 	}
 
-	system := agentchat.PromptText("documentFileRole.md")
+	system := agentbase.PromptText("documentFileRole.md")
 	briefing := buildBriefing(doc, handle, request)
-	messages := []agentchat.Message{
+	messages := []agentbase.Message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: briefing},
 	}
-	return runToolLoop(doc, messages, fileToolDefs(), maxToolRounds)
+	return runToolLoop(ctx, doc, messages, fileToolDefs(), maxToolRounds)
 }
 
 // ResolveHandle 把句柄或路径统一解析为文本句柄（路径支持完整 / 相对 / 纯文件名）
@@ -76,7 +84,7 @@ func ResolveHandle(input string) (string, error) {
 	if input == "" {
 		return "", fmt.Errorf("文件或句柄不能为空")
 	}
-	match, err := locator.ResolveToHandle(input, []string{resource.StorageRootDocuments})
+	match, err := resourcehub.ResolveToHandle(input, []string{resource.StorageRootDocuments})
 	if err != nil {
 		return "", err
 	}
@@ -198,7 +206,7 @@ func buildBriefing(doc *docContext, rawHandle, request string) string {
 		truncated = "（超大文件已按上限截断）"
 	}
 	scope, contentBlock := scopedContent(doc, rawHandle)
-	return agentchat.RenderPrompt(agentchat.PromptText("documentFileBriefing.md"),
+	return agentbase.RenderPrompt(agentbase.PromptText("documentFileBriefing.md"),
 		"{request}", request,
 		"{scope}", scope,
 		"{handle}", doc.Handle,
@@ -240,7 +248,7 @@ func scopedContent(doc *docContext, rawHandle string) (scope, block string) {
 	}
 	body := scoped.Content
 	if len([]rune(body)) > inlineContentLimit {
-		body = agentchat.HardCutRunes(body, inlineContentLimit)
+		body = agentbase.HardCutRunes(body, inlineContentLimit)
 	}
 	return scope, "【正文（仅指定范围）】\n" + body
 }
@@ -252,7 +260,7 @@ func buildContentBlock(doc *docContext) string {
 	}
 	return fmt.Sprintf("【正文】\n文件超过 %d 字，未整体注入。请先用 chunk_plan 取得分批区间，"+
 		"再用 read_chunk 或 read_lines 逐片读取（单次 ≤ %d 字）。\n开头片段如下：\n%s",
-		inlineContentLimit, maxToolReadChars, agentchat.HardCutRunes(doc.Text, 1200))
+		inlineContentLimit, maxToolReadChars, agentbase.HardCutRunes(doc.Text, 1200))
 }
 
 // resourceKindLabel 类型码中文名

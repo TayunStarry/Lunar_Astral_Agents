@@ -6,20 +6,21 @@ package WebSearch
 // 新增直连能力只需往 variable.go 的 routePipelines 注册一条，无需新增正则或分支。
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 )
 
 // Route 调用搜索模型产出结构化决策；调用或解析失败时回退检索管线。
-func Route(instruction string, profile summaryProfile) pipelineDecision {
+func Route(ctx context.Context, instruction string, profile summaryProfile) pipelineDecision {
 	fallback := pipelineDecision{Pipeline: PipelineSearch, Query: instruction}
 	system := loadPrompt("webSearchRoute.md")
 	if system == "" {
 		return fallback
 	}
 	system = renderPrompt(system, "{pipelines}", routeCandidates())
-	text, err := chatWithOptions([]chatMessage{
+	text, err := chatWithOptions(ctx, []chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: instruction},
 	}, profileChatOptions(profile))

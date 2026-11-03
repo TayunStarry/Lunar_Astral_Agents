@@ -135,3 +135,32 @@
 		padding: 6px;
 	}
 }
+
+/* 音乐播放器挂载区：悬浮于输入区上方，窄屏自适应宽度 */
+.music-dock {
+	position: fixed;
+	left: 10px;
+	right: 10px;
+	bottom: calc(84px + env(safe-area-inset-bottom));
+	max-width: 560px;
+	margin: 0 auto;
+	z-index: 60;
+}
+
+.music-dock[hidden] {
+	display: none;
+}
+
+.music-dock .lunar-music-card {
+	--lunar-music-ink: #f5f0ff;
+	--lunar-music-muted: rgba(245, 240, 255, 0.68);
+	background: rgba(17, 12, 32, 0.62);
+	border-color: rgba(157, 107, 255, 0.4);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.music-dock .lunar-music-title {
+	color: #d9c8ff;
+}

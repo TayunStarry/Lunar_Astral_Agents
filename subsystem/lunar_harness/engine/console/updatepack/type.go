@@ -7,7 +7,7 @@
 // 拉取：默认最新 Release 附件，或指定 tag / commit 哈希（需已发布对应 tag）。
 package updatepack
 
-// Config 更新包功能配置（宿主从 local_data/release.json 注入）
+// Config 更新包功能配置（宿主从 local_data/config/release.json 注入）
 type Config struct {
 	GiteeOwner string   `json:"gitee_owner"` // Gitee 仓库属主
 	GiteeRepo  string   `json:"gitee_repo"`  // Gitee 仓库名

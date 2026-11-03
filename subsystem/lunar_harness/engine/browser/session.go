@@ -43,6 +43,9 @@ type WebViewSession struct {
 	dead    bool
 	closing bool
 
+	// abandoned 创建方已超时放弃：窗口一旦进入事件循环就自动关闭，避免留下无主窗口
+	abandoned atomic.Bool
+
 	unregister func()
 }
 
@@ -120,6 +123,13 @@ func OpenWebViewSession(url string, title string, width int, height int) (*WebVi
 		}
 		s.aliveFlag.Store(1)
 		created <- nil
+		// 创建方已超时放弃：进入事件循环后自动关闭，避免留下无主窗口
+		if s.abandoned.Load() {
+			go func() {
+				time.Sleep(300 * time.Millisecond)
+				w.Dispatch(func() { w.Terminate() })
+			}()
+		}
 		w.Run()
 
 		// Run 返回：窗口已被关闭（用户或 Close）。先落「已结束」标记再销毁，
@@ -133,8 +143,17 @@ func OpenWebViewSession(url string, title string, width int, height int) (*WebVi
 		closeOnceDo(s)
 	}()
 
-	if err := <-created; err != nil {
-		return nil, err
+	select {
+	case err := <-created:
+		if err != nil {
+			return nil, err
+		}
+	case <-time.After(webViewCreateTimeout):
+		// webview.New 在 WebView2 初始化异常时可能长时间不返回；
+		// 放弃会话并让后台 goroutine 在窗口真正就绪后自行关闭，避免卡死整条搜索链。
+		s.abandoned.Store(true)
+		logger.SubWarn("browser", "OpenWebViewSession", "创建 webview 会话超时（%s），已放弃 id=%s", webViewCreateTimeout, s.ID)
+		return nil, fmt.Errorf("创建 webview 会话超时（%s）", webViewCreateTimeout)
 	}
 
 	sessionRegistryMu.Lock()

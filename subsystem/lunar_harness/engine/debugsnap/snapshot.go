@@ -19,10 +19,10 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/agentdump"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
 // HandleAlert 告警钩子实现（由 app 装配为 logger.SetAlertHook）。

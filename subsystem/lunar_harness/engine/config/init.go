@@ -9,20 +9,6 @@ import (
 	"strings"
 )
 
-// ModelScheme 一套绘图模型方案的原始配置（与 DiffusionScheme 一一对应）
-//
-// 扩散模型、VAE、提示词编码模型必须成套匹配，因此按方案整组声明，
-// 避免调用方把不同方案的模型混用成非法组合。
-type ModelScheme struct {
-	Label               string `json:"label"`                 // 界面显示名（空则用方案键名）
-	DiffusionModel      string `json:"diffusion_model"`       // 扩散模型路径
-	VariationalModel    string `json:"variational_model"`     // 变分模型路径
-	PromptAnalysisModel string `json:"prompt_analysis_model"` // 提示分析模型路径
-	PromptMmprojModel   string `json:"prompt_mmproj_model"`   // 多模态提示分析模型路径（可空）
-	RealESRGANModel     string `json:"real_esrgan_model"`     // 4x超分辨率模型路径（可空）
-	Steps               int    `json:"steps"`                 // 方案推荐默认步数（0=沿用 sd_steps）
-}
-
 // SystemSettings 系统级设置的统一根对象。
 //
 // 把原先分散的 server / logs / chat / client 四节扁平收拢到 system 下：
@@ -46,25 +32,18 @@ type SystemSettings struct {
 	LoopNodeRunes    *int     `json:"loop_node_runes,omitempty"`
 	LoopSegmentRunes *int     `json:"loop_segment_runes,omitempty"`
 	LoopSimilarity   *float64 `json:"loop_similarity,omitempty"`
+	// 对话者聚合工具意图检测：开关 / 相似度阈值 / 嵌入超时（毫秒） / 最短触发字符数
+	DialogueToolIntentEnabled   *bool    `json:"dialogue_tool_intent_enabled,omitempty"`
+	DialogueToolIntentThreshold *float64 `json:"dialogue_tool_intent_threshold,omitempty"`
+	DialogueToolIntentTimeoutMS *int     `json:"dialogue_tool_intent_timeout_ms,omitempty"`
+	DialogueToolIntentMinRunes  *int     `json:"dialogue_tool_intent_min_runes,omitempty"`
 }
 
-// ModelConfig 定义模型配置的结构
+// ModelConfig 定义公共配置（general.json）的结构
 //
-// 分组严格按职责边界划分：Models 只放模型文件路径、System 放运行/日志/聊天守卫/客户端显示，
-// 其余每组对应且仅对应一个功能域，避免出现职责混杂的「杂项组」。
+// 绘图相关配置（模型方案 + 扩散生成策略）已拆到独立文件 local_data/config/painter.json，
+// 这里只保留与绘图无关的配置节；每组对应且仅对应一个功能域，避免出现职责混杂的「杂项组」。
 type ModelConfig struct {
-	// 模型文件路径（辅助/生成类模型；主模型服务分段在 local_data/models/models.ini）
-	Models struct {
-		// 可切换的绘图模型方案：键名（turbo / quality）→ 成套模型路径。
-		// 未配置时回退到下面的扁平模型路径，保持旧配置文件可用。
-		Schemes             map[string]ModelScheme `json:"schemes"`
-		DefaultScheme       string                 `json:"default_scheme"`        // 默认方案键名（缺省取排序后的第一个）
-		DiffusionModel      string                 `json:"diffusion_model"`       // 扩散模型路径
-		VariationalModel    string                 `json:"variational_model"`     // 变分模型路径
-		PromptAnalysisModel string                 `json:"prompt_analysis_model"` // 提示分析模型路径
-		PromptMmprojModel   string                 `json:"prompt_mmproj_model"`   // 多模态提示分析模型路径
-		RealESRGANModel     string                 `json:"real_esrgan_model"`     // 4x超分辨率模型路径
-	} `json:"models"`
 	// 系统级设置：运行/安全、日志、聊天显存守卫、前端显示共用同一个根对象
 	System SystemSettings `json:"system"`
 	// 月华 Agent：多模态输入方式 + 追加设定（模型路由为本地固定值，不开放配置）
@@ -83,7 +62,7 @@ type ModelConfig struct {
 	} `json:"agent"`
 	// 网络搜索智能体（web_search）：检索词提炼、统一摘要与浏览器滚动策略。
 	// 仅由琉璃的内置 Web-LTP（agents/WebSearch）消费，与其余配置节统一在此解析，
-	// 智能体侧只读取解析后的全局值，不再自行读取 lunar_config.json。
+	// 智能体侧只读取解析后的全局值，不再自行读取 config/general.json。
 	WebSearch struct {
 		MaxPages        int   `json:"max_pages"`               // 页面条目总数：首页恒占 1 条，其余为同时打开的详情页
 		MaxResults      int   `json:"max_results"`             // 结果页解析的检索结果条数
@@ -105,36 +84,6 @@ type ModelConfig struct {
 		ScanChunkRunes int    `json:"scan_chunk_runes"`     // 扫描单片字符上限
 	} `json:"document_reader"`
 	// 记忆库不再有独立的模型路由：嵌入与多模态模型统一复用 agent 分组
-	// 图像生成（sd.cpp）行为与资源策略
-	Diffusion struct {
-		AllowDiffusion bool `json:"allow_diffusion"` // 是否允许运行扩散生成
-		// 画图前显存守卫：使用指针以便区分"未配置"与"显式关闭"，未配置时保持默认值（开启，阈值 8192 MiB）
-		ImageVRAMGuard    *bool `json:"image_vram_guard,omitempty"`
-		ImageVRAMGuardMiB *int  `json:"image_vram_guard_mib,omitempty"`
-		// sd.cpp 权重内存卸载模式（auto/always/off）与提示词编码器 CPU 运行开关
-		SDOffloadToCPU     *string `json:"sd_offload_to_cpu,omitempty"`
-		SDTextEncoderOnCPU *bool   `json:"sd_te_on_cpu,omitempty"`
-		// VAE 分片解码策略与几何（off/always/auto；tile 以 latent 单元计，overlap 为比例）
-		SDVaeTiling      *string  `json:"sd_vae_tiling,omitempty"`
-		SDVaeTileSize    *string  `json:"sd_vae_tile_size,omitempty"`
-		SDVaeTileOverlap *float64 `json:"sd_vae_tile_overlap,omitempty"`
-		// VAE 解码后端（auto=放不进显存就整段改 CPU / gpu / cpu）与 GPU direct conv 开关
-		SDVaeBackend    *string `json:"sd_vae_backend,omitempty"`
-		SDVaeConvDirect *bool   `json:"sd_vae_conv_direct,omitempty"`
-		// 显存预算（GiB，空=自动）与采样策略（auto=交给 sd.cpp 按模型选择）
-		SDMaxVRAM        *string  `json:"sd_max_vram,omitempty"`
-		SDSampler        *string  `json:"sd_sampler,omitempty"`
-		SDScheduler      *string  `json:"sd_scheduler,omitempty"`
-		SDFlowShift      *float64 `json:"sd_flow_shift,omitempty"`
-		SDFlashAttention *bool    `json:"sd_diffusion_fa,omitempty"`
-		// 调用方未指定时的默认步数与边长
-		SDSteps     *int `json:"sd_steps,omitempty"`
-		SDImageSize *int `json:"sd_image_size,omitempty"`
-		// 图生图/合照按参考图比例推导尺寸时的总像素预算上限（百万像素，默认 1.6）
-		PixelBudgetMP *float64 `json:"pixel_budget_mp,omitempty"`
-		// 图生图的提示词引导系数覆盖值（<=0 表示不覆盖，按 1.0）
-		Img2ImgCFG *float64 `json:"img2img_cfg,omitempty"`
-	} `json:"diffusion"`
 	// 月华语音合成（TTS）：引擎选择 + 统一效果参数。
 	// 参数层面统一：各引擎共用同一套字段；执行层面由 engine/broadcaster 统一播报
 	// 链路按引擎自身格式适配，引擎不支持的参数（如 Kokoro 不支持参考音频）自动忽略。
@@ -152,8 +101,8 @@ type ModelConfig struct {
 		// 引擎闲置卸载阈值（分钟）：无合成调用超过该时长即卸载模型释放占用
 		IdleUnloadMinutes *int `json:"idle_unload_minutes,omitempty"`
 	} `json:"tts"`
-	// Gitee Release 发布通道不出现在 lunar_config.json：
-	// 唯一来源是独立文件 local_data/release.json（含令牌，已 gitignore）。
+	// Gitee Release 发布通道不出现在 general.json：
+	// 唯一来源是独立文件 local_data/config/release.json（含令牌，已 gitignore）。
 }
 
 // init 加载配置文件
@@ -186,8 +135,8 @@ func init() {
 	}
 	// 提取可执行文件所在的目录
 	exeDir := filepath.Dir(exePath)
-	// 拼接配置文件 lunar_config.json 的完整路径
-	configPath := filepath.Join(exeDir, LocalDir, "lunar_config.json")
+	// 拼接公共配置文件 config/general.json 的完整路径
+	configPath := filepath.Join(exeDir, LocalDir, "config", "general.json")
 	// 读取配置文件内容
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -206,62 +155,32 @@ func init() {
 	// 解析结果 → 全局配置（映射规则集中在 applyConfig，便于单测覆盖）
 	applyConfig(parameter)
 
-	// ==== 发布通道：唯一来源 local_data/release.json（不再兼容 lunar_config.json 的 release 节） ====
+	// ==== 绘图配置：唯一来源 local_data/config/painter.json（扁平结构，general.json 不再承载绘图字段） ====
+	if fileCfg, ok, perr := LoadPainterConfigFile(filepath.Join(exeDir, LocalDir, "config")); perr != nil {
+		log.Printf("[Config][ERROR] -> 解析 %s 失败，绘图配置保持默认值: %v", PainterConfigFile, perr)
+	} else if ok {
+		applyPainterConfig(fileCfg)
+	} else {
+		log.Printf("[Config][ERROR] -> 未找到 local_data/config/%s，绘图配置保持默认值", PainterConfigFile)
+	}
+
+	// ==== 发布通道：唯一来源 local_data/config/release.json（不再兼容 general.json 的 release 节） ====
 	// 该文件含 Gitee 私人令牌，已被 .gitignore 排除。
-	if fileCfg, ok, rerr := LoadReleaseConfigFile(filepath.Join(exeDir, LocalDir)); rerr != nil {
+	if fileCfg, ok, rerr := LoadReleaseConfigFile(filepath.Join(exeDir, LocalDir, "config")); rerr != nil {
 		log.Printf("[Config][WARN] -> 解析 %s 失败，发布通道保持未配置: %v", ReleaseConfigFile, rerr)
 	} else if ok {
 		applyReleaseConfig(fileCfg)
 	} else {
-		log.Printf("[Config][INFO] -> 未找到 local_data/%s，发布通道未配置", ReleaseConfigFile)
+		log.Printf("[Config][INFO] -> 未找到 local_data/config/%s，发布通道未配置", ReleaseConfigFile)
 	}
 }
 
 // applyConfig 把解析结果写入全局配置。
 //
-// 独立成函数：配置文件读的是 exe 同级的 lunar_config.json，init 的文件路径无法在测试中
+// 独立成函数：配置文件读的是 exe 同级的 config/general.json，init 的文件路径无法在测试中
 // 复现，而「字段缺省保持默认」这类规则必须被单测钉住——否则改动一处就会静默失效
 // （配置回到默认值，且没有任何报错）。
 func applyConfig(parameter *ModelConfig) {
-	// ==== 模型文件路径（models） ====
-	// 如果配置文件中 DiffusionModel 字段非空，则更新全局配置
-	if parameter.Models.DiffusionModel != "" {
-		DiffusionModel = parameter.Models.DiffusionModel
-	}
-	// 如果配置文件中 VariationalModel 字段非空，则更新全局配置
-	if parameter.Models.VariationalModel != "" {
-		VariationalModel = parameter.Models.VariationalModel
-	}
-	// 如果配置文件中 PromptAnalysisModel 字段非空，则更新全局配置
-	if parameter.Models.PromptAnalysisModel != "" {
-		PromptAnalysisModel = parameter.Models.PromptAnalysisModel
-	}
-	// 如果配置文件中 PromptMmprojModel 字段非空，则更新全局配置
-	if parameter.Models.PromptMmprojModel != "" {
-		PromptMmprojModel = parameter.Models.PromptMmprojModel
-	}
-	// 如果配置文件中 RealESRGANModel 字段非空，则更新全局配置
-	if parameter.Models.RealESRGANModel != "" {
-		RealESRGANModel = parameter.Models.RealESRGANModel
-	}
-	// 绘图模型方案（models.schemes）：注册后立即启用默认方案。
-	// 未配置方案时保持上面的扁平模型路径，行为与旧配置一致。
-	if len(parameter.Models.Schemes) > 0 {
-		schemes := make(map[string]DiffusionScheme, len(parameter.Models.Schemes))
-		for name, raw := range parameter.Models.Schemes {
-			schemes[name] = DiffusionScheme{
-				Label:               raw.Label,
-				DiffusionModel:      raw.DiffusionModel,
-				VariationalModel:    raw.VariationalModel,
-				PromptAnalysisModel: raw.PromptAnalysisModel,
-				PromptMmprojModel:   raw.PromptMmprojModel,
-				RealESRGANModel:     raw.RealESRGANModel,
-				Steps:               raw.Steps,
-			}
-		}
-		SetDiffusionSchemes(parameter.Models.DefaultScheme, schemes)
-	}
-
 	// ==== 核心智能体配置（agent） ====
 	// 模型路由（embedding / multimodal 的 url、model、key）已收敛为本地固定参数，
 	// 不再从配置文件或命令行开放；旧配置中的对应字段在 JSON 解码时被忽略。
@@ -270,13 +189,6 @@ func applyConfig(parameter *ModelConfig) {
 	}
 	// Go 原生对话链直接消费的追加设定
 	AgentAppendSettings = append([]string(nil), parameter.Agent.AppendSettings...)
-	// 绘图尺寸预算与图生图 CFG 覆盖
-	if parameter.Diffusion.PixelBudgetMP != nil && *parameter.Diffusion.PixelBudgetMP > 0 {
-		DiffusionPixelBudgetMP = *parameter.Diffusion.PixelBudgetMP
-	}
-	if parameter.Diffusion.Img2ImgCFG != nil && *parameter.Diffusion.Img2ImgCFG > 0 {
-		DiffusionImg2ImgCFG = *parameter.Diffusion.Img2ImgCFG
-	}
 	// ==== 静态图思维链形态（agent.image_input / agent.vision_max_side） ====
 	// url=视觉读取端点（默认）；base64=视觉读取管线直出的副本（供无法回取本机 URL 的云端模型）。
 	// 两种形态都是 ≤ vision_max_side 的副本，原图永远不进入思维链（见 docs/adr/0008）。
@@ -416,67 +328,6 @@ func applyConfig(parameter *ModelConfig) {
 	if DocumentScanChunkRunes > 16000 {
 		DocumentScanChunkRunes = 16000
 	}
-	// ==== 图像生成行为与资源策略（diffusion） ====
-	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置
-	if parameter.Diffusion.AllowDiffusion == true {
-		AllowDiffusion = true
-	} else {
-		AllowDiffusion = false
-	}
-	// 画图前显存守卫配置：仅在配置文件中显式给出时才覆盖默认值
-	if parameter.Diffusion.ImageVRAMGuard != nil {
-		ImageVRAMGuard = *parameter.Diffusion.ImageVRAMGuard
-	}
-	if parameter.Diffusion.ImageVRAMGuardMiB != nil {
-		ImageVRAMGuardMiB = *parameter.Diffusion.ImageVRAMGuardMiB
-	}
-	// sd.cpp 权重内存卸载与提示词编码器 CPU 运行配置：仅在配置文件中显式给出时才覆盖默认值
-	if parameter.Diffusion.SDOffloadToCPU != nil && *parameter.Diffusion.SDOffloadToCPU != "" {
-		SDOffloadToCPU = *parameter.Diffusion.SDOffloadToCPU
-	}
-	if parameter.Diffusion.SDTextEncoderOnCPU != nil {
-		SDTextEncoderOnCPU = *parameter.Diffusion.SDTextEncoderOnCPU
-	}
-	// VAE 分片解码策略：仅在配置文件显式给出非空值时才覆盖默认值（默认 off）
-	if parameter.Diffusion.SDVaeTiling != nil && *parameter.Diffusion.SDVaeTiling != "" {
-		SDVaeTiling = *parameter.Diffusion.SDVaeTiling
-	}
-	if parameter.Diffusion.SDVaeTileSize != nil && *parameter.Diffusion.SDVaeTileSize != "" {
-		SDVaeTileSize = *parameter.Diffusion.SDVaeTileSize
-	}
-	if parameter.Diffusion.SDVaeTileOverlap != nil {
-		SDVaeTileOverlap = *parameter.Diffusion.SDVaeTileOverlap
-	}
-	// VAE 解码后端与 direct conv：仅显式给出时覆盖（默认 auto / 关闭）
-	if parameter.Diffusion.SDVaeBackend != nil && *parameter.Diffusion.SDVaeBackend != "" {
-		SDVaeBackend = *parameter.Diffusion.SDVaeBackend
-	}
-	if parameter.Diffusion.SDVaeConvDirect != nil {
-		SDVaeConvDirect = *parameter.Diffusion.SDVaeConvDirect
-	}
-	// 显存预算与采样策略：空字符串表示"使用引擎自动决策"，因此只在非空时覆盖
-	if parameter.Diffusion.SDMaxVRAM != nil {
-		SDMaxVRAM = *parameter.Diffusion.SDMaxVRAM
-	}
-	if parameter.Diffusion.SDSampler != nil && *parameter.Diffusion.SDSampler != "" {
-		SDSampler = *parameter.Diffusion.SDSampler
-	}
-	if parameter.Diffusion.SDScheduler != nil && *parameter.Diffusion.SDScheduler != "" {
-		SDScheduler = *parameter.Diffusion.SDScheduler
-	}
-	if parameter.Diffusion.SDFlowShift != nil {
-		SDFlowShift = *parameter.Diffusion.SDFlowShift
-	}
-	if parameter.Diffusion.SDFlashAttention != nil {
-		SDFlashAttention = *parameter.Diffusion.SDFlashAttention
-	}
-	// 缺省步数与边长：仅接受正数，避免非法配置把生成参数打成 0
-	if parameter.Diffusion.SDSteps != nil && *parameter.Diffusion.SDSteps > 0 {
-		SDSteps = *parameter.Diffusion.SDSteps
-	}
-	if parameter.Diffusion.SDImageSize != nil && *parameter.Diffusion.SDImageSize > 0 {
-		SDImageSize = *parameter.Diffusion.SDImageSize
-	}
 	// ==== 服务运行与调试（system） ====
 	// 如果配置文件中 Developer 字段非空，则更新全局配置
 	if parameter.System.Developer == true {
@@ -501,6 +352,20 @@ func applyConfig(parameter *ModelConfig) {
 	}
 	if parameter.System.LoopSimilarity != nil && *parameter.System.LoopSimilarity > 0 && *parameter.System.LoopSimilarity < 1 {
 		LoopSimilarity = *parameter.System.LoopSimilarity
+	}
+	// ==== 对话者聚合工具意图检测（system.dialogue_tool_intent_*） ====
+	if parameter.System.DialogueToolIntentEnabled != nil {
+		DialogueToolIntentEnabled = *parameter.System.DialogueToolIntentEnabled
+	}
+	if parameter.System.DialogueToolIntentThreshold != nil &&
+		*parameter.System.DialogueToolIntentThreshold > 0 && *parameter.System.DialogueToolIntentThreshold < 1 {
+		DialogueToolIntentThreshold = *parameter.System.DialogueToolIntentThreshold
+	}
+	if parameter.System.DialogueToolIntentTimeoutMS != nil && *parameter.System.DialogueToolIntentTimeoutMS > 0 {
+		DialogueToolIntentTimeoutMS = *parameter.System.DialogueToolIntentTimeoutMS
+	}
+	if parameter.System.DialogueToolIntentMinRunes != nil && *parameter.System.DialogueToolIntentMinRunes >= 0 {
+		DialogueToolIntentMinRunes = *parameter.System.DialogueToolIntentMinRunes
 	}
 	// ==== 聊天显存守卫与 QQ 桥接 ====
 	// chat（system.chat_vram_guard 聊天显存守卫）仅由月华 TypeScript 读取，

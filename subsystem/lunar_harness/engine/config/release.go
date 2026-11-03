@@ -1,6 +1,6 @@
 package config
 
-// ==== Gitee Release 发布通道（独立配置文件 local_data/release.json） ====
+// ==== Gitee Release 发布通道（独立配置文件 local_data/config/release.json） ====
 //
 // 更新包与 LTPX 应用市场共用同一仓库：两者都以 Gitee Release 存储，
 // 在仓库内以「描述标记 + 附件名前缀」严格区分——
@@ -12,7 +12,7 @@ package config
 // tui_system/ltpxmarket 各自实现（互不抓取对方的发布）。
 //
 // 该文件含 Gitee 私人令牌，已被 .gitignore 排除，绝不入库、不上传。
-// lunar_config.json 不再支持 release 节：旧写法会被忽略，请迁移到本文件。
+// general.json 不再支持 release 节：旧写法会被忽略，请迁移到本文件。
 
 import (
 	"encoding/json"
@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 )
 
-// ReleaseConfigFile 独立发布配置文件名（相对 LocalDir）
+// ReleaseConfigFile 独立发布配置文件名（相对 LocalDir/config）
 const ReleaseConfigFile = "release.json"
 
 // ReleaseConfig 发布通道配置（字段与 release.json 一一对应）

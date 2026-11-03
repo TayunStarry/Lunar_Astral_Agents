@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/protocolwire"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // TestPlanSendParsesJSON 钉住「需求 → 结构化投递计划」：提示词可读、JSON 可解析。
@@ -27,14 +28,13 @@ func TestPlanSendParsesJSON(t *testing.T) {
 	defer server.Close()
 
 	origURL, origModel := config.AgentMultimodalURL, config.AgentMultimodalModel
-	modelOnce = sync.Once{}
-	modelName, modelURL = "", ""
+	protocolwire.Wire()
+	agentbase.ResetModelCache()
 	config.AgentMultimodalURL = server.URL
 	config.AgentMultimodalModel = "test-model"
 	t.Cleanup(func() {
 		config.AgentMultimodalURL, config.AgentMultimodalModel = origURL, origModel
-		modelOnce = sync.Once{}
-		modelName, modelURL = "", ""
+		agentbase.ResetModelCache()
 	})
 
 	groups, friends := testDirectory()

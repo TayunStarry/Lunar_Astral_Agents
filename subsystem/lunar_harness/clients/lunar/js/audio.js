@@ -1,5 +1,5 @@
 // ============================================================
-//  星月智能 · 消息终端 — 音频播放队列 + 乐谱播放器桥接
+//  星月智能 · 消息终端 — 音频播放队列（TTS）
 // ============================================================
 
 // ---------- 音频播放队列（TTS） ----------
@@ -86,64 +86,3 @@ class AudioQueueManager {
 }
 const AudioQueue = new AudioQueueManager();
 
-// ---------- 音乐播放器 iframe 桥接（BroadcastChannel） ----------
-const musicChannel = new BroadcastChannel('lunar-astral-music');
-let musicIframe = null;
-let musicReady = false;
-const musicPendingQueue = [];
-
-function initMusicRenderer() {
-    if (document.getElementById('music-renderer-frame')) return;
-    musicIframe = document.createElement('iframe');
-    musicIframe.id = 'music-renderer-frame';
-    musicIframe.src = '/reliance/music_libs/music_renderer.html?v=2';
-    musicIframe.allow = 'autoplay';
-    musicIframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:1000;pointer-events:none;background:transparent;display:none;';
-    document.body.appendChild(musicIframe);
-
-    musicChannel.onmessage = (event) => {
-        const msg = event.data;
-        if (!msg || !msg.type) return;
-        switch (msg.type) {
-            case 'ready':
-                musicReady = true;
-                musicChannel.postMessage({ type: 'theme', darkMode: document.body.classList.contains('dark-mode') });
-                while (musicPendingQueue.length) musicChannel.postMessage(musicPendingQueue.shift());
-                break;
-            case 'closed':
-                hideMusicIframe();
-                break;
-            case 'state':
-                if (msg.playing || msg.paused) showMusicIframe();
-                break;
-        }
-    };
-}
-
-function postMusicMessage(msg) {
-    if (!musicReady) {
-        musicPendingQueue.push(msg);
-        return;
-    }
-    musicChannel.postMessage(msg);
-}
-
-function showMusicIframe() {
-    if (musicIframe) {
-        musicIframe.style.display = 'block';
-        musicIframe.style.pointerEvents = 'auto';
-    }
-}
-
-function hideMusicIframe() {
-    if (musicIframe) {
-        musicIframe.style.display = 'none';
-        musicIframe.style.pointerEvents = 'none';
-    }
-}
-
-function renderMusicScore(abcNotation) {
-    if (!abcNotation) return;
-    showMusicIframe();
-    postMusicMessage({ type: 'render', abcNotation });
-}

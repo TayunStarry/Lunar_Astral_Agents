@@ -1,0 +1,48 @@
+{
+	"system": {
+		"developer": false,
+		"allow_lan": false,
+		"insecure_tls": false,
+		"chat_vram_guard": true,
+		"chat_vram_guard_mib": 1024,
+		"chat_vram_guard_interval": 16,
+		"character_renderer": "live2d",
+		"loop_node_runes": 1024,
+		"loop_segment_runes": 128,
+		"loop_similarity": 0.65,
+		"-enumerate": [
+			"bedrock",
+			"live2d"
+		]
+	},
+	"agent": {
+		"image_input": "url",
+		"vision_max_side": 1024,
+		"vision_cache_cap_mb": 512,
+		"append_settings": []
+	},
+	"tts": {
+		"engine": "Qwen",
+		"-enumerate": [
+			"Qwen",
+			"Kokoro",
+			"OmniVoice"
+		],
+		"ref_audio": "./local_data/audios/lunar-template.wav",
+		"ref_text": null,
+		"voice": null,
+		"mix": null,
+		"speed": 1,
+		"lang": null,
+		"instruct": null,
+		"seed": 0,
+		"disable_postproc": false,
+		"idle_unload_minutes": 5
+	},
+	"web_search": {
+		"max_pages": 5,
+		"max_results": 15,
+		"summary_max_chars": 4096,
+		"max_run_seconds": 420
+	}
+}

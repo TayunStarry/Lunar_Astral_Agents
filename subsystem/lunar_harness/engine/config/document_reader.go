@@ -1,6 +1,6 @@
 package config
 
-// ==== 文献解析智能体（lunar_config.json 的 document_reader 节） ====
+// ==== 文献解析智能体（config/general.json 的 document_reader 节） ====
 //
 // 仅用于「大文件轻量扫描通道」：主模型产出扫描计划，轻量模型逐片摘要，
 // 主模型归并并按需回读原文。指针字段区分「未配置」与「显式关闭」。

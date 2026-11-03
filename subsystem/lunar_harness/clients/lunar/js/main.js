@@ -26,11 +26,6 @@ function cleanup() {
     document.querySelectorAll('.echarts-container').forEach(c => {
         if (c._echartsInstance) c._echartsInstance.dispose();
     });
-    if (musicIframe) {
-        musicIframe.remove();
-        musicIframe = null;
-    }
-    musicChannel.close();
 }
 
 // ---------- 初始化 ----------
@@ -62,7 +57,6 @@ async function init() {
     setupCapture();
     setupScrollControls();
     setupCornerToggle();
-    initMusicRenderer();
     setupRendererFrame();
     await ensureMarked();
     initMermaid();

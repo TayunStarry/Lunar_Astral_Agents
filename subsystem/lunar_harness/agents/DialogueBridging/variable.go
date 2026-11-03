@@ -24,16 +24,6 @@ const (
 	loopMaxRetries = 2
 )
 
-// 模型端点缓存（只解析一次）
-var (
-	modelOnce sync.Once
-	modelName string
-	modelURL  string
-)
-
-// modelHTTPClient 单次规划调用的 HTTP 客户端
-var modelHTTPClient = &http.Client{Timeout: 90 * time.Second}
-
 // runMu 串行化投递：同一时间只处理一个需求，避免并发写 QQ 时报告互相覆盖
 var runMu sync.Mutex
 

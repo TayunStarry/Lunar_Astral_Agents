@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.305.2156",
+    "version": "2026.307.1912",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -72,8 +72,8 @@
       "post": {
         "summary": "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）",
         "description": "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）",
-        "operationId": "CrystalPersonality.ModuleCreateHandler",
-        "x-handler": "CrystalPersonality.ModuleCreateHandler",
+        "operationId": "ltpxhost.ModuleCreateHandler",
+        "x-handler": "ltpxhost.ModuleCreateHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -85,8 +85,8 @@
       "post": {
         "summary": "检查 HTML 项目内容（供 AI 生成模块元信息）",
         "description": "检查 HTML 项目内容（供 AI 生成模块元信息）",
-        "operationId": "CrystalPersonality.ModuleInspectHandler",
-        "x-handler": "CrystalPersonality.ModuleInspectHandler",
+        "operationId": "ltpxhost.ModuleInspectHandler",
+        "x-handler": "ltpxhost.ModuleInspectHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -98,8 +98,8 @@
       "get": {
         "summary": "扫描包目录",
         "description": "扫描包目录",
-        "operationId": "CrystalPersonality.ScanPackagesHandler",
-        "x-handler": "CrystalPersonality.ScanPackagesHandler",
+        "operationId": "ltpxhost.ScanPackagesHandler",
+        "x-handler": "ltpxhost.ScanPackagesHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -402,8 +402,8 @@
     },
     "/debug/dump/context": {
       "post": {
-        "summary": "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）",
-        "description": "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）",
+        "summary": "导出 Go 智能体上下文/状态为 JSON（dialogue 对话者 / web_search / bilibili / desktop / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）",
+        "description": "导出 Go 智能体上下文/状态为 JSON（dialogue 对话者 / web_search / bilibili / desktop / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）",
         "operationId": "DataDumpContextHandler",
         "x-handler": "DataDumpContextHandler",
         "responses": {
@@ -881,8 +881,8 @@
       "post": {
         "summary": "加载应用",
         "description": "加载应用",
-        "operationId": "CrystalPersonality.LoadApplicationHandler",
-        "x-handler": "CrystalPersonality.LoadApplicationHandler",
+        "operationId": "ltpxhost.LoadApplicationHandler",
+        "x-handler": "ltpxhost.LoadApplicationHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -894,8 +894,8 @@
       "post": {
         "summary": "调用工具（异步受理，立即返回 request_id）",
         "description": "调用工具（异步受理，立即返回 request_id）",
-        "operationId": "CrystalPersonality.LTPRemoteCallHandler",
-        "x-handler": "CrystalPersonality.LTPRemoteCallHandler",
+        "operationId": "ltpxhost.LTPRemoteCallHandler",
+        "x-handler": "ltpxhost.LTPRemoteCallHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -907,8 +907,8 @@
       "get": {
         "summary": "列出待定工具调用（调试端点，已不承担轮询取结果）",
         "description": "列出待定工具调用（调试端点，已不承担轮询取结果）",
-        "operationId": "CrystalPersonality.LTPRemotePendingHandler",
-        "x-handler": "CrystalPersonality.LTPRemotePendingHandler",
+        "operationId": "ltpxhost.LTPRemotePendingHandler",
+        "x-handler": "ltpxhost.LTPRemotePendingHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -920,8 +920,8 @@
       "post": {
         "summary": "前端包执行完毕后回执结果",
         "description": "前端包执行完毕后回执结果",
-        "operationId": "CrystalPersonality.LTPRemoteResultHandler",
-        "x-handler": "CrystalPersonality.LTPRemoteResultHandler",
+        "operationId": "ltpxhost.LTPRemoteResultHandler",
+        "x-handler": "ltpxhost.LTPRemoteResultHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -933,8 +933,8 @@
       "get": {
         "summary": "拉取工具链（动态扫描包 AtoA 能力）",
         "description": "拉取工具链（动态扫描包 AtoA 能力）",
-        "operationId": "CrystalPersonality.LTPRemoteToolsHandler",
-        "x-handler": "CrystalPersonality.LTPRemoteToolsHandler",
+        "operationId": "ltpxhost.LTPRemoteToolsHandler",
+        "x-handler": "ltpxhost.LTPRemoteToolsHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1032,8 +1032,8 @@
       "get": {
         "summary": "通用页面操作智能体脚本（Mini-LTP）",
         "description": "通用页面操作智能体脚本（Mini-LTP）",
-        "operationId": "CrystalPersonality.MiniLTPAgentHandler",
-        "x-handler": "CrystalPersonality.MiniLTPAgentHandler",
+        "operationId": "ltpxhost.MiniLTPAgentHandler",
+        "x-handler": "ltpxhost.MiniLTPAgentHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1056,8 +1056,8 @@
       "post": {
         "summary": "代理访问服务",
         "description": "代理访问服务",
-        "operationId": "LunarPersonality.ProxyHandler",
-        "x-handler": "LunarPersonality.ProxyHandler",
+        "operationId": "Dialogue.ProxyHandler",
+        "x-handler": "Dialogue.ProxyHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1093,8 +1093,8 @@
       "get": {
         "summary": "自主页面操作智能体脚本（Self-LTP）",
         "description": "自主页面操作智能体脚本（Self-LTP）",
-        "operationId": "CrystalPersonality.SelfLTPAgentHandler",
-        "x-handler": "CrystalPersonality.SelfLTPAgentHandler",
+        "operationId": "ltpxhost.SelfLTPAgentHandler",
+        "x-handler": "ltpxhost.SelfLTPAgentHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1106,8 +1106,8 @@
       "get": {
         "summary": "统一键鼠操作共享模块",
         "description": "统一键鼠操作共享模块",
-        "operationId": "CrystalPersonality.SharedInputHandler",
-        "x-handler": "CrystalPersonality.SharedInputHandler",
+        "operationId": "ltpxhost.SharedInputHandler",
+        "x-handler": "ltpxhost.SharedInputHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1158,8 +1158,8 @@
       "post": {
         "summary": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
         "description": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
-        "operationId": "LunarPersonality.MessageBatchHandler",
-        "x-handler": "LunarPersonality.MessageBatchHandler",
+        "operationId": "Dialogue.MessageBatchHandler",
+        "x-handler": "Dialogue.MessageBatchHandler",
         "responses": {
           "200": {
             "description": "成功"

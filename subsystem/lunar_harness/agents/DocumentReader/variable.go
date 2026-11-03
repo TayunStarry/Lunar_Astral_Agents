@@ -38,6 +38,24 @@ const (
 	// profileHeadBytes 内容结构识别采样的字节数
 	profileHeadBytes = 4096
 
+	// ==== 目录级读取 ====
+	// maxFolderScanEntries 目录读取最多扫描的条目数
+	maxFolderScanEntries = 2000
+	// maxFolderListFiles 目录摘要最多列出的文件数
+	maxFolderListFiles = 80
+	// maxFolderPreviewBytes 单个文件参与摘要预览的字节上限
+	maxFolderPreviewBytes = 1 << 20
+	// maxFolderResultRunes 目录摘要返回的最大字符数
+	maxFolderResultRunes = 6000
+	// maxFolderExcerptFiles 按需求摘录时最多读取的文件数
+	maxFolderExcerptFiles = 10
+	// maxFolderExcerptLines 单文件最多摘录的命中行数
+	maxFolderExcerptLines = 3
+	// maxFolderTerms 按需求提取的关注词上限
+	maxFolderTerms = 6
+	// folderLargeBytes 目录摘要中标记为「大文件」的字节阈值
+	folderLargeBytes = 256 << 10
+
 	// ==== 轻量扫描通道 ====
 	// scanRoleLabel 轻量扫描阶段的实况角色标签
 	scanRoleLabel = "文献解析·扫描"
@@ -79,6 +97,17 @@ const (
 	ToolChunkPlan  = "chunk_plan"
 	ToolReadChunk  = "read_chunk"
 )
+
+// binaryExts 目录读取时直接判定为二进制的扩展名
+var binaryExts = map[string]bool{
+	".zip": true, ".ltpx": true, ".gguf": true,
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".bmp": true, ".ico": true,
+	".mp4": true, ".webm": true, ".avi": true, ".mov": true, ".mkv": true,
+	".mp3": true, ".wav": true, ".ogg": true, ".flac": true, ".aac": true,
+	".pdf": true, ".exe": true, ".dll": true, ".so": true, ".dylib": true,
+	".bin": true, ".onnx": true, ".safetensors": true, ".db": true, ".sqlite": true,
+	".woff": true, ".woff2": true, ".ttf": true, ".otf": true,
+}
 
 // 引用关系识别规则
 var (

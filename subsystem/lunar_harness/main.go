@@ -41,7 +41,7 @@ func main() {
 	// （取自编译时生成并嵌入的端点自述文档 info.version）
 	console.SetBuildVersion(server.DocsVersion())
 
-	// 注入 Gitee Release 发布通道配置（local_data/release.json）。
+	// 注入 Gitee Release 发布通道配置（local_data/config/release.json）。
 	console.SetUpdatePackConfig(&updatepack.Config{
 		GiteeOwner:      config.ReleaseGiteeOwner,
 		GiteeRepo:       config.ReleaseGiteeRepo,

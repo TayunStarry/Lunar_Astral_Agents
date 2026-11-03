@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/protocol/loopguard"
 )
 
 // reviewVideo 主模型审核：内置风险词先挡一层，再让主模型复核并生成评价与切片数。

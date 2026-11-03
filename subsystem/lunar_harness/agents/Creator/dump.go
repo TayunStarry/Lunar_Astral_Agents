@@ -5,7 +5,8 @@ package Creator
 import (
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/agentdump"
+	"LunarSubsystem/LunarHarness/engine/fileflow"
+	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
 func init() {
@@ -13,21 +14,23 @@ func init() {
 		ID:          "creative",
 		Label:       "自由创作",
 		Group:       "Go 智能体",
-		Description: "自由创作体系的规划日志（上一轮计划、备忘、参考资料、错误与收尾）及可调度智能体",
+		Description: "自由创作体系的规划日志（上一轮计划、备忘、参考资料、错误；操作记录在增量库）及可调度智能体",
 		Export: func(includeImages bool) (any, error) {
 			_ = includeImages
-			journal := loadJournal()
+			creatorJournal := loadJournal(journalPath(fileflow.ModeCreator))
+			assignedJournal := loadJournal(journalPath(fileflow.ModeAssigned))
 			agents := make([]map[string]string, 0, len(agentLabels))
 			for agent, label := range agentLabels {
 				agents = append(agents, map[string]string{"id": agent, "label": label})
 			}
 			return map[string]any{
-				"kind":          "creative-context",
-				"generated_at":  time.Now().Format(time.RFC3339),
-				"journal":       journal,
-				"agents":        agents,
-				"tools":         plannerTools,
-				"message_count": len(journal.LastPlans),
+				"kind":             "creative-context",
+				"generated_at":     time.Now().Format(time.RFC3339),
+				"journal":          creatorJournal,
+				"assigned_journal": assignedJournal,
+				"agents":           agents,
+				"tools":            plannerTools,
+				"message_count":    len(creatorJournal.LastPlans),
 			}, nil
 		},
 	})

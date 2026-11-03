@@ -5,8 +5,8 @@ package MutualForum
 import (
 	"fmt"
 
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {

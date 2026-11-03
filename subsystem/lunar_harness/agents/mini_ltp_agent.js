@@ -39,7 +39,7 @@
     /** 独立上下文历史：数组元素为 { user, assistant }（各为纯文本） */
     var agentHistory = [];
 
-    // ================= 模型配置加载（从 lunar_config.json 的 agent 字段读取，不硬编码） =================
+    // ================= 模型配置加载（从 config/general.json 的 agent 字段读取，不硬编码） =================
 
     /** 配置缓存与加载 Promise（一次加载，后续复用） */
     let modelConfigPromise = null;
@@ -507,7 +507,7 @@
         resolveTarget: resolveTarget,
         // ---- 智能体状态 ----
         resetHistory: function () { agentHistory = []; return agentHistory.length; },
-        // ---- 模型配置（从 lunar_config.json 读取） ----
+        // ---- 模型配置（从 config/general.json 读取） ----
         getModelConfig: loadModelConfig,
         refreshModelConfig: refreshModelConfig
     };

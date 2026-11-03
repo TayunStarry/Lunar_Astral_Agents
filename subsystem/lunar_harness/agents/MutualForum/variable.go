@@ -4,7 +4,6 @@ package MutualForum
 
 import (
 	"errors"
-	"net/http"
 	"sync"
 	"time"
 )
@@ -32,37 +31,22 @@ var (
 	// runMu 串行化自然语言需求，避免同一身份并发发言导致轮次互相覆盖
 	runMu sync.Mutex
 
-	// httpClient 模型调用客户端
-	httpClient = &http.Client{Timeout: modelTimeout}
-
-	// 模型端点只解析一次
-	modelOnce sync.Once
-	modelName string
-	modelURL  string
-
 	// historyMu 保护独立上下文
 	historyMu sync.Mutex
 	// history 最近若干轮「用户需求 + 最终答复」
 	history []chatMessage
-
-	// observerMu 保护实况观察者
-	observerMu sync.Mutex
-	obsBegin   func(role string)
-	obsDelta   func(role, kind, text string)
-	obsEnd     func(role string)
-	obsMeter   func(prompt, completion, cached int64, generation time.Duration, estimated bool)
 )
 
 // ==== 论坛桥接层常量与全局变量 ====
 
 const (
-	// configFileName 独立配置文件默认文件名（位于 local_data 下）
-	configFileName = "mutual_forum.json"
+	// configFileName 独立配置文件默认相对路径（位于 local_data/config 下）
+	configFileName = "config/forum.json"
 	// configEnvKey 测试或高级部署可用来覆盖配置文件路径
 	configEnvKey = "MUTUAL_FORUM_CONFIG"
 
 	// defaultAccountRelative 默认账号/轮次状态文件（相对 local_data）
-	defaultAccountRelative = "forum/mutual_forum_account.json"
+	defaultAccountRelative = "database/forum/forum_account.json"
 
 	defaultRequestTimeout  = 25
 	defaultHealthTimeout   = 3

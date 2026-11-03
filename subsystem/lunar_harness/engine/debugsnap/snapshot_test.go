@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/agentdump"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
+	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
 // withTempSnapshotEnv 准备隔离环境：临时 LocalDir、developer 开启、清空限流状态。

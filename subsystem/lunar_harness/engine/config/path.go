@@ -13,7 +13,7 @@ var (
 	ArchiveDBPath = LocalDir + "/database/handles.db"
 	// TextDBPath 文本内容索引（文件 → 分块集合映射）
 	TextDBPath = LocalDir + "/database/text.db"
-	// CharacterDBPath 自定义角色库（绘图角色档案）
+	// CharacterDBPath 自定义角色库（绘图角色档案；全局角色/知识域，由 engine/knowledge 管理）
 	CharacterDBPath = LocalDir + "/database/character.db"
 	// ArchiveQuotaMB 内容仓库容量上限（MB）：超限按「等级 → 最久未用」回收 blob
 	ArchiveQuotaMB = 2048
@@ -21,6 +21,6 @@ var (
 	ArchiveMaxBlobMB = 20
 	// ArchiveGCIntervalMin 资源仓库回收周期（分钟），0 表示关闭周期回收
 	ArchiveGCIntervalMin = 30
-	// MemoryDBDir 记忆库文件夹路径，统一数据库存储
+	// MemoryDBDir 记忆库文件夹路径（全局记忆引擎 engine/memory 持有，非生活系统专属）
 	MemoryDBDir = LocalDir + "/database/memory"
 )

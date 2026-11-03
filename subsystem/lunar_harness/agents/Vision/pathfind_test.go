@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/locator"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
 
 // setupVisionLocator 准备隔离的媒体目录与句柄库
@@ -20,10 +20,10 @@ func setupVisionLocator(t *testing.T) {
 	config.LocalDir = t.TempDir()
 	config.ArchiveDBPath = filepath.Join(config.LocalDir, "database", "handles.db")
 	_ = resource.Close()
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	t.Cleanup(func() {
 		_ = resource.Close()
-		locator.Invalidate()
+		resourcehub.Invalidate()
 		config.LocalDir, config.ArchiveDBPath = origLocal, origArchive
 	})
 	if err := resource.Init(config.ArchiveDBPath); err != nil {

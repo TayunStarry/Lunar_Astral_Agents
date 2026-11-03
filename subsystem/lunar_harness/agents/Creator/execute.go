@@ -7,13 +7,19 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/engine/fileflow"
 )
 
 // executePlan 顺序执行计划并返回每步结果。
 func (s *session) executePlan(ctx context.Context, plan planResult) []stepResult {
 	results := make([]stepResult, 0, len(plan.Steps))
 	prior := "（无）"
-	for i, step := range plan.Steps {
+	defer func() { s.current = nil }()
+	for i := range plan.Steps {
+		step := plan.Steps[i]
+		s.stepIndex = i
+		s.current = &plan.Steps[i]
 		label := agentLabels[step.Agent]
 		instruction := fmt.Sprintf(
 			"本轮第 %d/%d 步。\n专属智能体：%s\n任务：%s\n前面步骤的结果：%s\n"+
@@ -28,26 +34,97 @@ func (s *session) executePlan(ctx context.Context, plan planResult) []stepResult
 				clipAtSentence(err.Error(), 300) + "）。请换一种方式完成，避免重复相同的工具调用与相同输出。"
 			text, err = s.runStep(ctx, step.Agent, retryInstruction)
 		}
+		failures := s.stepReviewFailures(i + 1)
 		if err != nil {
 			s.addError(fmt.Errorf("第 %d 步[%s]失败并跳过: %w", i+1, label, err))
 			s.addMemo("未完成：" + step.Task)
 			results = append(results, stepResult{
-				Agent:   step.Agent,
-				Task:    step.Task,
-				Skipped: true,
-				Error:   err.Error(),
+				Agent:          step.Agent,
+				Task:           step.Task,
+				Skipped:        true,
+				Error:          err.Error(),
+				ReviewFailures: failures,
 			})
 			prior = fmt.Sprintf("第 %d 步（%s）被跳过：%s", i+1, label, previewRunes(err.Error(), 100))
+			prior = appendReviewFailures(prior, failures)
+			prior = appendFlowDiffs(prior, s.flowDiffs(i+1))
 			continue
 		}
 		text = strings.TrimSpace(text)
 		if text == "" {
 			text = "已完成本步骤的工具操作"
 		}
-		results = append(results, stepResult{Agent: step.Agent, Task: step.Task, Result: text})
+		results = append(results, stepResult{
+			Agent:          step.Agent,
+			Task:           step.Task,
+			Result:         text,
+			ReviewFailures: failures,
+		})
 		prior = fmt.Sprintf("第 %d 步（%s）完成：%s", i+1, label, clipAtSentence(text, 400))
+		prior = appendReviewFailures(prior, failures)
+		prior = appendFlowDiffs(prior, s.flowDiffs(i+1))
 	}
 	return results
+}
+
+// flowDiffs 返回本流程截至指定步骤的内容级操作差异（来自增量库，不依赖自然语言摘要）。
+func (s *session) flowDiffs(uptoStep int) string {
+	if s.flow == nil {
+		return ""
+	}
+	ops, err := fileflow.FlowOps(s.flow.FlowID)
+	if err != nil {
+		return ""
+	}
+	filtered := make([]fileflow.OpRecord, 0, len(ops))
+	for _, op := range ops {
+		if op.Step > 0 && op.Step > uptoStep {
+			continue
+		}
+		filtered = append(filtered, op)
+	}
+	if len(filtered) == 0 {
+		return ""
+	}
+	if len(filtered) > maxContextOperations {
+		filtered = filtered[len(filtered)-maxContextOperations:]
+	}
+	return formatOpRecords(filtered)
+}
+
+// appendFlowDiffs 把内容级差异并入下一节点可见的前序结果。
+func appendFlowDiffs(prior, diffs string) string {
+	if strings.TrimSpace(diffs) == "" {
+		return prior
+	}
+	return prior + "\n本流程已执行操作及其内容差异：\n" + diffs
+}
+
+// stepReviewFailures 收集指定步骤内审查失败并回滚的上下文。
+func (s *session) stepReviewFailures(step int) []string {
+	if s.flow == nil {
+		return nil
+	}
+	out := make([]string, 0)
+	for _, record := range s.flow.Records {
+		if record.Step != step || record.Review == nil || record.Review.OK {
+			continue
+		}
+		text := record.Review.Context
+		if text == "" {
+			text = record.Review.Summary()
+		}
+		out = append(out, text)
+	}
+	return out
+}
+
+// appendReviewFailures 把审查失败上下文并入下一节点可见的前序结果。
+func appendReviewFailures(prior string, failures []string) string {
+	if len(failures) == 0 {
+		return prior
+	}
+	return prior + "\n校验失败并已回滚：" + strings.Join(failures, "；")
 }
 
 // runStep 用指定专属智能体执行一步。
@@ -64,6 +141,8 @@ func (s *session) runStep(ctx context.Context, agent, instruction string) (strin
 func executorPrompt(agent string) string {
 	base := `你在执行「月华.生活.自由创作」管线中的一个步骤。只能通过工具完成操作，不要臆造结果。
 所有文件路径一律相对 /document；需要外部资料时可随时联网搜索或查询记忆库。
+文件操作由系统按目标自动路由：压缩包走归档智能体，大型目录与长文档走文献解析，普通文本走文件编辑；
+你只需写准目标路径，写入后会由系统自动审查，不符合预期会回滚，按工具返回的审查上下文调整即可。
 创作中的心情、生活记录与「刚才在…」均指月华本人，不是用户的状态；不要把两者混为一谈。
 完成后用中文简要说明产出：只用 1-2 句话讲清文件路径与本轮最重要的产出，不要罗列过程、不要贴代码或大段原文。`
 	switch agent {

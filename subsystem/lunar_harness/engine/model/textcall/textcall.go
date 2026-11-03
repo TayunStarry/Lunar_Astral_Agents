@@ -3,7 +3,16 @@ package textcall
 // textcall.go 生活体系与记忆整理共用的纯文本模型调用。
 //
 // 只做一次非流式 chat/completions：调用方需要的是完整结构化结果，
-// 不需要把逐字输出推给 TUI。模型地址与密钥沿用 lunar_config.json 的 agent 分组。
+// 不需要把逐字输出推给 TUI。模型地址与密钥沿用 config/general.json 的 agent 分组。
+//
+// 保留独立实现，不迁移到 protocol/agentbase 的非流式入口：两者并不等价——
+//   - textcall 直接使用 config.AgentMultimodalURL，不强制补 /v1；
+//   - 非 200 错误体截断 300 字，agentbase 为 240 字；
+//   - 空正文在 textcall 视为错误，agentbase 返回空 Reply 且不报错；
+//   - textcall 不接受 {success,data} 代理包装，agentbase 接受；
+//   - agentbase 还会登记推理实况/计量并参与智能修复上报。
+//
+// 因此只有产品确认上述差异可接受时，才应删除本包并改走 agentbase。
 
 import (
 	"bytes"
@@ -15,7 +24,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/model/loopguard"
+	"LunarSubsystem/LunarHarness/protocol/loopguard"
 )
 
 // Complete 用指定模型跑一次 system+user 文本对话。

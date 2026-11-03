@@ -5,19 +5,15 @@ package FileEditor
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/internal/testenv"
 )
 
 func withTempLocalDir(t *testing.T) {
 	t.Helper()
-	old := config.LocalDir
-	config.LocalDir = t.TempDir()
-	t.Cleanup(func() { config.LocalDir = old })
+	testenv.Isolate(t)
 }
 
 func TestFileEditorFileLifecycle(t *testing.T) {
@@ -115,17 +111,7 @@ func TestLibraryRunnerURL(t *testing.T) {
 
 // TestDocumentPathAcceptsHandleAndPrefix 句柄与 documents/ 前缀都能定位到同一文件。
 func TestDocumentPathAcceptsHandleAndPrefix(t *testing.T) {
-	origLocal, origArchive := config.LocalDir, config.ArchiveDBPath
-	config.LocalDir = t.TempDir()
-	config.ArchiveDBPath = filepath.Join(config.LocalDir, "database", "handles.db")
-	_ = resource.Close()
-	t.Cleanup(func() {
-		_ = resource.Close()
-		config.LocalDir, config.ArchiveDBPath = origLocal, origArchive
-	})
-	if err := resource.Init(config.ArchiveDBPath); err != nil {
-		t.Fatalf("初始化句柄库失败: %v", err)
-	}
+	testenv.Isolate(t)
 
 	created := CreateFile("notes/a.md", "hello\n")
 	if !created.OK || len(created.Handles) == 0 {

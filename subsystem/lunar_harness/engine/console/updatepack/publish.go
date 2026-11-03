@@ -310,7 +310,7 @@ func (m *multipartBody) Read(p []byte) (int, error) {
 // 拉取公开仓库属只读操作，可不带令牌（Gitee 读取 API 支持匿名访问）。
 func validateConfig(cfg Config, needToken bool) error {
 	if cfg.GiteeOwner == "" || cfg.GiteeRepo == "" {
-		return fmt.Errorf("未配置 Gitee 仓库（local_data/release.json 的 gitee_owner / gitee_repo 为空）")
+		return fmt.Errorf("未配置 Gitee 仓库（local_data/config/release.json 的 gitee_owner / gitee_repo 为空）")
 	}
 	if needToken && cfg.GiteeToken == "" {
 		return fmt.Errorf("未提供 Gitee 令牌（发布需 Release 读写权限的私人令牌）")

@@ -13,18 +13,15 @@ import (
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/agents/Vision"
-	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/internal/testenv"
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // prepareIntegrationDir 建立临时 LocalDir 与 documents 内容。
 func prepareIntegrationDir(t *testing.T) {
 	t.Helper()
-	oldDir := config.LocalDir
-	config.LocalDir = t.TempDir()
-	t.Cleanup(func() { config.LocalDir = oldDir })
-	dir := filepath.Join(config.LocalDir, "documents")
+	dir := filepath.Join(testenv.Isolate(t), "documents")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -44,7 +44,7 @@ func resolveAssetPath(p string) string {
 
 // EnsureQwen 加载 Qwen TTS 引擎：模型目录固定，参考音频取配置（缺省月华模板音色）
 func EnsureQwen() error {
-	modelDir := filepath.Join(localData(), "models", qwenModelDirName)
+	modelDir := filepath.Join(localData(), "models", broadcasterModelDirName)
 	refAudio := config.TTSRefAudio
 	if refAudio == "" {
 		refAudio = filepath.Join(config.LocalDir, qwenDefaultRefAudio)
@@ -63,7 +63,7 @@ func EnsureKokoro() (err error) {
 		}
 	}()
 
-	modelDir := filepath.Join(localData(), "models", kokoroModelDirName)
+	modelDir := filepath.Join(localData(), "models", broadcasterModelDirName)
 	dllPath := filepath.Join(modelDir, kokoroOnnxDllName)
 	if _, serr := os.Stat(dllPath); serr == nil {
 		KokoroTTS.SetOnnxLibraryPath(dllPath)
@@ -86,7 +86,7 @@ func EnsureOmniVoice() (err error) {
 		}
 	}()
 
-	modelDir := filepath.Join(localData(), "models", omniModelDirName)
+	modelDir := filepath.Join(localData(), "models", broadcasterModelDirName)
 	OmniVoiceTTS.SetRefAudioBaseDirs([]string{localData()})
 	return OmniVoiceTTS.InitEngine(modelDir)
 }

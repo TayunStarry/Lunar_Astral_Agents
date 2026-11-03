@@ -6,7 +6,7 @@ package FileEditor
 // 因此只提供 reset：清掉运行期标记，让下一次调用从干净状态开始。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {

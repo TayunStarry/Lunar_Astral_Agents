@@ -18,25 +18,27 @@ func (s *session) executeTool(ctx context.Context, name string, args map[string]
 	case toolFetchResources:
 		return s.fetchResources(ctx, args)
 	case toolFileList:
-		return fileList(args)
+		return s.fileList(ctx, args)
 	case toolFileRead:
-		return fileRead(args)
+		return s.fileRead(ctx, args)
 	case toolFileCreate:
-		return fileCreate(args)
+		return s.fileCreate(args)
 	case toolFileRewrite:
-		return fileRewrite(args)
+		return s.fileRewrite(args)
 	case toolFileRemove:
-		return fileRemove(args)
+		return s.fileRemove(args)
 	case toolFileDelete:
-		return fileDelete(args)
+		return s.fileDelete(args)
 	case toolFileMove:
-		return fileMove(args)
+		return s.fileMove(args)
 	case toolFileReplace:
-		return fileReplace(args)
+		return s.fileReplace(args)
 	case toolFileDeleteText:
-		return fileDeleteText(args)
-	case toolFileEdit:
-		return fileEditTool(args)
+		return s.fileDeleteText(args)
+	case toolArchiveRead:
+		return s.archiveRead(ctx, args)
+	case toolArchiveWrite:
+		return s.archiveWrite(args)
 	case toolCodeIndex:
 		return codeIndexTool(args)
 	case toolReadDTS:

@@ -51,7 +51,7 @@ type memoryFuseRequest struct {
 }
 
 // memoryInitRequest v2 实例初始化请求
-// 模型配置已迁移至 config 模块（lunar_config.json），此请求体不再需要模型参数
+// 模型配置已迁移至 config 模块（config/general.json），此请求体不再需要模型参数
 // 保留结构体以兼容前端可能发送的空请求体
 type memoryInitRequest struct {
 }

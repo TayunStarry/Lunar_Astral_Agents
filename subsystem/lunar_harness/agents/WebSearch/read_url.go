@@ -10,6 +10,7 @@ package WebSearch
 // 资源目录据此给句柄直接返回「地址 + 标题 + 解析文本」，月华下次看到同一地址不再开页面。
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -35,7 +36,14 @@ func ReadURL(target, instruction string) (title, summary string, err error) {
 	defer runMu.Unlock()
 
 	cfg := LoadConfig()
-	deadline := time.Now().Add(time.Duration(cfg.MaxRunSeconds) * time.Second)
+	// 单页读取使用独立预算：不复用整轮多页检索的 MaxRunSeconds。
+	budget := cfg.MaxRunSeconds
+	if budget <= 0 || budget > readPageMaxSeconds {
+		budget = readPageMaxSeconds
+	}
+	deadline := time.Now().Add(time.Duration(budget) * time.Second)
+	runCtx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
 	logger.Info("CrystalAstral", "Web-Search 打开指定页面: %s", truncateRunes(target, 80))
 
 	// 模型生命周期与网络搜索一致：卸主模型 → light_reasoning 提炼 → 收尾卸轻量模型
@@ -48,8 +56,15 @@ func ReadURL(target, instruction string) (title, summary string, err error) {
 	}
 	defer sess.Close()
 
-	if err := navTo(sess, target, 20*time.Second, 1200*time.Millisecond); err != nil {
-		return "", "", fmt.Errorf("打开页面失败: %w", err)
+	readyTimeout := 20 * time.Second
+	if remaining := time.Until(deadline); remaining < readyTimeout {
+		readyTimeout = remaining
+	}
+	if err1 := navTo(sess, target, readyTimeout, 1200*time.Millisecond); err1 != nil {
+		return "", "", fmt.Errorf("打开页面失败: %w", err1)
+	}
+	if time.Now().After(deadline) {
+		return "", "", fmt.Errorf("页面读取超时（%d 秒）", budget)
 	}
 	walk := walkPage(sess, cfg.perPageChars(1), cfg, deadline, nil)
 	if strings.TrimSpace(walk.Text) == "" {
@@ -57,7 +72,7 @@ func ReadURL(target, instruction string) (title, summary string, err error) {
 	}
 
 	title = firstNonEmpty(walk.Title, domainOf(target), target)
-	summary, err = composeDigest(instruction, title, []digestSource{{
+	summary, err = composeDigest(runCtx, instruction, title, []digestSource{{
 		Label: "指定页面",
 		Title: title,
 		URL:   firstNonEmpty(walk.URL, target),

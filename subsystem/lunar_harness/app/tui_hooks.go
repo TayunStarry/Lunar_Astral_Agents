@@ -14,11 +14,12 @@ import (
 	"LunarSubsystem/LunarHarness/agents/ArchiveReader"
 	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
 	"LunarSubsystem/LunarHarness/agents/Creator"
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
-	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
+	"LunarSubsystem/LunarHarness/agents/PlanManager"
 	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/agents/WebSearch"
@@ -26,11 +27,11 @@ import (
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/archive"
-	"LunarSubsystem/LunarHarness/engine/model/agentchat"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/websocket"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 	"LunarSubsystem/LunarHarness/server"
-	"LunarSubsystem/LunarHarness/transport/ws"
 )
 
 // WireTUIFrontendHooks 将前端在线探针与窗口唤起器注入控制台的前端管理屏：
@@ -46,15 +47,15 @@ func WireTUIFrontendHooks() {
 		// 该终端以 bus=0 接入（不订阅引擎总线），故不能用总线订阅数判定
 		// ——否则前端正常在线时会被误判为离线。
 		func() bool {
-			return ws.Instance != nil && ws.Instance.ChannelClientCount(lunarTerminalChannel) > 0
+			return websocket.Instance != nil && websocket.Instance.ChannelClientCount(lunarTerminalChannel) > 0
 		},
 		// 琉璃前端探针：引擎总线频道（DefaultBusChannel）的订阅数
 		func() bool {
-			return ws.Instance != nil && ws.Instance.ChannelBusCount(ws.DefaultBusChannel) > 0
+			return websocket.Instance != nil && websocket.Instance.ChannelBusCount(websocket.DefaultBusChannel) > 0
 		},
 		// 资源库探针：独立频道（?channel=library）的连接数
 		func() bool {
-			return ws.Instance != nil && ws.Instance.ChannelClientCount(libraryTerminalChannel) > 0
+			return websocket.Instance != nil && websocket.Instance.ChannelClientCount(libraryTerminalChannel) > 0
 		},
 		// 月华窗口唤起器（重启语义：存活重载页面，残留死窗口清理重建）
 		func() error {
@@ -78,7 +79,7 @@ func WireTUIFrontendHooks() {
 // 压缩完成后再恢复调度。
 func WireTUIMaintenanceHook() {
 	archive.SetMaintenanceHook(func(fn func() error) error {
-		resume := LunarPersonality.BeginMaintenance()
+		resume := Dialogue.BeginMaintenance()
 		defer resume()
 		return fn()
 	})
@@ -121,20 +122,8 @@ func WireTUIEngineHooks() {
 	meter := func(prompt, completion, cached int64, generation time.Duration, estimated bool) {
 		console.RecordModelCall(prompt, completion, cached, generation, estimated)
 	}
-	BilibiliViewer.SetModelObserver(
-		func(role string) { console.StreamBegin(role) },
-		func(role, kind, text string) {
-			streamKind := console.KindContent
-			if kind == "think" {
-				streamKind = console.KindThink
-			}
-			console.StreamDelta(role, streamKind, text)
-		},
-		func(role string) { console.StreamEnd(role) },
-		meter,
-	)
-	// 网络搜索、视觉理解与文献解析（Go 侧智能体）的模型调用同样进实况：
-	// 前者让用户看到检索过程的思考与输出，后者让用户看到影像/文件探查的现场推理。
+	// 网络搜索、视觉理解、文献解析、通讯桥接、互助论坛、桌面操纵与哔哩观影
+	// 的模型调用统一经 protocol/agentbase 进入实况与计量。
 	streamObserver := func(role string) { console.StreamBegin(role) }
 	streamDelta := func(role, kind, text string) {
 		streamKind := console.KindContent
@@ -144,24 +133,21 @@ func WireTUIEngineHooks() {
 		console.StreamDelta(role, streamKind, text)
 	}
 	streamEnd := func(role string) { console.StreamEnd(role) }
-	WebSearch.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
-	// 视觉理解与文献解析共享同一套模型调用层（engine/model/agentchat）：
-	// 一次注入即可让两类智能体的推理过程都进入实况屏与模型计量。
-	agentchat.SetObserver(agentchat.Observer{
+	// 工具调用由基座通过 Observer.Tool 上报，装配层桥接到控制台实况；
+	// protocol/agentbase 不再直接依赖 engine/console。
+	streamTool := func(role, name, args string) { console.StreamTool(role, name, args) }
+	// 所有 Go 智能体统一经 protocol/agentbase 登记推理实况与模型计量。
+	agentbase.SetObserver(agentbase.Observer{
 		Begin: streamObserver,
 		Delta: streamDelta,
 		End:   streamEnd,
+		Tool:  streamTool,
 		Meter: meter,
-		// 推理重试仍失败时交给智能修复：按实况角色标签映射到对应智能体 ID
-		Report: func(role string, err error) { Savior.ReportRun(agentIDByRole(role), err) },
 	})
-	// 通讯桥接的规划调用同样进实况与计量（投递内容不展示，只展示规划过程）。
-	DialogueBridging.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
-	// Mutual Forum 的论坛规划与工具调用同样进实况与计量。
-	MutualForum.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
-	// 桌面操纵各角色的模型调用同样进实况与计量；
-	// 其请求本身受 loopguard 思考监管约束，命中重复会自动中断并重试。
-	desktop.SetModelObserver(streamObserver, streamDelta, streamEnd, meter)
+	// 重试仍失败时交给智能修复：智能体基座按故障归属 ID 上报。
+	agentbase.SetRepairHook(func(agent string, err error) {
+		Savior.ReportRun(agentIDByRole(agent), err)
+	})
 	// 桌面操纵的工具调用也进实况（工具名 + 参数），复盘时看得出它到底有没有真正去启动应用
 	desktop.SetToolObserver(func(role, name, args string) {
 		console.StreamTool(role, name, args)
@@ -186,12 +172,19 @@ func WireTUIEngineHooks() {
 			}
 		},
 	)
-	LunarPersonality.SetDesktopActorStopHook(desktop.Stop)
+	Dialogue.SetDesktopActorStopHook(desktop.Stop)
 }
 
-// agentIDByRole 把实况角色标签映射到智能修复使用的智能体 ID。
-// 映射缺失时回落到 core（核心人格），保证失败不会被静默吞掉。
+// agentIDByRole 把故障归属映射到智能修复使用的智能体 ID。
+// 新基座直接上报标准 ID；旧调用点仍按实况角色标签上报，这里做兼容映射。
 func agentIDByRole(role string) string {
+	switch role {
+	case "vision", "document_reader", "archive_ops", "archive_reader",
+		"file_editor", "creative", "desktop", "bilibili",
+		"web_search", "mutual_forum", "dialogue_bridging",
+		"responder", "savior", "dialogue", "unknown":
+		return role
+	}
 	switch {
 	case strings.Contains(role, "视觉"):
 		return "vision"
@@ -202,18 +195,19 @@ func agentIDByRole(role string) string {
 	case strings.Contains(role, "归档"):
 		return "archive_reader"
 	}
-	return "core"
+	return "dialogue"
 }
 
 // buildToolCatalog 汇总全部 Go 智能体的工具目录（供控制台「工具列表」屏扫描展示）。
 func buildToolCatalog() []agentinfo.Agent {
-	out := LunarPersonality.ToolCatalog()
+	out := Dialogue.ToolCatalog()
 	out = append(out, Vision.ToolCatalog()...)
 	out = append(out, DocumentReader.ToolCatalog()...)
 	out = append(out, ArchiveReader.ToolCatalog()...)
 	out = append(out, ArchiveOps.ToolCatalog()...)
 	out = append(out, FileEditor.ToolCatalog()...)
 	out = append(out, Creator.ToolCatalog()...)
+	out = append(out, PlanManager.ToolCatalog()...)
 	out = append(out, DialogueBridging.ToolCatalog()...)
 	out = append(out, WebSearch.ToolCatalog()...)
 	out = append(out, BilibiliViewer.ToolCatalog()...)

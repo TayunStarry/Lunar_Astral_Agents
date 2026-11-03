@@ -105,9 +105,7 @@ func pickLocked() Event {
 }
 
 func envFromStateLocked(now time.Time) Env {
-	env := Env{Now: now, LastRecord: state.LastRecord, MoodLabel: mood.Snapshot().Label}
-	if lastUserTextHook != nil {
-		env.LastUserText = lastUserTextHook()
-	}
-	return env
+	// 注意：这里不再注入最新用户发言。生活事件（尤其创作）需要对话内容时，
+	// 统一通过 life_planning 写入的创作参考字符串获取，不从对话历史截取。
+	return Env{Now: now, LastRecord: state.LastRecord, MoodLabel: mood.Snapshot().Label}
 }

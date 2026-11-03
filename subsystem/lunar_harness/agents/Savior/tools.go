@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/engine/agentdump"
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
+	"LunarSubsystem/LunarHarness/protocol/agentdump"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 // repairTools 返回修复工具定义。

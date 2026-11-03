@@ -4,6 +4,10 @@ package Creator
 // 工具分为：联网搜索、记忆库查询、句柄系统、文件操作、内容调度、
 // 代码运行（LTP9）、DTS 开发文档查阅，以及调度者的计划提交。
 
+import (
+	"LunarSubsystem/LunarHarness/engine/resourcehub"
+)
+
 // definitionsFor 返回指定工具名对应的函数定义。
 func definitionsFor(names []string) []toolDefinition {
 	out := make([]toolDefinition, 0, len(names))
@@ -20,21 +24,9 @@ var toolDefinitions = map[string]toolDefinition{
 	toolWebSearch: toolDef(toolWebSearch,
 		"联网搜索：给出查询意图，返回搜索摘要与参考链接。需要外部资料时使用。",
 		map[string]any{"query": strProp("搜索查询，尽量具体")}, []string{"query"}),
-	toolFetchResources: toolDef(toolFetchResources,
-		"统一资源检索。type=memory 检索长期记忆；type=handle 按句柄读取完整信息与内容；type=list 列出全部或指定类型的句柄。query 在 memory 模式填关键词数组，在 handle 模式填句柄数组，在 list 模式留空或填类型码 D/I/G/A/V/U。",
-		map[string]any{
-			"type": map[string]any{
-				"type":        "string",
-				"enum":        []string{"memory", "handle", "list"},
-				"description": "memory=检索记忆；handle=按句柄读取；list=列出句柄",
-			},
-			"query": map[string]any{
-				"type":        "array",
-				"items":       map[string]any{"type": "string"},
-				"description": "memory 填搜索关键词；handle 填句柄；list 留空或填单个类型码",
-			},
-			"limit": intProp("返回结果数量（默认 5）", 1, 50),
-		}, []string{"type"}),
+	toolFetchResources: schemaDef(toolFetchResources,
+		resourcehub.ToolDescription(),
+		resourcehub.ToolSchema()),
 	toolFileList: toolDef(toolFileList,
 		"列出 /document 根目录下的文件与子目录。path 为空表示根目录。",
 		map[string]any{"path": strProp("相对 /document 的目录路径（可空）")}, nil),
@@ -84,10 +76,27 @@ var toolDefinitions = map[string]toolDefinition{
 			"text": strProp("要删除的原文"),
 			"all":  boolProp("是否删除全部匹配；默认 false"),
 		}, []string{"path", "text"}),
-	toolFileEdit: toolDef(toolFileEdit,
-		"文件编辑智能体：用自然语言描述一组文件操作需求（读写 / 检索 / 置换 / 运行），由专用智能体规划并执行；返回结构化结果（含资源句柄与操作简述）。",
-		map[string]any{"instruction": strProp("自然语言操作要求，例如「把 notes/a.md 第 2 行改为月华，并运行 scripts/demo.js」")},
-		[]string{"instruction"}),
+	toolArchiveRead: toolDef(toolArchiveRead,
+		"读取压缩包 / GGUF：target 为压缩包路径，entry 为条目名（可空，空则返回结构摘要）。普通文本文件请用 file_read。",
+		map[string]any{
+			"target": strProp("压缩包或 GGUF 路径（相对 /document 或完整路径）"),
+			"entry":  strProp("压缩包内条目名（可空）"),
+			"query":  strProp("读取诉求（可空）"),
+		}, []string{"target"}),
+	toolArchiveWrite: toolDef(toolArchiveWrite,
+		"压缩包写入：action=create 用 sources 打包；delete 删除压缩包；add 用 entry + source/content 新增或覆盖条目；remove 移除条目。",
+		map[string]any{
+			"action": enumProp("要执行的归档写操作", []string{"create", "delete", "add", "remove"}),
+			"target": strProp("压缩包路径（.zip / .ltpx）"),
+			"sources": map[string]any{
+				"type":        "array",
+				"description": "create 时要打包的文件 / 目录路径",
+				"items":       map[string]any{"type": "string"},
+			},
+			"entry":   strProp("add / remove 的条目名"),
+			"source":  strProp("add 时从本地文件读入的来源路径（与 content 二选一）"),
+			"content": strProp("add 时直接写入的文本内容（与 source 二选一）"),
+		}, []string{"action", "target"}),
 	toolCodeIndex: toolDef(toolCodeIndex,
 		"代码索引：返回目标代码文件的全局变量、全局函数签名、全局类名及各自注释。",
 		map[string]any{"path": strProp("相对 /document 的代码文件路径")}, []string{"path"}),
@@ -139,12 +148,37 @@ var toolDefinitions = map[string]toolDefinition{
 					"required": []string{"agent", "task"},
 				},
 			},
+			"expect": map[string]any{
+				"type":        "array",
+				"description": "该步骤完成后应满足的客观事实（自动审查用）；不填时按操作类型使用默认预期",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"path":         strProp("目标路径（相对 /document 或完整路径）"),
+						"exists":       map[string]any{"type": "boolean", "description": "期望操作后是否存在"},
+						"contains":     stringArrayProp("期望包含的文本片段"),
+						"not_contains": stringArrayProp("期望不包含的文本片段"),
+						"min_bytes":    map[string]any{"type": "integer", "description": "期望最小字节数"},
+						"max_bytes":    map[string]any{"type": "integer", "description": "期望最大字节数"},
+					},
+					"required": []string{"path"},
+				},
+			},
 			"memos": map[string]any{
 				"type":        "array",
 				"description": "本轮遗留的备忘与期望事项",
 				"items":       map[string]any{"type": "string"},
 			},
 		}, []string{"steps"}),
+}
+
+// schemaDef 用完整参数 schema 构造一条函数工具定义（聚合工具统一走这里）。
+func schemaDef(name, description string, parameters map[string]any) toolDefinition {
+	return toolDefinition{Type: "function", Function: toolFunction{
+		Name:        name,
+		Description: description,
+		Parameters:  parameters,
+	}}
 }
 
 func toolDef(name, description string, properties map[string]any, required []string) toolDefinition {
@@ -175,4 +209,16 @@ func boolProp(description string) map[string]any {
 
 func intProp(description string, minimum, maximum int) map[string]any {
 	return map[string]any{"type": "integer", "description": description, "minimum": minimum, "maximum": maximum}
+}
+
+func enumProp(description string, values []string) map[string]any {
+	return map[string]any{"type": "string", "description": description, "enum": values}
+}
+
+func stringArrayProp(description string) map[string]any {
+	return map[string]any{
+		"type":        "array",
+		"description": description,
+		"items":       map[string]any{"type": "string"},
+	}
 }

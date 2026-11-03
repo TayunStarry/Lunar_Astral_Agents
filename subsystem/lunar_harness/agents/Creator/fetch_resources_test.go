@@ -15,10 +15,10 @@ func TestCreatorFetchResourcesValidation(t *testing.T) {
 		args map[string]any
 		want string
 	}{
-		{"非法 type", map[string]any{"type": "bad"}, "type 只能取 memory / handle / list"},
-		{"memory 缺 query", map[string]any{"type": "memory"}, "memory 模式需要 query 关键词"},
-		{"handle 缺 query", map[string]any{"type": "handle"}, "handle 模式需要 query 句柄数组"},
-		{"list 类型码非法", map[string]any{"type": "list", "query": []any{"X"}}, "类型码无效"},
+		{"非法 type", map[string]any{"type": "bad"}, "type 只能取 memory / handle / path / list"},
+		{"memory 缺 query", map[string]any{"type": "memory"}, "query 需要 1-4 个搜索关键词"},
+		{"handle 缺 query", map[string]any{"type": "handle"}, "query 需要句柄"},
+		{"path 缺 query", map[string]any{"type": "path"}, "query 需要文件名或相对路径"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

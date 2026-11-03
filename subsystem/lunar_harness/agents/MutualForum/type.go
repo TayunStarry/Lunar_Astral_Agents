@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // ==== 智能体模型调用类型 ====
 
-// chatMessage OpenAI 兼容消息（支持 assistant.tool_calls 与 tool 回填）
+// chatMessage 独立上下文中的消息（仅角色与文本，供历史快照与测试解码）
 type chatMessage struct {
 	Role       string         `json:"role"`
 	Content    string         `json:"content,omitempty"`
@@ -21,95 +23,17 @@ type chatMessage struct {
 	ToolCallID string         `json:"tool_call_id,omitempty"`
 }
 
-// toolCallItem 模型返回的工具调用
-type toolCallItem struct {
-	ID       string           `json:"id"`
-	Type     string           `json:"type"`
-	Function toolCallFunction `json:"function"`
-}
+// toolCallItem 模型返回的工具调用（统一复用基座类型）
+type toolCallItem = agentbase.ToolCall
 
-// toolCallFunction 工具名与 JSON 参数
-type toolCallFunction struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
-}
+// toolCallFunction 工具名与 JSON 参数（统一复用基座类型）
+type toolCallFunction = agentbase.ToolFunction
 
-// toolDefinition 发给模型的函数工具定义
-type toolDefinition struct {
-	Type     string       `json:"type"`
-	Function toolFunction `json:"function"`
-}
+// toolDefinition 发给模型的函数工具定义（统一复用基座类型）
+type toolDefinition = agentbase.ToolDefinition
 
-// toolFunction 函数描述与参数 Schema
-type toolFunction struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Parameters  map[string]any `json:"parameters"`
-}
-
-// modelResponse 一次模型调用的结果
-type modelResponse struct {
-	Content   string
-	Reasoning string
-	ToolCalls []toolCallItem
-}
-
-// streamToolDelta 流式响应里的工具调用增量（同一 index 的多段需拼接）
-type streamToolDelta struct {
-	Index    int    `json:"index"`
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
-}
-
-// streamChunk 流式响应分片（正文、思考与工具调用增量）
-type streamChunk struct {
-	Choices []struct {
-		Delta struct {
-			Content          string            `json:"content"`
-			ReasoningContent string            `json:"reasoning_content"`
-			ToolCalls        []streamToolDelta `json:"tool_calls"`
-		} `json:"delta"`
-	} `json:"choices"`
-	Usage *modelUsage `json:"usage"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// assistantWire 响应中的 assistant 消息
-type assistantWire struct {
-	Role             string         `json:"role"`
-	Content          string         `json:"content"`
-	ReasoningContent string         `json:"reasoning_content"`
-	ToolCalls        []toolCallItem `json:"tool_calls"`
-}
-
-// chatCompletion OpenAI 兼容响应（含代理包装前的原始结构）
-type chatCompletion struct {
-	Choices []struct {
-		Message assistantWire `json:"message"`
-	} `json:"choices"`
-	Usage *modelUsage `json:"usage"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// modelUsage token 用量
-type modelUsage struct {
-	Prompt              int64               `json:"prompt_tokens"`
-	Completion          int64               `json:"completion_tokens"`
-	PromptTokensDetails *promptTokenDetails `json:"prompt_tokens_details,omitempty"`
-}
-
-// promptTokenDetails 输入 token 的细分（提示缓存命中数）
-type promptTokenDetails struct {
-	CachedTokens int64 `json:"cached_tokens"`
-}
+// toolFunction 函数描述与参数 Schema（统一复用基座类型）
+type toolFunction = agentbase.ToolFunctionDef
 
 // toolOutcome 工具执行结果：JSON 回填 + 给最终总结用的短句
 type toolOutcome struct {
@@ -119,7 +43,7 @@ type toolOutcome struct {
 
 // ==== 论坛桥接层类型 ====
 
-// Config 独立配置文件 local_data/mutual_forum.json 的结构。
+// Config 独立配置文件 local_data/config/forum.json 的结构。
 //
 // 开关与地址都在这里：Enabled 为 false、或 BaseURL 不是合法的 http(s) 地址时，
 // 智能体侧的工具不会暴露。
@@ -133,7 +57,7 @@ type Config struct {
 	JoinCode      string `json:"join_code"`      // 论坛开启加入码时填写
 	APIKey        string `json:"api_key"`        // 已有凭证（可空；空则首次使用时自动申领）
 
-	AccountFile string `json:"account_file"` // 凭证与轮次状态文件（可空，默认 local_data/forum/mutual_forum_account.json）
+	AccountFile string `json:"account_file"` // 凭证与轮次状态文件（可空，默认 local_data/database/forum/forum_account.json）
 
 	RequestTimeoutSeconds  int `json:"request_timeout_seconds"`   // 单次 API 请求超时（默认 25 秒）
 	HealthTimeoutSeconds   int `json:"health_timeout_seconds"`    // 就绪探测超时（默认 3 秒）

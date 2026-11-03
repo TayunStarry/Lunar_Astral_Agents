@@ -3,10 +3,8 @@ package WebSearch
 // variable.go 全局变量与常量集中声明（类型定义见 type.go）。
 
 import (
-	"net/http"
 	"regexp"
 	"sync"
-	"time"
 )
 
 const (
@@ -21,6 +19,10 @@ const (
 	promptUserMarker = "\n---user---\n"
 	// readURLInstruction 指定页面提炼的默认指令（没有任何具体诉求时使用）
 	readURLInstruction = "用中文概括这个页面的主要内容、关键结论与值得注意的信息；只依据页面正文，不要编造页面里没有的内容"
+	// readPageMaxSeconds 单页读取的总时长上限（秒）。
+	// 单页读取不应沿用整轮多页检索的 MaxRunSeconds：一次 404 / 反爬页面
+	// 如果按 420 秒走，整轮对话会被拖住数分钟，表现为「卡死无响应」。
+	readPageMaxSeconds = 120
 	// PipelineSearch 联网检索管线（兜底管线）
 	PipelineSearch = "search"
 	// PipelineWeather 天气查询管线（纯 API）
@@ -74,22 +76,4 @@ var (
 	runMu sync.Mutex
 	// pageCountRe 指令中的「前N个/页/条」数量要求
 	pageCountRe = regexp.MustCompile(`前\s*([0-9]+|[０-９]+)\s*[个页条]`)
-	// placeholderPattern 提示词占位符形态（{key}）
-	placeholderPattern = regexp.MustCompile(`\{[A-Za-z0-9_\-]+\}`)
-	// httpClient 模型调用 HTTP 客户端
-	httpClient = &http.Client{Timeout: 120 * time.Second}
-
-	// 主模型端点只解析一次
-	modelOnce sync.Once
-	modelName string
-	modelURL  string
-
-	// 模型实况观察者：由 app 注入控制台的 StreamBegin/Delta/End，
-	// 让 TUI「推理实况」能看到网络搜索的模型思考与输出。
-	observerMu    sync.Mutex
-	observerBegin func(role string)
-	observerDelta func(role, kind, text string)
-	observerEnd   func(role string)
-	// observerMeter 模型调用计量回调：网络搜索的调用同样计入「运行状态」的模型计量
-	observerMeter func(prompt, completion, cached int64, generation time.Duration, estimated bool)
 )

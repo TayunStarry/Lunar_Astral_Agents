@@ -5,7 +5,7 @@ package ArchiveOps
 import (
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/agentdump"
+	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
 func init() {

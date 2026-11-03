@@ -6,8 +6,8 @@ package BilibiliViewer
 // 让下一次观影从选片重新开始（已看记录与偏好配置不受影响）。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // Ready 主动投递是否可用：QQ 桥接器已连接且能解析群/好友信息。
@@ -39,7 +39,7 @@ func Run(instruction string) (string, error) {
 	plan, err := planSend(instruction, groups, friends)
 	if err != nil {
 		// 交给智能修复：规划失败常由目标信息/上下文损坏引起
-		Savior.ReportRun("dialogue_bridging", err)
+		agentbase.ReportRun("dialogue_bridging", err)
 		return "", err
 	}
 	logger.Info("DialogueBridging", "投递计划：目标数=%d 原因=%s", len(plan.Deliveries), plan.Reason)

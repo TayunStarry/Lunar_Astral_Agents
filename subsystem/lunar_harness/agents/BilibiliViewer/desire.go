@@ -5,7 +5,7 @@ package BilibiliViewer
 // 结合语义：提炼时同时看「用户这句话」与配置文件里的 preference_keywords，
 // 综合给出本轮使用的关键词（用户明确主题优先，默认偏好作补充/兜底）。
 // 结果写进 Config.DesireKeywords（json:"-"），本轮选片只按这些词打分与搜索；
-// 只在本次调用内生效，不写回 bilibili_life.json。
+// 只在本次调用内生效，不写回 config/bilibili.json。
 
 import (
 	"strings"

@@ -14,10 +14,10 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/locator"
 	"LunarSubsystem/LunarHarness/engine/media"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
 
 // IsArchiveExt 是否为支持的压缩包扩展名
@@ -49,11 +49,11 @@ func ResolveFilePath(target string) (abs, rel string, err error) {
 	if _, statErr := os.Stat(abs); statErr == nil {
 		return abs, rel, nil
 	}
-	match, locateErr := locator.Resolve(trimmed, nil)
+	match, locateErr := resourcehub.Resolve(trimmed, nil)
 	if locateErr == nil {
 		return match.Abs, match.Rel, nil
 	}
-	if _, ambiguous := locateErr.(*locator.AmbiguousError); ambiguous {
+	if _, ambiguous := locateErr.(*resourcehub.AmbiguousError); ambiguous {
 		return "", "", locateErr
 	}
 	return abs, rel, nil

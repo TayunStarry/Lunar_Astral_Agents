@@ -11,6 +11,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
+	"LunarSubsystem/LunarHarness/internal/testenv"
 )
 
 // 清掉本次用例写入的导出文件（避免污染工作目录）
@@ -55,6 +56,7 @@ func readDump(t *testing.T, path string) string {
 //
 // 本测试走真实链路：TuiSystem 日志管线入缓冲 → 导出端点读缓冲 → 落盘 → 读回断言。
 func TestDataDumpLogsStripsEscapeCodes(t *testing.T) {
+	testenv.Isolate(t)
 	console.Install() // 幂等；确保环形缓冲可用
 	cleanupDumps(t, "*-raw-logs.log")
 
@@ -124,6 +126,7 @@ func TestDataDumpLogsStripsEscapeCodes(t *testing.T) {
 // `->`、`=>`、`&&` 极常见——实测用户导出 261 行日志里几乎每条都带 `\u003e`，
 // 肉眼扫读与 grep `->` 全部失效。导出文件只落本地磁盘，故用 Encoder 关闭转义。
 func TestDataDumpLogsKeepsHtmlSensitiveCharsReadable(t *testing.T) {
+	testenv.Isolate(t)
 	console.Install()
 	cleanupDumps(t, "*-raw-logs.log")
 
@@ -175,6 +178,7 @@ func TestDataDumpLogsKeepsHtmlSensitiveCharsReadable(t *testing.T) {
 // 这条数据是独一份的：原始日志没有轮次结构，`/debug/dump/context` 只有给模型看的
 // messages（输入）——模型的思考流、工具调用顺序与每轮耗时只存在于实况轮次缓冲里。
 func TestDataDumpTranscriptExportsLiveTurns(t *testing.T) {
+	testenv.Isolate(t)
 	cleanupDumps(t, "*-transcript.json")
 
 	// 走真实管道：向实况轮次缓冲投递一轮，再经端点导出

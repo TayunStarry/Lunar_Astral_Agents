@@ -10,7 +10,7 @@ import (
 )
 
 // DefaultConfigPath 默认打包配置路径（随发行版分发，位于工作目录的 local_data 下）
-const DefaultConfigPath = "local_data/archive_config.json"
+const DefaultConfigPath = "local_data/config/archive.json"
 
 // Config 扁平化的打包配置结构（JSON Schema）
 type Config struct {

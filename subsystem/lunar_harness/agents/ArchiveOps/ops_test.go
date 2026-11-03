@@ -9,16 +9,13 @@ import (
 	"testing"
 
 	"LunarSubsystem/LunarHarness/agents/ArchiveReader"
-	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/internal/testenv"
 )
 
 // prepareDocuments 在临时 LocalDir 下写入两个源文件。
 func prepareDocuments(t *testing.T) {
 	t.Helper()
-	oldDir := config.LocalDir
-	config.LocalDir = t.TempDir()
-	t.Cleanup(func() { config.LocalDir = oldDir })
-	dir := filepath.Join(config.LocalDir, "documents")
+	dir := filepath.Join(testenv.Isolate(t), "documents")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

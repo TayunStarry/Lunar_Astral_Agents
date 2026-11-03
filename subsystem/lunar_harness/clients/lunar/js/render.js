@@ -8,8 +8,7 @@ const CATEGORY_META = {
     file: { label: '文件', icon: 'fa-file-lines', cls: 'badge-file' },
     image: { label: '图片', icon: 'fa-image', cls: 'badge-image' },
     voice: { label: '语音', icon: 'fa-volume-high', cls: 'badge-voice' },
-    music: { label: '乐谱', icon: 'fa-music', cls: 'badge-music' },
-    action: { label: '行动', icon: 'fa-person-running', cls: 'badge-action' }
+    music: { label: '音乐', icon: 'fa-music', cls: 'badge-music' }
 };
 
 /**
@@ -150,7 +149,8 @@ function computeSearchText(msg) {
     if (msg.sender) parts.push(msg.sender);
     if (msg.content) parts.push(msg.role === 'user' ? stripUserPrefix(msg.content) : msg.content);
     if (msg.imageLabel) parts.push(msg.imageLabel);
-    if (msg.abcNotation) parts.push(msg.abcNotation);
+    if (msg.musicTitle) parts.push(msg.musicTitle);
+    if (msg.musicSummary) parts.push(msg.musicSummary);
     if (msg.attachments && msg.attachments.length) {
         msg.attachments.forEach(att => { if (att.label) parts.push(att.label); });
     }
@@ -163,7 +163,6 @@ function renderMessageElement(msg) {
     el.dataset.id = msg.id;
     el.dataset.categories = (msg.categories || ['text']).join(',');
     el.dataset.searchText = computeSearchText(msg);
-    if (msg.categories && msg.categories.includes('action')) el.classList.add('action-message');
     if (typeof isMessageQuoted === 'function' && isMessageQuoted(msg.id)) el.classList.add('quote-selected');
 
     // 用户气泡名优先用缓存里的实际发送者（QQ 私聊昵称 / 前端配置名）；正文不带前缀
@@ -205,11 +204,12 @@ function renderMessageElement(msg) {
         });
     }
 
-    // 乐谱卡片
-    if (msg.abcNotation) el.appendChild(buildMusicCard(msg));
+    // 音乐卡片（推送与历史消息均按分类 music 渲染）
+    if (Array.isArray(msg.categories) && msg.categories.includes('music')) el.appendChild(buildMusicCard(msg));
 
-    // 语音重播按钮
-    if (msg.audio) el.appendChild(buildAudioReplay(msg));
+    // 语音重播按钮（音乐消息的 audio 是演奏音频地址，由音乐卡片自行播放）
+    const isMusic = Array.isArray(msg.categories) && msg.categories.includes('music');
+    if (msg.audio && !isMusic) el.appendChild(buildAudioReplay(msg));
 
     // 操作按钮
     el.appendChild(buildActionsPanel(msg));

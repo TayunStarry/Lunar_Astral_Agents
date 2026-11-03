@@ -2,7 +2,7 @@
  * 用户名模块
  *
  * 首次访问/缓存缺失时显示称呼覆盖层，输入后缓存到 localStorage；
- * 刷新时直接复用缓存，不再从 lunar_config.json 读取。
+ * 刷新时直接复用缓存，不再从 config/general.json 读取。
  * 与电脑端 preferences.js 使用同一个存储键，电脑端与手机端共用称呼。
  */
 

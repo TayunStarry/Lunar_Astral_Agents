@@ -3,8 +3,9 @@ package Creator
 // repair.go 向拯救者注册自由创作的上下文修复能力。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/fileflow"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {
@@ -15,7 +16,8 @@ func init() {
 
 // resetJournal 清空规划日志，让下一轮调度从空白计划开始。
 func resetJournal() string {
-	saveJournal(journal{Version: 1})
+	saveJournal(journalPath(fileflow.ModeCreator), journal{Version: 1})
+	saveJournal(journalPath(fileflow.ModeAssigned), journal{Version: 1})
 	logger.Warn(Module, "[拯救] 自由创作规划日志已清空")
 	return "已清空自由创作的规划日志"
 }

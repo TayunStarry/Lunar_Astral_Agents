@@ -103,6 +103,12 @@ const (
 // FileReadPrefix 本地资源的目标 URL 前缀（相对路由，不带主机与端口）
 const FileReadPrefix = "/file/read/"
 
+// ASRFallbackText 音频转写失败时的中性提示（句柄描述与对话上下文共用同一文案）
+const ASRFallbackText = "（这段音频没有转写出可用文本）"
+
+// audioModule 音频接入日志模块名（与资源目录既有日志标签一致）
+const audioModule = "FileManager"
+
 // 句柄体系错误语义（调用方与 HTTP 层按同一组文案透出）
 const (
 	ErrHandleInvalid = "句柄无效,文件不存在"

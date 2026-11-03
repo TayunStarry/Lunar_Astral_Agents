@@ -10,7 +10,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/sound"
 )
 
-// ListConfigs 返回候选打包配置：默认配置（local_data/archive_config.json，存在时）置于最前，
+// ListConfigs 返回候选打包配置：默认配置（local_data/config/archive.json，存在时）置于最前，
 // 其后为工作目录 data/ 下的额外 *.json 配置（便于用户自定义多套打包方案）。
 func ListConfigs() []string {
 	configs := make([]string, 0, 4)

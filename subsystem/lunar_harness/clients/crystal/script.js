@@ -126,13 +126,13 @@ function addCodeCopyButtons(container) {
 }
 
 // ===== 配置管理：标签映射（本地化翻译） =====
-// 标签映射已抽离为独立文件，由 local_data/config_labels.json 提供，
+// 标签映射已抽离为独立文件，由 local_data/config/labels.json 提供，
 // 通过 /file/read/ 接口加载，避免随前端脚本一起编译、便于维护
 let labelMap = {};
 
 async function loadConfigLabels() {
     try {
-        const response = await fetch('/file/read/config_labels.json');
+        const response = await fetch('/file/read/config/labels.json');
         if (response.ok) {
             const data = await response.json();
             labelMap = data && typeof data === 'object' ? data : {};
@@ -168,7 +168,7 @@ function encodeFileName(filename) {
 // ===== 初始化 =====
 async function loadConfig() {
     try {
-        const response = await fetch('/file/read/lunar_config.json');
+        const response = await fetch('/file/read/config/general.json');
         if (response.ok) {
             configData = await response.json();
             originalConfig = JSON.parse(JSON.stringify(configData));
@@ -228,8 +228,8 @@ function getTagModifierClass(tag) {
 }
 
 /* 布局持久化：扁平数组 layout，数组下标即网格槽位，元素为页面 id 或 null（null 表示空格）。
-   通过 /file/read + /file/write 读写到本地 JSON（desktop_layout.json）。 */
-const GRID_LAYOUT_FILE = 'desktop_layout.json';
+   通过 /file/read + /file/write 读写到本地 JSON（config/layout.json）。 */
+const GRID_LAYOUT_FILE = 'config/layout.json';
 let layout = [];
 
 // 读取 CSS 定义的响应式列数（--grid-cols）
@@ -1217,7 +1217,7 @@ async function saveConfig() {
         const res = await fetch('/file/write', {
             method: 'POST',
             headers: {
-                'X-File-Name': encodeFileName('lunar_config.json'),
+                'X-File-Name': encodeFileName('config/general.json'),
                 'X-Overwrite': 'true'
             },
             body: blob

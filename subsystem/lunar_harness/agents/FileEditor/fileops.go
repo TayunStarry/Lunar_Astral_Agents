@@ -14,9 +14,9 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/library"
-	"LunarSubsystem/LunarHarness/engine/locator"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
 
 // documentsAbsRoot 返回 /document 的绝对路径。
@@ -44,11 +44,11 @@ func documentPath(rel string) (full string, localRel string, err error) {
 			return full, localRel, nil
 		}
 	}
-	match, locateErr := locator.Resolve(raw, []string{documentsRootRel})
+	match, locateErr := resourcehub.Resolve(raw, []string{documentsRootRel})
 	if locateErr == nil && strings.HasPrefix(match.Rel, documentsRootRel+"/") {
 		return match.Abs, match.Rel, nil
 	}
-	if _, ambiguous := locateErr.(*locator.AmbiguousError); ambiguous {
+	if _, ambiguous := locateErr.(*resourcehub.AmbiguousError); ambiguous {
 		return "", "", locateErr
 	}
 	if err != nil {
@@ -255,7 +255,7 @@ func writeDocument(rel, content string, mustCreate bool) (string, string, error)
 	if err := persistence.WriteFileAtomic(localRel, []byte(content)); err != nil {
 		return "", "", fmt.Errorf("写入文件失败: %w", err)
 	}
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	return localRel, registerHandle(localRel), nil
 }
 
@@ -275,7 +275,7 @@ func deleteDocument(rel string) (string, error) {
 	if err := os.Remove(full); err != nil {
 		return "", fmt.Errorf("删除文件失败: %w", err)
 	}
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	resource.RemoveHandlesForPath(localRel)
 	return localRel, nil
 }
@@ -311,7 +311,7 @@ func moveDocument(from, target string) (string, error) {
 	if err := os.Rename(fullFrom, fullTarget); err != nil {
 		return "", fmt.Errorf("移动文件失败: %w", err)
 	}
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	resource.RewriteHandlesForMove(localFrom, localTarget)
 	return localTarget, nil
 }

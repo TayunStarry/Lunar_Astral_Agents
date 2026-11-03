@@ -28,11 +28,11 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/locator"
-	"LunarSubsystem/LunarHarness/engine/model/agentchat"
 	"LunarSubsystem/LunarHarness/engine/multimodal"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/resourcehub"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // ResolveHandle 把句柄或路径统一解析为资源句柄（路径支持完整 / 相对 / 纯文件名）
@@ -41,7 +41,7 @@ func ResolveHandle(input string) (string, error) {
 	if input == "" {
 		return "", fmt.Errorf("文件或句柄不能为空")
 	}
-	match, err := locator.ResolveToHandle(input, []string{resource.StorageRootDocuments, resource.StorageRootMultimedia})
+	match, err := resourcehub.ResolveToHandle(input, []string{resource.StorageRootDocuments, resource.StorageRootMultimedia})
 	if err != nil {
 		return "", err
 	}
@@ -210,7 +210,7 @@ func storeResourceSummary(res resource.Resource, text string) {
 	if text == "" {
 		return
 	}
-	if err := resource.SetSummary(res.ID, agentchat.HardCutRunes(text, summaryStoreChars), nil); err != nil {
+	if err := resource.SetSummary(res.ID, agentbase.HardCutRunes(text, summaryStoreChars), nil); err != nil {
 		logger.Warn("CrystalAstral", "视觉理解：写入 %s 描述失败: %v", res.Handle, err)
 	}
 }

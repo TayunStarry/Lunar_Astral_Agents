@@ -8,14 +8,17 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 )
 
-// TestConfigHotReload 钉住 bilibili_life.json 的改动会在下一次调用时重新加载。
+// TestConfigHotReload 钉住 config/bilibili.json 的改动会在下一次调用时重新加载。
 func TestConfigHotReload(t *testing.T) {
 	tmp := t.TempDir()
 	orig := config.LocalDir
 	config.LocalDir = tmp
 	t.Cleanup(func() { config.LocalDir = orig })
 
-	path := filepath.Join(tmp, "bilibili_life.json")
+	path := filepath.Join(tmp, "config", "bilibili.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("创建配置目录失败: %v", err)
+	}
 	write := func(body string) {
 		t.Helper()
 		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {

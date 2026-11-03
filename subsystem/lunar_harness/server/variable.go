@@ -1,10 +1,10 @@
 package server
 
 import (
-	"LunarSubsystem/LunarHarness/agents/CrystalPersonality"
-	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/library"
+	"LunarSubsystem/LunarHarness/engine/ltpxhost"
 	media "LunarSubsystem/LunarHarness/engine/media/httpapi"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
@@ -22,11 +22,11 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/window/focus", Handler: WindowFocusHandler, Method: "POST", Description: "置前指定桌面窗口（id: lunar/crystal）"},
 
 	// ==================== 消息队列 ====================
-	{Path: "/write/message", Handler: LunarPersonality.MessageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
+	{Path: "/write/message", Handler: Dialogue.MessageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
 
 	// ==================== 应用与资源 ====================
 	{Path: "/background", Handler: file.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
-	{Path: "/load/application", Handler: CrystalPersonality.LoadApplicationHandler, Method: "POST", Description: "加载应用"},
+	{Path: "/load/application", Handler: ltpxhost.LoadApplicationHandler, Method: "POST", Description: "加载应用"},
 
 	// ==================== 文件操作 ====================
 	{Path: "/file/write", Handler: file.SaveHandler, Method: "POST", Description: "文件保存（自动登记句柄；内容哈希全局唯一，生成目录优先于 audios/multimedia 根目录；X-Store-Exact 仅影响新内容落点）"},
@@ -61,14 +61,14 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/package/install", Handler: file.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},
 	{Path: "/file/package/export", Handler: file.ExportPackageHandler, Method: "POST", Description: "导出扩展包"},
 	{Path: "/file/package/delete", Handler: file.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
-	{Path: "/api/packages", Handler: CrystalPersonality.ScanPackagesHandler, Method: "GET", Description: "扫描包目录"},
-	{Path: "/api/module/create", Handler: CrystalPersonality.ModuleCreateHandler, Method: "POST", Description: "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）"},
-	{Path: "/api/module/inspect", Handler: CrystalPersonality.ModuleInspectHandler, Method: "POST", Description: "检查 HTML 项目内容（供 AI 生成模块元信息）"},
+	{Path: "/api/packages", Handler: ltpxhost.ScanPackagesHandler, Method: "GET", Description: "扫描包目录"},
+	{Path: "/api/module/create", Handler: ltpxhost.ModuleCreateHandler, Method: "POST", Description: "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）"},
+	{Path: "/api/module/inspect", Handler: ltpxhost.ModuleInspectHandler, Method: "POST", Description: "检查 HTML 项目内容（供 AI 生成模块元信息）"},
 
 	// ==================== 控制台数据导出 ====================
 	{Path: "/debug/dump/logs", Handler: DataDumpLogsHandler, Method: "POST", Description: "导出原始日志为 JSON Lines（.log）"},
 	{Path: "/debug/dump/transcript", Handler: DataDumpTranscriptHandler, Method: "POST", Description: "导出核心智能实况的模型调用轮次（思考/输出/工具序列/时长）为 JSON（.json）"},
-	{Path: "/debug/dump/context", Handler: DataDumpContextHandler, Method: "POST", Description: "导出 Go 智能体上下文/状态为 JSON（core / web_search / bilibili / desktop / descriptor / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）"},
+	{Path: "/debug/dump/context", Handler: DataDumpContextHandler, Method: "POST", Description: "导出 Go 智能体上下文/状态为 JSON（dialogue 对话者 / web_search / bilibili / desktop / dialogue_bridging 通讯桥接 / mutual_forum 互助论坛）"},
 
 	// ==================== 知识库与记忆库 ====================
 	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
@@ -96,7 +96,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/vram/unload", Handler: llama.VRAMUnloadHandler, Method: "POST", Description: "定向卸载（卸载指定 ID 的已加载模型）"},
 
 	// ==================== 代理请求 ====================
-	{Path: "/proxy", Handler: LunarPersonality.ProxyHandler, Method: "POST", Description: "代理访问服务"},
+	{Path: "/proxy", Handler: Dialogue.ProxyHandler, Method: "POST", Description: "代理访问服务"},
 
 	// ==================== 语音播报（Broadcaster 统一链路） ====================
 	{Path: "/broadcaster/synthesize", Handler: broadcaster.SynthesizeHandler, Method: "POST", Description: "语音合成统一入口（engine 参数选引擎 Qwen/Kokoro/OmniVoice，缺省 tts.engine 配置；引擎槽位单载自动切换）"},
@@ -110,11 +110,11 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/broadcaster/omnivoice/languages", Handler: broadcaster.OmniVoiceLanguagesHandler, Method: "GET", Description: "OmniVoice 支持的语言列表（自动激活 OmniVoice 槽位）"},
 
 	// ==================== LTPX 工具包调度 ====================
-	{Path: "/ltpx/tools", Handler: CrystalPersonality.LTPRemoteToolsHandler, Method: "GET", Description: "拉取工具链（动态扫描包 AtoA 能力）"},
-	{Path: "/ltpx/call", Handler: CrystalPersonality.LTPRemoteCallHandler, Method: "POST", Description: "调用工具（异步受理，立即返回 request_id）"},
-	{Path: "/ltpx/poll", Handler: CrystalPersonality.LTPRemotePendingHandler, Method: "GET", Description: "列出待定工具调用（调试端点，已不承担轮询取结果）"},
-	{Path: "/ltpx/result", Handler: CrystalPersonality.LTPRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
-	{Path: "/mini-ltp-agent.js", Handler: CrystalPersonality.MiniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（Mini-LTP）"},
-	{Path: "/shared-input.js", Handler: CrystalPersonality.SharedInputHandler, Method: "GET", Description: "统一键鼠操作共享模块"},
-	{Path: "/self-ltp-agent.js", Handler: CrystalPersonality.SelfLTPAgentHandler, Method: "GET", Description: "自主页面操作智能体脚本（Self-LTP）"},
+	{Path: "/ltpx/tools", Handler: ltpxhost.LTPRemoteToolsHandler, Method: "GET", Description: "拉取工具链（动态扫描包 AtoA 能力）"},
+	{Path: "/ltpx/call", Handler: ltpxhost.LTPRemoteCallHandler, Method: "POST", Description: "调用工具（异步受理，立即返回 request_id）"},
+	{Path: "/ltpx/poll", Handler: ltpxhost.LTPRemotePendingHandler, Method: "GET", Description: "列出待定工具调用（调试端点，已不承担轮询取结果）"},
+	{Path: "/ltpx/result", Handler: ltpxhost.LTPRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
+	{Path: "/mini-ltp-agent.js", Handler: ltpxhost.MiniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（Mini-LTP）"},
+	{Path: "/shared-input.js", Handler: ltpxhost.SharedInputHandler, Method: "GET", Description: "统一键鼠操作共享模块"},
+	{Path: "/self-ltp-agent.js", Handler: ltpxhost.SelfLTPAgentHandler, Method: "GET", Description: "自主页面操作智能体脚本（Self-LTP）"},
 }

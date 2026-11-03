@@ -8,7 +8,7 @@ package desktop
 // 没有运行中的任务时是无副作用的空操作。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {

@@ -54,6 +54,9 @@ func planDetailPages(outcome searchOutcome, cache *PageCache, n int) []SearchHit
 // 阶段一并发创建窗口并导航（各自等待加载完成）；阶段二在全部窗口就绪后
 // 统一滚动提取正文；最后统一关闭窗口。返回按打开顺序排列的采集结果。
 func collectDetailPages(targets []SearchHit, cfg Config, deadline time.Time) ([]PageCapture, bool) {
+	if time.Now().After(deadline) {
+		return nil, true
+	}
 	titles := detailWindowTitles(len(targets))
 	sessions := make([]*browser.WebViewSession, len(targets))
 	navErrs := make([]error, len(targets))
@@ -67,6 +70,10 @@ func collectDetailPages(targets []SearchHit, cfg Config, deadline time.Time) ([]
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			if time.Now().After(deadline) {
+				navErrs[i] = fmt.Errorf("总时长已超限，跳过详情页")
+				return
+			}
 			sess, err := browser.OpenWebViewSession("", titles[i], 960, 720)
 			if err != nil {
 				navErrs[i] = fmt.Errorf("打开窗口失败: %w", err)

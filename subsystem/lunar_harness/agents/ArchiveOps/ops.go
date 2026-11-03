@@ -17,9 +17,9 @@ import (
 	"LunarSubsystem/LunarHarness/agents/ArchiveReader"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/locator"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
 
 // Create 创建压缩包：sources 为 /document/ 或相对 LocalDir 的文件 / 目录路径
@@ -55,7 +55,7 @@ func Create(target string, sources []string) Result {
 	if err != nil {
 		return failResult(OpCreate, target, err)
 	}
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	entries, _ := persistence.ReadZipFileList(saved.Path)
 	handles := []string{}
 	if saved.Handle != "" {
@@ -81,7 +81,7 @@ func Delete(target string) Result {
 	if err := os.Remove(abs); err != nil {
 		return failResult(OpDelete, target, fmt.Errorf("删除压缩包失败: %w", err))
 	}
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	resource.RemoveHandlesForPath(rel)
 	logger.SubInfo(Module, "Delete", "已删除压缩包 %s", rel)
 	return okResult(OpDelete, rel, "删除压缩包 "+rel, nil, 0, nil)
@@ -125,7 +125,7 @@ func AddEntry(target, entryName, sourcePath, content string) Result {
 	if err := persistence.WriteFileAtomic(rel, rebuilt); err != nil {
 		return failResult(OpAdd, target, fmt.Errorf("写入压缩包失败: %w", err))
 	}
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	handles := []string{}
 	if handle := registerArchiveHandle(rel); handle != "" {
 		handles = append(handles, handle)
@@ -173,7 +173,7 @@ func RemoveEntry(target, entryName string) Result {
 	if err := persistence.WriteFileAtomic(rel, rebuilt); err != nil {
 		return failResult(OpRemove, target, fmt.Errorf("写入压缩包失败: %w", err))
 	}
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	handles := []string{}
 	if handle := registerArchiveHandle(rel); handle != "" {
 		handles = append(handles, handle)

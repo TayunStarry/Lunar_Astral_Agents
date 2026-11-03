@@ -2,7 +2,7 @@ package WebSearch
 
 // config.go 网络搜索配置
 //
-// lunar_config.json 的 web_search 节由 engine/config 统一解析（启动时一次），
+// config/general.json 的 web_search 节由 engine/config 统一解析（启动时一次），
 // 智能体只读取解析后的全局值，不再自行读取配置文件；这里仅负责快照并
 // 施加搜索流程可接受的取值边界。
 

@@ -10,8 +10,8 @@ import (
 	_ "LunarSubsystem/LunarHarness/agents/Creator"
 	_ "LunarSubsystem/LunarHarness/agents/Responder"
 
-	"LunarSubsystem/LunarHarness/engine/agentdump"
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
+	"LunarSubsystem/LunarHarness/protocol/agentdump"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func TestAllGoAgentsRegisteredForRepair(t *testing.T) {

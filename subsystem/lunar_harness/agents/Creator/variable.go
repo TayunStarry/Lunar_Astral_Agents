@@ -3,7 +3,6 @@ package Creator
 // variable.go 创作体系的常量、工具目录与全局变量。
 
 import (
-	"net/http"
 	"sync"
 	"time"
 )
@@ -14,7 +13,9 @@ const (
 	// plannerLabel 调度者角色名
 	plannerLabel = "自由创作.调度者"
 	// journalFile 创作规划日志（相对 LocalDir）
-	journalFile = "database/life_chain/creative_journal.json"
+	journalFile = "database/life/creative_journal.json"
+	// assignedJournalFile 对话者指派模式的操作历史日志（相对 LocalDir）
+	assignedJournalFile = "database/life/creative_assigned.json"
 	// documentsRootRel 文件操作的统一根目录（相对 LocalDir）
 	documentsRootRel = "documents"
 	// runtimePackageID 私有 js 运行时标识（也是创作管线名）
@@ -62,6 +63,34 @@ const (
 	toolBudgetRunes = 18000
 	// toolPrunedRunes 收紧较早的工具结果时保留的字符数
 	toolPrunedRunes = 400
+
+	// ==== 路由阈值 ====
+	// largeFileBytes 单文件超过该字节数时交给文献解析（与文件编辑直读上限对齐）
+	largeFileBytes = 256 << 10
+	// largeFolderFiles 目录文件数超过该值时判定为大型目录
+	largeFolderFiles = 50
+	// largeFolderBytes 目录总字节超过该值时判定为大型目录
+	largeFolderBytes = 4 << 20
+	// largeFolderLargest 目录内最大文件超过该值时判定为大型目录
+	largeFolderLargest = 256 << 10
+	// maxFolderScanEntries 路由扫描目录时的条目上限
+	maxFolderScanEntries = 2000
+
+	// ==== 上下文留存 ====
+	// maxOperationHistory 指派模式保留的历史操作记录条数
+	maxOperationHistory = 50
+	// maxContextOperations 注入下一轮提示词的历史操作记录条数
+	maxContextOperations = 20
+	// maxContextDeltas 单条操作在提示词里最多展示的内容差异块数
+	maxContextDeltas = 3
+	// maxDeltaRunes 单个差异片段在提示词里保留的字符数
+	maxDeltaRunes = 160
+	// maxAssignedSummaryRunes 指派模式返回摘要的最大字符数
+	maxAssignedSummaryRunes = 2000
+	// maxExpectsPerStep 单个步骤最多声明的规划预期条数
+	maxExpectsPerStep = 8
+	// maxExpectFragments 单条预期最多包含的文本片段数
+	maxExpectFragments = 8
 )
 
 // 可用智能体：全部通过自然语言指令接收任务。
@@ -94,7 +123,8 @@ const (
 	toolFileMove       = "file_move"
 	toolFileReplace    = "file_replace"
 	toolFileDeleteText = "file_delete_content"
-	toolFileEdit       = "file_edit"
+	toolArchiveRead    = "archive_read"
+	toolArchiveWrite   = "archive_write"
 	toolCodeIndex      = "code_index"
 	toolReadDTS        = "read_dts"
 	toolSendGroupText  = "send_group_text"
@@ -104,20 +134,20 @@ const (
 	toolSubmitPlan     = "submit_plan"
 )
 
-// plannerTools 调度者可调度的全部能力 + 计划提交。
+// plannerTools 调度者只做节点编排：可读取证 + 提交计划，不直接写文件、不运行脚本。
+// 所有写操作必须落到计划步骤，由执行节点经路由 / 快照 / 审查 / 回滚完成。
 var plannerTools = []string{
 	toolWebSearch, toolFetchResources,
-	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
-	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText, toolFileEdit,
-	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
-	toolRunScript, toolScriptStatus, toolSubmitPlan,
+	toolFileList, toolFileRead, toolArchiveRead,
+	toolCodeIndex, toolReadDTS, toolSubmitPlan,
 }
 
 // writerTools 文字创作者：文档与文学创作、素材查阅、内容调度。
 var writerTools = []string{
 	toolWebSearch, toolFetchResources,
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
-	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText, toolFileEdit,
+	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText,
+	toolArchiveRead, toolArchiveWrite,
 	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
 }
 
@@ -125,7 +155,8 @@ var writerTools = []string{
 var engineerTools = []string{
 	toolWebSearch, toolFetchResources,
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
-	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText, toolFileEdit,
+	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText,
+	toolArchiveRead, toolArchiveWrite,
 	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
 	toolRunScript, toolScriptStatus,
 }
@@ -133,27 +164,19 @@ var engineerTools = []string{
 // researcherTools 资料查阅者：只读取证，不改文件。
 var researcherTools = []string{
 	toolWebSearch, toolFetchResources,
-	toolFileList, toolFileRead, toolCodeIndex, toolReadDTS,
+	toolFileList, toolFileRead, toolArchiveRead, toolCodeIndex, toolReadDTS,
 }
 
 // runnerTools 脚本运行者：运行、监控与必要的文件读写；同样可随时搜索与查记忆。
 var runnerTools = []string{
 	toolWebSearch, toolFetchResources, toolFileList, toolFileRead,
-	toolFileCreate, toolFileRewrite, toolFileEdit, toolReadDTS, toolRunScript,
+	toolFileCreate, toolFileRewrite, toolArchiveRead, toolArchiveWrite, toolReadDTS, toolRunScript,
 	toolScriptStatus, toolSendGroupText,
 }
 
 var (
 	// runMu 串行化创作事件，避免同一管线并发运行
 	runMu sync.Mutex
-
-	// httpClient 模型调用客户端
-	httpClient = &http.Client{Timeout: modelTimeout}
-
-	// 模型端点只解析一次
-	modelOnce sync.Once
-	modelName string
-	modelURL  string
 
 	// lastRunMeta 最近一次脚本运行摘要（供 script_status 汇报）
 	lastRunMu   sync.Mutex

@@ -20,7 +20,7 @@ type MentionTarget struct {
 	UID  int64  `json:"uid,omitempty"`
 }
 
-// Config 哔哩观影的长期配置（local_data/bilibili_life.json）。
+// Config 哔哩观影的长期配置（local_data/config/bilibili.json）。
 //
 // videos_per_round 已移除：候选数量固定为 4-8 个，由机制决定。
 type Config struct {
@@ -218,4 +218,24 @@ type memoryEntry struct {
 type dynamicCommentTarget struct {
 	Type int
 	Oid  string
+}
+
+// ==== 模型调用消息类型 ====
+
+// chatMessage OpenAI 兼容消息。
+type chatMessage struct {
+	Role    string `json:"role"`
+	Content any    `json:"content"`
+}
+
+// imageURL 图片地址。
+type imageURL struct {
+	URL string `json:"url"`
+}
+
+// contentPart 图文混排片段。
+type contentPart struct {
+	Type     string    `json:"type"`
+	Text     string    `json:"text,omitempty"`
+	ImageURL *imageURL `json:"image_url,omitempty"`
 }

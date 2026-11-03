@@ -14,7 +14,7 @@ var labels = []string{
 
 const (
 	// stateFile 心情状态文件（相对 LocalDir）：基础情绪向量 + 当前多维心情
-	stateFile = "database/life_chain/mood_state.json"
+	stateFile = "database/life/mood_state.json"
 	// defaultLabel 未初始化时的兜底标签
 	defaultLabel = "开心"
 	// alpha 当前心情在加权平均中的权重（越大越稳定）

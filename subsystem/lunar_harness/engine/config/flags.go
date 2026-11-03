@@ -43,6 +43,12 @@ func RegisterFlags() {
 	flag.BoolVar(&AllowLAN, "allow-lan", AllowLAN, "允许局域网访问引擎服务（默认仅本机回环可访问）")
 	flag.BoolVar(&InsecureTLS, "insecure-tls", InsecureTLS, "插件网络请求跳过 TLS 证书校验（不推荐）")
 
+	// ==== 对话者聚合工具意图检测 ====
+	flag.BoolVar(&DialogueToolIntentEnabled, "dialogue-tool-intent", DialogueToolIntentEnabled, "启用对话者聚合工具意图检测")
+	flag.Float64Var(&DialogueToolIntentThreshold, "dialogue-tool-intent-threshold", DialogueToolIntentThreshold, "意图相似度阈值（0-1）")
+	flag.IntVar(&DialogueToolIntentTimeoutMS, "dialogue-tool-intent-timeout-ms", DialogueToolIntentTimeoutMS, "意图检测嵌入超时（毫秒）")
+	flag.IntVar(&DialogueToolIntentMinRunes, "dialogue-tool-intent-min-runes", DialogueToolIntentMinRunes, "触发意图检测的最短用户文本字符数")
+
 	// ==== 图像与视觉 ====
 	flag.IntVar(&MaxWidth, "max-width", MaxWidth, "最大宽度")
 	flag.IntVar(&MaxHeight, "max-height", MaxHeight, "最大高度")

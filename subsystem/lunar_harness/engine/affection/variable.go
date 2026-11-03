@@ -12,7 +12,7 @@ const (
 	// Module 情感认知日志模块名
 	Module = "Affection"
 	// stateFile 情感认知状态文件（相对 LocalDir），与心情状态完全分离
-	stateFile = "database/life_chain/affection_state.json"
+	stateFile = "database/life/affection_state.json"
 	// initTimeoutSeconds 初始化嵌入的总超时
 	initTimeoutSeconds = 20
 )

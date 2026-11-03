@@ -10,6 +10,8 @@ package Creator
 import (
 	"fmt"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // isContextOverflow 判断模型报错是否为上下文超限（llama.cpp 返回 HTTP 400 + "exceeds"）。
@@ -28,17 +30,17 @@ func isContextOverflow(err error) bool {
 
 // shrinkMessages 上下文超限时的兜底收缩：保留系统提示与前两条（系统 + 任务），
 // 其余历史压到极短，只保留最近两条工具结果的头部。
-func shrinkMessages(messages []chatMessage) {
+func shrinkMessages(messages []agentbase.Message) {
 	keepHead := 2
 	if len(messages) < keepHead {
 		return
 	}
 	for index := keepHead; index < len(messages); index++ {
-		current := len([]rune(messages[index].Content))
+		current := len([]rune(agentbase.StringOf(messages[index].Content)))
 		if current <= toolPrunedRunes {
 			continue
 		}
-		messages[index].Content = previewRunes(messages[index].Content, toolPrunedRunes) + "…（上下文超限，已压缩）"
+		messages[index].Content = previewRunes(agentbase.StringOf(messages[index].Content), toolPrunedRunes) + "…（上下文超限，已压缩）"
 	}
 }
 
@@ -57,11 +59,11 @@ func toolResultContent(outcome toolOutcome) string {
 }
 
 // compactToolResults 在累计工具结果超出预算时收紧较早的结果。
-func compactToolResults(messages []chatMessage) {
+func compactToolResults(messages []agentbase.Message) {
 	total := 0
 	indexes := make([]int, 0, len(messages))
 	for index, message := range messages {
-		total += len([]rune(message.Content))
+		total += len([]rune(agentbase.StringOf(message.Content)))
 		if message.Role == "tool" {
 			indexes = append(indexes, index)
 		}
@@ -73,11 +75,11 @@ func compactToolResults(messages []chatMessage) {
 	prunable := len(indexes) - 2
 	for cursor := 0; cursor < prunable && total > toolBudgetRunes; cursor++ {
 		position := indexes[cursor]
-		current := len([]rune(messages[position].Content))
+		current := len([]rune(agentbase.StringOf(messages[position].Content)))
 		if current <= toolPrunedRunes {
 			continue
 		}
-		short := previewRunes(messages[position].Content, toolPrunedRunes) + "…（较早的工具结果已压缩）"
+		short := previewRunes(agentbase.StringOf(messages[position].Content), toolPrunedRunes) + "…（较早的工具结果已压缩）"
 		messages[position].Content = short
 		total -= current - len([]rune(short))
 	}

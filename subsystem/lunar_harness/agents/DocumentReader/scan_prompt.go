@@ -11,13 +11,13 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/model/agentchat"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // planScan 让主模型根据文件画像与需求产出扫描计划
 func planScan(doc *docContext, handle, request string) scanPlan {
-	system := agentchat.PromptText("documentScanPlan.md")
-	user := agentchat.RenderPrompt(agentchat.PromptText("documentScanPlanBriefing.md"),
+	system := agentbase.PromptText("documentScanPlan.md")
+	user := agentbase.RenderPrompt(agentbase.PromptText("documentScanPlanBriefing.md"),
 		"{request}", request,
 		"{handle}", handle,
 		"{name}", doc.Resource.Name,
@@ -28,8 +28,8 @@ func planScan(doc *docContext, handle, request string) scanPlan {
 		"{summary}", firstNonEmpty(strings.TrimSpace(doc.Resource.Summary), "（暂无现成摘要）"),
 		"{outline}", formatOutline(doc.Outline, 20),
 	)
-	text, err := agentchat.ChatWithRetry(roleLabel,
-		[]agentchat.Message{
+	text, err := agentbase.ChatWithRetry(roleLabel,
+		[]agentbase.Message{
 			{Role: "system", Content: system},
 			{Role: "user", Content: user},
 		}, nil, "扫描计划")
@@ -117,7 +117,7 @@ func buildMergeBriefing(doc *docContext, handle, request string, plan scanPlan, 
 	if len(spans) < len(chunks) {
 		coverage += "（超出单次上限，按相关度抽取了片段）"
 	}
-	return agentchat.RenderPrompt(agentchat.PromptText("documentScanMergeBriefing.md"),
+	return agentbase.RenderPrompt(agentbase.PromptText("documentScanMergeBriefing.md"),
 		"{request}", request,
 		"{goal}", plan.Goal,
 		"{mode}", plan.Mode,

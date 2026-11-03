@@ -98,6 +98,104 @@ func UnloadModelByID(modelID string) (bool, error) {
 	return false, nil
 }
 
+// LoadModelByID 请求路由服务器加载指定 ID 的模型（幂等：已加载或加载中直接返回）。
+// 只负责触发加载，不阻塞等待权重全部就绪；后续模型请求会由路由服务器排队等待加载完成。
+// 刚触发卸载时路由服务器会短暂拒绝加载（返回 400），因此这里做短重试。
+func LoadModelByID(modelID string) error {
+	if strings.TrimSpace(modelID) == "" {
+		return fmt.Errorf("模型 ID 不能为空")
+	}
+	body, err := json.Marshal(map[string]string{"model": modelID})
+	if err != nil {
+		return err
+	}
+	var lastErr error
+	for attempt := 0; attempt < 4; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Second)
+		}
+		lastErr = postModelLoad(body)
+		if lastErr == nil {
+			return nil
+		}
+	}
+	return lastErr
+}
+
+// postModelLoad 发起一次加载请求。
+func postModelLoad(body []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("http://localhost:%d/models/load", config.ModelPort), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("请求加载接口失败: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("加载接口返回状态码 %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// WaitModelGone 等待指定模型真正离开显存（状态变为 unloaded / sleeping）。
+// 路由服务器的卸载是异步的：卸载请求返回后模型仍可能处于 unloading，
+// 此时立即加载另一个大模型会被拒绝（400），也违背「两个模型不同时驻留」的约束。
+func WaitModelGone(modelID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		models, err := fetchRouterModels(config.ModelPort)
+		if err != nil {
+			return err
+		}
+		value := "unloaded"
+		for _, m := range models {
+			if m.ID == modelID {
+				value = m.Status.Value
+				break
+			}
+		}
+		if value == "unloaded" || value == "sleeping" || value == "" {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("等待模型[%s]释放显存超时（当前状态 %s）", modelID, value)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// WaitModelLoaded 等待指定模型真正加载完成。
+// 路由服务器收到 /models/load 后立即返回，权重仍在加载中；
+// 此时直接发补全请求可能被拒绝，必须先等状态变为 loaded。
+func WaitModelLoaded(modelID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		models, err := fetchRouterModels(config.ModelPort)
+		if err != nil {
+			return err
+		}
+		value := ""
+		for _, m := range models {
+			if m.ID == modelID {
+				value = m.Status.Value
+				break
+			}
+		}
+		if value == "loaded" {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("等待模型[%s]加载超时（当前状态 %s）", modelID, value)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 // unloadLoadedGPUModels 卸载路由服务器上已加载且占用显存的模型，返回成功卸载的模型 ID 列表
 func unloadLoadedGPUModels(port int) ([]string, error) {
 	models, err := fetchRouterModels(port)

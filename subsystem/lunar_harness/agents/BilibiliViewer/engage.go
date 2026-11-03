@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/model/loopguard"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/protocol/loopguard"
 )
 
 // runNextStep 执行计划表里的下一个步骤；失败时下一个 Tick 重试一次，仍失败则跳过。

@@ -30,7 +30,7 @@ func AdmitAudioTranscript(in AudioTranscriptInput) (AdmitResult, error) {
 	}
 	transcript := strings.TrimSpace(in.Transcript)
 	if transcript == "" {
-		transcript = "（这段音频没有转写出可用文本）"
+		transcript = ASRFallbackText
 	}
 	hash := normalizeTranscriptHash(in.ContentHash, transcript)
 	rawURL := NormalizeURL(danglingAudioURLPrefix + hash)

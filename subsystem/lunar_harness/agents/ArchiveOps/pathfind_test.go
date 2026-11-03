@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/locator"
+	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
 
 func writeDocFile(t *testing.T, rel, content string) {
@@ -26,8 +26,8 @@ func writeDocFile(t *testing.T, rel, content string) {
 // TestOpsResolveByFileName 目标压缩包与来源文件都可以只写文件名。
 func TestOpsResolveByFileName(t *testing.T) {
 	prepareDocuments(t)
-	locator.Invalidate()
-	t.Cleanup(locator.Invalidate)
+	resourcehub.Invalidate()
+	t.Cleanup(resourcehub.Invalidate)
 
 	created := Create("/document/pkg.zip", []string{"a.txt"})
 	if !created.OK {
@@ -42,8 +42,8 @@ func TestOpsResolveByFileName(t *testing.T) {
 // TestOpsAmbiguousSource 同名来源文件必须返回候选列表而不是随意选择。
 func TestOpsAmbiguousSource(t *testing.T) {
 	prepareDocuments(t)
-	locator.Invalidate()
-	t.Cleanup(locator.Invalidate)
+	resourcehub.Invalidate()
+	t.Cleanup(resourcehub.Invalidate)
 
 	writeDocFile(t, "documents/notes/a.txt", "nested-alpha")
 	result := Create("/document/out.zip", []string{"a.txt"})

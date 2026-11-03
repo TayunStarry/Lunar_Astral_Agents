@@ -8,7 +8,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
-	"LunarSubsystem/LunarHarness/engine/model/modellease"
+	"LunarSubsystem/LunarHarness/protocol/modellease"
 )
 
 // prepareSearchModel 执行步骤 0 的模型切换：卸载主多模态模型并改用搜索模型。

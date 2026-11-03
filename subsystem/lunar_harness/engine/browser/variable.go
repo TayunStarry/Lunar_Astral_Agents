@@ -2,6 +2,7 @@ package browser
 
 import (
 	"sync"
+	"time"
 
 	webview "github.com/webview/webview_go"
 )
@@ -18,6 +19,11 @@ var (
 // defaultIconPath 非「月华/琉璃 前端专用窗口」统一使用的窗口图标。
 // 相对可执行文件目录；exe 输出在仓库根目录，故路径自仓库根起。
 const defaultIconPath = "subsystem/lunar_harness/icon.ico"
+
+// webViewCreateTimeout 创建可驱动会话的最长等待时间。
+// webview.New 在 WebView2 初始化异常时可能长时间不返回；没有这道上限时，
+// 搜索链路会卡在 OpenWebViewSession 的 <-created 上，整轮对话无法收尾。
+const webViewCreateTimeout = 15 * time.Second
 
 // iconPathOr 返回给定的图标路径；为空时回退默认图标
 func iconPathOr(iconPath string) string {

@@ -164,15 +164,3 @@ type pipelineDecision struct {
 	Args       map[string]any `json:"args,omitempty"`
 	Confidence *float64       `json:"confidence,omitempty"`
 }
-
-// modelUsage OpenAI 兼容响应中的 token 用量
-type modelUsage struct {
-	Prompt              int64               `json:"prompt_tokens"`
-	Completion          int64               `json:"completion_tokens"`
-	PromptTokensDetails *promptTokenDetails `json:"prompt_tokens_details,omitempty"`
-}
-
-// promptTokenDetails 输入 token 的细分（提示缓存命中数）
-type promptTokenDetails struct {
-	CachedTokens int64 `json:"cached_tokens"`
-}

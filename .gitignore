@@ -32,17 +32,18 @@ local_data/cache/
 local_data/database/
 local_data/audios/
 
+## 子系统测试/手工运行残留（目录级兜底）
+subsystem/**/local_data/
+
 ## 敏感凭证与平台私有配置（B 站 / QQ / Mutual Forum / Gitee 发布令牌；绝不入库、不上传）
-local_data/release.json
-local_data/bilibili_config.json
-local_data/bilibili_account.json
-local_data/bilibili_life.json
-local_data/napcat_config.json
-local_data/mutual_forum.json
-local_data/forum/
-local_data/package/lunar.search-weather/config.json
+local_data/config/release.json
+local_data/config/bilibili_config.json
+local_data/config/bilibili_account.json
+local_data/config/bilibili.json
+local_data/config/napcat.json
+local_data/config/forum.json
+local_data/config/layout.json
 docs/plans/cookies*.txt
-local_data/bili_login_qr.png
 bin/
 
 ## 系统文件

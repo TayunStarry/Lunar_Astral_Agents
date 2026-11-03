@@ -33,7 +33,7 @@ function quoteMessagePreview(msg) {
     }
     if (msg.imageSrc) return '[图片]';
     if (msg.videoSrc) return '[视频]';
-    if (msg.abcNotation) return '[乐谱]';
+    if (msg.categories && msg.categories.includes('music')) return '[音乐]';
     return '[消息]';
 }
 

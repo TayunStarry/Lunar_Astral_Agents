@@ -2,7 +2,7 @@ package BilibiliViewer
 
 // config.go 哔哩观影的配置读取：选片偏好与数量类参数。
 //
-// 用户参考词放在 local_data/bilibili_life.json（已 gitignore），
+// 用户参考词放在 local_data/config/bilibili.json（已 gitignore），
 // 不在代码里硬编码个人偏好；文件缺失时使用安全默认值。
 //
 // @ 目标不再来自配置：分享时从当前账号的「特别关注」列表里随机挑选。
@@ -52,7 +52,7 @@ func configPath() string {
 	if dir == "" {
 		dir = "local_data"
 	}
-	return filepath.Join(dir, "bilibili_life.json")
+	return filepath.Join(dir, "config", "bilibili.json")
 }
 
 // LoadConfig 读取用户参考词与数量参数；文件不存在或损坏时用默认值。

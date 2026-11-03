@@ -6,7 +6,7 @@ package DocumentReader
 // 失败通常来自文件本身，reset 只清理运行期标记。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {

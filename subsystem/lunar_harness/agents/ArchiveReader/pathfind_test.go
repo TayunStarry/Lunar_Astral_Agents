@@ -7,16 +7,16 @@ import (
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/locator"
+	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
 
 // TestResolveArchiveByPathForms 完整路径 / 相对路径 / 纯文件名定位到同一压缩包。
 func TestResolveArchiveByPathForms(t *testing.T) {
 	oldDir := config.LocalDir
 	config.LocalDir = t.TempDir()
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	t.Cleanup(func() {
-		locator.Invalidate()
+		resourcehub.Invalidate()
 		config.LocalDir = oldDir
 	})
 
@@ -36,9 +36,9 @@ func TestResolveArchiveByPathForms(t *testing.T) {
 func TestResolveArchiveAmbiguous(t *testing.T) {
 	oldDir := config.LocalDir
 	config.LocalDir = t.TempDir()
-	locator.Invalidate()
+	resourcehub.Invalidate()
 	t.Cleanup(func() {
-		locator.Invalidate()
+		resourcehub.Invalidate()
 		config.LocalDir = oldDir
 	})
 

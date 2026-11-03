@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/engine/agentrepair"
 	"LunarSubsystem/LunarHarness/prompts"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 // buildSystemPrompt 组装本次修复的系统提示词。

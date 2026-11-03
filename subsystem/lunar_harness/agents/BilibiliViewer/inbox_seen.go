@@ -25,7 +25,7 @@ var (
 	inboxSeenMu sync.Mutex
 	// inboxSeenFile 去重记录路径；测试可替换
 	inboxSeenFile = func() string {
-		return filepath.Join(localRoot(), "database", "bilibili_life", "inbox.json")
+		return filepath.Join(localRoot(), "database", "bilibili", "inbox.json")
 	}
 )
 

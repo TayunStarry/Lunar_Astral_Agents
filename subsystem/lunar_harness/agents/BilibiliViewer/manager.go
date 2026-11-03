@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // lifeManager 进程内唯一的观影管理器。
@@ -56,7 +56,7 @@ type runner struct {
 	finished    bool
 }
 
-// reloadConfigLocked 重新读取 bilibili_life.json（调用方需持有 m.mu）。
+// reloadConfigLocked 重新读取 config/bilibili.json（调用方需持有 m.mu）。
 func (m *lifeManager) reloadConfigLocked() {
 	m.cfg = LoadConfig()
 }
@@ -71,7 +71,7 @@ func localRoot() string {
 
 // stateDir 返回哔哩观影的落盘目录（已看/去重共用）。
 func stateDir() string {
-	return filepath.Join(localRoot(), "database", "bilibili_life")
+	return filepath.Join(localRoot(), "database", "bilibili")
 }
 
 // RunInstruction 启动一轮哔哩观影（同步完成启动阶段，观看阶段交给 Tick）。
@@ -85,7 +85,7 @@ func StartLifeRound(moodLabel string) (string, error) {
 }
 
 func runInstruction(instruction, mood string) (out string, err error) {
-	defer func() { Savior.ReportRun("bilibili", err) }()
+	defer func() { agentbase.ReportRun("bilibili", err) }()
 	manager.mu.Lock()
 	if manager.job != nil || manager.running {
 		manager.mu.Unlock()

@@ -3,7 +3,6 @@ package Savior
 // variable.go 故障队列与固定参数。
 
 import (
-	"net/http"
 	"sync"
 	"time"
 )
@@ -45,6 +44,4 @@ var (
 	cooldown = map[string]time.Time{}
 	// seq 故障编号
 	seq int64
-	// httpClient 非流式模型调用客户端
-	httpClient = &http.Client{Timeout: modelTimeout}
 )

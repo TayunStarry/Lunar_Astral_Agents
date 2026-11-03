@@ -9,13 +9,12 @@ package MutualForum
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // Ready 返回 Mutual Forum 是否应暴露给月华。
@@ -65,83 +64,82 @@ func Run(instruction string) (string, error) {
 		return "", err
 	}
 
-	messages := make([]chatMessage, 0, historyLimitMessages+8)
-	messages = append(messages, chatMessage{Role: "system", Content: systemPrompt})
-	messages = append(messages, historySnapshot()...)
-	messages = append(messages, chatMessage{Role: "user", Content: instruction})
+	messages := make([]agentbase.Message, 0, historyLimitMessages+8)
+	messages = append(messages, agentbase.Message{Role: "system", Content: systemPrompt})
+	for _, message := range historySnapshot() {
+		messages = append(messages, agentbase.Message{
+			Role:      message.Role,
+			Content:   message.Content,
+			ToolCalls: message.ToolCalls,
+		})
+	}
+	messages = append(messages, agentbase.Message{Role: "user", Content: instruction})
 
-	tools := forumTools()
 	lastSummary := ""
 	// 整轮只在 Run 开头/结尾各标记一次实况，多轮工具调用合并成同一轮；
 	// 否则每个工具轮次都会留下一条只有标题、没有内容的空实况。
+	observeBegin := func() { agentbase.BeginLive(roleLabel) }
+	observeEnd := func() { agentbase.EndLive(roleLabel) }
 	observeBegin()
 	defer observeEnd()
-	for round := 0; round < maxToolRounds; round++ {
-		response, callErr := chatWithTools(ctx, messages, tools, round)
-		if callErr != nil {
-			logger.Warn(roleLabel, "模型调用失败（第 %d 轮）: %v", round+1, callErr)
-			// 交给智能修复：论坛上下文过长或含脏数据时会持续复现
-			Savior.ReportRun("mutual_forum", callErr)
-			return "", fmt.Errorf("互助论坛模型调用失败: %w", callErr)
-		}
 
-		messages = append(messages, chatMessage{
-			Role:      "assistant",
-			Content:   response.Content,
-			ToolCalls: response.ToolCalls,
-		})
-
-		if len(response.ToolCalls) == 0 {
-			final := strings.TrimSpace(response.Content)
-			if final == "" {
-				if lastSummary != "" {
-					final = "互助论坛已执行：" + strings.TrimSuffix(lastSummary, "；")
-				} else {
-					final = "互助论坛没有生成可用的答复，请换一种说法再试一次。"
-				}
-			}
-			remember(instruction, final)
-			return final, nil
-		}
-
-		for _, call := range response.ToolCalls {
+	base := agentbase.NewAgent(agentbase.AgentConfig{
+		ID:                 "mutual_forum",
+		Label:              roleLabel,
+		MaxRounds:          maxToolRounds,
+		MaxRepeats:         -1, // 迁移前无跨轮重复检测，保持原有行为
+		MaxToolResultRunes: -1, // 工具结果原样回填 JSON
+	})
+	result, callErr := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{
+		Messages: messages,
+		Tools:    forumTools(),
+		Stream: agentbase.StreamRequest{
+			Agent:      "mutual_forum",
+			Role:       roleLabel,
+			Timeout:    modelTimeout,
+			ManageLive: true,
+		},
+		Execute: func(ctx context.Context, call agentbase.ToolCall) (string, bool, error) {
 			logger.Info(roleLabel, "[实况] 工具 %s（%s）", call.Function.Name, previewText(call.Function.Arguments, 200))
-			args, parseErr := parseToolArgs(call.Function.Arguments)
+			args, parseErr := agentbase.ParseToolArgs(call.Function.Arguments)
 			if parseErr != nil {
 				outcome := toolError(fmt.Errorf("工具 %s 的参数不是合法 JSON: %w", call.Function.Name, parseErr))
-				messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Content: outcome.JSON})
 				lastSummary += outcome.Summary + "；"
-				continue
+				return outcome.JSON, false, nil
 			}
 			outcome := executeTool(ctx, call.Function.Name, args)
-			messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Content: outcome.JSON})
 			lastSummary += outcome.Summary + "；"
+			return outcome.JSON, false, nil
+		},
+		// 保持原有「先日志、再上报」的时机。
+		DisableReport: true,
+	})
+	if callErr != nil {
+		if errors.Is(callErr, agentbase.ErrMaxRounds) {
+			final := "互助论坛在限定轮次内没有完成这次请求。"
+			if lastSummary != "" {
+				final += "已执行的步骤：" + strings.TrimSuffix(lastSummary, "；") + "。请换一种更具体的说法再试。"
+			}
+			remember(instruction, final)
+			logger.Warn(roleLabel, "工具轮次达到上限（%d），已停止继续调用", maxToolRounds)
+			return final, nil
+		}
+		logger.Warn(roleLabel, "模型调用失败（第 %d 轮）: %v", result.Rounds+1, callErr)
+		// 交给智能修复：论坛上下文过长或含脏数据时会持续复现
+		agentbase.ReportRun("mutual_forum", callErr)
+		return "", fmt.Errorf("互助论坛模型调用失败: %w", callErr)
+	}
+
+	final := strings.TrimSpace(result.Reply.Text)
+	if final == "" {
+		if lastSummary != "" {
+			final = "互助论坛已执行：" + strings.TrimSuffix(lastSummary, "；")
+		} else {
+			final = "互助论坛没有生成可用的答复，请换一种说法再试一次。"
 		}
 	}
-
-	final := "互助论坛在限定轮次内没有完成这次请求。"
-	if lastSummary != "" {
-		final += "已执行的步骤：" + strings.TrimSuffix(lastSummary, "；") + "。请换一种更具体的说法再试。"
-	}
 	remember(instruction, final)
-	logger.Warn(roleLabel, "工具轮次达到上限（%d），已停止继续调用", maxToolRounds)
 	return final, nil
-}
-
-// parseToolArgs 解析模型给出的 JSON 参数；空串视为空对象。
-func parseToolArgs(raw string) (map[string]any, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "null" {
-		return map[string]any{}, nil
-	}
-	var args map[string]any
-	if err := json.Unmarshal([]byte(raw), &args); err != nil {
-		return nil, err
-	}
-	if args == nil {
-		args = map[string]any{}
-	}
-	return args, nil
 }
 
 /* ---------------- 独立上下文 ---------------- */

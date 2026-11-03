@@ -76,7 +76,7 @@ function renderFileRefChips() {
 async function copyMessage(msg) {
     let text = msg.role === 'user' ? stripUserPrefix(msg.content) : (msg.content || '');
     if (!text && msg.imageSrc) text = msg.imageSrc;
-    if (!text && msg.abcNotation) text = msg.abcNotation;
+    if (!text && msg.musicTitle) text = msg.musicTitle;
     const ok = await copyToClipboard(text);
     showToast(ok ? '已复制' : '复制失败', ok ? 'success' : 'error');
 }

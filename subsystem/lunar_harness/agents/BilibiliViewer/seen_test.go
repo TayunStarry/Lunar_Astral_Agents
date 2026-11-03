@@ -31,7 +31,7 @@ func TestSeenMarkAndSnapshot(t *testing.T) {
 		t.Fatal("标记后应出现在已看快照里")
 	}
 	// 落盘：重新读文件也应存在
-	if _, err := os.Stat(filepath.Join(config.LocalDir, "database", "bilibili_life", "seen.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(config.LocalDir, "database", "bilibili", "seen.json")); err != nil {
 		t.Fatalf("已看记录未落盘: %v", err)
 	}
 

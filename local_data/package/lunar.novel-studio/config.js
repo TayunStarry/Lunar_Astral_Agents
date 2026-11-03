@@ -1,6 +1,6 @@
 /**
  * AI 配置管理模块
- * 本地部署固定使用同源 /agent 端点与固定模型名，不再读取 lunar_config.json。
+ * 本地部署固定使用同源 /agent 端点与固定模型名，不再读取 config/general.json。
  *
  * AI 调用始终走同源 /agent 路由，避免 CORS 问题。
  */

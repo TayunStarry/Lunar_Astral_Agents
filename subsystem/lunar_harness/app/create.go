@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/CrystalPersonality"
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
-	"LunarSubsystem/LunarHarness/agents/LunarPersonality"
 	"LunarSubsystem/LunarHarness/clients"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/browser"
@@ -15,9 +14,11 @@ import (
 	"LunarSubsystem/LunarHarness/engine/debugsnap"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
 	"LunarSubsystem/LunarHarness/engine/library"
+	"LunarSubsystem/LunarHarness/engine/ltpxhost"
+	"LunarSubsystem/LunarHarness/engine/protocolwire"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/websocket"
 	"LunarSubsystem/LunarHarness/server"
-	"LunarSubsystem/LunarHarness/transport/ws"
 )
 
 // Assemble 装配各子系统：传输层 → HTTP 服务 → 服务层（月华生产者 / 琉璃）→ 消费层（Go 对话链）。
@@ -26,13 +27,17 @@ import (
 // 消费层（月华对话链与 LTP9 插件沙箱）排在末段启动，
 // 保证其思考循环/插件加载之时，HTTP、llama 代理、记忆库与 LTPX 协调层均已就绪。
 func Assemble() {
+	// ==== protocol 配置注入：必须在任何智能体调用模型之前 ====
+	// protocol/agentbase 与 loopguard 只消费端点/阈值，不直接 import engine/config。
+	protocolwire.Wire()
+
 	// ==== 开发者模式告警快照：日志钩子装配 ====
 	// 必须在其他子系统之前接上：装配期出现的警告也应留下调试快照。
 	wireDebugSnapshot()
 
 	// ==== 传输层：统一 WebSocket 集线器 ====
-	ws.Instance = ws.NewHub()
-	go ws.Instance.Run()
+	websocket.Instance = websocket.NewHub()
+	go websocket.Instance.Run()
 	logger.Info("LunarHarness", "统一 WebSocket 集线器已启动")
 
 	// ==== 传输层：结构化广播 ====
@@ -40,12 +45,16 @@ func Assemble() {
 
 	// ==== 跨层注入：结构化广播 & 下行桥接 ====
 	// 智能体下行走结构化广播（type/data），QQ 桥接挂在结构化旁路上（原始字节广播不触发）
-	LunarPersonality.PushMessageFunc = ws.Instance.BroadcastMessage
-	ws.OnStructuredMessage = DialogueBridging.BridgeStructuredMessage
+	Dialogue.PushMessageFunc = websocket.Instance.BroadcastMessage
+	websocket.OnStructuredMessage = DialogueBridging.BridgeStructuredMessage
 
 	// ==== 跨层注入：资源库编辑状态实时推送 ====
-	// 文件编辑智能体每次操作都会写入资源库状态中心，这里把状态经同一条 /ws 推给前端。
-	library.SetBroadcast(ws.Instance.BroadcastMessage)
+	// 文件编辑智能体每次操作都会写入资源库状态中心，这里把状态只推给资源库前端。
+	// 必须按频道定向投递：library_edit 是编辑器状态事件，不是聊天消息；
+	// 若走全量广播，消息终端会把无法识别的结构体当成内容渲染到聊天记录里。
+	library.SetBroadcast(func(msgType string, data any) {
+		websocket.Instance.BroadcastMessageToChannel(libraryTerminalChannel, msgType, data)
+	})
 
 	// ==== 前端静态资源：消息终端 / 移动端 / 琉璃桌面 / 资源库 ====
 	StaticRootsProvider = func() server.StaticRoots {
@@ -85,12 +94,12 @@ func Assemble() {
 	// 月华的机制运行不依赖前端（前端仅显示与记录），但琉璃与 LTPX 的功能实现依托前端
 	// （ltpx_call 派发与 LTP9 插件沙箱都在琉璃桌面页面执行）。LTPX 调用发生而琉璃前端
 	// 已被关闭时，守护经唤起器重建桌面窗口，并等待其重新接入总线后再广播。
-	CrystalPersonality.SetFrontendRelauncher(func() error {
+	ltpxhost.SetFrontendRelauncher(func() error {
 		// 重启语义：窗口可能残留死条目（Run 未返回）或页面已断连，需重载/重建
 		return browser.RestartDesktopWindow(crystalWindowSpec())
 	})
-	CrystalPersonality.SetFrontendReadyProbe(func() bool {
-		return ws.Instance != nil && ws.Instance.ChannelBusCount(ws.DefaultBusChannel) > 0
+	ltpxhost.SetFrontendReadyProbe(func() bool {
+		return websocket.Instance != nil && websocket.Instance.ChannelBusCount(websocket.DefaultBusChannel) > 0
 	})
 
 	// ==== TTS 闲置卸载守护：在位引擎 5 分钟无合成调用即卸载模型占用 ====
@@ -192,8 +201,8 @@ func GracefulShutdown(reason string) {
 		if err := knowledge.Close(); err != nil {
 			logger.Warn("LunarHarness", "关闭知识库与领域数据库失败: %v", err)
 		}
-		if ws.Instance != nil {
-			ws.Instance.CloseAll()
+		if websocket.Instance != nil {
+			websocket.Instance.CloseAll()
 		}
 	}()
 

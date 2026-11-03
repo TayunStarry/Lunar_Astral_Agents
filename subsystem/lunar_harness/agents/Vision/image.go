@@ -6,8 +6,8 @@ package Vision
 // 原图字节不出 Go 侧（见 docs/adr/0008）。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/model/agentchat"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // describeStaticImage 观看一张静态图片并返回描述
@@ -16,19 +16,19 @@ func describeStaticImage(res resource.Resource, abs, question string) (string, e
 	if err != nil {
 		return "", err
 	}
-	system := agentchat.PromptText("visionImageRole.md")
+	system := agentbase.PromptText("visionImageRole.md")
 	task := imageTask(question)
-	messages := []agentchat.Message{
+	messages := []agentbase.Message{
 		{Role: "system", Content: system},
 		{
 			Role: "user",
-			Content: []agentchat.ContentPart{
+			Content: []agentbase.ContentPart{
 				{Type: "text", Text: task},
-				{Type: "image_url", ImageURL: &agentchat.ImageURL{URL: uri}},
+				{Type: "image_url", ImageURL: &agentbase.ImageURL{URL: uri}},
 			},
 		},
 	}
-	text, err := agentchat.ChatWithRetry(roleLabel, messages, nil, res.Handle)
+	text, err := agentbase.ChatWithRetry(roleLabel, messages, nil, res.Handle)
 	if err != nil {
 		return "", err
 	}
@@ -41,7 +41,7 @@ func describeStaticImage(res resource.Resource, abs, question string) (string, e
 // imageTask 构建图片描述任务
 func imageTask(question string) string {
 	if question != "" {
-		return agentchat.RenderPrompt(agentchat.PromptText("visionImageQuestionTask.md"), "{question}", question)
+		return agentbase.RenderPrompt(agentbase.PromptText("visionImageQuestionTask.md"), "{question}", question)
 	}
-	return agentchat.PromptText("visionImageTask.md")
+	return agentbase.PromptText("visionImageTask.md")
 }

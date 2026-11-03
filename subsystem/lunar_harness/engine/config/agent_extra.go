@@ -2,7 +2,7 @@ package config
 
 // 月华对话链（Go 原生实现）需要的补充配置。
 //
-// 这些字段原本由 TypeScript 侧直接读取 lunar_config.json 的原始 JSON；
+// 这些字段原本由 TypeScript 侧直接读取 config/general.json 的原始 JSON；
 // 迁移为 Go 原生链后统一在配置层解析并导出，避免运行期再各读一遍配置文件。
 
 var (

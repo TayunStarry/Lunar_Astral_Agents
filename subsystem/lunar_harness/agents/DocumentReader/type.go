@@ -120,3 +120,19 @@ type docContext struct {
 	// Chunks 分批处理计划
 	Chunks []chunkSpan
 }
+
+// folderFile 目录读取扫描到的单个文件。
+type folderFile struct {
+	// Rel 相对目录根的路径
+	Rel string
+	// Size 字节数
+	Size int64
+	// Lines 文本行数（二进制为 0）
+	Lines int
+	// Head 首个非空行（用于结构化预览）
+	Head string
+	// Text 是否按文本处理
+	Text bool
+	// Large 是否超过单文件预览上限
+	Large bool
+}

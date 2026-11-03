@@ -135,7 +135,6 @@
 .message-category-badge.badge-image { background: var(--badge-image-bg); color: var(--badge-image-color); }
 .message-category-badge.badge-voice { background: var(--badge-voice-bg); color: var(--badge-voice-color); }
 .message-category-badge.badge-music { background: var(--badge-music-bg); color: var(--badge-music-color); }
-.message-category-badge.badge-action { background: var(--badge-action-bg); color: var(--badge-action-color); }
 
 /* ========== 操作按钮 ========== */
 .message-actions-panel {
@@ -253,11 +252,4 @@
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
-}
-
-/* ========== 行动消息 ========== */
-.action-message .markdown-content {
-    border-left: 3px solid var(--badge-action-color);
-    padding-left: 12px;
-    font-style: italic;
 }

@@ -26,11 +26,12 @@ function handleWebSocketMessage(msg) {
         const audio = data.audio || '';
 
         if (subType === 'music') {
-            addMessage({ id: generateId(), role: 'assistant', categories: ['music'], content: '', abcNotation: content, timestamp: Date.now() });
-            return;
-        }
-        if (subType === 'action') {
-            addMessage({ id: generateId(), role: 'assistant', categories: ['action'], content, actionType: subType, timestamp: Date.now() });
+            // 后端已渲染演奏音频：统一携带音频地址与标题 / 描述 / 时长
+            addMessage({
+                id: generateId(), role: 'assistant', categories: ['music'], content: '',
+                musicAudio: audio, musicTitle: data.title || '', musicSummary: data.summary || '',
+                musicDuration: Number(data.duration) || 0, timestamp: Date.now()
+            });
             return;
         }
 

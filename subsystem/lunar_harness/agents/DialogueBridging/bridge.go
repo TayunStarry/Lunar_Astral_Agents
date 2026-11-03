@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// LoadBridgingConfig 从专用配置文件 napcat_config.json 加载桥接器配置。
+// LoadBridgingConfig 从专用配置文件 config/napcat.json 加载桥接器配置。
 func LoadBridgingConfig(configPath string) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -129,9 +129,8 @@ func HandleAgentResponse(msgType string, content string, auto bool) {
 	}
 	flowMutex.Unlock()
 
-	// 乐谱消息不转发
+	// 音乐消息由结构化旁路单独转发（见 HandleAgentMusicResponse），这里不再重复处理
 	if msgType == "music" {
-		logger.SubInfo("LunarCore", "Napcat", "乐谱消息已拦截，跳过转发")
 		return
 	}
 	if GetBridgeState() != BridgeConnected {
@@ -157,6 +156,38 @@ func HandleAgentImageResponse(images []string) {
 		return
 	}
 	dispatchImage(target, images)
+}
+
+// HandleAgentMusicResponse 处理智能体的音乐回应，转发到对应会话目标。
+// 与文本/图片一致：只有当前存在 QQ 请求（awaitingResponse）时才落到 QQ；
+// 前端收到的仍是同一条结构化广播，不在这里重新生成或重新渲染。
+func HandleAgentMusicResponse(audio, title, summary string, duration float64) {
+	flowMutex.Lock()
+	if !awaitingResponse {
+		// Web 端会话或没有待回应的 QQ 请求，不转发
+		flowMutex.Unlock()
+		return
+	}
+	target := currentTarget
+	responseStarted = true
+	flowMutex.Unlock()
+
+	if GetBridgeState() != BridgeConnected {
+		logger.SubInfo("LunarCore", "Napcat", "桥接器未连接，跳过音乐转发")
+		return
+	}
+	dispatchMusic(target, audio, title, summary, duration)
+}
+
+// dispatchMusic 将演奏音频转发到目标会话：优先语音条，失败降级为文字 + 音频文件。
+func dispatchMusic(target BridgeTarget, audio, title, summary string, duration float64) {
+	if err := sendQQMusic(target, audio, title, summary, duration); err != nil {
+		where := "群"
+		if !target.IsGroup {
+			where = "用户"
+		}
+		logger.SubError("LunarCore", "Napcat", "转发音乐到%s %d 失败: %v", where, target.ID, err)
+	}
 }
 
 // dispatchText 将文本回应转发到目标会话

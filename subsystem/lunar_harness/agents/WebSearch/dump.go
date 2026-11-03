@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/agentdump"
+	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
 type lastSearchRecord struct {

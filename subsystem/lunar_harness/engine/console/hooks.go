@@ -26,7 +26,7 @@ func SetFrontendHooks(lunarProbe, crystalProbe, libraryProbe func() bool,
 // ==== 更新包配置注入 ====
 
 var (
-	// updatePackCfg 更新包功能配置（宿主从 local_data/release.json 读取注入）
+	// updatePackCfg 更新包功能配置（宿主从 local_data/config/release.json 读取注入）
 	updatePackCfg *updatepack.Config
 )
 
