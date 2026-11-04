@@ -232,8 +232,8 @@ func buildContext(snapshot Snapshot, review Review) string {
 // preview 截断预期片段，避免错误信息过长。
 func preview(text string) string {
 	runes := []rune(strings.TrimSpace(text))
-	if len(runes) <= 80 {
+	if len(runes) <= 512 {
 		return string(runes)
 	}
-	return string(runes[:80]) + "…"
+	return string(runes[:512]) + "…"
 }

@@ -64,7 +64,7 @@ func detectOutline(doc *docContext) []outlineItem {
 		items = append(items, outlineItem{
 			Start: index + 1,
 			Level: level,
-			Label: truncateRunes(label, 100),
+			Label: truncateRunes(label, 512),
 		})
 		if len(items) >= maxOutlineItems {
 			break

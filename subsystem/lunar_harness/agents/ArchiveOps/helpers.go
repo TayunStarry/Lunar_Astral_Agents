@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/agents/ArchiveReader"
+	"LunarSubsystem/LunarHarness/executors/ArchiveReader"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 

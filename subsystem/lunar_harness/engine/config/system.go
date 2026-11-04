@@ -23,17 +23,6 @@ var (
 	LoopSimilarity   = 0.0
 )
 
-// 对话者聚合工具意图检测参数。
-//
-// 阈值按「用户意图向量 ↔ 聚合工具语义向量」的余弦相似度判定；
-// 检测异步执行并带超时，模型不可用时回退到原有正则规则。
-var (
-	DialogueToolIntentEnabled   = true
-	DialogueToolIntentThreshold = 0.58
-	DialogueToolIntentTimeoutMS = 2000
-	DialogueToolIntentMinRunes  = 2
-)
-
 // 系统运行状态变量
 var (
 	// ModelReady 表示模型是否准备就绪的状态标识，0 可表示未准备就绪。

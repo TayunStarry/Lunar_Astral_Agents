@@ -2,17 +2,18 @@ package resourcehub
 
 // memory.go memory 模式：只检索长期记忆库，不混入资源目录或句柄查询。
 //
-// 语义与对话者原有实现保持一致：向量检索优先，数量不足时用关键词检索补足；
-// 命中结果按相关度排序，并标注角色 / 时间 / 相关度，便于模型判断可信度。
+// 检索方式为混合检索：向量（嵌入语义）与关键词（字面/正则）两路并行召回，
+// 同一记忆去重后按「综合相关度」排序；嵌入服务不可用时自动降级为关键词结果。
+// 命中结果标注角色 / 时间 / 相关度 / 命中来源，便于模型判断可信度。
 
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/memory"
 )
 
@@ -41,9 +42,12 @@ func runMemory(ctx context.Context, q Query) Result {
 	lines := make([]string, 0, len(hits))
 	for index, hit := range hits {
 		meta := fmt.Sprintf("角色=%s｜时间=%s｜相关度=%.3f", roleLabel(hit.Role), formatMemoryTime(hit.Timestamp), hit.Similarity)
+		if label := memoryMatchLabel(hit.MatchedBy); label != "" {
+			meta += "｜命中=" + label
+		}
 		lines = append(lines, fmt.Sprintf("[%d] %s\n%s", index+1, meta, previewRunes(hit.Content, previewRunesLimit)))
 	}
-	text := fmt.Sprintf("检索到 %d 条相关记忆：\n%s", len(hits), strings.Join(lines, "\n\n"))
+	text := fmt.Sprintf("检索到 %d 条相关记忆（向量 + 关键词融合，按综合相关度排序）：\n%s", len(hits), strings.Join(lines, "\n\n"))
 	text += "\n\n只依据以上原文回答；原文不足以回答用户问题时，直接说明不记得/没有找到相关信息，不要编造，也不要改用 handle 模式现场读取。"
 	return Result{Text: text, Handle: []string{}}
 }
@@ -66,129 +70,49 @@ func ensureMemoryReady() bool {
 	return true
 }
 
-// searchMemory 向量检索 + 关键词补足，按相关度去重排序
+// searchMemory 向量 + 关键词双路并行召回，融合去重后按综合相关度排序
 func searchMemory(ctx context.Context, keywords []string, topK int) []memory.Entry {
-	merged := map[string]memory.Entry{}
-	order := make([]string, 0)
-	for _, keyword := range keywords {
-		results, err := memory.Query(ctx, keyword, "text", topK, memory.QueryOptions{})
-		if err != nil {
-			continue
-		}
-		for _, item := range results {
-			content := strings.TrimSpace(item.Content)
-			if content == "" || item.ID == "" {
-				continue
-			}
-			item.Content = content
-			if existing, ok := merged[item.ID]; !ok {
-				merged[item.ID] = item
-				order = append(order, item.ID)
-			} else if item.Similarity > existing.Similarity {
-				merged[item.ID] = item
-			}
-		}
-	}
-	hits := make([]memory.Entry, 0, len(order))
-	for _, id := range order {
-		hits = append(hits, merged[id])
-	}
-	sort.SliceStable(hits, func(i, j int) bool {
-		return hits[i].Similarity > hits[j].Similarity
-	})
-	if len(hits) > topK {
-		hits = hits[:topK]
-	}
-	if len(hits) >= topK {
-		return hits
-	}
-	// 关键词补足：向量检索不足时，用原文关键词再找一轮
-	known := make(map[string]bool, len(hits))
-	for _, hit := range hits {
-		known[hit.ID] = true
-	}
-	fallback := keywordFallback(keywords, topK, known)
-	hits = append(hits, fallback...)
-	if len(hits) > topK {
-		hits = hits[:topK]
-	}
-	return hits
-}
-
-// keywordFallback 关键词检索补足（去重向量命中，按命中次数与时间排序）
-func keywordFallback(keywords []string, topK int, known map[string]bool) []memory.Entry {
-	terms := keywordTerms(keywords)
-	if len(terms) == 0 {
+	results, err := memory.HybridQuery(ctx, keywords, "text", topK, memory.HybridQueryOptions{})
+	if err != nil {
+		logger.Warn("FileManager", "[记忆检索] 混合检索失败: %v", err)
 		return nil
 	}
-	type entry struct {
-		hit      memory.Entry
-		hitCount int
+	return dedupeMemoryContent(results, topK)
+}
+
+// dedupeMemoryContent 同一正文只保留融合分最高的一条（入参已按融合分排序）
+func dedupeMemoryContent(results []memory.Entry, limit int) []memory.Entry {
+	if len(results) == 0 {
+		return results
 	}
-	merged := map[string]entry{}
-	order := make([]string, 0)
-	for _, term := range terms {
-		results, err := memory.KeywordSearch("text", []string{term}, false, topK*2)
-		if err != nil {
+	seen := make(map[string]bool, len(results))
+	hits := make([]memory.Entry, 0, len(results))
+	for _, item := range results {
+		content := strings.TrimSpace(item.Content)
+		if content == "" || seen[content] {
 			continue
 		}
-		for _, item := range results {
-			content := strings.TrimSpace(item.Content)
-			if content == "" || item.ID == "" || known[item.ID] {
-				continue
-			}
-			item.Content = content
-			if existing, ok := merged[item.ID]; ok {
-				existing.hitCount++
-				merged[item.ID] = existing
-			} else {
-				merged[item.ID] = entry{hit: item, hitCount: 1}
-				order = append(order, item.ID)
-			}
+		seen[content] = true
+		item.Content = content
+		hits = append(hits, item)
+		if len(hits) >= limit {
+			break
 		}
 	}
-	hits := make([]memory.Entry, 0, len(order))
-	for _, id := range order {
-		hits = append(hits, merged[id].hit)
-	}
-	sort.SliceStable(hits, func(i, j int) bool {
-		left, right := merged[hits[i].ID], merged[hits[j].ID]
-		if right.hitCount != left.hitCount {
-			return right.hitCount > left.hitCount
-		}
-		return right.hit.Timestamp > left.hit.Timestamp
-	})
 	return hits
 }
 
-// keywordTerms 把查询拆成适合原文检索的短词
-func keywordTerms(keywords []string) []string {
-	terms := make([]string, 0)
-	seen := map[string]bool{}
-	for _, keyword := range keywords {
-		text := strings.TrimSpace(keyword)
-		if text == "" {
-			continue
-		}
-		if len([]rune(text)) <= 20 {
-			if !seen[text] {
-				seen[text] = true
-				terms = append(terms, text)
-			}
-			continue
-		}
-		for _, part := range strings.Fields(text) {
-			word := strings.TrimSpace(part)
-			if len([]rune(word)) >= 2 && !seen[word] {
-				seen[word] = true
-				terms = append(terms, word)
-			}
-		}
+// memoryMatchLabel 命中来源中文名
+func memoryMatchLabel(matchedBy string) string {
+	switch matchedBy {
+	case memory.MatchedByBoth:
+		return "双路"
+	case memory.MatchedByVector:
+		return "向量"
+	case memory.MatchedByKeyword:
+		return "关键词"
 	}
-	if len(terms) > 8 {
-		terms = terms[:8]
-	}
-	return terms
+	return ""
 }
 
 // roleLabel 记忆角色中文名

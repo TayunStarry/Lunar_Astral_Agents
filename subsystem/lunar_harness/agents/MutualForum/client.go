@@ -75,14 +75,14 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 				Status:  resp.StatusCode,
 				Code:    "not_found_html",
 				Message: "论坛接口返回 404，响应体不是 JSON（可能被前置服务器改写）",
-				Details: map[string]any{"body": truncateText(string(raw), 160)},
+				Details: map[string]any{"body": truncateText(string(raw), 512)},
 			}
 		}
 		return nil, &APIError{
 			Status:  resp.StatusCode,
 			Code:    "bad_response",
 			Message: "论坛接口响应不是合法 JSON",
-			Details: map[string]any{"body": truncateText(string(raw), 160)},
+			Details: map[string]any{"body": truncateText(string(raw), 512)},
 		}
 	}
 

@@ -59,7 +59,7 @@ func IngestAudio(source, name, origin string) (string, string, error) {
 		logger.Warn(audioModule, "[语音] 悬空句柄登记失败: %v", err)
 		return "", text, err
 	}
-	logger.Info(audioModule, "[语音] 已转写并登记音频句柄 %s（%s）", result.Handle, truncateRunes(text, 80))
+	logger.Info(audioModule, "[语音] 已转写并登记音频句柄 %s（%s）", result.Handle, truncateRunes(text, 512))
 	return result.Handle, text, nil
 }
 

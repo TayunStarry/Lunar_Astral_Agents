@@ -19,9 +19,10 @@ import (
 )
 
 // Render 把解码后的乐谱写成 MIDI 并渲染 WAV。
+// 产物文件名带版本前缀，避免复用旧版未归一化音频；渲染完成后统一做静音裁剪与响度归一化。
 func Render(score *parsedScore, source string) (RenderResult, error) {
 	result := RenderResult{Source: source}
-	name := ScoreFingerprint(score) + ".wav"
+	name := renderFileNameVersion + ScoreFingerprint(score) + ".wav"
 	outputDir := config.MusicOutputDir
 	if outputDir == "" {
 		outputDir = filepath.Join(config.LocalDir, "audios")
@@ -32,6 +33,10 @@ func Render(score *parsedScore, source string) (RenderResult, error) {
 	result.DurationSeconds = scoreDurationSeconds(score)
 
 	if info, statErr := os.Stat(wavPath); statErr == nil && info.Size() > 0 {
+		// 缓存命中：以真实音频时长覆盖估算值
+		if report, reportErr := InspectAudio(wavPath); reportErr == nil && report.Seconds > 0 {
+			result.DurationSeconds = report.Seconds
+		}
 		return result, nil
 	}
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
@@ -45,6 +50,10 @@ func Render(score *parsedScore, source string) (RenderResult, error) {
 	if err := renderWithFluidsynth(midiPath, wavPath); err != nil {
 		result.AudioURL = ""
 		return result, err
+	}
+	// 渲染端收尾：裁剪首尾近静音并按 RMS 归一化，失败时保留原音频
+	if report, normalizeErr := normalizeWAV(wavPath); normalizeErr == nil && report.Seconds > 0 {
+		result.DurationSeconds = report.Seconds
 	}
 	return result, nil
 }
@@ -228,10 +237,14 @@ func renderWithFluidsynth(midiPath, wavPath string) error {
 	command := exec.CommandContext(ctx, engine,
 		"-i",
 		"-T", "wav",
-		"-r", "44100",
-		"-g", "1.0",
+		"-r", renderSampleRate,
+		// 增益低于默认 1.0：避免多声部叠加时 16bit 写出即削波，响度由后处理归一化补回
+		"-g", renderGain,
+		// 保留混响但压低强度，关闭合唱以免糊音
 		"-o", "synth.reverb.active=1",
-		"-o", "synth.chorus.active=1",
+		"-o", "synth.reverb.room-size="+renderReverbRoom,
+		"-o", "synth.reverb.level="+renderReverbLevel,
+		"-o", "synth.chorus.active=0",
 		"-F", wavPath,
 		soundfont,
 		midiPath,

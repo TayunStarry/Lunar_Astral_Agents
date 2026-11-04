@@ -22,7 +22,7 @@ func planSend(instruction string, groups []QQGroup, friends []QQFriend) (sendPla
 	}
 	var plan sendPlan
 	if err := json.Unmarshal([]byte(extractJSONObject(text)), &plan); err != nil {
-		return sendPlan{}, fmt.Errorf("解析投递计划失败: %w（模型输出：%s）", err, truncate(text, 160))
+		return sendPlan{}, fmt.Errorf("解析投递计划失败: %w（模型输出：%s）", err, truncate(text, 512))
 	}
 	plan.normalize()
 	return plan, nil

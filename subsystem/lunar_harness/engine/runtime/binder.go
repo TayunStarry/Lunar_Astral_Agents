@@ -1,7 +1,7 @@
 package runtime
 
 // ==== 运行时沙箱顶层全局绑定（能力全量注入，无权限开关） ====
-// 契约见 prompts/runtimeAPI.d.ts 及按能力拆分的 prompts/*API.d.ts。
+// 契约见 prompts/runtimeAPI/runtimeAPI.d.ts 及按能力拆分的 prompts/runtimeAPI/*API.d.ts。
 
 import (
 	"fmt"

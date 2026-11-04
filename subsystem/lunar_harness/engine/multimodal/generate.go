@@ -26,15 +26,8 @@ func StartTaskProcessor() {
 }
 
 // CreateGenerateTask 创建生成任务
-//
-// scheme 为请求指定的绘图模型方案；空串或未知值回落到 Go 层当前方案。
-// 方案在入队时固化为任务字段，避免排队期间切换方案导致同一任务前后不一致。
-func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool, scheme string) (*GenerateTask, int) {
+func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool) (*GenerateTask, int) {
 	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
-	schemeName := config.NormalizeDiffusionSchemeName(scheme)
-	if schemeName == "" {
-		schemeName = config.CurrentDiffusionSchemeName()
-	}
 	task := &GenerateTask{
 		ID:                   taskID,
 		Prompt:               prompt,
@@ -48,7 +41,6 @@ func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height,
 		CfgScale:             cfgScale,
 		InitImg:              initImg,
 		AllowSuperResolution: allowSuperResolution,
-		Scheme:               schemeName,
 		CreatedAt:            time.Now(),
 		Status:               "queued",
 	}
@@ -76,9 +68,8 @@ func ProcessTask(task GenerateTask) {
 	task.Status = "running"
 	TaskStatus[taskID] = &task
 	TaskStatusMu.Unlock()
-	// 模型方案快照：任务创建时已固化方案名，这里按任务取成套模型路径，
-	// 排队期间前端/智能体切换方案不会改变本任务实际使用的模型。
-	scheme := config.ResolveDiffusionScheme(task.Scheme)
+	// 模型路径按启动时应用的默认方案解析（运行期不再切换方案）。
+	scheme := config.ResolveDiffusionScheme()
 	schemeLabel := scheme.Name
 	if schemeLabel == "" {
 		schemeLabel = "默认（扁平配置）"
@@ -416,8 +407,8 @@ func GenerateImage(prompt, negativePrompt string, batchSize, width, height, step
 		return nil, fmt.Errorf("提示词不能为空")
 	}
 
-	// 创建任务（未指定方案时由 CreateGenerateTask 固化当前方案）
-	task, _ := CreateGenerateTask(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, allowSuperResolution, "")
+	// 创建任务（模型路径在任务执行时按启动时应用的默认方案解析）
+	task, _ := CreateGenerateTask(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, allowSuperResolution)
 
 	if task == nil {
 		return nil, fmt.Errorf("任务队列已满")
@@ -466,8 +457,8 @@ func UpscaleImage(imageData []byte) (map[string]any, error) {
 	if len(imageData) == 0 {
 		return nil, fmt.Errorf("图片数据为空")
 	}
-	// 超分模型跟随当前绘图方案（未配置方案时回退扁平配置）
-	upscaleModel := config.ResolveDiffusionScheme("").RealESRGANModel
+	// 超分模型跟随启动时应用的默认方案（未配置方案时回退扁平配置）
+	upscaleModel := config.ResolveDiffusionScheme().RealESRGANModel
 	if strings.TrimSpace(upscaleModel) == "" {
 		return nil, fmt.Errorf("未配置超分模型（real_esrgan_model）")
 	}

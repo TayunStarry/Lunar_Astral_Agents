@@ -3,6 +3,7 @@ package Painter
 // tools.go 绘制者工具声明。
 
 import (
+	"maps"
 	"sort"
 	"strings"
 
@@ -60,7 +61,7 @@ func toolDefinitions() []agentbase.ToolDefinition {
 		"enum":        []string{"1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"},
 		"description": "画面比例预设。人物/物品用 2:3 或 3:4，风景/横构图用 3:2 或 16:9，方形构图用 1:1",
 	}
-	stepsParam := map[string]any{"type": "number", "description": "迭代步数，取值 8~60：quality 方案建议 30~60；turbo 方案建议 8~12。省略时使用当前模型方案的推荐步数"}
+	stepsParam := map[string]any{"type": "number", "description": "迭代步数，取值 8~60，省略时使用绘图配置的推荐步数"}
 	negativeParam := map[string]any{"type": "string", "description": "负面提示文本，用于排除不希望出现的元素"}
 	cfgParam := map[string]any{"type": "number", "description": "提示词引导系数（0~2），默认 1.0。当前为引导蒸馏模型，保持 1.0"}
 	superParam := map[string]any{"type": "boolean", "description": "生成完成后追加 RealESRGAN 超分辨率重建（4x）"}
@@ -125,10 +126,6 @@ func toolDefinitions() []agentbase.ToolDefinition {
 				"cfg_scale":        cfgParam,
 				"super_resolution": superParam,
 			}, []string{"roles"}),
-		functionTool("switch_diffusion_scheme",
-			"切换后续绘图使用的模型方案。quality=质量优先；turbo=速度优先。",
-			map[string]any{"scheme": map[string]any{"type": "string", "enum": []string{"turbo", "quality"}, "description": "目标方案"}},
-			[]string{"scheme"}),
 		functionTool("list_images",
 			"查看资源目录中最近的图片句柄与内容描述。",
 			map[string]any{}, []string{}),
@@ -158,9 +155,7 @@ func functionTool(name, description string, properties map[string]any, required 
 // mergeParam 在参数描述后追加语境说明。
 func mergeParam(base map[string]any, suffix string) map[string]any {
 	result := make(map[string]any, len(base)+1)
-	for key, value := range base {
-		result[key] = value
-	}
+	maps.Copy(result, base)
 	result["description"] = base["description"].(string) + suffix
 	return result
 }

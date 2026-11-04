@@ -38,9 +38,9 @@ const (
 	// documentReadBytes 文档整篇取回的字节上限
 	documentReadBytes = 12000
 	// previewRunesLimit 结果预览的最大字符数
-	previewRunesLimit = 400
+	previewRunesLimit = 512
 	// listSummaryRunes 列表摘要的最大字符数
-	listSummaryRunes = 80
+	listSummaryRunes = 512
 )
 
 var (

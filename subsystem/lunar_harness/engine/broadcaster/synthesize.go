@@ -109,7 +109,7 @@ func synthPayload(engine, audio string, elapsedMS int64, cached bool) map[string
 	}
 }
 
-// SynthesizeBase64 进程内合成入口：返回 base64 WAV 音频（Go 对话链语音合成使用）
+// SynthesizeBase64 进程内合成入口：返回 base64 WAV 音频（Go 思维链语音合成使用）
 func SynthesizeBase64(req TTSRequest) (string, error) {
 	payload, status := Synthesize(req)
 	if status != http.StatusOK {

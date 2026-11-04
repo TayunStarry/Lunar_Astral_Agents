@@ -191,7 +191,7 @@ func (d *Store) postTagRequest(ctx context.Context, messages []chatMessage) ([]s
 	rawContent := strings.TrimSpace(chatResp.Choices[0].Message.Content)
 	if rawContent == "" {
 		if reasoning := strings.TrimSpace(chatResp.Choices[0].Message.ReasoningContent); reasoning != "" {
-			return nil, fmt.Errorf("LLM 返回空内容（仅推理内容: %s）", truncateForLog(reasoning, 120))
+			return nil, fmt.Errorf("LLM 返回空内容（仅推理内容: %s）", truncateForLog(reasoning, 512))
 		}
 		return nil, fmt.Errorf("LLM 返回空内容")
 	}
@@ -199,7 +199,7 @@ func (d *Store) postTagRequest(ctx context.Context, messages []chatMessage) ([]s
 	// 解析 JSON 数组：尝试从响应中提取 ["标签1","标签2",...]
 	tags, err := parseTagsJSON(rawContent)
 	if err != nil {
-		return nil, fmt.Errorf("解析标签失败: %w (原始响应: %s)", err, truncateForLog(rawContent, 100))
+		return nil, fmt.Errorf("解析标签失败: %w (原始响应: %s)", err, truncateForLog(rawContent, 512))
 	}
 
 	return tags, nil

@@ -6,7 +6,6 @@ package desktop
 // 项目所有包级变量/常量统一在此声明，禁止与业务逻辑混在同一文件。
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"syscall"
@@ -67,24 +66,9 @@ var dtBuiltinPrograms = map[string]string{
 	"mspaint":  "mspaint.exe",
 }
 
-// runMu 保护运行状态与取消句柄（同一时间只允许一个任务）。
-var runMu sync.Mutex
-
-// runCancel 取消当前运行中的任务（nil 表示没有任务在运行）。
-var runCancel context.CancelFunc
-
-// runDone 当前任务的退出信号；任务 goroutine 在真正收尾时关闭。
-var runDone chan struct{}
-
-// runSeq 运行代次：强制结束后递增，用于忽略旧任务迟到的收尾。
-var runSeq int64
-
-// runState 当前/最近一次运行状态。
-var runState RunState
+// 运行状态（Start / Stop / Snapshot）已上移到 chain/desktop，由桌控链统一维护。
 
 const (
-	// stopWaitTimeout 请求中断后等待任务自行退出的时长；超时则强制收尾。
-	stopWaitTimeout = 4 * time.Second
 	// desktopCallTimeout 单个桌面原语（UIA / 键鼠 / 截图）的最长执行时间。
 	desktopCallTimeout = 10 * time.Second
 	// uiaDumpTimeout 读取 UIA 树的最长执行时间。

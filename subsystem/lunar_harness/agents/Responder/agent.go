@@ -96,7 +96,7 @@ func respondOne(stats *drainContext, req *Request) bool {
 	if preview == "" {
 		preview = strings.TrimSpace(result.Reasoning)
 	}
-	logger.Info(roleLabel, "[通用应答] 推理完成：%s", previewRunes(preview, 80))
+	logger.Info(roleLabel, "[通用应答] 推理完成：%s", previewRunes(preview, 512))
 	return true
 }
 
@@ -128,7 +128,7 @@ func toolCallDigest(raw json.RawMessage) string {
 	}
 	lines := make([]string, 0, len(calls))
 	for _, call := range calls {
-		lines = append(lines, "→ 调用工具 "+call.Function.Name+"："+previewRunes(call.Function.Arguments, 100))
+		lines = append(lines, "→ 调用工具 "+call.Function.Name+"："+previewRunes(call.Function.Arguments, 512))
 	}
 	return strings.Join(lines, "\n")
 }

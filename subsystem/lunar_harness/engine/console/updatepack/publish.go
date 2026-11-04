@@ -216,7 +216,7 @@ func createRelease(cfg Config, version, body string) (int64, error) {
 		return 0, fmt.Errorf("解析 Release 响应失败: %w", err)
 	}
 	if release.ID == 0 {
-		return 0, fmt.Errorf("Release 创建异常: %s", truncate(string(resp), 300))
+		return 0, fmt.Errorf("Release 创建异常: %s", truncate(string(resp), 512))
 	}
 	logf("  Release 已创建: %s（ID=%d）", version, release.ID)
 	return release.ID, nil
@@ -249,7 +249,7 @@ func uploadAsset(cfg Config, releaseID int64, filePath string) error {
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(data), 300))
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(data), 512))
 	}
 	return nil
 }
@@ -460,7 +460,7 @@ func postJSON(path string, payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(body), 300))
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(body), 512))
 	}
 	return body, nil
 }

@@ -29,13 +29,15 @@
 字段要求：
 
 - `title`：简短中文标题，不带书名号。
-- `prompt`：**英文**音乐描述，直接作为 MIDI-LLM 的创作输入，不超过 120 个字符。必须包含风格、情绪、演奏乐器、大致小节数、速度与拍号，不要出现中文、代码、引号或换行。示例：`An energetic rock song with electric guitar, drums and bass, about 16 bars, 120 BPM, 4/4 meter`。
+- `prompt`：**英文**音乐描述，直接作为 MIDI-LLM 的创作输入，不超过 200 个字符。必须依次包含：风格、主奏乐器与伴奏、情绪、小节数、速度、拍号、曲式；并明确「清晰的主旋律 + 轻伴奏、避免厚重和弦堆叠」。不要出现中文、代码、引号或换行。
+  正面范例：`A gentle lyrical piano piece with soft strings and a warm cello, calm mood, about 16 bars, 96 BPM, 4/4 meter, ABA structure, one clear melody line with light accompaniment, no thick chord clusters.`
+  负面范例（禁止这样写）：`A grand orchestral epic with piano, strings, cello, harp, flute and drums, 40 bars, dense chords, fast and loud`——乐器过多、篇幅过长、要求稠密和弦，模型会写出无法演奏的音墙。
 - `tempo`：整数 BPM，抒情 60-90，欢快 100-130，激昂 120-160。
-- `key`：`C` / `G` / `D` / `F` / `Am` / `Em` 这类调式写法；小调以 `m` 结尾。
-- `meter`：`4/4`、`3/4`、`6/8` 之一。
+- `key`：`C` / `G` / `D` / `F` / `Am` / `Em` 这类调式写法；小调以 `m` 结尾。和声以自然音阶为主，避免频繁离调。
+- `meter`：`4/4`、`3/4`、`6/8` 之一，全曲统一，不中途换拍。
 - `bars`：12-24 之间的整数，默认 16。
-- `instruments`：三个元素，依次为主奏、伴奏、低音，如 `["钢琴","弦乐","大提琴"]`。
-- `structure`：段落结构，如 `起承转合`、`ABA`、`主题-发展-再现`。
+- `instruments`：三个元素，依次为主奏、伴奏、低音，如 `["钢琴","弦乐","大提琴"]`；全曲最多 3 件乐器，不要加入鼓组。
+- `structure`：段落结构，如 `起承转合`、`ABA`、`主题-发展-再现`；写成两到三段，每段有明确的开始与收束。
 - `summary`：不超过 30 字。
 
 ## 创作取向

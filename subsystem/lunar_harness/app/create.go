@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/agents/FileEditor"
+	"LunarSubsystem/LunarHarness/chain/search"
+	"LunarSubsystem/LunarHarness/chain/thinking"
 	"LunarSubsystem/LunarHarness/clients"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/browser"
@@ -17,19 +19,26 @@ import (
 	"LunarSubsystem/LunarHarness/engine/ltpxhost"
 	"LunarSubsystem/LunarHarness/engine/protocolwire"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	harnessruntime "LunarSubsystem/LunarHarness/engine/runtime"
 	"LunarSubsystem/LunarHarness/engine/websocket"
 	"LunarSubsystem/LunarHarness/server"
 )
 
-// Assemble 装配各子系统：传输层 → HTTP 服务 → 服务层（月华生产者 / 琉璃）→ 消费层（Go 对话链）。
+// Assemble 装配各子系统：传输层 → HTTP 服务 → 服务层（月华生产者 / 琉璃）→ 消费层（Go 思维链）。
 // 各层按依赖顺序初始化，跨层依赖（引擎上行观测、结构化消息桥接）在此注入，
 // 避免包间反向依赖，亦避免各人格包互相 import。
-// 消费层（月华对话链与 LTP9 插件沙箱）排在末段启动，
+// 消费层（月华思维链与 LTP9 插件沙箱）排在末段启动，
 // 保证其思考循环/插件加载之时，HTTP、llama 代理、记忆库与 LTPX 协调层均已就绪。
 func Assemble() {
 	// ==== protocol 配置注入：必须在任何智能体调用模型之前 ====
 	// protocol/agentbase 与 loopguard 只消费端点/阈值，不直接 import engine/config。
 	protocolwire.Wire()
+
+	// ==== 跨层注入：运行时沙箱的网络搜索 ====
+	// engine/runtime 不得反向依赖 agents/chain，agent.search 的实现由装配层注入搜索链入口。
+	harnessruntime.AgentSearchFunc = search.Run
+	// 文件编辑智能体同理：联网查询能力注入搜索链，避免智能体层反向依赖链路层。
+	FileEditor.SearchFunc = search.Run
 
 	// ==== 开发者模式告警快照：日志钩子装配 ====
 	// 必须在其他子系统之前接上：装配期出现的警告也应留下调试快照。
@@ -45,7 +54,7 @@ func Assemble() {
 
 	// ==== 跨层注入：结构化广播 & 下行桥接 ====
 	// 智能体下行走结构化广播（type/data），QQ 桥接挂在结构化旁路上（原始字节广播不触发）
-	Dialogue.PushMessageFunc = websocket.Instance.BroadcastMessage
+	thinking.PushMessageFunc = websocket.Instance.BroadcastMessage
 	websocket.OnStructuredMessage = DialogueBridging.BridgeStructuredMessage
 
 	// ==== 跨层注入：资源库编辑状态实时推送 ====
@@ -106,13 +115,13 @@ func Assemble() {
 	// 引擎本体在首次合成请求时经统一播报链路（engine/broadcaster）惰性加载，本守护只负责闲置回收。
 	broadcaster.StartIdleUnloader()
 
-	// ==== 消费层启动：月华 Go 原生对话链（每秒思考循环） ====
+	// ==== 消费层启动：月华 Go 原生思维链（每秒思考循环） ====
 	// 必须最后启动：思考循环一经运行即可能消费计划表等到期任务，若此时 llama 模型、
 	// 记忆库、LTP9/LTPX 协调层尚未就绪，到期任务会在依赖缺失下执行。
 	if err := startLunarAgent(); err != nil {
 		logger.Fatal("LunarHarness", "月华智能体运行时启动失败: %v", err)
 	}
-	logger.Info("LunarHarness", "月华智能体运行时（Go 对话链）已启动")
+	logger.Info("LunarHarness", "月华智能体运行时（Go 思维链）已启动")
 }
 
 // wireDebugSnapshot 装配开发者模式下的告警调试快照。

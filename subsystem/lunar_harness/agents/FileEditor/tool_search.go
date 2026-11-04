@@ -6,9 +6,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"LunarSubsystem/LunarHarness/agents/WebSearch"
 )
+
+// SearchFunc 联网查询能力的实现，由装配层注入搜索链入口。
+// 智能体层不得反向依赖链路层，因此这里只保留函数钩子，未装配时明确报错。
+var SearchFunc func(string) (string, error)
 
 // WebQuery 联网查询。
 func WebQuery(ctx context.Context, query string) OpResult {
@@ -16,12 +18,15 @@ func WebQuery(ctx context.Context, query string) OpResult {
 	if query == "" {
 		return failResult(ToolWeb, "", fmt.Errorf("query 不能为空"))
 	}
-	summary, err := WebSearch.Run(query)
+	if SearchFunc == nil {
+		return failResult(ToolWeb, "", fmt.Errorf("联网查询能力尚未装配"))
+	}
+	summary, err := SearchFunc(query)
 	if err != nil {
 		return failResult(ToolWeb, "", err)
 	}
 	_ = ctx
 	return newResult(ToolWeb, "",
-		"联网查询「"+previewRunes(query, 40)+"」完成", nil,
+		"联网查询「"+previewRunes(query, 512)+"」完成", nil,
 		map[string]any{"query": query, "summary": strings.TrimSpace(summary)})
 }

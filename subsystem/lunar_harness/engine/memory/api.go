@@ -97,6 +97,14 @@ func KeywordSearch(mediaType string, terms []string, useRegex bool, limit int) (
 	return globalStore.KeywordSearch(mediaType, terms, useRegex, limit)
 }
 
+// HybridQuery 全局混合检索：向量与关键词并行召回，融合去重后按相关度排序
+func HybridQuery(ctx context.Context, queries []string, mediaType string, topK int, opts HybridQueryOptions) ([]Entry, error) {
+	if globalStore == nil {
+		return nil, fmt.Errorf("全局记忆库未初始化")
+	}
+	return globalStore.HybridQuery(ctx, queries, mediaType, topK, opts)
+}
+
 // Update 全局原地更新文本记忆正文
 func Update(ctx context.Context, id, content string) error {
 	if globalStore == nil {

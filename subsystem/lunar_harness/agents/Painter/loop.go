@@ -29,7 +29,7 @@ func (s *session) run(system string, tools []agentbase.ToolDefinition, history *
 
 	prefixLen := 1 + len(s.runtime)
 	base := agentbase.NewAgent(agentbase.AgentConfig{
-		ID:                 "core",
+		ID:                 agentID,
 		Label:              roleLabel,
 		MaxRounds:          maxIterations,
 		MaxRepeats:         -1, // 内容循环由 StreamWithRetry 负责，跨轮不重复检测
@@ -83,7 +83,7 @@ func (s *session) stream(ctx context.Context, messages []chatMessage, tools []ag
 		timeout = 5 * time.Minute
 	}
 	return agentbase.StreamWithRetry(ctx, agentbase.StreamRequest{
-		Agent:    "core",
+		Agent:    agentID,
 		Role:     roleLabel,
 		Messages: messages,
 		Tools:    tools,

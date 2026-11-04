@@ -401,7 +401,6 @@ func setupAgent(t *testing.T, modelScript *stubModel) *stubForum {
 
 	protocolwire.Wire()
 	agentbase.ResetModelCache()
-	ResetContext()
 	return forum
 }
 
@@ -413,7 +412,7 @@ func TestRunCreatesTopicFromNaturalLanguage(t *testing.T) {
 	}, "已在互助论坛发起求助话题《WebView 超时求助》。")
 
 	forum := setupAgent(t, model)
-	text, err := Run("帮我在互助论坛发个求助：WebView 页面读取偶发超时，想问问怎么排查")
+	text, err := RunRound(context.Background(), "帮我在互助论坛发个求助：WebView 页面读取偶发超时，想问问怎么排查", nil)
 	if err != nil {
 		t.Fatalf("Run 失败: %v", err)
 	}
@@ -450,9 +449,6 @@ func TestRunCreatesTopicFromNaturalLanguage(t *testing.T) {
 	if !messagesContainRole(model.requests[1].Messages, "tool") {
 		t.Fatal("第二轮模型调用应包含工具结果回填")
 	}
-	if historyLen() != 2 {
-		t.Fatalf("独立上下文应记录一轮问答，实际 %d 条", historyLen())
-	}
 }
 
 func TestRunRepliesAndAutoPollsRound(t *testing.T) {
@@ -468,7 +464,7 @@ func TestRunRepliesAndAutoPollsRound(t *testing.T) {
 	}
 	forum.mu.Unlock()
 
-	text, err := Run("去互助论坛看看「页面读取超时」这个话题，给点排查建议")
+	text, err := RunRound(context.Background(), "去互助论坛看看「页面读取超时」这个话题，给点排查建议", nil)
 	if err != nil {
 		t.Fatalf("Run 失败: %v", err)
 	}
@@ -506,7 +502,7 @@ func TestRunWhenDisabled(t *testing.T) {
 	if Ready() {
 		t.Fatal("关闭开关后 Ready 应为 false")
 	}
-	if _, err := Run("发个求助"); err == nil || !strings.Contains(err.Error(), "不可用") {
+	if _, err := RunRound(context.Background(), "发个求助", nil); err == nil || !strings.Contains(err.Error(), "不可用") {
 		t.Fatalf("关闭时应返回不可用错误，实际 %v", err)
 	}
 	if model.calls != 0 {
@@ -522,7 +518,7 @@ func TestToolLoopLimit(t *testing.T) {
 	}
 	setupAgent(t, model)
 
-	text, err := Run("一直查看状态")
+	text, err := RunRound(context.Background(), "一直查看状态", nil)
 	if err != nil {
 		t.Fatalf("Run 失败: %v", err)
 	}
@@ -575,12 +571,6 @@ func TestToolSchemasAndArgumentErrors(t *testing.T) {
 }
 
 /* ---------------- 小工具 ---------------- */
-
-func historyLen() int {
-	historyMu.Lock()
-	defer historyMu.Unlock()
-	return len(history)
-}
 
 func messagesContain(messages []chatMessage, needle string) bool {
 	for _, message := range messages {

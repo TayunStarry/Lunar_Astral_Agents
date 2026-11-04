@@ -254,8 +254,8 @@ func ShortURLForLog(raw string) string {
 	if cut := strings.IndexAny(trimmed, "?#"); cut >= 0 {
 		trimmed = trimmed[:cut]
 	}
-	if runes := []rune(trimmed); len(runes) > 120 {
-		return string(runes[:120]) + "…"
+	if runes := []rune(trimmed); len(runes) > 512 {
+		return string(runes[:512]) + "…"
 	}
 	return trimmed
 }

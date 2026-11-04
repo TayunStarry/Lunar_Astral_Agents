@@ -405,7 +405,7 @@ func readWholeReply(reader io.Reader, role string, req StreamRequest) (Reply, er
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
-		return Reply{}, fmt.Errorf("解析模型响应失败: %w（响应：%s）", err, TruncateRunes(string(raw), 200))
+		return Reply{}, fmt.Errorf("解析模型响应失败: %w（响应：%s）", err, TruncateRunes(string(raw), 512))
 	}
 	if wrapper.Success != nil && !*wrapper.Success {
 		message := "未知错误"
@@ -415,7 +415,7 @@ func readWholeReply(reader io.Reader, role string, req StreamRequest) (Reply, er
 		return Reply{}, fmt.Errorf("模型返回失败: %s", message)
 	}
 	if len(wrapper.Data) == 0 {
-		return Reply{}, fmt.Errorf("解析模型响应失败：%s", TruncateRunes(string(raw), 200))
+		return Reply{}, fmt.Errorf("解析模型响应失败：%s", TruncateRunes(string(raw), 512))
 	}
 	var completion wholeResponse
 	if err := json.Unmarshal(wrapper.Data, &completion); err != nil {

@@ -33,5 +33,6 @@ func Perform(ctx context.Context, instruction string, env Env) (Result, error) {
 	summary := s.run()
 	state.history = s.history
 
+	recordRun(summary, s.primary != "")
 	return Result{Summary: summary, Image: s.primary}, nil
 }

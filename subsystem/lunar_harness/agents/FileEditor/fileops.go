@@ -388,7 +388,7 @@ func searchInFile(docRel, query, full string) ([]searchHit, error) {
 			hits = append(hits, searchHit{
 				Path: docRel,
 				Line: index + 1,
-				Text: previewRunes(strings.TrimSpace(line), 160),
+				Text: previewRunes(strings.TrimSpace(line), 512),
 			})
 			if len(hits) >= searchHitLimit {
 				break

@@ -161,7 +161,7 @@ type StatusError struct {
 }
 
 func (e *StatusError) Error() string {
-	return fmt.Sprintf("模型 HTTP %d: %s", e.Status, TruncateRunes(e.Body, 240))
+	return fmt.Sprintf("模型 HTTP %d: %s", e.Status, TruncateRunes(e.Body, 512))
 }
 
 // RetryOptions 统一重试策略：循环输出 / 5xx / 网络错误可按需重试。

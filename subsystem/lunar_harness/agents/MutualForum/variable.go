@@ -15,26 +15,19 @@ const (
 	roleLabel = "互助论坛"
 	// maxToolRounds 单次需求允许的工具调用轮次上限
 	maxToolRounds = 8
-	// historyLimitMessages 独立上下文保留的消息条数（约 20 轮问答）
-	historyLimitMessages = 40
-	// runTimeout 单次需求的整体超时
-	runTimeout = 2 * time.Minute
 	// modelTimeout 单次模型调用超时
 	modelTimeout = 90 * time.Second
 	// maxPostPreview 工具结果里的发言摘要长度
 	maxPostPreview = 1200
 	// maxBodyPreview 工具结果里的话题正文摘要长度
-	maxBodyPreview = 240
+	maxBodyPreview = 512
 )
 
 var (
-	// runMu 串行化自然语言需求，避免同一身份并发发言导致轮次互相覆盖
-	runMu sync.Mutex
-
-	// historyMu 保护独立上下文
-	historyMu sync.Mutex
-	// history 最近若干轮「用户需求 + 最终答复」
-	history []chatMessage
+	// lastRunMu 保护最近一次模型轮次的诊断信息
+	lastRunMu sync.Mutex
+	// lastRun 最近一次模型轮次的轮次、工具调用数与错误（供 agentdump 展示）
+	lastRun map[string]any
 )
 
 // ==== 论坛桥接层常量与全局变量 ====

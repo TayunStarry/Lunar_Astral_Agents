@@ -24,7 +24,7 @@ import (
 //      → 通过 /ws 广播给前端 → 前端打开包页面并 postMessage 投递给包 → 包执行（含页面展示）
 //      → 回执 /ltpx/result 写入结果通道；月华在进程内经结果通道取回
 //   3. LTP9 事件全部由 Go 边界触发（读取消息前 / 消息发送前），
-//      goja 对话链不再发送或处理事件；无插件订阅/未改写/未回传时沿用原始数据
+//      goja 思维链不再发送或处理事件；无插件订阅/未改写/未回传时沿用原始数据
 //   4. 琉璃核心不随包增删而改动：加载/卸载工具只影响扫描结果
 //
 // 合并为单进程后已无「心跳探测 / 在线判定」环节：工具提供方与消费方同处一个进程，
@@ -148,8 +148,8 @@ func ltpxFirstSentence(desc string) string {
 		}
 	}
 	s := strings.TrimSpace(string(runes[:end]))
-	if sr := []rune(s); len(sr) > 60 {
-		s = string(sr[:60]) + "…"
+	if sr := []rune(s); len(sr) > 512 {
+		s = string(sr[:512]) + "…"
 	}
 	return s
 }

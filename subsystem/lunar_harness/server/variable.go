@@ -1,7 +1,7 @@
 package server
 
 import (
-	"LunarSubsystem/LunarHarness/agents/Dialogue"
+	"LunarSubsystem/LunarHarness/chain/thinking"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/library"
 	"LunarSubsystem/LunarHarness/engine/ltpxhost"
@@ -22,7 +22,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/window/focus", Handler: WindowFocusHandler, Method: "POST", Description: "置前指定桌面窗口（id: lunar/crystal）"},
 
 	// ==================== 消息队列 ====================
-	{Path: "/write/message", Handler: Dialogue.MessageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
+	{Path: "/write/message", Handler: thinking.MessageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
 
 	// ==================== 应用与资源 ====================
 	{Path: "/background", Handler: file.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
@@ -85,9 +85,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/gguf/metadata", Handler: media.GGUFMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
 
 	// ==================== 图片生成 ====================
-	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务（请求可带 scheme 指定绘图模型方案）"},
+	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务"},
 	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},
-	{Path: "/generate/scheme", Handler: image.DiffusionSchemeHandler, Method: "GET/POST", Description: "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）"},
 
 	// ==================== 模型服务与显存守卫 ====================
 	{Path: "/agent/chat/completions", Handler: AgentChatHandler, Method: "POST", Description: "外部多模态推理（非流式；模型名固定 primary_reasoning；请求经响应者智能体排队，由响应者独立 Tick 在主调度空档期依次处理）"},
@@ -96,7 +95,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/vram/unload", Handler: llama.VRAMUnloadHandler, Method: "POST", Description: "定向卸载（卸载指定 ID 的已加载模型）"},
 
 	// ==================== 代理请求 ====================
-	{Path: "/proxy", Handler: Dialogue.ProxyHandler, Method: "POST", Description: "代理访问服务"},
+	{Path: "/proxy", Handler: thinking.ProxyHandler, Method: "POST", Description: "代理访问服务"},
 
 	// ==================== 语音播报（Broadcaster 统一链路） ====================
 	{Path: "/broadcaster/synthesize", Handler: broadcaster.SynthesizeHandler, Method: "POST", Description: "语音合成统一入口（engine 参数选引擎 Qwen/Kokoro/OmniVoice，缺省 tts.engine 配置；引擎槽位单载自动切换）"},

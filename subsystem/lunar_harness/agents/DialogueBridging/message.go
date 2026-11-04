@@ -25,7 +25,7 @@ const maxGroupPoolSize = 20
 const maxForwardDepth = 3
 
 // maxReplyQuoteLen 回复引用摘要的最大字符数
-const maxReplyQuoteLen = 120
+const maxReplyQuoteLen = 512
 
 // HandleNapcatMessage 处理从 Napcat 接收到的消息（私聊 / 群聊）
 func HandleNapcatMessage(rawMessage []byte) {

@@ -44,6 +44,7 @@ func Perform(ctx context.Context, instruction string, ref *Reference, env Env) (
 	if s.artwork.Handle != "" {
 		handles = append(handles, s.artwork.Handle)
 	}
+	recordRun(summary, handles)
 	return Result{Summary: summary, Handles: handles}, nil
 }
 

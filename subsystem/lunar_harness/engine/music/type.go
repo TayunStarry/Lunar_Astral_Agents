@@ -41,6 +41,46 @@ type RenderResult struct {
 	Source string
 }
 
+// Review 一次模型输出的客观体检报告（生成端自检，不含渲染）。
+type Review struct {
+	// Tokens 有效 MIDI token 数
+	Tokens int
+	// Notes 解析出的音符数
+	Notes int
+	// Malformed 无法解析的三连音事件数
+	Malformed int
+	// Instruments 使用到的 GM 乐器编号（按编号升序）
+	Instruments []int
+	// DistinctPitches 不同音高数量
+	DistinctPitches int
+	// MaxOverlap 任一时刻同时发声的最大音符数
+	MaxOverlap int
+	// SpanSeconds 乐谱首音到末音结束的时长（秒）
+	SpanSeconds float64
+	// NotesPerSecond 音符密度（音符数 / 秒）
+	NotesPerSecond float64
+	// Issues 命中的问题码（可枚举，空表示通过）
+	Issues []string
+	// Score 候选排序分（越低越好）
+	Score float64
+}
+
+// AudioReport 渲染产物的自检报告（渲染端）。
+type AudioReport struct {
+	// Seconds 音频时长（秒）
+	Seconds float64
+	// Peak 峰值（0-1 满量程）
+	Peak float64
+	// RMS 均方根（0-1 满量程）
+	RMS float64
+	// ClippedRatio 削波采样占比（0-1）
+	ClippedRatio float64
+	// Issues 命中的问题码（空表示通过）
+	Issues []string
+	// OK 是否通过基础可听性检查
+	OK bool
+}
+
 // noteEvent MIDI 单音事件（内部类型）。
 type noteEvent struct {
 	// Tick 起始时间（PPQ 480 的 tick）

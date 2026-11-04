@@ -76,7 +76,7 @@ func executeTool(call agentbase.ToolCall) Result {
 			OK:      true,
 			Action:  "query",
 			Handles: []string{},
-			Summary: previewRunes(text, 240),
+			Summary: previewRunes(text, 512),
 			Detail:  map[string]any{"result": text},
 		}
 	case ToolCreate:
@@ -121,7 +121,7 @@ func failResult(op string, err error) Result {
 		OK:      false,
 		Action:  strings.TrimPrefix(op, "plan_"),
 		Handles: []string{},
-		Summary: previewRunes(op+" 失败："+err.Error(), 240),
+		Summary: previewRunes(op+" 失败："+err.Error(), 512),
 		Detail:  map[string]any{"error": err.Error()},
 	}
 }

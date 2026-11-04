@@ -64,7 +64,7 @@ func failResult(op, path string, err error) Result {
 		Op:      op,
 		Path:    path,
 		Handles: []string{},
-		Summary: PreviewRunes(message, 200),
+		Summary: PreviewRunes(message, 512),
 		Detail:  map[string]any{"error": err.Error()},
 	}
 }

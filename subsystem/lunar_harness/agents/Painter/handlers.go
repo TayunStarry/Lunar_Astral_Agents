@@ -25,14 +25,12 @@ func (s *session) executeTool(call chatCall) string {
 		return s.handleCreateCharacter(args)
 	case "group_photo":
 		return s.handleGroupPhoto(args)
-	case "switch_diffusion_scheme":
-		return s.handleSwitchDiffusionScheme(args)
 	case "list_images":
 		return s.handleListImages()
 	case "upscale_image":
 		return s.handleUpscaleImage(args)
 	default:
-		return "未知工具: " + call.Name + "，可用工具为 diffusion_generation、image_to_image、portrait、create_character、group_photo、switch_diffusion_scheme、list_images、upscale_image"
+		return "未知工具: " + call.Name + "，可用工具为 diffusion_generation、image_to_image、portrait、create_character、group_photo、list_images、upscale_image"
 	}
 }
 
@@ -309,24 +307,6 @@ func (s *session) handleCreateCharacter(args map[string]any) string {
 	return action + "自定义角色「" + name + "」（" + profile.Gender + "）。之后绘制立绘或合照时可直接用该名字引用。"
 }
 
-func (s *session) handleSwitchDiffusionScheme(args map[string]any) string {
-	name := strings.TrimSpace(stringArg(args, "scheme"))
-	if name == "" {
-		return "切换模型方案失败：请指定 turbo 或 quality"
-	}
-	if err := config.SetActiveDiffusionScheme(name); err != nil {
-		return "切换模型方案失败：" + err.Error()
-	}
-	label := name
-	switch name {
-	case "turbo":
-		label = "速度优先"
-	case "quality":
-		label = "质量优先"
-	}
-	return "已切换到 " + name + "（" + label + "）模型方案，后续绘图将使用该方案。"
-}
-
 func (s *session) handleListImages() string {
 	entries := listImages()
 	if len(entries) == 0 {
@@ -412,7 +392,7 @@ func collectPaintingDetail(call chatCall, paintings *[]PaintingDetail) {
 		if name == "image_to_image" {
 			strengthNote = fmt.Sprintf("（强度 %.2f）", normalizeStrength(numberArg(args, "strength"), "图生图"))
 		}
-		*paintings = append(*paintings, PaintingDetail{ToolName: name, PromptSummary: truncateRunes(prompt, 100) + strengthNote})
+		*paintings = append(*paintings, PaintingDetail{ToolName: name, PromptSummary: truncateRunes(prompt, 512) + strengthNote})
 	case "upscale_image":
 		label := "最近作品超分重建"
 		if tag := stringArg(args, "image_tag"); tag != "" {

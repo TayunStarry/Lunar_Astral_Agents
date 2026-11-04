@@ -32,11 +32,6 @@ type SystemSettings struct {
 	LoopNodeRunes    *int     `json:"loop_node_runes,omitempty"`
 	LoopSegmentRunes *int     `json:"loop_segment_runes,omitempty"`
 	LoopSimilarity   *float64 `json:"loop_similarity,omitempty"`
-	// 对话者聚合工具意图检测：开关 / 相似度阈值 / 嵌入超时（毫秒） / 最短触发字符数
-	DialogueToolIntentEnabled   *bool    `json:"dialogue_tool_intent_enabled,omitempty"`
-	DialogueToolIntentThreshold *float64 `json:"dialogue_tool_intent_threshold,omitempty"`
-	DialogueToolIntentTimeoutMS *int     `json:"dialogue_tool_intent_timeout_ms,omitempty"`
-	DialogueToolIntentMinRunes  *int     `json:"dialogue_tool_intent_min_runes,omitempty"`
 }
 
 // ModelConfig 定义公共配置（general.json）的结构
@@ -56,12 +51,12 @@ type ModelConfig struct {
 		VisionMaxSide int `json:"vision_max_side"`
 		// 视觉副本缓存池容量上限（MB），超限按最久未用淘汰，默认 512
 		VisionCacheCapMB int `json:"vision_cache_cap_mb"`
-		// 追加设定：逐行附加到「月华 · 对话者」系统提示词末尾（由 Go 对话链读取；
+		// 追加设定：逐行附加到「月华 · 对话者」系统提示词末尾（由 Go 思维链读取；
 		// 未配置或空数组时不追加任何内容）
 		AppendSettings []string `json:"append_settings"`
 	} `json:"agent"`
 	// 网络搜索智能体（web_search）：检索词提炼、统一摘要与浏览器滚动策略。
-	// 仅由琉璃的内置 Web-LTP（agents/WebSearch）消费，与其余配置节统一在此解析，
+	// 仅由搜索链（chain/search → 执行体 executors/SearchCrawler）消费，与其余配置节统一在此解析，
 	// 智能体侧只读取解析后的全局值，不再自行读取 config/general.json。
 	WebSearch struct {
 		MaxPages        int   `json:"max_pages"`               // 页面条目总数：首页恒占 1 条，其余为同时打开的详情页
@@ -187,7 +182,7 @@ func applyConfig(parameter *ModelConfig) {
 	if parameter.Agent.ASRModel != "" {
 		AgentASRModel = parameter.Agent.ASRModel
 	}
-	// Go 原生对话链直接消费的追加设定
+	// Go 原生思维链直接消费的追加设定
 	AgentAppendSettings = append([]string(nil), parameter.Agent.AppendSettings...)
 	// ==== 静态图思维链形态（agent.image_input / agent.vision_max_side） ====
 	// url=视觉读取端点（默认）；base64=视觉读取管线直出的副本（供无法回取本机 URL 的云端模型）。
@@ -352,20 +347,6 @@ func applyConfig(parameter *ModelConfig) {
 	}
 	if parameter.System.LoopSimilarity != nil && *parameter.System.LoopSimilarity > 0 && *parameter.System.LoopSimilarity < 1 {
 		LoopSimilarity = *parameter.System.LoopSimilarity
-	}
-	// ==== 对话者聚合工具意图检测（system.dialogue_tool_intent_*） ====
-	if parameter.System.DialogueToolIntentEnabled != nil {
-		DialogueToolIntentEnabled = *parameter.System.DialogueToolIntentEnabled
-	}
-	if parameter.System.DialogueToolIntentThreshold != nil &&
-		*parameter.System.DialogueToolIntentThreshold > 0 && *parameter.System.DialogueToolIntentThreshold < 1 {
-		DialogueToolIntentThreshold = *parameter.System.DialogueToolIntentThreshold
-	}
-	if parameter.System.DialogueToolIntentTimeoutMS != nil && *parameter.System.DialogueToolIntentTimeoutMS > 0 {
-		DialogueToolIntentTimeoutMS = *parameter.System.DialogueToolIntentTimeoutMS
-	}
-	if parameter.System.DialogueToolIntentMinRunes != nil && *parameter.System.DialogueToolIntentMinRunes >= 0 {
-		DialogueToolIntentMinRunes = *parameter.System.DialogueToolIntentMinRunes
 	}
 	// ==== 聊天显存守卫与 QQ 桥接 ====
 	// chat（system.chat_vram_guard 聊天显存守卫）仅由月华 TypeScript 读取，

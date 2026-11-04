@@ -15,7 +15,7 @@ import (
 
 // 日志分类模块标签（与各子系统 logger 模块名保持一致，避免反向依赖具体包）。
 const (
-	// lunarModule 月华-对话系统（Go 原生对话链、计划表、记忆与资源统一使用 LunarCore）
+	// lunarModule 月华-对话系统（Go 原生思维链、计划表、记忆与资源统一使用 LunarCore）
 	lunarModule = "LunarCore"
 	// lifeModule 月华-生活系统
 	lifeModule = "Life"
@@ -209,7 +209,7 @@ func routeLogRecord(level, module, sub, msg string) {
 	pushLog(line, SourceRaw)
 
 	switch module {
-	// 对话：月华-对话系统（对话链 / 计划表 / 记忆 / 资源）
+	// 对话：月华-对话系统（思维链 / 计划表 / 记忆 / 资源）
 	case lunarModule:
 		pushLog(line, SourceDialogue)
 	// 生活：生活系统 / 哔哩观影 / 创作 / 文件编辑 / 私有 js 运行时

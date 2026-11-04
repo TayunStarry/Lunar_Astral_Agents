@@ -2,7 +2,7 @@ package runtime
 
 // ==== 媒体能力实现：视频抽帧 video.frames / 图像缩放与编码 image.resize|convert / WebSearch 网络搜索 ====
 // 复用 MultimodalAnalysis 模块的抽帧/图像基础组元与 WebSearch 进程内搜索流水线，
-// 沙箱侧契约见 prompts/videoAPI.d.ts、prompts/imageAPI.d.ts、prompts/agentAPI.d.ts。
+// 沙箱侧契约见 prompts/runtimeAPI/videoAPI.d.ts、prompts/runtimeAPI/imageAPI.d.ts、prompts/runtimeAPI/agentAPI.d.ts。
 
 import (
 	"bytes"
@@ -16,7 +16,6 @@ import (
 	"os"
 	"strings"
 
-	websearch "LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
 
@@ -314,8 +313,12 @@ func engineImageConvert(p *plugin, path, format string, opts map[string]any) (an
 // ==== Web-Search 网络搜索 agent.search ====
 
 // engineAgentSearch 调用进程内 Web-Search 搜索流水线，返回自然语言搜索报告。
+// 搜索实现由装配层注入 AgentSearchFunc，避免 engine 反向依赖 agents。
 func engineAgentSearch(_ *plugin, instruction string) map[string]any {
-	text, err := websearch.Run(instruction)
+	if AgentSearchFunc == nil {
+		return map[string]any{"success": false, "error": "网络搜索能力未装配"}
+	}
+	text, err := AgentSearchFunc(instruction)
 	if err != nil {
 		return map[string]any{"success": false, "error": err.Error()}
 	}

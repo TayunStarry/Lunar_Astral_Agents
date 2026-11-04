@@ -27,10 +27,29 @@ func Perform(ctx context.Context, instruction string) (Result, error) {
 	}
 	brief = normalizeBrief(brief)
 
-	rendered, err := music.Compose(brief)
+	ids, review, err := generateBestTokens(brief)
 	if err != nil {
-		logger.Error(module, "[演奏者] 音乐生成或渲染失败: %v", err)
+		logger.Error(module, "[演奏者] 音乐模型生成失败: %v", err)
 		return Result{}, err
+	}
+	logger.Info(module, "[演奏者] 入选候选体检: %s", review.String())
+
+	rendered, err := music.ComposeScore(ids, brief)
+	if err != nil {
+		logger.Error(module, "[演奏者] 音乐解码或渲染失败: %v", err)
+		return Result{}, err
+	}
+	// 产物自检：确认渲染出的音频确实可听（非静默、无明显削波）
+	report, reportErr := music.InspectAudio(rendered.AudioPath)
+	if reportErr != nil {
+		logger.Warn(module, "[演奏者] 音频自检失败: %v", reportErr)
+	} else {
+		logger.Info(module, "[演奏者] 音频自检: %.1fs peak=%.2f rms=%.2f clip=%.3f issues=%v",
+			report.Seconds, report.Peak, report.RMS, report.ClippedRatio, report.Issues)
+		if !report.OK {
+			logger.Error(module, "[演奏者] 音频自检未通过: %v", report.Issues)
+			return Result{}, fmt.Errorf("演奏音频未通过自检: %v", report.Issues)
+		}
 	}
 	return Result{
 		Title:       brief.Title,

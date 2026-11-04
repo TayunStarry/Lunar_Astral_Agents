@@ -1,8 +1,10 @@
 package fileflow
 
-// delta_store.go 内容级增量记录的 SQLite 存储：建表、写入、按流程查询、保留策略清理。
+// delta_store.go 统一创作存储库（SQLite）：建表、文件操作增量写入、按流程查询、保留策略清理。
 //
-// 库路径 = config.LocalDir + DeltaDirRel + DeltaDBFile，即 local_data/database/fileflow/flow_ops.db；
+// 库路径 = config.LocalDir + DeltaDirRel + DeltaDBFile，即 local_data/database/creation.db；
+// creation.db 是创作链路的唯一数据库，本包是唯一写者（连接复用 + WAL + busy_timeout 均在此处设置）。
+// 旧的 local_data/database/fileflow/flow_ops.db 不再读取；旧 JSON 日志仅在首次打开时一次性导入。
 // 不从 engine/config 新增常量，避免与目录布局整理任务冲突。
 
 import (
@@ -55,6 +57,9 @@ func deltaConn() (*sql.DB, error) {
 			db.Close()
 			return nil, fmt.Errorf("增量记录库建表失败: %w", err)
 		}
+	}
+	if err := migrateLegacyJournals(db); err != nil {
+		logger.Warn("文件操作", "旧 JSON 日志导入失败（原文件保留，稍后可重试）: %v", err)
 	}
 	deltaDB = db
 	deltaDBPath = want
@@ -118,6 +123,9 @@ func insertOp(input OpInput, beforeHash, afterHash string, beforeSize, afterSize
 			boolInt(delta.Binary), delta.BinaryNote, boolInt(delta.Truncated), now); err != nil {
 			return fmt.Errorf("写入内容增量失败: %w", err)
 		}
+	}
+	if err := insertChanges(tx, input.CallID, opID, input.FlowID, input.Seq, deltas, now); err != nil {
+		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交增量记录失败: %w", err)

@@ -34,5 +34,5 @@ func uiaReaderPhase(ctx context.Context, plan editorTask) (string, []string) {
 	} else {
 		elements = append(elements, text)
 	}
-	return truncateStr(tree, 400), elements
+	return truncateStr(tree, 512), elements
 }

@@ -47,7 +47,7 @@ func Report(agent string, err error) {
 	seq++
 	pending[agent] = &Failure{ID: seq, Agent: agent, Error: message, At: time.Now()}
 	order = append(order, agent)
-	logger.Warn(roleLabel, "[智能修复] 收到故障 #%d（%s）：%s", seq, agent, previewRunes(message, 160))
+	logger.Warn(roleLabel, "[智能修复] 收到故障 #%d（%s）：%s", seq, agent, previewRunes(message, 512))
 }
 
 // ReportRun 上报一次运行失败。
@@ -77,7 +77,7 @@ func Process(ctx context.Context) {
 	}
 	summary, err := repair(ctx, failure)
 	if err == nil {
-		logger.Info(roleLabel, "[智能修复] 故障 #%d（%s）修复完成：%s", failure.ID, failure.Agent, previewRunes(summary, 120))
+		logger.Info(roleLabel, "[智能修复] 故障 #%d（%s）修复完成：%s", failure.ID, failure.Agent, previewRunes(summary, 512))
 		remove(failure.Agent)
 		return
 	}
@@ -109,7 +109,7 @@ func repair(ctx context.Context, failure *Failure) (string, error) {
 	result, err := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{
 		Messages: []agentbase.Message{
 			{Role: "system", Content: system},
-			{Role: "user", Content: fmt.Sprintf("请修复故障 #%d：%s 报错「%s」", failure.ID, failure.Agent, previewRunes(failure.Error, 300))},
+			{Role: "user", Content: fmt.Sprintf("请修复故障 #%d：%s 报错「%s」", failure.ID, failure.Agent, previewRunes(failure.Error, 512))},
 		},
 		Tools: repairTools(),
 		Stream: agentbase.StreamRequest{
@@ -143,7 +143,7 @@ func repair(ctx context.Context, failure *Failure) (string, error) {
 	}
 	text := strings.TrimSpace(result.Reply.Text)
 	if text == "" {
-		return "", fmt.Errorf("拯救者没有给出结论（%s）", previewRunes(result.Reply.Reasoning, 120))
+		return "", fmt.Errorf("拯救者没有给出结论（%s）", previewRunes(result.Reply.Reasoning, 512))
 	}
 	return text, nil
 }

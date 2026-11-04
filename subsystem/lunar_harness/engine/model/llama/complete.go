@@ -23,6 +23,20 @@ import (
 // midiTokenBase GGUF 中 MIDI token 的起始 id（Llama 3.2 基础词表大小）
 const midiTokenBase = 128256
 
+// midiTokenCount MIDI-LLM 扩展词表中的有效 MIDI token 数（0..55025）。
+// 55026 起为控制块特殊 token（自回归/anticipate），不属于三连音事件。
+const midiTokenCount = 55026
+
+// TokenOptions 采样选项；零值表示使用 MIDI-LLM 推荐参数。
+type TokenOptions struct {
+	// Temperature 采样温度（<=0 时用推荐值 1.0）
+	Temperature float64
+	// TopP 核采样（<=0 时用推荐值 0.98）
+	TopP float64
+	// Seed 随机种子（<=0 由服务器随机；多候选时传入固定值便于复盘）
+	Seed int64
+}
+
 // completionRequest 原生补全请求体。
 type completionRequest struct {
 	// Model 路由服务器上的模型 ID
@@ -43,6 +57,8 @@ type completionRequest struct {
 	Stream bool `json:"stream"`
 	// CachePrompt 不复用提示缓存
 	CachePrompt bool `json:"cache_prompt"`
+	// Seed 随机种子（0 省略，交由服务器随机）
+	Seed int64 `json:"seed,omitempty"`
 }
 
 // completionResponse 原生补全响应体（只取需要的字段）。
@@ -60,8 +76,9 @@ type completionResponse struct {
 }
 
 // CompletionTokens 调用路由服务器的 /completion，返回 AMT 词表 id 序列。
-// MIDI-LLM 推荐 temperature 1.0 / top_p 0.98 / top_k 0。
-func CompletionTokens(ctx context.Context, modelID, prompt string, maxTokens int) ([]int, error) {
+// 默认参数为 MIDI-LLM 推荐值（temperature 1.0 / top_p 0.98 / top_k 0）；
+// 结构化乐谱需要多候选时由调用方通过 options 覆盖温度、核采样与随机种子。
+func CompletionTokens(ctx context.Context, modelID, prompt string, maxTokens int, options TokenOptions) ([]int, error) {
 	if strings.TrimSpace(modelID) == "" {
 		return nil, fmt.Errorf("模型 ID 不能为空")
 	}
@@ -71,16 +88,25 @@ func CompletionTokens(ctx context.Context, modelID, prompt string, maxTokens int
 	if maxTokens <= 0 {
 		maxTokens = 2046
 	}
+	temperature := options.Temperature
+	if temperature <= 0 {
+		temperature = 1.0
+	}
+	topP := options.TopP
+	if topP <= 0 {
+		topP = 0.98
+	}
 	payload := completionRequest{
 		Model:       modelID,
 		Prompt:      prompt,
 		NPredict:    maxTokens,
-		Temperature: 1.0,
-		TopP:        0.98,
+		Temperature: temperature,
+		TopP:        topP,
 		TopK:        0,
 		NProbs:      1,
 		Stream:      false,
 		CachePrompt: false,
+		Seed:        options.Seed,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -114,9 +140,12 @@ func CompletionTokens(ctx context.Context, modelID, prompt string, maxTokens int
 	}
 	ids := make([]int, 0, len(result.CompletionProbabilities))
 	for _, item := range result.CompletionProbabilities {
-		if item.ID >= midiTokenBase {
-			ids = append(ids, item.ID-midiTokenBase)
+		// 文本 token 或控制块特殊 token 出现在乐谱流中说明模型已偏离，
+		// 在首个异常 token 处截断，保证三连音事件不会因跳 token 而错位。
+		if item.ID < midiTokenBase || item.ID >= midiTokenBase+midiTokenCount {
+			break
 		}
+		ids = append(ids, item.ID-midiTokenBase)
 	}
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("补全未返回 MIDI token")

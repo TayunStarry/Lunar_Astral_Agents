@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -176,10 +177,27 @@ func TestDescribeFileKeepsName(t *testing.T) {
 
 const testSelfID = int64(999)
 
-// fakeNapcat 最小 NapCat HTTP 假服务：应答登录/群信息/成员列表/消息详情。
+// fakeSend 记录一次投递请求，用于校验目标会话与出站消息段
+type fakeSend struct {
+	Action   string
+	GroupID  int64
+	UserID   int64
+	Segments []MessageSegment
+}
+
+// fakeNapcat 最小 NapCat HTTP 假服务：应答登录/群信息/成员列表/消息详情，并记录投递请求。
 type fakeNapcat struct {
 	server       *httptest.Server
 	quotedSender int64 // get_msg 返回的被引用消息发送者
+	mu           sync.Mutex
+	sends        []fakeSend
+}
+
+// sentMessages 返回已记录的投递请求副本
+func (f *fakeNapcat) sentMessages() []fakeSend {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeSend(nil), f.sends...)
 }
 
 func startFakeNapcat(t *testing.T, selfID int64) *fakeNapcat {
@@ -189,6 +207,28 @@ func startFakeNapcat(t *testing.T, selfID int64) *fakeNapcat {
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "retcode": 0, "data": data})
 	}
 	mux := http.NewServeMux()
+	// 记录投递请求：目标群/用户与消息段都留档，供「目标一致性」用例断言
+	recordSend := func(action string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			var payload struct {
+				GroupID int64            `json:"group_id"`
+				UserID  int64            `json:"user_id"`
+				Message []MessageSegment `json:"message"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			fake.mu.Lock()
+			fake.sends = append(fake.sends, fakeSend{
+				Action:   action,
+				GroupID:  payload.GroupID,
+				UserID:   payload.UserID,
+				Segments: payload.Message,
+			})
+			fake.mu.Unlock()
+			writeOK(w, map[string]any{"message_id": 1})
+		}
+	}
+	mux.HandleFunc("/send_group_msg", recordSend("/send_group_msg"))
+	mux.HandleFunc("/send_private_msg", recordSend("/send_private_msg"))
 	mux.HandleFunc("/get_login_info", func(w http.ResponseWriter, r *http.Request) {
 		writeOK(w, map[string]any{"user_id": selfID, "nickname": "月华"})
 	})

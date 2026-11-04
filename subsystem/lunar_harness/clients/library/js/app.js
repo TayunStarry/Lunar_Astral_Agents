@@ -589,6 +589,10 @@ function showHelp() {
 let socket = null;
 let attempts = 0;
 let reloadTimer = null;
+let structureTimer = null;
+
+// 结构类操作会改变目录内容，必须重新拉取清单；内容类操作只更新状态与预览。
+const STRUCTURE_OPS = new Set(['create', 'delete', 'move', 'rename', 'copy']);
 
 function connectSocket() {
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -616,6 +620,12 @@ function onSocketMessage(event) {
         const file = payload.data.file;
         state.edits.set(file.path, file);
         state.version = payload.data.version || state.version;
+        // 新增 / 删除 / 移动 / 重命名 / 复制没有单独的清单事件，必须由这里补一次全量刷新，
+        // 否则新文件不会出现在树与列表中（内容修改仍走下面的局部刷新）。
+        if (needsTreeRefresh(file)) {
+            scheduleStructureRefresh();
+            return;
+        }
         if (state.selectedPath === file.path) {
             scheduleReload();
             renderDetailsPane();
@@ -629,6 +639,20 @@ function onSocketMessage(event) {
         clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => refreshAll(), 250);
     }
+}
+
+// needsTreeRefresh 判断一次 AI 操作是否可能改变目录结构。
+// 结构类操作必然改变清单；write 目标不在当前清单中时同样意味着新建了文件（或其父目录）。
+function needsTreeRefresh(file) {
+    if (STRUCTURE_OPS.has(file.op)) return true;
+    if (file.op !== 'write') return false;
+    return !state.entries.some((entry) => entry.path === file.path);
+}
+
+// scheduleStructureRefresh 合并短时间内的多次结构事件，只重新拉取一次清单。
+function scheduleStructureRefresh() {
+    clearTimeout(structureTimer);
+    structureTimer = setTimeout(() => refreshAll(), 250);
 }
 
 function scheduleReload() {

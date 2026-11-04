@@ -2,25 +2,22 @@
 
 package desktop
 
-// repair.go 向拯救者注册桌面操纵的修复能力。
+// repair.go 向拯救者注册桌面操纵智能体（模型侧）的修复能力。
 //
-// 桌面操纵会占用真实键鼠：任务卡死时 reset 等价于中断，
-// 没有运行中的任务时是无副作用的空操作。
+// 桌面键鼠任务的中断由 chain/desktop 负责；这里只清空各阶段最近执行结果。
 
 import (
 	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {
-	agentrepair.RegisterResettable("desktop", "桌面操作",
-		"桌面操纵的运行状态（要求、起止时间、结果）；reset 中断正在运行的任务",
-		resetDesktop)
+	agentrepair.RegisterResettable("desktop_agent", "桌面操作-模型",
+		"桌面操纵智能体各阶段最近一次执行结果；reset 清除该记录",
+		resetDesktopPhases)
 }
 
-// resetDesktop 中断当前任务；未运行时直接返回。
-func resetDesktop() string {
-	if Stop() {
-		return "已中断桌面操纵任务"
-	}
-	return "桌面操纵当前没有运行中的任务"
+// resetDesktopPhases 清空各阶段最近执行结果。
+func resetDesktopPhases() string {
+	resetPhases()
+	return "已清除桌面操纵智能体的阶段执行记录"
 }

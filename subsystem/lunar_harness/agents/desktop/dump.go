@@ -2,7 +2,10 @@
 
 package desktop
 
-// dump.go 桌面操作的导出：最近一次人工任务的运行状态。
+// dump.go 桌面操纵智能体（模型侧）的导出：各阶段最近一次执行结果。
+//
+// 任务运行状态（要求、起止时间、结果）已上移到 chain/desktop，由桌控链导出；
+// 本包只暴露每个模型阶段的最近执行结果。
 
 import (
 	"time"
@@ -12,16 +15,15 @@ import (
 
 func init() {
 	agentdump.Register(agentdump.Provider{
-		ID:          "desktop",
-		Label:       "桌面操作",
+		ID:          "desktop_agent",
+		Label:       "桌面操作-模型",
 		Group:       "Go 智能体",
-		Description: "最近一次桌面操纵任务的要求、起止时间、结果或中断原因",
+		Description: "桌面操纵智能体各阶段（编纂/启动/UIA/规划/操作）最近一次执行结果",
 		Export: func(includeImages bool) (any, error) {
 			return map[string]any{
-				"kind":          "desktop-operator-context",
-				"generated_at":  time.Now().Format(time.RFC3339),
-				"message_count": 1,
-				"run":           Snapshot(),
+				"kind":         "desktop-agent-phases",
+				"generated_at": time.Now().Format(time.RFC3339),
+				"phases":       snapshotPhases(),
 			}, nil
 		},
 	})

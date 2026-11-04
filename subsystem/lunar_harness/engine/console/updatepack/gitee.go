@@ -72,7 +72,7 @@ func apiRequest(path string, query url.Values, out any) error {
 	}
 	if resp.StatusCode != http.StatusOK {
 		// 返回可分类的接口错误：限流/鉴权/权限需要给出不同的人话提示（见 channel/api.go）
-		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: truncate(string(body), 300)}
+		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: truncate(string(body), 512)}
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("解析响应失败: %w", err)
@@ -98,7 +98,7 @@ func deleteRequest(path string, query url.Values) error {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: truncate(string(body), 300)}
+		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: truncate(string(body), 512)}
 	}
 	return nil
 }

@@ -7,8 +7,8 @@ package app
 import (
 	"testing"
 
-	_ "LunarSubsystem/LunarHarness/agents/Creator"
 	_ "LunarSubsystem/LunarHarness/agents/Responder"
+	_ "LunarSubsystem/LunarHarness/chain/creation"
 
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 	"LunarSubsystem/LunarHarness/protocol/agentrepair"

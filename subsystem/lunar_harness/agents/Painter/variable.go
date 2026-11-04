@@ -12,6 +12,8 @@ import (
 const (
 	// module 日志模块名
 	module = "Painter"
+	// agentID 上报、数据导出与智能修复共用的智能体标识
+	agentID = "painter"
 	// roleLabel 实况与请求头中的角色标签
 	roleLabel = "绘制者"
 	// rolePromptPath 绘制者角色提示词

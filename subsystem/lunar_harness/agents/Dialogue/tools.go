@@ -1,240 +1,91 @@
 package Dialogue
 
-import (
-	"context"
-	"fmt"
-	"strings"
-	"time"
+// tools.go 对话者的工具声明：schema + 说明 + 所属智能体 ID（dialogue）。
+//
+// 按四层定义，「工具声明」归智能体；执行函数仍由装配层（chain/thinking）注册，
+// 本包不导入任何链，也不执行工具。动态枚举（qq_send 就绪后才出现）通过
+// toolreg.RegisterProvider 在查询时重新计算，避免 init 时把状态固化。
 
-	"LunarSubsystem/LunarHarness/agents/Creator"
-	"LunarSubsystem/LunarHarness/agents/Musician"
-	"LunarSubsystem/LunarHarness/agents/Painter"
-	"LunarSubsystem/LunarHarness/agents/Screenshoter"
-	"LunarSubsystem/LunarHarness/engine/console/logger"
+import (
+	"strings"
+
+	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/engine/resourcehub"
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
+	"LunarSubsystem/LunarHarness/protocol/toolreg"
 )
-
-// ==== 工具定义 ====
 
 const (
-	// techniqueToolName 技法创作聚合工具名
-	techniqueToolName = "dispatch_technique"
-	// techniquePainter 绘图子工具
-	techniquePainter = "painter"
-	// techniqueMusician 音乐子工具
-	techniqueMusician = "musician"
-	// techniqueScreenshoter 截图子工具
-	techniqueScreenshoter = "screenshoter"
-	// techniqueFileOperations 文件操作编排分支：统一承接文件读写、归档处理、文献读取与脚本运行
-	techniqueFileOperations = "file_operations"
-	// techniqueCreatorLegacy 旧创作分支（兼容保留，内部同样转文件操作编排）
-	techniqueCreatorLegacy = "creator"
-	// techniqueFileEditorLegacy 旧文件编辑分支（兼容保留，内部同样转文件操作编排）
-	techniqueFileEditorLegacy = "file_editor"
-	// fileOperationsTimeout 单次文件操作编排任务的超时上限
-	fileOperationsTimeout = 20 * time.Minute
+	// ToolDispatchTechnique 技法创作聚合工具名
+	ToolDispatchTechnique = "dispatch_technique"
+	// ToolFetchResources 统一资源工具名
+	ToolFetchResources = "fetch_resources"
+	// ToolLifePlanning 生活规划聚合工具名
+	ToolLifePlanning = "life_planning"
+	// ToolNetworkExplore 联网探索聚合工具名
+	ToolNetworkExplore = "network_explore"
+
+	// networkWebSearch 网页检索子工具
+	networkWebSearch = "web_search"
+	// networkBilibili 哔哩观影子工具
+	networkBilibili = "bilibili_viewer"
+	// networkForum 互助论坛子工具
+	networkForum = "mutual_forum"
+	// networkQQSend 通讯桥接子工具
+	networkQQSend = "qq_send"
 )
 
-var agentControlTools = []ToolCall{
-	schemaTool(techniqueToolName, "使用自然语言去调度专用子智能体进行技法创作或文件操作",
-		agentdispatch.Schema(
-			"painter=绘画创作、musician=音乐创作、screenshoter=屏幕截图、file_operations=文件操作（读写、整理、压缩包、脚本运行与多步骤任务编排）",
-			[]string{techniquePainter, techniqueMusician, techniqueScreenshoter, techniqueFileOperations},
-			"例如: 画一张赛博朋克风格的自画像；创作一段安静的钢琴曲；截取当前屏幕上弹出的对话框；把文档库里的笔记整理成一篇文章；把 notes 目录打包成压缩包",
-			"painter 分支可传入图生图基座图句柄（如 @I.003）；file_operations 分支传入任务涉及的资源句柄；其他分支按任务需要传入目标句柄。",
-		)),
+func init() {
+	toolreg.Register("dialogue",
+		toolreg.Schema{
+			Name:        ToolDispatchTechnique,
+			Description: "使用自然语言去调度专用子智能体进行技法创作或文件操作",
+			Parameters: agentdispatch.Schema(
+				"painter=绘画创作、musician=音乐创作、screenshoter=屏幕截图、file_operations=文件操作（读写、整理、压缩包、脚本运行与多步骤任务编排）",
+				[]string{"painter", "musician", "screenshoter", "file_operations"},
+				"例如: 画一张赛博朋克风格的自画像；创作一段安静的钢琴曲；截取当前屏幕上弹出的对话框；把文档库里的笔记整理成一篇文章；把 notes 目录打包成压缩包",
+				"painter 分支可传入图生图基座图句柄（如 @I.003）；file_operations 分支传入任务涉及的资源句柄；其他分支按任务需要传入目标句柄。",
+			),
+		},
+		toolreg.Schema{
+			Name:        ToolFetchResources,
+			Description: resourcehub.ToolDescription(),
+			Parameters:  resourcehub.ToolSchema(),
+		},
+		toolreg.Schema{
+			Name:        ToolLifePlanning,
+			Description: "生活规划：计划表增删改查、查看最近做了什么、记录创作意图",
+			Parameters: agentdispatch.Schema(
+				"plan_manager=计划管理（新增/删除/改写/查询计划表）；recent_activity=查看最近做了什么；record_intent=记录空闲时的创作意图",
+				[]string{"plan_manager", "recent_activity", "record_intent"},
+				"plan_manager 用自然语言写清要对计划表做什么（如「把明天下午三点的会议改到四点」「今天还有什么计划」）；recent_activity 可留空；record_intent 写清下一轮生活创作想做什么",
+				"计划管理可传计划项标识；recent_activity / record_intent 没有目标句柄时传空数组。",
+			),
+		},
+	)
+	toolreg.RegisterProvider("dialogue", networkExploreSchemas)
 }
 
-var fetchResourceTools = []ToolCall{
-	{Type: "function", Function: ToolDefinition{
-		Name:        "fetch_resources",
-		Description: resourcehub.ToolDescription(),
-		Parameters:  resourcehub.ToolSchema(),
-	}},
-}
-
-// ==== 工具注册 ====
-
-func registerTool(name string, handler ToolHandler) {
-	toolMu.Lock()
-	toolFunctions[name] = handler
-	toolMu.Unlock()
-}
-
-func lookupTool(name string) ToolHandler {
-	toolMu.RLock()
-	defer toolMu.RUnlock()
-	return toolFunctions[name]
-}
-
-// ==== 智能体控制 ====
-
-// handleDispatchTechnique 技法创作聚合工具：按 type 分派给对应子智能体。
-// 输入严格使用统一原语 {type, instruction, handle, details}，输出统一为 {result, handle, error}。
-func handleDispatchTechnique(args map[string]any) ToolResult {
-	call, err := agentdispatch.Parse(args)
-	if err != nil {
-		return toolJSON(agentdispatch.Failure(err.Error(), nil))
+// networkExploreSchemas 联网探索工具声明：qq_send 仅在通讯桥接就绪时加入枚举。
+func networkExploreSchemas() []toolreg.Schema {
+	subTools := []string{networkWebSearch, networkBilibili, networkForum}
+	descriptionParts := []string{
+		"bilibili_viewer=哔哩观影",
+		"mutual_forum=互助论坛",
+		"web_search=网页检索",
 	}
-	kind := strings.ToLower(call.Type)
-	if call.Details {
-		if text, ok := techniqueScope(kind); ok {
-			return toolJSON(agentdispatch.Success(text, nil))
-		}
-		return toolJSON(agentdispatch.Failure("type 只能取 painter / musician / screenshoter / file_operations", nil))
+	if DialogueBridging.Ready() {
+		subTools = append(subTools, networkQQSend)
+		descriptionParts = append(descriptionParts, "qq_send=向指定 QQ 群/好友发送文本、图片或文件（图片/文件使用句柄）")
 	}
-	if call.Instruction == "" {
-		return toolJSON(agentdispatch.Failure("instruction 不能为空，请用自然语言说明要做什么", nil))
-	}
-	switch kind {
-	case techniquePainter:
-		return toolJSON(dispatchPainter(call.Instruction, call.Handle))
-	case techniqueMusician:
-		return toolJSON(dispatchMusician(call.Instruction))
-	case techniqueScreenshoter:
-		result, image := dispatchScreenshoter(call.Instruction)
-		outcome := toolJSON(result)
-		outcome.Image = image
-		return outcome
-	case techniqueFileOperations, techniqueCreatorLegacy, techniqueFileEditorLegacy:
-		return toolJSON(dispatchFileOperations(call.Instruction, call.Handle))
-	default:
-		return toolJSON(agentdispatch.Failure("type 只能取 painter / musician / screenshoter / file_operations", nil))
-	}
-}
-
-// dispatchFileOperations 把任务交给文件操作编排：由它统一编排、路由与执行全部文件操作。
-// 旧 creator / file_editor 分支同样转这里，不再直接触发文件编辑智能体。
-func dispatchFileOperations(instruction string, handles []string) agentdispatch.Result {
-	if strings.TrimSpace(instruction) == "" {
-		return agentdispatch.Failure("文件操作编排失败：操作要求不能为空", nil)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), fileOperationsTimeout)
-	defer cancel()
-	result, err := Creator.RunAssigned(ctx, instruction, handles)
-	if err != nil {
-		return agentdispatch.PartialFailure("文件操作任务失败："+err.Error(), strings.TrimSpace(result.Summary), result.Handles)
-	}
-	summary := strings.TrimSpace(result.Summary)
-	if summary == "" {
-		summary = "文件操作已完成"
-	}
-	if len(result.ReviewFailures) > 0 {
-		summary += fmt.Sprintf("（%d 次校验失败，已按快照回滚或上报回滚错误）", len(result.ReviewFailures))
-	}
-	return agentdispatch.Success(summary, result.Handles)
-}
-
-func dispatchPainter(instruction string, handles []string) agentdispatch.Result {
-	if instruction == "" {
-		return agentdispatch.Failure("绘画任务调度失败：创作描述不能为空", nil)
-	}
-	var reference *Painter.Reference
-	usedHandles := make([]string, 0, 2)
-	if len(handles) > 0 {
-		tag := strings.TrimSpace(handles[0])
-		handle, source, desc, ok := resolveImageRef(tag)
-		if !ok {
-			return agentdispatch.Failure("绘画任务调度失败：图片句柄 "+tag+" 不存在，请用 fetch_resources（type=\"list\", query=[\"I\"]）查看可引用的图片句柄后重试", nil)
-		}
-		if source == "" {
-			note := ""
-			if desc != "" {
-				note = "：" + desc
-			}
-			return agentdispatch.Failure("绘画任务调度失败："+handle+" 的图片本体已从内容仓库回收（仅存描述"+note+"），请让用户重新发送该图片", nil)
-		}
-		reference = &Painter.Reference{Handle: handle, Source: source, Desc: desc}
-		usedHandles = append(usedHandles, handle)
-	}
-	result, err := Painter.Perform(context.Background(), instruction, reference, painterEnv{})
-	usedHandles = append(usedHandles, result.Handles...)
-	summary := strings.TrimSpace(result.Summary)
-	if err != nil {
-		return agentdispatch.PartialFailure("绘画任务失败："+err.Error(), summary, usedHandles)
-	}
-	if summary == "" {
-		summary = "绘画已完成"
-	}
-	return agentdispatch.Success(summary, usedHandles)
-}
-
-// painterEnv 把绘制者需要的宿主能力接到月华的推送、视觉副本与图片解析管线。
-// 绘制者只声明能力，具体传输细节留在月华这一侧。
-type painterEnv struct{}
-
-func (painterEnv) PushImages(images []string) []string {
-	return pushAssistantImage(images, false)
-}
-
-func (painterEnv) VisionCopy(relPath, tag string) (int, int, error) {
-	_, _, width, height, err := visionCopy(relPath, tag, 0)
-	return width, height, err
-}
-
-func (painterEnv) VisionReference(handle, blobPath string) string {
-	return visionReference(handle, blobPath)
-}
-
-func (painterEnv) ReadImageBytes(source string) ([]byte, error) {
-	return resolveImageBytes(source)
-}
-
-func dispatchMusician(instruction string) agentdispatch.Result {
-	if instruction == "" {
-		return agentdispatch.Failure("音乐任务调度失败：创作描述不能为空", nil)
-	}
-	result, err := Musician.Perform(context.Background(), instruction)
-	if err != nil {
-		return agentdispatch.Failure("演奏没能完成："+err.Error(), nil)
-	}
-	// 两个前端共用同一份音乐消息：可播放音频地址 + 标题 + 描述 + 时长。
-	pushAssistantMusic(result.Title, result.Description, result.Duration, result.AudioURL)
-	return agentdispatch.Success(result.Summary, nil)
-}
-
-// dispatchScreenshoter 把截图需求交给独立截图智能体，只消费其汇报与主帧。
-func dispatchScreenshoter(requirement string) (agentdispatch.Result, string) {
-	if requirement == "" {
-		return agentdispatch.Failure("截图任务调度失败：截图要求不能为空", nil), ""
-	}
-	result, err := Screenshoter.Perform(context.Background(), requirement, screenshotEnv{})
-	if err != nil {
-		return agentdispatch.Failure("截图任务调度失败："+err.Error(), nil), ""
-	}
-	return agentdispatch.Success(result.Summary, nil), result.Image
-}
-
-// screenshotEnv 把截图者需要的宿主能力接到月华的推送与落盘管线。
-// 截图者只声明能力，具体传输细节留在月华这一侧。
-type screenshotEnv struct{}
-
-func (screenshotEnv) PushImages(images []string) []string {
-	return pushAssistantImage(images, false)
-}
-
-func (screenshotEnv) SaveImage(name string, data []byte) (string, error) {
-	if _, err := persistenceSaveBytes(name, data); err != nil {
-		return "", err
-	}
-	return localPathToReadURL(name), nil
-}
-
-// ==== 统一资源工具 ====
-
-// handleFetchResources 统一资源入口：memory / handle / path / list。
-// 句柄解析、路径登记与内容渲染全部由 engine/resourcehub 完成。
-func handleFetchResources(args map[string]any) ToolResult {
-	return ToolResult{Text: resourcehub.RunArgs(context.Background(), args).Text}
-}
-
-// registerDialogueTools 注册对话者可用的全部工具
-func registerDialogueTools() {
-	registerTool(techniqueToolName, handleDispatchTechnique)
-	registerTool("fetch_resources", handleFetchResources)
-	registerTool(lifePlanningToolName, handleLifePlanning)
-	registerTool(networkExploreToolName, handleNetworkExplore)
-	registerTool(crystalToolName, handleUseTheProgram)
-	logger.Info(lunarCoreModule, "[工具] 对话者工具已注册")
+	return []toolreg.Schema{{
+		Name:        ToolNetworkExplore,
+		Description: "使用自然语言去调度专用子智能体进行联网探索",
+		Parameters: agentdispatch.Schema(
+			strings.Join(descriptionParts, "；"),
+			subTools,
+			"例如: 查一下今天的 AI 新闻；去 B 站看看有趣的猫咪视频；在互助论坛发帖问问 WebView 超时怎么排查；把这个文件 @D.012 发给群「测试群」",
+			"qq_send 分支可传入待发送的图片 / 文件句柄（如 @I.007、@D.012）；其他分支按任务需要传入目标句柄。",
+		),
+	}}
 }

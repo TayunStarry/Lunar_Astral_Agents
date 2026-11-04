@@ -110,7 +110,7 @@ func Upcoming(now time.Time, window time.Duration) string {
 	sort.SliceStable(list, func(i, j int) bool { return list[i].due.Before(list[j].due) })
 	parts := make([]string, 0, len(list))
 	for _, item := range list {
-		parts = append(parts, item.due.Format("15:04")+" "+truncateRunes(item.content, 40))
+		parts = append(parts, item.due.Format("15:04")+" "+truncateRunes(item.content, 512))
 	}
 	return strings.Join(parts, "；")
 }

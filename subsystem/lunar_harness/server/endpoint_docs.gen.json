@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.307.1912",
+    "version": "2026.309.0019",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -699,36 +699,10 @@
     },
     "/generate": {
       "post": {
-        "summary": "图片生成服务（请求可带 scheme 指定绘图模型方案）",
-        "description": "图片生成服务（请求可带 scheme 指定绘图模型方案）",
+        "summary": "图片生成服务",
+        "description": "图片生成服务",
         "operationId": "image.GenerateHandler",
         "x-handler": "image.GenerateHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/generate/scheme": {
-      "get": {
-        "summary": "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）",
-        "description": "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）",
-        "operationId": "image.DiffusionSchemeHandler_get",
-        "x-handler": "image.DiffusionSchemeHandler",
-        "x-method": "GET/POST",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      },
-      "post": {
-        "summary": "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）",
-        "description": "查询/切换绘图模型方案（turbo=速度优先 / quality=质量优先）",
-        "operationId": "image.DiffusionSchemeHandler_post",
-        "x-handler": "image.DiffusionSchemeHandler",
-        "x-method": "GET/POST",
         "responses": {
           "200": {
             "description": "成功"
@@ -1056,8 +1030,8 @@
       "post": {
         "summary": "代理访问服务",
         "description": "代理访问服务",
-        "operationId": "Dialogue.ProxyHandler",
-        "x-handler": "Dialogue.ProxyHandler",
+        "operationId": "thinking.ProxyHandler",
+        "x-handler": "thinking.ProxyHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1158,8 +1132,8 @@
       "post": {
         "summary": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
         "description": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
-        "operationId": "Dialogue.MessageBatchHandler",
-        "x-handler": "Dialogue.MessageBatchHandler",
+        "operationId": "thinking.MessageBatchHandler",
+        "x-handler": "thinking.MessageBatchHandler",
         "responses": {
           "200": {
             "description": "成功"

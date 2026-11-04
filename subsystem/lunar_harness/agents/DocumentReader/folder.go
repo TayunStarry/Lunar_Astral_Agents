@@ -162,7 +162,7 @@ func renderFolderDigest(rel string, files []folderFile, dirs int, totalBytes int
 			fmt.Fprintf(&builder, "  %s（%d 字节 / %d 行）\n", file.Rel, file.Size, file.Lines)
 			continue
 		}
-		fmt.Fprintf(&builder, "  %s（%d 字节 / %d 行）｜%s\n", file.Rel, file.Size, file.Lines, agentbase.TruncateRunes(line, 60))
+		fmt.Fprintf(&builder, "  %s（%d 字节 / %d 行）｜%s\n", file.Rel, file.Size, file.Lines, agentbase.TruncateRunes(line, 512))
 	}
 	if limit < len(files) {
 		fmt.Fprintf(&builder, "  （其余 %d 个文件未展开）\n", len(files)-limit)
@@ -217,7 +217,7 @@ func folderExcerpt(rel string, files []folderFile, request string) string {
 			if matched == "" {
 				continue
 			}
-			fmt.Fprintf(&builder, "%s L%d: %s\n", file.Rel, index+1, agentbase.TruncateRunes(strings.TrimSpace(line), 120))
+			fmt.Fprintf(&builder, "%s L%d: %s\n", file.Rel, index+1, agentbase.TruncateRunes(strings.TrimSpace(line), 512))
 			added++
 		}
 		if added > 0 {

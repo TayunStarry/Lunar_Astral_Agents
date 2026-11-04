@@ -81,7 +81,7 @@ func buildReferences(doc *docContext) []fileReference {
 			resolved, exists := resolveReference(doc, target)
 			refs = append(refs, fileReference{
 				Line:     index + 1,
-				Raw:      truncateRunes(trimmed, 160),
+				Raw:      truncateRunes(trimmed, 512),
 				Target:   target,
 				Resolved: resolved,
 				Exists:   exists,

@@ -167,10 +167,7 @@ func TestApplyPainterConfig(t *testing.T) {
 	if SDSteps != 20 {
 		t.Fatalf("sd_steps 应覆盖为 20，实得 %d", SDSteps)
 	}
-	if got := ResolveDiffusionScheme("legacy"); got.Steps != 12 {
-		t.Fatalf("legacy 方案 steps 应为 12，实得 %d", got.Steps)
-	}
-	if len(DiffusionSchemeInfos()) != 2 {
-		t.Fatalf("应注册 2 套方案，实得 %d", len(DiffusionSchemeInfos()))
+	if got := ResolveDiffusionScheme(); got.Name != "custom" || got.Steps != 8 {
+		t.Fatalf("默认方案应为 custom（steps=8），实得 name=%q steps=%d", got.Name, got.Steps)
 	}
 }

@@ -1,6 +1,9 @@
 package memory
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // MediaSubdir 记忆库图片在 multimedia 下的专属子目录：
 // 图片实体统一落在 multimedia/memory/<集合名>/，与生成图、背景图、截图等隔离，便于清理。
@@ -45,6 +48,36 @@ const (
 	FuseStrategyAuto   = "auto"   // 短内容直接拼接，长内容交给模型整合
 	FuseStrategyConcat = "concat" // 总是拼接去重
 	FuseStrategyModel  = "model"  // 总是调用模型整合
+)
+
+// 混合检索（向量 + 关键词）融合参数
+const (
+	// HybridVectorWeight 默认向量通道权重（语义相近度）
+	HybridVectorWeight float32 = 0.6
+	// HybridKeywordWeight 默认关键词通道权重（字面命中强度）
+	HybridKeywordWeight float32 = 0.4
+	// HybridCandidateMultiplier 每路召回上限 = topK × 本倍数
+	HybridCandidateMultiplier = 3
+	// HybridMinCandidates 每路召回下限（短查询也能有足够候选）
+	HybridMinCandidates = 20
+	// HybridMaxCandidates 每路召回硬上限
+	HybridMaxCandidates = 60
+	// HybridKeywordOccurrenceCap 关键词命中次数计入强度的上限（超过按上限计）
+	HybridKeywordOccurrenceCap = 3
+	// HybridKeywordOccurrenceFloor 关键词命中强度下限：覆盖度 × 本值起步，命中越多越接近 1
+	HybridKeywordOccurrenceFloor float32 = 0.6
+	// HybridVectorTimeout 向量通道超时（嵌入服务不可用时尽快降级到关键词通道）
+	HybridVectorTimeout = 8 * time.Second
+)
+
+// 混合检索命中的来源标记（Entry.MatchedBy）
+const (
+	// MatchedByVector 仅向量通道命中
+	MatchedByVector = "vector"
+	// MatchedByKeyword 仅关键词通道命中
+	MatchedByKeyword = "keyword"
+	// MatchedByBoth 两个通道同时命中
+	MatchedByBoth = "both"
 )
 
 // 图片识别取向常量 — 决定图片标签生成的描述角度与方式

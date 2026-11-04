@@ -26,6 +26,13 @@ func TestListDTSModules(t *testing.T) {
 		if rerr != nil || len(content) == 0 {
 			t.Fatalf("读取 %s 失败: %v", name, rerr)
 		}
+		firstLine := strings.SplitN(strings.TrimSpace(string(content)), "\n", 2)[0]
+		t.Logf("%-18s %5d 字节 %4d 行 首行: %s", name, len(content), strings.Count(string(content), "\n")+1, firstLine)
+	}
+
+	// 迁移到 runtimeAPI/ 子目录后，裸文件名与显式目录路径两种写法都应可读。
+	if content, rerr := Read("runtimeAPI/agentAPI.d.ts"); rerr != nil || len(content) == 0 {
+		t.Fatalf("按新目录路径读取 agentAPI.d.ts 失败: %v", rerr)
 	}
 }
 

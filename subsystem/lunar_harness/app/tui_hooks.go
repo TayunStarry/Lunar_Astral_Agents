@@ -11,24 +11,31 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
-	"LunarSubsystem/LunarHarness/agents/ArchiveReader"
-	"LunarSubsystem/LunarHarness/agents/BilibiliViewer"
-	"LunarSubsystem/LunarHarness/agents/Creator"
-	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
 	"LunarSubsystem/LunarHarness/agents/PlanManager"
 	"LunarSubsystem/LunarHarness/agents/Savior"
+	"LunarSubsystem/LunarHarness/agents/SearchPlanner"
+	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
+	"LunarSubsystem/LunarHarness/agents/ViewerCensor"
+	"LunarSubsystem/LunarHarness/agents/ViewerCritic"
+	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
+	"LunarSubsystem/LunarHarness/agents/ViewerShare"
 	"LunarSubsystem/LunarHarness/agents/Vision"
-	"LunarSubsystem/LunarHarness/agents/WebSearch"
 	"LunarSubsystem/LunarHarness/agents/desktop"
+	"LunarSubsystem/LunarHarness/chain/creation"
+	"LunarSubsystem/LunarHarness/chain/desktop"
+	"LunarSubsystem/LunarHarness/chain/search"
+	"LunarSubsystem/LunarHarness/chain/thinking"
+	"LunarSubsystem/LunarHarness/chain/viewer"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/archive"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/engine/websocket"
+	"LunarSubsystem/LunarHarness/executors/ArchiveReader"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 	"LunarSubsystem/LunarHarness/server"
@@ -74,12 +81,12 @@ func WireTUIFrontendHooks() {
 
 // WireTUIMaintenanceHook 把「打包期间暂停思维链」注入打包归档 / 更新包发布：
 //
-// 7z 压缩会长时间占用 CPU 与磁盘，若 Tick 同时推进生活链/对话链，会突然拉起
+// 7z 压缩会长时间占用 CPU 与磁盘，若 Tick 同时推进生活链/思维链，会突然拉起
 // primary_reasoning / light_reasoning / text_embedding。这里在压缩前后暂停 Tick 并卸载模型，
 // 压缩完成后再恢复调度。
 func WireTUIMaintenanceHook() {
 	archive.SetMaintenanceHook(func(fn func() error) error {
-		resume := Dialogue.BeginMaintenance()
+		resume := thinking.BeginMaintenance()
 		defer resume()
 		return fn()
 	})
@@ -111,7 +118,7 @@ func WireTUIDataDumpHooks() {
 //   - 核心智能实况与模型计量：各 Go 智能体的模型调用统一进实况与计量；
 //   - 桌面操纵：唯一人工入口在「运行状态」屏（输入要求启动 / 随时中断）。
 //
-// 对话链状态重建（自动/手动）已整体移除：实测无法真正恢复正常运行，
+// 思维链状态重建（自动/手动）已整体移除：实测无法真正恢复正常运行，
 // 控制台不再提供该入口。
 func WireTUIEngineHooks() {
 	// 「工具列表」屏：宿主汇总全部 Go 智能体的工具目录（控制台只负责展示）。
@@ -157,10 +164,10 @@ func WireTUIEngineHooks() {
 	// 同时把中断器注入对话者：对话者开始推理与应答前会自动终止桌面操纵，
 	// 避免它继续抢占桌面键鼠、与本轮响应互相干扰。
 	console.SetDesktopOperatorHooks(
-		desktop.Start,
-		desktop.Stop,
+		desktopchain.Start,
+		desktopchain.Stop,
 		func() console.DesktopOperatorStatus {
-			state := desktop.Snapshot()
+			state := desktopchain.Snapshot()
 			return console.DesktopOperatorStatus{
 				Running:     state.Running,
 				Stopping:    state.Stopping,
@@ -172,7 +179,7 @@ func WireTUIEngineHooks() {
 			}
 		},
 	)
-	Dialogue.SetDesktopActorStopHook(desktop.Stop)
+	thinking.SetDesktopActorStopHook(desktopchain.Stop)
 }
 
 // agentIDByRole 把故障归属映射到智能修复使用的智能体 ID。
@@ -180,8 +187,10 @@ func WireTUIEngineHooks() {
 func agentIDByRole(role string) string {
 	switch role {
 	case "vision", "document_reader", "archive_ops", "archive_reader",
-		"file_editor", "creative", "desktop", "bilibili",
-		"web_search", "mutual_forum", "dialogue_bridging",
+		"file_editor", "creator", "creative", "life_memorizer", "painter", "screenshoter",
+		"desktop", "bilibili",
+		"web_search", "search_planner", "search_summarizer", "mutual_forum", "dialogue_bridging",
+		"viewer_screening", "viewer_censor", "viewer_critic", "viewer_share",
 		"responder", "savior", "dialogue", "unknown":
 		return role
 	}
@@ -200,17 +209,23 @@ func agentIDByRole(role string) string {
 
 // buildToolCatalog 汇总全部 Go 智能体的工具目录（供控制台「工具列表」屏扫描展示）。
 func buildToolCatalog() []agentinfo.Agent {
-	out := Dialogue.ToolCatalog()
+	out := thinking.ToolCatalog()
 	out = append(out, Vision.ToolCatalog()...)
 	out = append(out, DocumentReader.ToolCatalog()...)
 	out = append(out, ArchiveReader.ToolCatalog()...)
 	out = append(out, ArchiveOps.ToolCatalog()...)
 	out = append(out, FileEditor.ToolCatalog()...)
-	out = append(out, Creator.ToolCatalog()...)
+	out = append(out, creation.ToolCatalog()...)
 	out = append(out, PlanManager.ToolCatalog()...)
 	out = append(out, DialogueBridging.ToolCatalog()...)
-	out = append(out, WebSearch.ToolCatalog()...)
-	out = append(out, BilibiliViewer.ToolCatalog()...)
+	out = append(out, search.ToolCatalog()...)
+	out = append(out, SearchPlanner.ToolCatalog()...)
+	out = append(out, SearchSummarizer.ToolCatalog()...)
+	out = append(out, ViewerScreening.ToolCatalog()...)
+	out = append(out, ViewerCensor.ToolCatalog()...)
+	out = append(out, ViewerCritic.ToolCatalog()...)
+	out = append(out, ViewerShare.ToolCatalog()...)
+	out = append(out, viewer.ToolCatalog()...)
 	out = append(out, desktop.ToolCatalog()...)
 	out = append(out, MutualForum.ToolCatalog()...)
 	return out

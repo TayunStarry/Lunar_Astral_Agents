@@ -37,36 +37,8 @@ func Run(ctx context.Context, instruction string) (string, error) {
 	if summary == "" {
 		summary = "已完成文件编辑操作"
 	}
-	logger.Info(Module, "[文件编辑] 本轮完成：%s", previewRunes(summary, 120))
+	logger.Info(Module, "[文件编辑] 本轮完成：%s", previewRunes(summary, 512))
 	return summary, nil
-}
-
-// Execute 用自然语言执行一次文件编辑，返回结构化结果（含资源句柄与操作简述）。
-//
-// 兼容保留：对话者已改为统一指派「自由创作」（Creator），由 Creator 编排并调用
-// 本包的确定性能力；本入口不再处于生产调用链上，仅保留给旧调用方与回归测试。
-func Execute(ctx context.Context, instruction string) (OpResult, error) {
-	instruction = strings.TrimSpace(instruction)
-	if instruction == "" {
-		return failResult("file_editor", "", errEmptyInstruction), errEmptyInstruction
-	}
-	runMu.Lock()
-	defer runMu.Unlock()
-
-	runCtx, cancel := context.WithTimeout(ctx, runTimeout)
-	defer cancel()
-
-	summary, handles, err := runToolLoop(runCtx, systemPrompt(), instruction)
-	if err != nil {
-		logger.Warn(Module, "[文件编辑] 执行失败: %v", err)
-		agentbase.ReportRun("file_editor", err)
-		return failResult("file_editor", "", err), err
-	}
-	if summary == "" {
-		summary = "已完成文件编辑操作"
-	}
-	logger.Info(Module, "[文件编辑] 本轮完成：%s", previewRunes(summary, 120))
-	return newResult("file_editor", "", summary, handles, nil), nil
 }
 
 // systemPrompt 文件编辑智能体的系统提示（统一收纳在 prompts/fileEditor.md）。

@@ -1,19 +1,6 @@
 package desktop
 
-import (
-	"time"
-)
-
-// RunState 桌面操纵当前/最近一次运行状态（供控制台「运行状态」屏展示）。
-type RunState struct {
-	Running     bool      // 是否正在运行
-	Stopping    bool      // 是否已请求中断、正在等待任务退出
-	Instruction string    // 本轮指令
-	StartedAt   time.Time // 启动时间
-	FinishedAt  time.Time // 结束时间（未结束时为零值）
-	Result      string    // 成功时的结果文本
-	Error       string    // 失败/中断原因（空串表示无）
-}
+// RunState 及运行控制已上移到 chain/desktop；本包只保留模型角色与桌面原语类型。
 
 // chatMessage OpenAI v1 协议中的单条对话消息。
 type chatMessage struct {

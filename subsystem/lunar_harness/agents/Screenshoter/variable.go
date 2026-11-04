@@ -7,6 +7,8 @@ import "sync"
 const (
 	// module 日志模块标识
 	module = "Screenshoter"
+	// agentID 上报、数据导出与智能修复共用的智能体标识
+	agentID = "screenshoter"
 	// roleLabel 实况与模型路由使用的角色名（保持既有契约）
 	roleLabel = "截图者"
 	// promptPath 系统提示词路径

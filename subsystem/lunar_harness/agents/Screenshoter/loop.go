@@ -28,7 +28,7 @@ func (s *session) run() string {
 	messages = append(messages, baseMessage{Role: "system", Content: s.system})
 	messages = append(messages, s.history...)
 	base := agentbase.NewAgent(agentbase.AgentConfig{
-		ID:                 "core",
+		ID:                 agentID,
 		Label:              roleLabel,
 		MaxRounds:          maxIterations,
 		MaxRepeats:         -1, // 内容循环由 StreamWithRetry 负责，跨轮不重复检测
@@ -87,7 +87,7 @@ func (s *session) stream(ctx context.Context, messages []baseMessage, tools []ag
 		timeout = 5 * time.Minute
 	}
 	return agentbase.StreamWithRetry(ctx, agentbase.StreamRequest{
-		Agent:    "core",
+		Agent:    agentID,
 		Role:     roleLabel,
 		Messages: messages,
 		Tools:    tools,

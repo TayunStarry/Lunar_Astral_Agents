@@ -16,7 +16,7 @@ import (
 // assembleCrystal 装配琉璃人格格：知识库/记忆库、LTPX 协调与前端总线消费。
 func assembleCrystal() error {
 	// ==== 统一句柄库（SQLite handles.db：URL 主表 / 六类句柄 / 段落 / 缓存） ====
-	// 必须先于月华智能体运行时启动：入库层在对话链路里即被调用。
+	// 必须先于月华智能体运行时启动：入库层在思维链里即被调用。
 	if err := resource.Init(config.ArchiveDBPath); err != nil {
 		logger.Warn("LunarHarness", "统一句柄库初始化失败: %v (不影响服务启动)", err)
 	}

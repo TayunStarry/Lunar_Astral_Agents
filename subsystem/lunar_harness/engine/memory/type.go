@@ -26,8 +26,14 @@ type Entry struct {
 	Base64     string  `json:"base64,omitempty"`     // 旧版图片内联数据（仅历史数据兼容）
 	Collection string  `json:"collection,omitempty"` // 内容所属分组集合名
 	Source     string  `json:"source,omitempty"`     // 写入来源标记（插件 / 内部调用；普通对话为空）
-	Similarity float32 `json:"similarity"`           // 内容向量余弦相似度
+	Similarity float32 `json:"similarity"`           // 内容向量余弦相似度；混合检索时为融合后的综合相关度
 	Timestamp  int64   `json:"timestamp,omitempty"`  // 入库时间 Unix 秒级时间戳，旧数据无此字段
+	// VectorScore 向量通道归一化得分（0~1，仅混合检索填写）
+	VectorScore float32 `json:"vector_score,omitempty"`
+	// KeywordScore 关键词通道命中强度（0~1，仅混合检索填写）
+	KeywordScore float32 `json:"keyword_score,omitempty"`
+	// MatchedBy 命中来源：vector / keyword / both（仅混合检索填写）
+	MatchedBy string `json:"matched_by,omitempty"`
 }
 
 // DocumentEntry 文档条目 — 用于前端分页列表（不含嵌入向量，避免传输开销）
@@ -51,6 +57,33 @@ type QueryOptions struct {
 	// 集合，首集合未命中则回退扫描其余全部集合。集合越多，快速检索省下的全量
 	// 向量比较越多；需要“确保不漏”时（如表情包等稀疏媒体）显式打开本项。
 	ForceGlobal bool
+}
+
+// HybridQueryOptions 混合检索（向量 + 关键词）选项
+type HybridQueryOptions struct {
+	// ForceGlobal 向量通道强制扫描全部集合（默认 false 走快速路由）
+	ForceGlobal bool
+	// VectorWeight 向量通道权重；与 KeywordWeight 同时为 0 时使用默认值，
+	// 否则按两者之和归一化（允许只给其中一路非零权重）
+	VectorWeight float32
+	// KeywordWeight 关键词通道权重（归一化规则同上）
+	KeywordWeight float32
+	// CandidateLimit 每路召回上限（<=0 时按 topK 自适应：topK×3，夹在 20~60）
+	CandidateLimit int
+	// Regex 关键词通道按正则匹配（queries 以空格拼接后编译，忽略大小写）
+	Regex bool
+}
+
+// hybridCandidate 混合检索融合过程中的单条候选（按记忆 ID 去重）
+//
+// 同一条记忆可能同时被向量通道与关键词通道命中，两路只保留一条：
+// 向量分与关键词分各自取最大值，最终以融合分参与排序。
+type hybridCandidate struct {
+	entry        Entry   // 记忆条目（正文优先取更完整的一份）
+	vectorScore  float32 // 归一化后的向量分（0~1）
+	keywordScore float32 // 关键词命中强度（0~1）
+	vectorHit    bool    // 是否被向量通道命中
+	keywordHit   bool    // 是否被关键词通道命中
 }
 
 // FuseOptions 权重融合参数（仅作用于文本记忆）

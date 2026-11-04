@@ -35,30 +35,14 @@ func DecodeAMT(ids []int, brief Brief) (*parsedScore, error) {
 
 	groups := make(map[int][]noteEvent)
 	firstTick := make(map[int]int)
-	for index := 0; index+amtNotesPerStep <= len(ids); index += amtNotesPerStep {
-		timeID, durID, noteID := ids[index], ids[index+1], ids[index+2]
-		// 时间 token 越界说明该三元组已损坏，整组丢弃
-		if timeID < amtTimeOffset || timeID >= amtMaxTime {
-			continue
-		}
-		// 休止 / 控制 / 特殊 token 不产生音符
-		if noteID < amtNoteOffset || noteID >= amtRestToken {
-			continue
-		}
-		duration := durID - amtDurOffset
+	notes, _ := scanNotes(ids)
+	for _, parsed := range notes {
+		duration := parsed.Duration
 		if duration < 1 {
 			duration = 1
 		}
-		if duration > amtMaxDuration {
-			continue
-		}
-		note := noteID - amtNoteOffset
-		instrument := note / 128
-		pitch := note % 128
-		if instrument > amtDrumInstrument {
-			continue
-		}
-		tick := timeID * normalized.Tempo * PPQ / 6000
+		instrument := parsed.Instrument
+		tick := parsed.Time * normalized.Tempo * PPQ / 6000
 		ticks := duration * normalized.Tempo * PPQ / 6000
 		if ticks < 1 {
 			ticks = 1
@@ -68,7 +52,7 @@ func DecodeAMT(ids []int, brief Brief) (*parsedScore, error) {
 			velocity = 80
 		}
 		groups[instrument] = append(groups[instrument], noteEvent{
-			Tick: tick, Duration: ticks, Note: pitch, Velocity: velocity,
+			Tick: tick, Duration: ticks, Note: parsed.Pitch, Velocity: velocity,
 		})
 		if _, ok := firstTick[instrument]; !ok {
 			firstTick[instrument] = tick
@@ -164,7 +148,7 @@ func normalizeBrief(brief Brief) Brief {
 // 缺失时由结构化字段拼接（异常保护，不作为常规路径）。
 func BriefDescription(brief Brief) string {
 	if value := strings.TrimSpace(brief.Prompt); value != "" {
-		return value
+		return clampDescription(value)
 	}
 	style := strings.TrimSpace(brief.Style)
 	if style == "" {
@@ -174,8 +158,17 @@ func BriefDescription(brief Brief) string {
 	if mood == "" {
 		mood = "expressive"
 	}
-	return fmt.Sprintf("A %s %s piece for %s, about %d bars, %d BPM, %s meter.",
-		style, mood, strings.Join(brief.Instruments, " and "), brief.Bars, brief.Tempo, brief.Meter)
+	return clampDescription(fmt.Sprintf("A %s %s piece for %s, about %d bars, %d BPM, %s meter.",
+		style, mood, strings.Join(brief.Instruments, " and "), brief.Bars, brief.Tempo, brief.Meter))
+}
+
+// clampDescription 把模型给出的描述压成单行并限制长度，避免换行或超长说明混入模型输入。
+func clampDescription(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if runes := []rune(value); len(runes) > descriptionLimit {
+		value = string(runes[:descriptionLimit])
+	}
+	return value
 }
 
 // meterParts 解析拍号，缺失时回退 4/4。

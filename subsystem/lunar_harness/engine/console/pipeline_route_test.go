@@ -39,7 +39,7 @@ func TestRouteLogRecordCategories(t *testing.T) {
 	clear()
 	t.Cleanup(clear)
 
-	routeLogRecord("INFO", "LunarCore", "", "对话链回合完成")
+	routeLogRecord("INFO", "LunarCore", "", "思维链回合完成")
 	if got := GetLogs(SourceDialogue); len(got) != 1 {
 		t.Fatalf("LunarCore 日志应进入「对话」，实际 %d 条", len(got))
 	}

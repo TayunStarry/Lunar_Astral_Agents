@@ -78,7 +78,7 @@ func Execute(ctx context.Context, instruction string) (Result, error) {
 		summary = last.Summary
 	}
 	last.Summary = summary
-	logger.Info(Module, "[计划管理] 本轮完成：%s", previewRunes(summary, 120))
+	logger.Info(Module, "[计划管理] 本轮完成：%s", previewRunes(summary, 512))
 	return last, nil
 }
 

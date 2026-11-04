@@ -27,8 +27,8 @@ func parseBrief(text string) (music.Brief, error) {
 // fallbackBrief 主模型失败时的兜底描述（音乐本体仍由 MIDI-LLM 生成）。
 func fallbackBrief(instruction string) music.Brief {
 	title := strings.TrimSpace(instruction)
-	if len([]rune(title)) > 20 {
-		title = string([]rune(title)[:20])
+	if len([]rune(title)) > 512 {
+		title = string([]rune(title)[:512])
 	}
 	if title == "" {
 		title = "即兴小曲"

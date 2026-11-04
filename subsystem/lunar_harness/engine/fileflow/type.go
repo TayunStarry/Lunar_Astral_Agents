@@ -2,7 +2,10 @@ package fileflow
 
 // type.go 文件操作流程的类型定义：操作种类、规划预期、快照、审查结果与流程上下文。
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+)
 
 // ==== 生成模式 ====
 
@@ -302,6 +305,8 @@ type OpInput struct {
 	Step int
 	// Mode 运行模式
 	Mode Mode
+	// CallID 所属调用轮次（语义为一次外部任务输入到一次任务输出；测试或独立使用时可为空）
+	CallID string
 	// Op 操作种类
 	Op string
 	// Target 调用方给出的目标路径
@@ -453,6 +458,221 @@ func (c *Context) AddError(text string) {
 		return
 	}
 	c.Errors = append(c.Errors, text)
+}
+
+// ==== 跨轮编排态 ====
+
+// queryer 兼容 *sql.DB 与 *sql.Tx 的查询接口。
+type queryer interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+// 调用状态。
+const (
+	// CallStatusRunning 调用进行中
+	CallStatusRunning = "running"
+	// CallStatusDone 调用正常完成
+	CallStatusDone = "done"
+	// CallStatusFailed 调用失败
+	CallStatusFailed = "failed"
+)
+
+// CallRecord 一次调用轮次的元信息。
+type CallRecord struct {
+	// CallID 调用 ID
+	CallID string `json:"call_id"`
+	// Mode 运行模式
+	Mode Mode `json:"mode"`
+	// Status 调用状态（running / done / failed）
+	Status string `json:"status"`
+	// Summary 收尾摘要（仅自由创作模式持久化）
+	Summary string `json:"summary,omitempty"`
+	// StartedAt 开始时间（Unix 秒）
+	StartedAt int64 `json:"started_at"`
+	// EndedAt 结束时间（Unix 秒，进行中为 0）
+	EndedAt int64 `json:"ended_at,omitempty"`
+}
+
+// RoundStep 一次调用内安排的步骤。
+type RoundStep struct {
+	// Ordinal 步骤序号（0 基）
+	Ordinal int `json:"ordinal"`
+	// Agent 执行智能体
+	Agent string `json:"agent"`
+	// Task 自然语言任务
+	Task string `json:"task"`
+	// Expects 规划预期
+	Expects []Expect `json:"expects,omitempty"`
+	// CreatedAt 写入时间（Unix 秒）
+	CreatedAt int64 `json:"created_at,omitempty"`
+}
+
+// RoundItem 参考资料 / 备忘 / 错误等文本条目。
+type RoundItem struct {
+	// Ordinal 条目序号
+	Ordinal int `json:"ordinal"`
+	// Content 文本内容
+	Content string `json:"content"`
+	// CreatedAt 写入时间（Unix 秒）
+	CreatedAt int64 `json:"created_at,omitempty"`
+}
+
+// ChangeRecord change 表中的一条内容级变更（对应一个差异块）。
+type ChangeRecord struct {
+	// ID 主键
+	ID int64 `json:"id"`
+	// OpID 对应 flow_ops 主键（回退的权威来源）
+	OpID int64 `json:"op_id"`
+	// CallID 所属调用轮次（可能为空）
+	CallID string `json:"call_id,omitempty"`
+	// FlowID 流程 ID
+	FlowID string `json:"flow_id"`
+	// Seq 流程内序号
+	Seq int `json:"seq"`
+	// Kind 增量种类
+	Kind string `json:"kind"`
+	// PathRel 目标相对路径
+	PathRel string `json:"path_rel,omitempty"`
+	// PathAbs 目标绝对路径
+	PathAbs string `json:"path_abs,omitempty"`
+	// SourceRel 重命名 / 移动来源
+	SourceRel string `json:"source_rel,omitempty"`
+	// Locator 可读定位
+	Locator string `json:"locator,omitempty"`
+	// LineFrom 变更起始行
+	LineFrom int `json:"line_from,omitempty"`
+	// LineTo 变更结束行
+	LineTo int `json:"line_to,omitempty"`
+	// OldText 变更前片段
+	OldText string `json:"old_text,omitempty"`
+	// NewText 变更后片段
+	NewText string `json:"new_text,omitempty"`
+	// OldHash 变更前哈希
+	OldHash string `json:"old_hash,omitempty"`
+	// NewHash 变更后哈希
+	NewHash string `json:"new_hash,omitempty"`
+	// OldSize 变更前字节数
+	OldSize int64 `json:"old_size,omitempty"`
+	// NewSize 变更后字节数
+	NewSize int64 `json:"new_size,omitempty"`
+	// Binary 是否为二进制变更
+	Binary bool `json:"binary,omitempty"`
+	// BinaryNote 二进制可读结论
+	BinaryNote string `json:"binary_note,omitempty"`
+	// Truncated 片段是否被截断
+	Truncated bool `json:"truncated,omitempty"`
+	// CreatedAt 记录时间（Unix 秒）
+	CreatedAt int64 `json:"created_at"`
+}
+
+// ChangeBaseline 单个文件更久远变更合并后的原始基准。
+type ChangeBaseline struct {
+	// PathRel 目标相对路径
+	PathRel string `json:"path_rel"`
+	// MergedCount 已合并进基准的操作次数
+	MergedCount int `json:"merged_count"`
+	// FirstOpID 最早被合并的操作 ID
+	FirstOpID int64 `json:"first_op_id"`
+	// LastOpID 最晚被合并的操作 ID
+	LastOpID int64 `json:"last_op_id"`
+	// FirstFlowID 最早被合并的流程 ID
+	FirstFlowID string `json:"first_flow_id,omitempty"`
+	// BaseBeforeHash 最早被合并操作之前的内容哈希
+	BaseBeforeHash string `json:"base_before_hash,omitempty"`
+	// BaseBeforeSize 最早被合并操作之前的字节数
+	BaseBeforeSize int64 `json:"base_before_size,omitempty"`
+	// LatestAfterHash 最晚被合并操作之后的内容哈希
+	LatestAfterHash string `json:"latest_after_hash,omitempty"`
+	// LatestAfterSize 最晚被合并操作之后的字节数
+	LatestAfterSize int64 `json:"latest_after_size,omitempty"`
+	// FirstAt 最早合并时间（Unix 秒）
+	FirstAt int64 `json:"first_at,omitempty"`
+	// LastAt 最晚合并时间（Unix 秒）
+	LastAt int64 `json:"last_at,omitempty"`
+}
+
+// RoundSnapshot 一次调用的跨轮回读结果。
+type RoundSnapshot struct {
+	// Call 调用元信息
+	Call CallRecord
+	// Steps 步骤
+	Steps []RoundStep `json:"steps,omitempty"`
+	// References 参考资料（仅自由创作模式）
+	References []string `json:"references,omitempty"`
+	// Memos 备忘录（仅自由创作模式）
+	Memos []string `json:"memos,omitempty"`
+	// Errors 错误
+	Errors []string `json:"errors,omitempty"`
+	// Changes 该轮产生的文件内容级变更
+	Changes []ChangeRecord `json:"changes,omitempty"`
+}
+
+// ==== 旧 JSON 日志导入 ====
+
+// legacyPlan 旧自主创作日志中的一步规划（历史文件只有 agent / task）。
+type legacyPlan struct {
+	// Agent 执行智能体
+	Agent string `json:"agent"`
+	// Task 自然语言任务
+	Task string `json:"task"`
+	// Expect 规划预期（历史文件通常为空）
+	Expect []Expect `json:"expect,omitempty"`
+}
+
+// legacyJournal 旧 JSON 创作日志的文件结构（字段名与历史文件一致）。
+type legacyJournal struct {
+	// Version 文件版本
+	Version int `json:"version"`
+	// Mode 记录时的运行模式
+	Mode string `json:"mode"`
+	// LastPlans 上一轮步骤
+	LastPlans []legacyPlan `json:"last_plans"`
+	// Memos 备忘录（仅自由创作）
+	Memos []string `json:"memos"`
+	// References 参考资料（仅自由创作）
+	References []string `json:"references"`
+	// Errors 错误
+	Errors []string `json:"errors"`
+	// LastSummary 上一轮收尾（仅自由创作）
+	LastSummary string `json:"last_summary"`
+	// UpdatedAt 最后更新时间（Unix 秒）
+	UpdatedAt int64 `json:"updated_at"`
+}
+
+// journalSource 一个旧 JSON 日志来源（相对路径 + 导入到哪个模式）。
+type journalSource struct {
+	// PathRel 相对 LocalDir 的文件路径
+	PathRel string
+	// Mode 导入目标模式
+	Mode Mode
+}
+
+// JournalFileReport 单个旧 JSON 日志的导入状态与行数。
+type JournalFileReport struct {
+	// Path 日志文件路径
+	Path string `json:"path"`
+	// Mode 导入目标模式
+	Mode Mode `json:"mode"`
+	// Exists 原文件当前是否存在
+	Exists bool `json:"exists"`
+	// Skipped 是否因已有导入标记而跳过
+	Skipped bool `json:"skipped"`
+	// CallID 导入时使用的合成调用 ID
+	CallID string `json:"call_id"`
+	// Steps 步骤行数
+	Steps int `json:"steps"`
+	// References 参考资料行数（仅自由创作）
+	References int `json:"references"`
+	// Memos 备忘录行数（仅自由创作）
+	Memos int `json:"memos"`
+	// Errors 错误行数
+	Errors int `json:"errors"`
+}
+
+// JournalMigrationReport 旧 JSON 日志导入汇总（两种模式各一份）。
+type JournalMigrationReport struct {
+	// Files 各日志文件的导入结果
+	Files []JournalFileReport `json:"files"`
 }
 
 // LatestFailure 返回最近一条审查失败 / 执行失败的上下文文本。
