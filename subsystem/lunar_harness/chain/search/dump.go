@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/executors/SearchCrawler"
+	"LunarSubsystem/LunarHarness/chain/search/crawler"
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
@@ -24,32 +24,35 @@ var (
 	lastSearch   *searchRecord
 )
 
+// exportContext 网络搜索的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	lastSearchMu.Lock()
+	record := lastSearch
+	lastSearchMu.Unlock()
+	if record == nil {
+		return map[string]any{
+			"kind":          "web-search-context",
+			"generated_at":  time.Now().Format(time.RFC3339),
+			"message_count": 0,
+			"note":          "本次进程内还没有执行过网络搜索",
+			"config":        crawler.LoadConfig(),
+		}, nil
+	}
+	return map[string]any{
+		"kind":          "web-search-context",
+		"generated_at":  time.Now().Format(time.RFC3339),
+		"message_count": 1,
+		"last_search":   record,
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "web_search",
 		Label:       "网络搜索",
 		Group:       "Go 智能体",
 		Description: "最近一次网络检索的检索词、引擎、页数与结构化报告",
-		Export: func(includeImages bool) (any, error) {
-			lastSearchMu.Lock()
-			record := lastSearch
-			lastSearchMu.Unlock()
-			if record == nil {
-				return map[string]any{
-					"kind":          "web-search-context",
-					"generated_at":  time.Now().Format(time.RFC3339),
-					"message_count": 0,
-					"note":          "本次进程内还没有执行过网络搜索",
-					"config":        SearchCrawler.LoadConfig(),
-				}, nil
-			}
-			return map[string]any{
-				"kind":          "web-search-context",
-				"generated_at":  time.Now().Format(time.RFC3339),
-				"message_count": 1,
-				"last_search":   record,
-			}, nil
-		},
+		Export:      exportContext,
 	})
 }
 

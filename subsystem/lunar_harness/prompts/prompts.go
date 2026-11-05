@@ -9,8 +9,8 @@
 //     agents/MutualForum 互助论坛、agents/FileEditor 文件编辑）。
 //
 // 提示词是数据而不是代码，集中到独立的 prompts/；运行期间提示词经 prompts.Read
-// 以 "prompts/xxx.md" 的虚拟路径读取，运行时 API 契约则收纳在 prompts/runtimeAPI/
-// 子目录（读取时仍可用裸文件名），调用方无需感知真实文件布局。
+// 以 "prompts/xxx.md" 的虚拟路径读取。运行时 API 契约（*.d.ts）不属于提示词，
+// 已拆分到 engine/runtime/contracts，调用方无需感知真实文件布局。
 package prompts
 
 import (
@@ -19,61 +19,27 @@ import (
 	"strings"
 )
 
-// dtsDir 运行时 API 契约的存放目录（相对 prompts 包）。
-const dtsDir = "runtimeAPI"
-
-// files 内嵌的全部提示词（角色提示词、任务模板、外观提示词）与运行时 API 契约
-// （runtimeAPI/*API.d.ts，按能力拆分，供创作 / 文件编辑智能体写脚本前按需查阅）。
+// files 内嵌的全部提示词（角色提示词、任务模板、外观提示词）。
 //
-//go:embed *.md runtimeAPI/*.d.ts
+//go:embed *.md
 var files embed.FS
 
-// ListDTS 列出全部内嵌运行时 API 契约（按文件名升序）。
-func ListDTS() ([]DTSDoc, error) {
-	entries, err := files.ReadDir(dtsDir)
-	if err != nil {
-		return nil, fmt.Errorf("列出内嵌运行时契约失败: %w", err)
-	}
-	docs := make([]DTSDoc, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".d.ts") {
-			continue
-		}
-		info, ierr := entry.Info()
-		if ierr != nil {
-			continue
-		}
-		docs = append(docs, DTSDoc{Name: entry.Name(), Size: info.Size()})
-	}
-	return docs, nil
-}
-
-// Read 读取内嵌提示词或运行时 API 契约。
+// Read 读取内嵌提示词。
 //
 // name 为 prompts/ 下的文件名（如 "dialogueRole.md"），也接受带 "prompts/"
 // 前缀的写法——TypeScript 侧的调用形态正是 `fileView('prompts/dialogueRole.md')`。
-// 运行时 API 契约（*.d.ts）统一落在 runtimeAPI/ 子目录：既可传裸文件名
-// （如 "agentAPI.d.ts"），也可传 "runtimeAPI/agentAPI.d.ts"。
+// 运行时 API 契约不走这里，请使用 engine/runtime/contracts 包。
 func Read(name string) ([]byte, error) {
 	if name == "" {
 		return nil, fmt.Errorf("提示词名称为空")
 	}
 	base := strings.TrimPrefix(name, "prompts/")
-	paths := []string{base}
-	if strings.HasSuffix(base, ".d.ts") && !strings.HasPrefix(base, dtsDir+"/") {
-		paths = append(paths, dtsDir+"/"+base)
+	data, err := files.ReadFile(base)
+	if err != nil {
+		return nil, fmt.Errorf("读取内嵌提示词 %s 失败: %w", base, err)
 	}
-	var lastErr error
-	for _, p := range paths {
-		data, err := files.ReadFile(p)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if len(data) == 0 {
-			return nil, fmt.Errorf("内嵌提示词 %s 为空", p)
-		}
-		return data, nil
+	if len(data) == 0 {
+		return nil, fmt.Errorf("内嵌提示词 %s 为空", base)
 	}
-	return nil, fmt.Errorf("读取内嵌提示词 %s 失败: %w", base, lastErr)
+	return data, nil
 }

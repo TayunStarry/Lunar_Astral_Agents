@@ -18,8 +18,9 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/model/llama"
 	"LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/internal/textutil"
+	"LunarSubsystem/LunarHarness/protocol/modellease"
 )
 
 // IngestAudio 音频接入：转码 → ASR 转写 → 登记悬空句柄。
@@ -59,14 +60,14 @@ func IngestAudio(source, name, origin string) (string, string, error) {
 		logger.Warn(audioModule, "[语音] 悬空句柄登记失败: %v", err)
 		return "", text, err
 	}
-	logger.Info(audioModule, "[语音] 已转写并登记音频句柄 %s（%s）", result.Handle, truncateRunes(text, 512))
+	logger.Info(audioModule, "[语音] 已转写并登记音频句柄 %s（%s）", result.Handle, textutil.TruncateRunes(text, 512))
 	return result.Handle, text, nil
 }
 
 // UnloadASRModel 卸载语音识别模型（幂等：未加载时为空操作）。
-// 定向卸载由 engine/model/llama 的 UnloadModelByID 统一实现。
+// 定向卸载经 protocol/modellease 的单一入口统一执行。
 func UnloadASRModel() {
-	if _, err := llama.UnloadModelByID(config.AgentASRModel); err != nil {
+	if _, err := modellease.Unload(config.AgentASRModel); err != nil {
 		logger.Warn(audioModule, "ASR 卸载执行失败: %v", err)
 		return
 	}
@@ -139,13 +140,4 @@ func chatCompletionJSON(body map[string]any) (map[string]any, error) {
 		return nil, fmt.Errorf("模型服务错误 [%d]: %v", resp.StatusCode, errValue)
 	}
 	return parsed, nil
-}
-
-// truncateRunes 按字符截断并追加省略号
-func truncateRunes(text string, limit int) string {
-	runes := []rune(text)
-	if limit <= 0 || len(runes) <= limit {
-		return text
-	}
-	return string(runes[:limit]) + "…"
 }

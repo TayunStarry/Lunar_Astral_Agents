@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/Responder"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
@@ -53,17 +52,26 @@ func AgentChatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	params := payload
 	delete(params, "messages")
-	req := &Responder.Request{
+	req := &AgentRequest{
 		Messages: messages,
 		Params:   params,
-		Reply:    make(chan Responder.Result, 1),
+		Reply:    make(chan AgentResult, 1),
 	}
-	if err := Responder.Enqueue(req); err != nil {
+	if AgentEnqueueFunc == nil {
+		logger.Warn(agentModule, "外部推理入队能力未装配")
+		writeAgentError(w, http.StatusServiceUnavailable, "推理排队能力未装配")
+		return
+	}
+	if err := AgentEnqueueFunc(req); err != nil {
 		logger.Warn(agentModule, "外部推理入队失败: %v", err)
 		writeAgentError(w, http.StatusTooManyRequests, err.Error())
 		return
 	}
-	logger.Info(agentModule, "外部推理已入队（排队 %d 条）", Responder.Pending())
+	pending := 0
+	if AgentPendingFunc != nil {
+		pending = AgentPendingFunc()
+	}
+	logger.Info(agentModule, "外部推理已入队（排队 %d 条）", pending)
 
 	select {
 	case result := <-req.Reply:
@@ -144,7 +152,7 @@ func readAgentPayload(r *http.Request) (map[string]json.RawMessage, error) {
 // writeAgentChat 输出与 OpenAI v1 兼容的非流式响应。
 // tool_calls 与 finish_reason 必须原样带出：外部智能体靠它判断是否继续工具循环，
 // 少了 tool_calls 会让带工具链的智能体在输出一句引子后直接停下。
-func writeAgentChat(w http.ResponseWriter, result Responder.Result) {
+func writeAgentChat(w http.ResponseWriter, result AgentResult) {
 	finishReason := strings.TrimSpace(result.FinishReason)
 	if finishReason == "" {
 		finishReason = "stop"

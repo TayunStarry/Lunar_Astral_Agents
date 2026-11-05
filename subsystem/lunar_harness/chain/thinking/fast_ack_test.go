@@ -4,6 +4,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 )
 
 // fastAckPushRecord 一次快速应答推送的快照。
@@ -36,7 +38,7 @@ func captureFastAck(t *testing.T) func() []fastAckPushRecord {
 
 // TestFastAckTriggersForCompositeTools 三个复合工具各命中一次。
 func TestFastAckTriggersForCompositeTools(t *testing.T) {
-	for _, name := range []string{techniqueToolName, networkExploreToolName, crystalToolName} {
+	for _, name := range []string{Dialogue.ToolDispatchTechnique, Dialogue.ToolNetworkExplore, Dialogue.ToolUseTheProgram} {
 		t.Run(name, func(t *testing.T) {
 			resetDialogueGlobals(t)
 			pushes := captureFastAck(t)
@@ -72,8 +74,8 @@ func TestFastAckOncePerRound(t *testing.T) {
 		name  string
 		calls []string
 	}{
-		{"同工具重复", []string{techniqueToolName, techniqueToolName}},
-		{"不同复合工具", []string{techniqueToolName, networkExploreToolName}},
+		{"同工具重复", []string{Dialogue.ToolDispatchTechnique, Dialogue.ToolDispatchTechnique}},
+		{"不同复合工具", []string{Dialogue.ToolDispatchTechnique, Dialogue.ToolNetworkExplore}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -89,13 +91,34 @@ func TestFastAckOncePerRound(t *testing.T) {
 	}
 }
 
+// TestFastAckConcurrentCallsPushOnce 并发调用时判定与置位保持原子：同轮仍只推一次。
+func TestFastAckConcurrentCallsPushOnce(t *testing.T) {
+	resetDialogueGlobals(t)
+	pushes := captureFastAck(t)
+	useSpeechSynth(t, func(text string) string { return "audio:" + text })
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			maybeSendFastAck(Dialogue.ToolDispatchTechnique)
+		}()
+	}
+	wg.Wait()
+
+	if records := pushes(); len(records) != 1 {
+		t.Fatalf("并发调用只应推送 1 次，实际 %d 次", len(records))
+	}
+}
+
 // TestFastAckSpokenAndAutoMarked 快速应答照常朗读，且恒定标记 auto=true（不消费 QQ 应答份额）。
 func TestFastAckSpokenAndAutoMarked(t *testing.T) {
 	resetDialogueGlobals(t)
 	pushes := captureFastAck(t)
 	useSpeechSynth(t, func(text string) string { return "audio:" + text })
 
-	maybeSendFastAck(techniqueToolName)
+	maybeSendFastAck(Dialogue.ToolDispatchTechnique)
 
 	records := pushes()
 	if len(records) != 1 {
@@ -112,7 +135,7 @@ func TestFastAckSpokenAndAutoMarked(t *testing.T) {
 // TestFastAckLinePoolIsToolLevel 分支参数不再参与台词选择：候选池按工具名固定，
 // 每次随机取用，且每个复合工具至少两条候选。
 func TestFastAckLinePoolIsToolLevel(t *testing.T) {
-	for _, name := range []string{techniqueToolName, networkExploreToolName, crystalToolName} {
+	for _, name := range []string{Dialogue.ToolDispatchTechnique, Dialogue.ToolNetworkExplore, Dialogue.ToolUseTheProgram} {
 		t.Run(name, func(t *testing.T) {
 			pool := fastAckLines[name]
 			if len(pool) < 2 {

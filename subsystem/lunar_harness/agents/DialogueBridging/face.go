@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/clients/napcat"
 )
 
 // qqFaceTextMap QQ 系统表情 id → 文本含义，取自 NapCat 官方 face_config.json 的 sysface 段
@@ -86,7 +88,7 @@ var qqFaceTextMap = map[int]string{
 // faceDisplayText 解析 QQ 表情的文本含义：
 // 优先 NapCat 原始 faceText（形如 "/呲牙"），其次 raw.faceIndex，最后按 id 查官方对照表；无法识别返回空
 func faceDisplayText(data json.RawMessage) string {
-	var face FaceData
+	var face napcat.FaceData
 	if json.Unmarshal(data, &face) != nil {
 		return ""
 	}

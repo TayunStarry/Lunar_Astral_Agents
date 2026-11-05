@@ -49,10 +49,12 @@ func IDs() []string {
 }
 
 // Export 导出指定目标并返回 JSON 文本。
+//
+// id 为空直接报错：注册表是通用设施，不替调用方选择业务默认目标。
 func Export(id string, includeImages bool) (string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		id = "dialogue"
+		return "", fmt.Errorf("导出目标未指定（可用：%s）", strings.Join(IDs(), " / "))
 	}
 	mu.RLock()
 	provider, ok := providers[id]

@@ -9,8 +9,9 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
+	"LunarSubsystem/LunarHarness/chain/search/crawler"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/executors/SearchCrawler"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // composeReport 输出收口：优先采用摘要智能体的提取结果；失败时确定性兜底
@@ -29,7 +30,7 @@ func composeReport(in reportInput) string {
 
 // composeReportFallback 确定性兜底（摘要模型调用失败时）
 func composeReportFallback(in reportInput) string {
-	engineName := SearchCrawler.FirstNonEmpty(in.EngineName, "必应")
+	engineName := textutil.FirstNonEmpty(in.EngineName, "必应")
 	var b strings.Builder
 	b.WriteString("【网络搜索兜底输出】")
 	if in.Interrupted {
@@ -47,7 +48,7 @@ func composeReportFallback(in reportInput) string {
 
 	if strings.TrimSpace(in.SearchPageText) != "" {
 		b.WriteString("\n◆ 搜索页概览：\n")
-		b.WriteString(SearchCrawler.HardCutRunes(in.SearchPageText, 1500))
+		b.WriteString(textutil.HardCutRunes(in.SearchPageText, 1500))
 		b.WriteString("\n")
 	}
 
@@ -57,14 +58,14 @@ func composeReportFallback(in reportInput) string {
 			if i >= 8 {
 				break
 			}
-			fmt.Fprintf(&b, "%d. %s（%s）\n", i+1, hit.Title, SearchCrawler.DomainOf(hit.URL))
+			fmt.Fprintf(&b, "%d. %s（%s）\n", i+1, hit.Title, crawler.DomainOf(hit.URL))
 		}
 	}
 
 	if len(in.Pages) > 0 {
 		b.WriteString("\n◆ 打开的页面：\n")
 		for i, p := range in.Pages {
-			fmt.Fprintf(&b, "%d. 「%s」（%s，正文 %d 字）\n", i+1, SearchCrawler.FirstNonEmpty(p.Title, p.Domain), p.Domain, p.TextChars)
+			fmt.Fprintf(&b, "%d. 「%s」（%s，正文 %d 字）\n", i+1, textutil.FirstNonEmpty(p.Title, p.Domain), p.Domain, p.TextChars)
 		}
 		b.WriteString("\n◆ 页面内容摘要：\n")
 		for i, p := range in.Pages {
@@ -75,7 +76,7 @@ func composeReportFallback(in reportInput) string {
 			if text == "" {
 				continue
 			}
-			fmt.Fprintf(&b, "【%s】\n%s\n\n", SearchCrawler.FirstNonEmpty(p.Title, p.Domain), SearchCrawler.HardCutRunes(text, 800))
+			fmt.Fprintf(&b, "【%s】\n%s\n\n", textutil.FirstNonEmpty(p.Title, p.Domain), textutil.HardCutRunes(text, 800))
 		}
 	} else {
 		b.WriteString("\n◆ 打开的页面：本次未获取到可用的详情页内容。\n")

@@ -15,6 +15,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
 
 const (
@@ -41,7 +42,7 @@ const (
 // 只使用公开接口，不依赖浏览器登录态；评论或弹幕取不到时用其余材料继续，
 // 素材不足时退化为“标题 + UP主 + 时长 + 标签 + 简介”的可读摘要。
 func QuickDigest(rawURL, instruction string) (title, summary string, err error) {
-	bvid := bvidRe.FindString(rawURL)
+	bvid := viewerstore.ExtractBVID(rawURL)
 	if bvid == "" {
 		return "", "", fmt.Errorf("不是有效的 B 站视频地址")
 	}
@@ -85,7 +86,7 @@ func QuickDigest(rawURL, instruction string) (title, summary string, err error) 
 // 切换 light_reasoning 写一段视频印象后立即返回；不选片、不看动态、不切片，
 // 也不产生任何分片地址或临时地址。评论/弹幕取不到时退回纯元信息。
 func DirectImpression(rawURL, instruction string) (string, error) {
-	bvid := bvidRe.FindString(rawURL)
+	bvid := viewerstore.ExtractBVID(rawURL)
 	if bvid == "" {
 		return "", fmt.Errorf("不是有效的 B 站视频地址")
 	}

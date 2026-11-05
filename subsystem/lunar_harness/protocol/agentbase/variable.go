@@ -45,6 +45,11 @@ var (
 	// repairHook 智能修复上报回调（由装配层注入，避免 protocol 反向依赖 agents）
 	repairHook func(agent string, err error)
 
+	// logMu 保护日志钩子
+	logMu sync.Mutex
+	// logHook 日志回调（由装配层注入，避免 protocol 依赖 engine/console/logger）
+	logHook func(level, message string)
+
 	// promptMu 保护提示词缓存
 	promptMu sync.Mutex
 	// promptCache 提示词缓存（文件名 → 文本）

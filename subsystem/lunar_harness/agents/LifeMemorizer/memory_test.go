@@ -8,8 +8,14 @@ package LifeMemorizer
 //  3. 单条整理后记忆有统一字符上限
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // TestMinKeep 保留下限：比例缩放 + 上下限夹取
@@ -21,9 +27,9 @@ func TestMinKeep(t *testing.T) {
 		{0, 0},
 		{-3, 0},
 		{3, 3},              // 小于下限时最多保留输入本身
-		{8, KeepFloor},      // 8 × 25% = 2 → 抬到下限
-		{20, 5},             // 常规比例
-		{125, 31},           // 大批次按比例
+		{8, KeepFloor},      // 8 × 50% = 4 → 抬到下限 8
+		{20, 10},            // 常规比例
+		{125, KeepCeiling},  // 125 × 50% = 62 → 夹到上限 48
 		{1000, KeepCeiling}, // 超大批次夹到上限
 	}
 	for _, c := range cases {
@@ -79,6 +85,81 @@ func TestParseArrayWithFence(t *testing.T) {
 	}
 	if len(values) != 2 || values[0] != "第一条" || values[1] != "第二条" {
 		t.Fatalf("解析结果异常: %#v", values)
+	}
+}
+
+// TestRetainEnough 正文总量下限：过度压缩视为不合格，正常合并通过
+func TestRetainEnough(t *testing.T) {
+	contents := []string{strings.Repeat("甲", 100), strings.Repeat("乙", 100)}
+	if retainEnough(contents, []string{strings.Repeat("丙", 10)}) {
+		t.Fatal("输出正文仅占输入 5%%，应判定为过度压缩")
+	}
+	if !retainEnough(contents, []string{strings.Repeat("丙", 45)}) {
+		t.Fatal("输出正文占输入 22.5%%，应判定为合格")
+	}
+}
+
+// TestTruncateAtSentenceKeepsContent 长文本首个逗号出现过早时，不得只保留开头一小段
+func TestTruncateAtSentenceKeepsContent(t *testing.T) {
+	long := "开头， " + strings.Repeat("内容", 400)
+	got := truncateAtSentence(long, MaxTextRunes)
+	if runes := len([]rune(got)); runes < MaxTextRunes-2 {
+		t.Fatalf("过早句读不应丢掉大半内容，实得 %d 字", runes)
+	}
+}
+
+// TestConsolidateFallsBackOnGarbage 模型返回非 JSON 时保留全部原条目，不得清空
+func TestConsolidateFallsBackOnGarbage(t *testing.T) {
+	withFakeModel(t, "抱歉，我无法整理这些记忆")
+	contents := []string{"今天和月华聊了插件开发", "小想喜欢无糖乌龙茶", "周末计划去看海"}
+	got, err := Consolidate(context.Background(), contents)
+	if err != nil {
+		t.Fatalf("保底整理不应报错: %v", err)
+	}
+	assertSameTexts(t, fallbackTexts(contents), got)
+}
+
+// TestConsolidateFallsBackOnEmptyArray 模型返回空数组时同样保留原条目
+func TestConsolidateFallsBackOnEmptyArray(t *testing.T) {
+	withFakeModel(t, "[]")
+	contents := []string{"第一条真实记忆", "第二条真实记忆", "第三条真实记忆"}
+	got, err := Consolidate(context.Background(), contents)
+	if err != nil {
+		t.Fatalf("保底整理不应报错: %v", err)
+	}
+	assertSameTexts(t, fallbackTexts(contents), got)
+}
+
+// withFakeModel 注入固定回复的模型端点，测试结束后恢复
+func withFakeModel(t *testing.T, content string) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]string{"content": content}}},
+		})
+	}))
+	t.Cleanup(server.Close)
+	agentbase.SetModelEndpointProvider(func() agentbase.ModelEndpoint {
+		return agentbase.ModelEndpoint{URL: server.URL, Model: "test-model"}
+	})
+	agentbase.ResetModelCache()
+	t.Cleanup(func() {
+		agentbase.SetModelEndpointProvider(nil)
+		agentbase.ResetModelCache()
+	})
+}
+
+// assertSameTexts 比较两组整理结果（顺序与内容都要一致）
+func assertSameTexts(t *testing.T, want, got []string) {
+	t.Helper()
+	if len(want) != len(got) {
+		t.Fatalf("条目数量不一致：want %d，got %d（%v）", len(want), len(got), got)
+	}
+	for i := range want {
+		if want[i] != got[i] {
+			t.Fatalf("第 %d 条不一致：want %q，got %q", i, want[i], got[i])
+		}
 	}
 }
 

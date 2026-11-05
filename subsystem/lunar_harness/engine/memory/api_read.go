@@ -22,6 +22,16 @@ func List(mediaType string, offset, limit int) ([]Entry, int) {
 	return globalStore.List(mediaType, offset, limit)
 }
 
+// ListWithError 全局逐条列举条目；记忆库不可用时返回错误而不是空列表。
+//
+// 供迁移等「空即完成」的场景使用：读不到数据时必须能与「确实没有数据」区分开。
+func ListWithError(mediaType string, offset, limit int) ([]Entry, int, error) {
+	if globalStore == nil {
+		return nil, 0, errStoreMissing()
+	}
+	return globalStore.ListWithError(mediaType, offset, limit)
+}
+
 // Count 全局统计指定类型的条目数
 func Count(mediaType string) int {
 	if globalStore == nil {

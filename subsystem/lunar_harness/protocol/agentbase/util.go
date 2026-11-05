@@ -5,6 +5,8 @@ package agentbase
 import (
 	"encoding/json"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // ParseToolArgs 解析模型给出的 JSON 参数；空串视为空对象。
@@ -42,23 +44,10 @@ func StringOf(content any) string {
 	return ""
 }
 
-// TruncateRunes 按字符截断（超长时以省略号收尾）
-func TruncateRunes(text string, limit int) string {
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	return string(runes[:limit]) + "…"
-}
+// TruncateRunes 按字符截断（超长时以省略号收尾）。
+// 实现唯一收敛在 internal/textutil，此处仅保留包级入口供既有调用方使用。
+func TruncateRunes(text string, limit int) string { return textutil.TruncateRunes(text, limit) }
 
-// HardCutRunes 按字符硬切断（超长时以省略号收尾）
-func HardCutRunes(text string, limit int) string {
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	if limit < 1 {
-		limit = 1
-	}
-	return string(runes[:limit-1]) + "…"
-}
+// HardCutRunes 按字符硬切断（超长时以省略号收尾）。
+// 与 textutil.HardCutRunes（带「已截断」标记）语义不同，唯一实现在 internal/textutil.CutRunes。
+func HardCutRunes(text string, limit int) string { return textutil.CutRunes(text, limit) }

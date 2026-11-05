@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // buildOutline 生成结构大纲（每项带行区间）
@@ -64,7 +65,7 @@ func detectOutline(doc *docContext) []outlineItem {
 		items = append(items, outlineItem{
 			Start: index + 1,
 			Level: level,
-			Label: truncateRunes(label, 512),
+			Label: textutil.TruncateRunes(label, 512),
 		})
 		if len(items) >= maxOutlineItems {
 			break

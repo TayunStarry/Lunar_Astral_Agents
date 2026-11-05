@@ -13,7 +13,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("desktop_agent", "桌面操作-模型",
 		"桌面操纵智能体各阶段最近一次执行结果；reset 清除该记录",
-		resetDesktopPhases)
+		resetDesktopPhases,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetDesktopPhases 清空各阶段最近执行结果。

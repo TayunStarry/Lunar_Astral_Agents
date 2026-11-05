@@ -1,11 +1,15 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
+	"LunarSubsystem/LunarHarness/agents/ltpxhost"
+	"LunarSubsystem/LunarHarness/chain/creation"
 	"LunarSubsystem/LunarHarness/chain/search"
 	"LunarSubsystem/LunarHarness/chain/thinking"
 	"LunarSubsystem/LunarHarness/clients"
@@ -16,11 +20,11 @@ import (
 	"LunarSubsystem/LunarHarness/engine/debugsnap"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
 	"LunarSubsystem/LunarHarness/engine/library"
-	"LunarSubsystem/LunarHarness/engine/ltpxhost"
 	"LunarSubsystem/LunarHarness/engine/protocolwire"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	harnessruntime "LunarSubsystem/LunarHarness/engine/runtime"
 	"LunarSubsystem/LunarHarness/engine/websocket"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"LunarSubsystem/LunarHarness/server"
 )
 
@@ -33,12 +37,32 @@ func Assemble() {
 	// ==== protocol 配置注入：必须在任何智能体调用模型之前 ====
 	// protocol/agentbase 与 loopguard 只消费端点/阈值，不直接 import engine/config。
 	protocolwire.Wire()
+	// protocol/agentbase 的日志同样经注入：默认走标准库日志，这里改接统一日志层，
+	// 保证 protocol 层既不直接 import engine/console/logger，又能留下同样的日志。
+	agentbase.SetLogHook(func(level, message string) {
+		switch level {
+		case "warn":
+			logger.Warn("CrystalAstral", "%s", message)
+		case "error":
+			logger.Error("CrystalAstral", "%s", message)
+		default:
+			logger.Info("CrystalAstral", "%s", message)
+		}
+	})
 
 	// ==== 跨层注入：运行时沙箱的网络搜索 ====
 	// engine/runtime 不得反向依赖 agents/chain，agent.search 的实现由装配层注入搜索链入口。
 	harnessruntime.AgentSearchFunc = search.Run
 	// 文件编辑智能体同理：联网查询能力注入搜索链，避免智能体层反向依赖链路层。
 	FileEditor.SearchFunc = search.Run
+	// 创作链的联网搜索同样经装配层注入，链包之间不再横向直调。
+	creation.WebSearchHook = search.Run
+	// 对话者工具执行器已归 agents/Dialogue，跨链能力在此注入。
+	wireDialogueTools()
+
+	// ==== 跨层注入：HTTP 层所需能力 ====
+	// 必须在 server.Start 之前接线：消息写入 / 代理 / 视觉读取 / 外部推理排队。
+	wireServerHooks()
 
 	// ==== 开发者模式告警快照：日志钩子装配 ====
 	// 必须在其他子系统之前接上：装配期出现的警告也应留下调试快照。
@@ -122,6 +146,16 @@ func Assemble() {
 		logger.Fatal("LunarHarness", "月华智能体运行时启动失败: %v", err)
 	}
 	logger.Info("LunarHarness", "月华智能体运行时（Go 思维链）已启动")
+}
+
+// wireDialogueTools 向对话者工具执行器注入创作链能力。
+// 智能体包只声明函数变量，装配层负责把链的具体实现接上，避免智能体反向依赖 chain；
+// 宿主推送 / 生活 / 检索能力由 chain/thinking 在自身装配期注入。
+func wireDialogueTools() {
+	Dialogue.RunFileOperations = func(ctx context.Context, instruction string, handles []string) (string, []string, int, error) {
+		result, err := creation.RunAssigned(ctx, instruction, handles)
+		return result.Summary, result.Handles, len(result.ReviewFailures), err
+	}
 }
 
 // wireDebugSnapshot 装配开发者模式下的告警调试快照。

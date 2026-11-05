@@ -13,6 +13,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // ==== 模型请求的出站图片闸门（docs/adr/0008） ====
@@ -53,7 +54,7 @@ func guardRequestImages(messages []PostMessage) ([]PostMessage, []string) {
 			if reason == "" {
 				continue
 			}
-			blocked = append(blocked, fmt.Sprintf("%s | %s", reason, truncateRunes(items[j].ImageURL.URL, 512)))
+			blocked = append(blocked, fmt.Sprintf("%s | %s", reason, textutil.TruncateRunes(items[j].ImageURL.URL, 512)))
 			items[j] = ContentItem{Type: ContentText, Text: blockedImagePlaceholder}
 			changed = true
 		}

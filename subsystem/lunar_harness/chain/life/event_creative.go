@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/chain/creation"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 type creativeEvent struct{ params eventParams }
@@ -31,14 +32,14 @@ type creativeRun struct{ data creativeRunData }
 
 func (r *creativeRun) Start(_ context.Context, env Env) error {
 	reference := CreativeIntent()
-	referenceText := truncateRunes(reference, 2000)
+	referenceText := textutil.TruncateRunes(reference, 2000)
 	positive := moodPositive(env.MoodLabel)
 	requirement := strings.TrimSpace(env.Instruction)
 	idea := requirement
 	if idea == "" {
 		idea = "延续之前的创作思路，挑一件合适的作品或项目继续推进；也可以发起全新的创作。"
 	}
-	idea = truncateRunes(idea, 2000)
+	idea = textutil.TruncateRunes(idea, 2000)
 	focus := "可以展开的创作方向：" + idea + "。"
 	if requirement != "" {
 		focus = "本轮必须完成的要求（工具触发的强制指令）：" + idea + "。"

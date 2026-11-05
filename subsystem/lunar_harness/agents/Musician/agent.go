@@ -14,7 +14,8 @@ import (
 )
 
 // Perform 完成一次演奏：主模型产出描述，音乐模型生成旋律，渲染后回传结果。
-func Perform(ctx context.Context, instruction string) (Result, error) {
+func Perform(ctx context.Context, instruction string) (result Result, err error) {
+	defer func() { recordRun(instruction, result, err) }()
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
 		return Result{}, fmt.Errorf("创作描述不能为空")

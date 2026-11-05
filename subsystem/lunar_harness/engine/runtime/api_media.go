@@ -2,7 +2,7 @@ package runtime
 
 // ==== 媒体能力实现：视频抽帧 video.frames / 图像缩放与编码 image.resize|convert / WebSearch 网络搜索 ====
 // 复用 MultimodalAnalysis 模块的抽帧/图像基础组元与 WebSearch 进程内搜索流水线，
-// 沙箱侧契约见 prompts/runtimeAPI/videoAPI.d.ts、prompts/runtimeAPI/imageAPI.d.ts、prompts/runtimeAPI/agentAPI.d.ts。
+// 沙箱侧契约见 engine/runtime/contracts/videoAPI.d.ts、contracts/imageAPI.d.ts、contracts/agentAPI.d.ts。
 
 import (
 	"bytes"

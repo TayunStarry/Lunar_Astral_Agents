@@ -10,14 +10,12 @@ package fileflow
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-
-	_ "github.com/mattn/go-sqlite3"
+	"LunarSubsystem/LunarHarness/engine/dbopen"
 )
 
 // DeltaDBPath 返回增量记录库的绝对路径（供报告与排查）。
@@ -38,16 +36,19 @@ func deltaConn() (*sql.DB, error) {
 		_ = deltaDB.Close()
 		deltaDB = nil
 	}
-	if err := os.MkdirAll(filepath.Dir(want), 0o755); err != nil {
-		return nil, fmt.Errorf("创建增量记录目录失败: %w", err)
-	}
-	db, err := sql.Open("sqlite3", want+"?_busy_timeout=10000&_journal_mode=WAL&_foreign_keys=on")
+	db, err := dbopen.Open(want, dbopen.Options{
+		CreateDir:       true,
+		ForeignKeys:     true,
+		MaxOpenConns:    4,
+		MaxIdleConns:    2,
+		ConnMaxLifetime: 5 * time.Minute,
+	})
 	if err != nil {
+		if cause, isDir := dbopen.DirCause(err); isDir {
+			return nil, fmt.Errorf("创建增量记录目录失败: %w", cause)
+		}
 		return nil, fmt.Errorf("连接增量记录库失败: %w", err)
 	}
-	db.SetMaxOpenConns(4)
-	db.SetMaxIdleConns(2)
-	db.SetConnMaxLifetime(5 * time.Minute)
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("测试增量记录库连接失败: %w", err)

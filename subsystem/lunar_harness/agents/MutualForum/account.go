@@ -1,129 +1,124 @@
 package MutualForum
 
-// account.go 账号申领、凭证持久化与轮次状态。
+// account.go 账号申领与轮次生命周期编排。
 //
 // 月华的论坛身份不靠人工注册：首次调用时 POST /auth/enroll 领取 uid 与一次性
 // api_key，随后把凭证与轮次状态写入独立的账号文件，后续调用直接复用。
 // 配置文件里也允许直接填 api_key（适合固定部署或迁移已有身份）。
+//
+// 账号文件的磁盘格式、v2 幂等迁移、.bak 回滚副本与写互斥均由 engine/forum 负责；
+// 本文件只保留申领口径与凭证复验：
+//   - 申领只发送 name / join_code / qq / uid，不再发送 model / client_version / meta；
+//   - 账号文件升级到 schema_version=2，移除 model，新增 qq_masked / avatar_* / kind / test_mode；
+//   - 每次覆盖账号文件前都会写 .bak，回滚只需把 .bak 复制回原路径（由 engine/forum 实现）。
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	engineforum "LunarSubsystem/LunarHarness/engine/forum"
 )
 
+// qqPattern QQ 号：5–12 位纯数字且首位不为 0。
+var qqPattern = regexp.MustCompile(`^[1-9]\d{4,11}$`)
+
 // loadAccount 读取本地账号文件；文件不存在或地址已变化时返回 nil。
+// 旧结构的幂等迁移由 engine/forum 在同一次读取中完成。
 func loadAccount(cfg Config) (*Account, error) {
-	path := cfg.AccountPath()
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("读取互助论坛账号文件失败: %w", err)
-	}
-	var acct Account
-	if err := json.Unmarshal(raw, &acct); err != nil {
-		return nil, fmt.Errorf("解析互助论坛账号文件失败: %w", err)
-	}
-	if strings.TrimSpace(acct.APIKey) == "" {
-		return nil, nil
-	}
-	if acct.Endpoint != "" && acct.Endpoint != cfg.Endpoint() {
-		// 服务地址换过时旧身份不沿用，避免把 A 站凭证发到 B 站
-		return nil, nil
-	}
-	acct.Endpoint = cfg.Endpoint()
-	return &acct, nil
+	return engineforum.LoadAccount(cfg.AccountPath(), cfg.Endpoint())
 }
 
-// saveAccount 原子写入账号文件（Windows 下权限依赖用户目录 ACL）。
+// saveAccount 写入账号文件（原子落盘、.bak 回滚副本与写互斥由 engine/forum 保证）。
 func saveAccount(cfg Config, acct *Account) error {
-	path := cfg.AccountPath()
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("创建互助论坛账号目录失败: %w", err)
-	}
-	acct.UpdatedAt = time.Now().Unix()
-	raw, err := json.MarshalIndent(acct, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化互助论坛账号失败: %w", err)
-	}
-	temp := path + ".tmp"
-	if err := os.WriteFile(temp, raw, 0o600); err != nil {
-		return fmt.Errorf("写入互助论坛账号失败: %w", err)
-	}
-	if err := os.Rename(temp, path); err != nil {
-		_ = os.Remove(temp)
-		return fmt.Errorf("保存互助论坛账号失败: %w", err)
-	}
-	return nil
+	return engineforum.SaveAccount(cfg.AccountPath(), acct)
 }
 
-// enroll 申领一个新身份并返回账号状态。
-func (c *Client) enroll(ctx context.Context, cfg Config) (*Account, error) {
+// enrollAccount 申领一个新身份并返回账号状态；existing 非空时用于 uid 幂等恢复。
+func enrollAccount(ctx context.Context, c *Client, cfg Config, existing *Account) (*Account, error) {
 	name, generated, nameErr := chooseName(cfg)
 	if nameErr != nil {
 		return nil, nameErr
 	}
-	body := map[string]any{
-		"name":           name,
-		"client_version": cfg.ClientVersion,
-		"meta":           map[string]any{"client": "mutual-forum", "auto_name": generated},
+	uid := strings.TrimSpace(cfg.UID)
+	if uid == "" && existing != nil {
+		uid = strings.TrimSpace(existing.InstanceUID)
 	}
-	if strings.TrimSpace(cfg.Model) != "" {
-		body["model"] = strings.TrimSpace(cfg.Model)
+	if existing != nil && strings.TrimSpace(existing.Name) != "" {
+		// 命中既有 uid 时服务端会保留旧昵称；仍按文档携带 name 字段。
+		name = existing.Name
+		generated = existing.NameGenerated
 	}
-	if strings.TrimSpace(cfg.JoinCode) != "" {
-		body["join_code"] = strings.TrimSpace(cfg.JoinCode)
+	if utf8.RuneCountInString(name) > enrollNameMaxRunes {
+		name = string([]rune(name)[:enrollNameMaxRunes])
+		generated = true
+	}
+	qq := strings.TrimSpace(cfg.QQ)
+	if qq != "" && !qqPattern.MatchString(qq) {
+		return nil, ErrQQInvalid
 	}
 
-	var result EnrollResult
-	if _, err := c.request(ctx, http.MethodPost, "auth/enroll", nil, body, false, &result); err != nil {
+	request := engineforum.EnrollRequest{
+		Name:     name,
+		JoinCode: strings.TrimSpace(cfg.JoinCode),
+		QQ:       qq,
+		UID:      uid,
+	}
+	result, err := c.Enroll(ctx, request)
+	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(result.APIKey) == "" {
+		if result.Idempotent {
+			return nil, fmt.Errorf("%w（identity=%s，uid=%s）；请恢复本地 forum_account.json，或在配置里填写原来的 api_key",
+				ErrCredentialsLost, result.Identity, result.Instance.UID)
+		}
 		return nil, errors.New("论坛申领成功但没有返回 api_key")
 	}
+
 	now := time.Now().Unix()
 	acct := &Account{
-		Endpoint:      c.endpoint,
-		InstanceUID:   result.Instance.UID,
-		Name:          result.Instance.Name,
-		NameGenerated: generated,
-		Model:         result.Instance.Model,
-		APIKey:        result.APIKey,
-		MinInterval:   result.Poll.MinIntervalSeconds,
-		RoundTTL:      result.Poll.RoundTTLSeconds,
-		ValidatedAt:   now,
+		SchemaVersion:  engineforum.AccountSchemaVersion,
+		Endpoint:       c.Endpoint,
+		InstanceUID:    result.Instance.UID,
+		Name:           result.Instance.Name,
+		NameGenerated:  generated,
+		QQMAsked:       result.Instance.QQMAsked,
+		AvatarURL:      result.Instance.AvatarURL,
+		AvatarFallback: result.Instance.AvatarFallback,
+		Kind:           result.Instance.Kind,
+		TestMode:       result.TestMode,
+		APIKey:         result.APIKey,
+		MinInterval:    result.Poll.MinIntervalSeconds,
+		RoundTTL:       result.Poll.RoundTTLSeconds,
+		ValidatedAt:    now,
 	}
-	c.apiKey = result.APIKey
+	c.SetAPIKey(result.APIKey)
 	logger.Info("LunarMatrix", "已申领论坛身份 %s（%s）", result.Instance.UID, result.Instance.Name)
 	return acct, nil
 }
 
 // EnsureAccount 返回可用身份：优先使用配置里的 api_key，其次本地账号文件，
 // 都没有时自动申领；已有凭证按 TTL 复验，避免每次工具调用都请求 /me。
-func (c *Client) EnsureAccount(ctx context.Context, cfg Config) (*Account, error) {
+func EnsureAccount(ctx context.Context, cfg Config, c *Client) (*Account, error) {
 	acct, err := loadAccount(cfg)
 	if err != nil {
 		return nil, err
 	}
 	if key := strings.TrimSpace(cfg.APIKey); key != "" {
 		if acct == nil {
-			acct = &Account{Endpoint: c.endpoint}
+			acct = &Account{SchemaVersion: engineforum.AccountSchemaVersion, Endpoint: c.Endpoint}
 		}
 		acct.APIKey = key
 	}
 	if acct == nil || strings.TrimSpace(acct.APIKey) == "" {
-		acct, err = c.enroll(ctx, cfg)
+		acct, err = enrollAccount(ctx, c, cfg, acct)
 		if err != nil {
 			return nil, err
 		}
@@ -133,7 +128,7 @@ func (c *Client) EnsureAccount(ctx context.Context, cfg Config) (*Account, error
 		return acct, nil
 	}
 
-	c.apiKey = acct.APIKey
+	c.SetAPIKey(acct.APIKey)
 	now := time.Now().Unix()
 	if acct.ValidatedAt <= 0 || now-acct.ValidatedAt > int64(accountValidationTTL/time.Second) {
 		me, meErr := c.Me(ctx)
@@ -143,24 +138,52 @@ func (c *Client) EnsureAccount(ctx context.Context, cfg Config) (*Account, error
 				return nil, &APIError{
 					Status:  http.StatusUnauthorized,
 					Code:    "unauthorized",
-					Message: "互助论坛凭证已失效，请删除账号文件后重新申领，或在配置里填写新的 api_key",
+					Message: "互助论坛凭证已失效，请恢复 forum_account.json.bak 后重新申领，或在配置里填写新的 api_key",
 				}
 			}
 			return nil, meErr
 		}
-		acct.InstanceUID = me.Instance.UID
-		acct.Name = me.Instance.Name
-		acct.Model = me.Instance.Model
-		acct.RoundID = me.Round.RoundID
+		applyMe(acct, me)
 		acct.ValidatedAt = now
-		if me.Stats.LastPollAt != nil {
-			acct.LastPollAt = parseISOTime(*me.Stats.LastPollAt)
-		}
 		if saveErr := saveAccount(cfg, acct); saveErr != nil {
 			logger.Warn("LunarMatrix", "保存账号复验状态失败: %v", saveErr)
 		}
 	}
 	return acct, nil
+}
+
+// applyMe 把 /me 的最新公开信息同步到本地账号。
+func applyMe(acct *Account, me *Me) {
+	acct.InstanceUID = me.Instance.UID
+	acct.Name = me.Instance.Name
+	acct.QQMAsked = me.Instance.QQMAsked
+	acct.AvatarURL = me.Instance.AvatarURL
+	acct.AvatarFallback = me.Instance.AvatarFallback
+	acct.Kind = me.Instance.Kind
+	if me.Limits.TestExempt {
+		acct.TestMode = true
+	}
+	acct.RoundID = me.Round.RoundID
+	acct.RoundUsed = me.Round.Used
+	roundIdleReset(acct, me)
+	if me.Round.TTLSeconds > 0 {
+		acct.RoundTTL = me.Round.TTLSeconds
+	}
+	if me.Round.PollMinIntervalS > 0 {
+		acct.MinInterval = me.Round.PollMinIntervalS
+	}
+	if me.Stats.LastPollAt != nil {
+		acct.LastPollAt = parseISOTime(*me.Stats.LastPollAt)
+	}
+}
+
+// roundIdleReset 只在轮次未被使用且能解析出签发时刻时保留复用窗口。
+func roundIdleReset(acct *Account, me *Me) {
+	acct.RoundIssuedAt = 0
+	if me.Round.Used || me.Round.IssuedAt == nil {
+		return
+	}
+	acct.RoundIssuedAt = parseISOTime(*me.Round.IssuedAt)
 }
 
 // updateAccount 在持有最新账号的前提下修改并落盘。
@@ -181,8 +204,13 @@ func accountView(acct *Account) *AccountView {
 		UID:             acct.InstanceUID,
 		Name:            acct.Name,
 		NameGenerated:   acct.NameGenerated,
-		Model:           acct.Model,
+		QQMAsked:        acct.QQMAsked,
+		AvatarURL:       acct.AvatarURL,
+		AvatarFallback:  acct.AvatarFallback,
+		Kind:            acct.Kind,
+		TestMode:        acct.TestMode,
 		RoundID:         acct.RoundID,
+		RoundUsed:       acct.RoundUsed,
 		RoundIssuedAt:   acct.RoundIssuedAt,
 		LastSeq:         acct.LastSeq,
 		EventSeq:        acct.EventSeq,
@@ -190,15 +218,16 @@ func accountView(acct *Account) *AccountView {
 	}
 }
 
-// parseISOTime 解析论坛返回的 ISO 时间；失败返回 0。
+// parseISOTime 解析论坛返回的 ISO 时间（兼容带小数秒与 +08:00）；失败返回 0。
 func parseISOTime(value string) int64 {
-	if strings.TrimSpace(value) == "" {
+	value = strings.TrimSpace(value)
+	if value == "" {
 		return 0
 	}
-	layout := "2006-01-02T15:04:05-07:00"
-	parsed, err := time.Parse(layout, value)
-	if err != nil {
-		return 0
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.Unix()
+		}
 	}
-	return parsed.Unix()
+	return 0
 }

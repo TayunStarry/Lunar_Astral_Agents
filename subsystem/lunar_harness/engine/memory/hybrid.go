@@ -5,10 +5,12 @@ package memory
 // 设计要点：
 //   - 两路各自召回候选，同一记忆 ID 只保留一条，避免重复返回；
 //   - 向量分按 DocRankThreshold 线性归一化到 0~1，与关键词分量纲对齐；
-//   - 关键词分由「词覆盖度 × 命中次数强度」构成，天然落在 0~1；
+//   - 关键词分由「倒排索引加权覆盖率」构成，天然落在 0~1（常见词按 df 降权，精确串加权）；
 //   - 融合分 = 归一化向量分 × 向量权重 + 关键词强度 × 关键词权重；
 //   - 排序键：融合分降序 → 向量分降序 → 入库时间降序 → ID 升序（保证结果可复现）；
-//   - 嵌入服务不可用或超时时，向量通道失败但关键词通道照常返回，整条检索不失败。
+//   - 嵌入服务不可用或超时时，向量通道失败但关键词通道照常返回，整条检索不失败；
+//   - 共享 topK 预算：两通道共用一个返回额度，不固定对半。先按融合分做全局排序，
+//     某一路召回不足时，另一路的高分候选自然补足空余额度，总数严格不超过 topK。
 
 import (
 	"context"
@@ -40,7 +42,9 @@ func (d *Store) HybridQuery(ctx context.Context, queries []string, mediaType str
 		return nil, err
 	}
 
-	candidateLimit := hybridCandidateLimit(topK, opts.CandidateLimit)
+	// 共享 topK 预算：两通道共用同一个召回上限（不低于 topK），
+	// 保证任何一路富余时都有足够的候选去补足另一路的空余额度。
+	recallLimit := hybridRecallLimit(topK, opts.CandidateLimit)
 	vectorWeight, keywordWeight := hybridWeights(opts)
 
 	// 两路并行前先统一刷新一次集合，避免两个通道同时触发跨进程重载。
@@ -58,11 +62,11 @@ func (d *Store) HybridQuery(ctx context.Context, queries []string, mediaType str
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		vectorHits, vectorErr = d.hybridVectorChannel(ctx, queries, normalizedType, candidateLimit, opts.ForceGlobal)
+		vectorHits, vectorErr = d.hybridVectorChannel(ctx, queries, normalizedType, recallLimit, opts.ForceGlobal)
 	}()
 	go func() {
 		defer wg.Done()
-		keywordHits, keywordErr = d.hybridKeywordChannel(queries, normalizedType, candidateLimit, opts.Regex)
+		keywordHits, keywordErr = d.hybridKeywordChannel(queries, normalizedType, recallLimit, opts.Regex)
 	}()
 	wg.Wait()
 
@@ -78,10 +82,40 @@ func (d *Store) HybridQuery(ctx context.Context, queries []string, mediaType str
 	}
 
 	fused := fuseHybridCandidates(vectorHits, keywordHits, vectorWeight, keywordWeight)
-	if len(fused) > topK {
-		fused = fused[:topK]
+	return trimHybridBudget(fused, topK), nil
+}
+
+// trimHybridBudget 共享 topK 预算的裁剪入口。
+//
+// 融合结果已按综合分全局排序，因此额度按“分数优先”自动调配：
+//   - 关键词结果不足（例如只召回 3 条）时，向量的高分候选继续占据剩余名额；
+//   - 向量结果不足时同理由关键词补足；
+//   - 两路均富余时按分数择优，不做固定 0.6/0.4 的名额切分。
+//
+// 唯一硬约束是总返回条数不超过 topK；降级（仅剩一路）时同样走这里。
+func trimHybridBudget(fused []Entry, topK int) []Entry {
+	if topK <= 0 || len(fused) == 0 {
+		return nil
 	}
-	return fused, nil
+	if len(fused) > topK {
+		return fused[:topK]
+	}
+	return fused
+}
+
+// hybridBudgetUsage 统计返回结果中各通道实际占用的额度（用于测试与观测）。
+func hybridBudgetUsage(hits []Entry) (vectorOnly, keywordOnly, both int) {
+	for _, hit := range hits {
+		switch hit.MatchedBy {
+		case MatchedByBoth:
+			both++
+		case MatchedByVector:
+			vectorOnly++
+		case MatchedByKeyword:
+			keywordOnly++
+		}
+	}
+	return vectorOnly, keywordOnly, both
 }
 
 // hybridVectorChannel 向量通道：逐条查询做嵌入语义检索，按 ID 合并取最高相似度。
@@ -122,10 +156,16 @@ func (d *Store) hybridVectorChannel(ctx context.Context, queries []string, media
 	return out, nil
 }
 
-// hybridKeywordChannel 关键词通道：本地扫描文本记忆，按字面/正则命中强度打分。
+// hybridKeywordChannel 关键词通道：默认走倒排索引独立召回，按加权覆盖率打分；
+// 正则模式保留原有的全库字面扫描（正则无法安全地映射为词元召回）。
 // 不依赖嵌入服务，因此向量通道不可用时仍可独立返回结果。
 func (d *Store) hybridKeywordChannel(queries []string, mediaType string, limit int, useRegex bool) ([]Entry, error) {
-	score, err := hybridKeywordScorer(queries, useRegex)
+	if !useRegex {
+		hits, _ := d.keywordIndexRecall(queries, mediaType, limit)
+		return hits, nil
+	}
+
+	score, err := hybridKeywordScorer(queries, true)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +179,10 @@ func (d *Store) hybridKeywordChannel(queries []string, mediaType string, limit i
 		for i := range collection.Documents {
 			doc := &collection.Documents[i]
 			if documentType(*doc) != mediaType || strings.TrimSpace(doc.Content) == "" {
+				continue
+			}
+			// 待处理条目只对整理可见：检索默认不返回，避免同一事实出现两遍
+			if doc.Pending {
 				continue
 			}
 			keywordScore := score(doc.Content)
@@ -365,7 +409,17 @@ func normalizeVectorScore(similarity float32) float32 {
 	return (similarity - DocRankThreshold) / (1 - DocRankThreshold)
 }
 
-// hybridCandidateLimit 计算单路召回上限：优先用调用方指定值，否则 topK×3，夹在 20~60。
+// hybridRecallLimit 计算共享召回上限：两通道使用同一个上限，且不低于 topK，
+// 这样任一通道都能独立补齐另一通道的空余额度。
+func hybridRecallLimit(topK, requested int) int {
+	limit := hybridCandidateLimit(topK, requested)
+	if limit < topK {
+		limit = topK
+	}
+	return limit
+}
+
+// hybridCandidateLimit 计算召回上限：优先用调用方指定值，否则 topK×3，夹在 20~60。
 func hybridCandidateLimit(topK, requested int) int {
 	limit := requested
 	if limit <= 0 {

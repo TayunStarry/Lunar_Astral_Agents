@@ -64,6 +64,12 @@ type EventRun interface {
 	Restore(json.RawMessage) error
 }
 
+// NoWorkRun 可选接口：事件启动后即可判定本次没有实际动作（如没有待合并组）。
+// 调度层据此回滚刚扣除的当日额度，保证「空跑不消耗额度」。
+type NoWorkRun interface {
+	NoWork() bool
+}
+
 // EventStep 一个原子步骤的结果。
 type EventStep struct {
 	Done   bool
@@ -78,14 +84,20 @@ type memoryItem struct {
 	Content   string `json:"content"`
 	Role      string `json:"role,omitempty"`
 	Timestamp int64  `json:"timestamp,omitempty"`
+	// Pending 待处理（待合并）标记：写入时命中高度相似条目，等待整理合并
+	Pending bool `json:"pending,omitempty"`
+	// PendingPartner 待合并组中的高度相似既有条目 ID
+	PendingPartner string `json:"pending_partner,omitempty"`
 }
 
+// memoryBatch 一个待合并组：组内条目语义相近，交给主推理模型合并成一条或多条新条目。
 type memoryBatch struct {
-	Items    []memoryItem `json:"items"`
-	NewTexts []string     `json:"new_texts,omitempty"`
+	Items []memoryItem `json:"items"`
 }
 
 type memoryPlan struct {
+	// Version 计划格式版本；旧版按时间分批的计划不再续跑，避免绕过相似度门槛整批改写
+	Version int           `json:"version,omitempty"`
 	ID      string        `json:"id"`
 	Batches []memoryBatch `json:"batches"`
 }
@@ -99,13 +111,18 @@ type memoryRunData struct {
 }
 
 // memoryJournal 单批记忆整理的意图日志。
-// Status: prepared -> deleted -> written；失败保留中间状态供启动恢复。
+// Status: prepared -> replaced -> done；失败保留中间状态供下次恢复重放。
+// 恢复重放通过引擎 ReplaceTexts 的「完全同文复用 + 缺失按已删」保证幂等。
 type memoryJournal struct {
-	BatchID    string       `json:"batch_id"`
-	Status     string       `json:"status"`
-	OldEntries []memoryItem `json:"old_entries"`
-	NewTexts   []string     `json:"new_texts"`
-	DeletedIDs []string     `json:"deleted_ids,omitempty"`
-	WrittenIDs []string     `json:"written_ids,omitempty"`
-	UpdatedAt  int64        `json:"updated_at"`
+	BatchID     string       `json:"batch_id"`
+	Status      string       `json:"status"`
+	OldEntries  []memoryItem `json:"old_entries"`
+	NewTexts    []string     `json:"new_texts"`
+	DeletedIDs  []string     `json:"deleted_ids,omitempty"`
+	WrittenIDs  []string     `json:"written_ids,omitempty"`
+	ReusedIDs   []string     `json:"reused_ids,omitempty"`
+	BeforeCount int          `json:"before_count,omitempty"`
+	AfterCount  int          `json:"after_count,omitempty"`
+	Error       string       `json:"error,omitempty"`
+	UpdatedAt   int64        `json:"updated_at"`
 }

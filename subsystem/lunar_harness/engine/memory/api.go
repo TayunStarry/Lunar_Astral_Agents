@@ -41,14 +41,6 @@ func EnsureReady() error {
 	return globalStore.EnsureReady()
 }
 
-// InitCollection 全局初始化集合（创建时按集合名生成嵌入向量）
-func InitCollection(ctx context.Context, name string) error {
-	if globalStore == nil {
-		return fmt.Errorf("全局记忆库未初始化")
-	}
-	return globalStore.InitCollection(ctx, name)
-}
-
 // AddText 全局添加文本消息（内容自动归组）
 func AddText(ctx context.Context, role, content string) (string, error) {
 	if globalStore == nil {
@@ -113,12 +105,52 @@ func Update(ctx context.Context, id, content string) error {
 	return globalStore.Update(ctx, id, content)
 }
 
+// ClusterTextCandidates 全局相似候选聚类（只读规划，不写记忆）
+func ClusterTextCandidates(ctx context.Context, collectionName string, ids []string, threshold float32) ([]TextCluster, int, error) {
+	if globalStore == nil {
+		return nil, 0, fmt.Errorf("全局记忆库未初始化")
+	}
+	return globalStore.ClusterTextCandidates(ctx, collectionName, ids, threshold)
+}
+
+// VerifyReplacementSimilarity 全局校验整理结果与来源记忆的双向语义一致性
+func VerifyReplacementSimilarity(ctx context.Context, oldIDs, newTexts []string, threshold float32) error {
+	if globalStore == nil {
+		return fmt.Errorf("全局记忆库未初始化")
+	}
+	return globalStore.VerifyReplacementSimilarity(ctx, oldIDs, newTexts, threshold)
+}
+
+// ClearPending 全局清除指定条目的待处理（待合并）标记
+func ClearPending(ctx context.Context, id string) error {
+	if globalStore == nil {
+		return fmt.Errorf("全局记忆库未初始化")
+	}
+	return globalStore.ClearPending(ctx, id)
+}
+
+// PendingCount 全局返回待处理（待合并）条目数量
+func PendingCount() int {
+	if globalStore == nil {
+		return 0
+	}
+	return globalStore.PendingCount()
+}
+
 // Delete 全局删除消息（跨全部集合）
 func Delete(ctx context.Context, id string) error {
 	if globalStore == nil {
 		return fmt.Errorf("全局记忆库未初始化")
 	}
 	return globalStore.Delete(ctx, id)
+}
+
+// ReplaceTexts 全局批量替换文本记忆（先写新、校验通过后再删旧，失败回滚）
+func ReplaceTexts(ctx context.Context, oldIDs, newTexts []string, opts ReplaceOptions) (ReplaceResult, error) {
+	if globalStore == nil {
+		return ReplaceResult{}, fmt.Errorf("全局记忆库未初始化")
+	}
+	return globalStore.ReplaceTexts(ctx, oldIDs, newTexts, opts)
 }
 
 // Fuse 全局权重融合：对指定集合的文本记忆执行合并

@@ -26,8 +26,8 @@ const (
 	maxMessageRunes = 4000
 
 	// 三类数据的来源说明（写进 meta.json，保证快照自述"数据从哪来、有多少"）
-	rawLogsSourceNote   = "console.GetLogs(console.SourceRaw)：TUI 原始日志环形缓冲（最多 1000 行），JSON Lines"
-	reasoningSourceNote = "console.BuildTranscriptJSON：核心智能实况（模型调用轮次环形缓冲，历史上限 30 轮）"
+	rawLogsSourceNote   = "logbuf.GetLogs(logbuf.SourceRaw)：原始日志环形缓冲（最多 1000 行），JSON Lines"
+	reasoningSourceNote = "logbuf.BuildTranscriptJSON：核心智能实况（模型调用轮次环形缓冲，历史上限 30 轮）"
 	agentsSourceNote    = "agentdump.Export：全部已注册智能体上下文（include_images=false）"
 	snapshotNote        = "开发者模式告警快照：警告及以上日志自动触发，仅落本地磁盘，不打开任何前端窗口。"
 )

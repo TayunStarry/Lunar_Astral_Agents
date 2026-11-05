@@ -46,6 +46,11 @@ func truncateAtSentence(text string, limit int) string {
 	if cut <= 0 {
 		cut = limit
 	}
+	// 句读位置过早（保留不足 60% 预算）时宁可硬切到 limit：
+	// 例如长段落第一个逗号出现在第 60 字，按逗号收尾会丢掉后面 88% 的内容。
+	if cut < limit*3/5 {
+		cut = limit
+	}
 	out := strings.TrimSpace(string(runes[:cut]))
 	if cut < len(runes) && !isSentenceEnd(runes[cut-1]) {
 		out += "…"

@@ -12,7 +12,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("document_reader", "文献解析",
 		"文献解析按次执行、不保留对话上下文；reset 清理运行期状态",
-		resetReader)
+		resetReader,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetReader 文献解析没有持久上下文，重置是安全且幂等的。

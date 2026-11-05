@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // RememberWebPage 登记一条检索访问记录（不建句柄，仅写 URL 主表）
@@ -47,8 +48,8 @@ func RememberWebPage(rawURL, title, summary string) error {
 	res := &Resource{
 		Kind:       KindURL,
 		URL:        norm,
-		Name:       firstNonEmpty(title, norm),
-		Title:      firstNonEmpty(title, norm),
+		Name:       textutil.FirstNonEmpty(title, norm),
+		Title:      textutil.FirstNonEmpty(title, norm),
 		ParseText:  summary,
 		ParseState: ParseReady,
 		Origin:     "web-search",
@@ -75,9 +76,9 @@ func WebPageFresh(rawURL string, ttl time.Duration) bool {
 	return time.Since(time.Unix(parsedAt, 0)) < ttl
 }
 
-// BilibiliBvid 从链接或文本中提取 BV 号（无则空串）
+// BilibiliBvid 从链接或文本中提取 BV 号（无则空串）；规则唯一实现在 internal/textutil。
 func BilibiliBvid(source string) string {
-	return bvIDPattern.FindString(strings.TrimSpace(source))
+	return textutil.ExtractBVID(strings.TrimSpace(source))
 }
 
 // AdmitURL 登记链接资源并返回句柄；同一地址复用既有句柄
@@ -98,7 +99,7 @@ func AdmitURL(in URLAdmitInput) (AdmitResult, error) {
 
 	if existing, found := archiveDB.FindResourceByURL(rawURL); found {
 		archiveDB.TouchResource(existing.ID)
-		newTitle := firstNonEmpty(title, existing.Title)
+		newTitle := textutil.FirstNonEmpty(title, existing.Title)
 		newSummary := existing.ParseText
 		if strings.TrimSpace(newSummary) == "" {
 			newSummary = summary
@@ -120,7 +121,7 @@ func AdmitURL(in URLAdmitInput) (AdmitResult, error) {
 	kind := URLKind(rawURL, in.KindHint)
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
-		name = firstNonEmpty(title, rawURL)
+		name = textutil.FirstNonEmpty(title, rawURL)
 	}
 	res := &Resource{
 		Kind:       kind,
@@ -128,7 +129,7 @@ func AdmitURL(in URLAdmitInput) (AdmitResult, error) {
 		BlobPath:   RelFromURL(rawURL),
 		Name:       name,
 		MIME:       linkMIME(kind),
-		Title:      firstNonEmpty(title, name),
+		Title:      textutil.FirstNonEmpty(title, name),
 		ParseText:  summary,
 		ParseState: ParseNone,
 		Origin:     origin,

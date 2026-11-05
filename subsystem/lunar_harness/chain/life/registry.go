@@ -1,7 +1,6 @@
 package life
 
 import (
-	"math/rand"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/affection"
@@ -77,9 +76,15 @@ func eventByIDLocked(id string) Event {
 }
 
 // pickLocked 按权重选择事件；调用方需持有锁。
+//
+// 权重 <= 0 的事件视为「自动触发已关闭」：不参与随机挑选，但仍可通过
+// RequestEvent 手动/强制触发（如记忆整理默认关闭自动触发）。
 func pickLocked() Event {
 	available := make([]Event, 0, len(registry))
 	for _, event := range registry {
+		if event.Weight() <= 0 {
+			continue
+		}
 		if usedLocked(event.ID()) < event.DailyQuota() {
 			available = append(available, event)
 		}
@@ -94,7 +99,7 @@ func pickLocked() Event {
 	if total <= 0 {
 		return available[0]
 	}
-	r := rand.Intn(total)
+	r := pickRandHook(total)
 	for _, event := range available {
 		r -= event.Weight()
 		if r < 0 {

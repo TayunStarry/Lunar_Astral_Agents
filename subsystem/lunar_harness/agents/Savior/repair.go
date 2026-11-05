@@ -13,7 +13,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("savior", "智能修复",
 		"智能修复的待办故障与静默期；reset 清空待修故障并解除全部静默",
-		resetFailures)
+		resetFailures,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetFailures 清空故障队列与静默表。

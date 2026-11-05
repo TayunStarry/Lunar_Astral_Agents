@@ -4,13 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/LunarHarness/executors/SearchCrawler"
+	"LunarSubsystem/LunarHarness/chain/search/crawler"
 )
 
 func TestComposeReportReplacesNoRelevancePlaceholder(t *testing.T) {
 	in := reportInput{
 		Digest: "（未检索到与问题直接相关的信息）",
-		Pages: []SearchCrawler.PageCapture{
+		Pages: []crawler.PageCapture{
 			{Title: "页面 A", Domain: "example.com", Text: "页面正文介绍了模型参数和训练数据。", TextChars: 18},
 		},
 	}

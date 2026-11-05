@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -31,10 +30,10 @@ func currentEmbeddingModel() string {
 	return "text_embedding"
 }
 
-// EnsureReady 初始化记忆库实例：一次性加载全部集合，并补齐默认分组与集合名向量。
+// EnsureReady 初始化记忆库实例：按 clusters.json 加载簇目录，必要时执行幂等布局迁移。
 //
-// 启动时不再指定某个集合：磁盘上的所有集合全部载入，默认分组集合缺失时自动创建，
-// 没有集合名嵌入向量的集合按集合名调用嵌入模型补齐。
+// 布局与索引一致时只加载，不搬迁；存在旧分组目录时先备份，再按簇搬迁、逐项对账，
+// 全部成功后才切换索引并删除旧目录。任一步失败回滚，不改变旧布局。
 // 模型配置为本地固定值，与智能体共用嵌入/多模态模型。
 func (d *Store) EnsureReady() error {
 	if d.baseDir == "" {
@@ -50,97 +49,20 @@ func (d *Store) EnsureReady() error {
 	if !d.initialized {
 		d.httpClient = &http.Client{Timeout: 120 * time.Second}
 		d.initialized = true
-		d.loadAllCollections()
 	}
 
-	// 每次实例初始化都做一遍幂等补齐：默认分组、缺失的集合名向量
-	// 嵌入服务启动较晚时，后续 EnsureReady 调用会在这里继续补齐，而不是永久停摆
-	defaultsOK := d.ensureDefaultCollections()
-	namesOK := d.ensureNameEmbeddings()
+	// 聚类索引与磁盘布局统一由 prepareLayout 准备（幂等，可重复调用）。
+	if _, err := d.prepareLayout(false); err != nil {
+		logger.Warn("FileManager", "聚类布局初始化失败（旧目录保持不变）: %v", err)
+		// 记录失败原因：此时集合可能完全没加载，读取方必须能看出「读不到」而不是「没有数据」。
+		d.recordLoadError(fmt.Errorf("记忆库聚类布局初始化失败: %w", err))
+		return fmt.Errorf("记忆库聚类布局初始化失败: %w", err)
+	}
 
-	if d.CollectionCount() == 0 {
-		return fmt.Errorf("记忆库没有可用集合（默认分组创建失败，请确认嵌入服务可用后重试）")
-	}
-	if !defaultsOK || !namesOK {
-		return fmt.Errorf("记忆库分组尚未全部就绪（嵌入服务可能未启动，稍后重试）")
-	}
+	// 关键词倒排索引：优先加载持久化快照，缺失/损坏/与文档不一致时从已加载文档幂等重建。
+	// 索引失败不阻断初始化，检索时降级为向量通道。
+	d.ensureKeywordIndex()
 	return nil
-}
-
-// ensureDefaultCollections 确保默认分组集合存在（已存在则跳过），返回是否全部就绪
-func (d *Store) ensureDefaultCollections() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	ok := true
-	for _, name := range DefaultCollections {
-		d.collectionsMu.RLock()
-		_, exists := d.collections[name]
-		d.collectionsMu.RUnlock()
-		if exists {
-			continue
-		}
-		if err := d.InitCollection(ctx, name); err != nil {
-			logger.Warn("FileManager", "默认记忆分组 [%s] 初始化失败: %v（下次启动重试）", name, err)
-			ok = false
-			continue
-		}
-		logger.Info("FileManager", "默认记忆分组 [%s] 已就绪", name)
-	}
-	return ok
-}
-
-// ensureNameEmbeddings 为所有缺少集合名嵌入向量的集合补齐向量，返回是否全部就绪
-func (d *Store) ensureNameEmbeddings() bool {
-	d.collectionsMu.RLock()
-	collections := make([]*Collection, 0, len(d.collections))
-	for _, c := range d.collections {
-		collections = append(collections, c)
-	}
-	d.collectionsMu.RUnlock()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	ok := true
-	for _, c := range collections {
-		c.mu.RLock()
-		ready := len(c.NameEmbedding) > 0 && (c.NameEmbeddingModel == "" || c.NameEmbeddingModel == currentEmbeddingModel())
-		c.mu.RUnlock()
-		if ready {
-			continue
-		}
-		if err := d.ensureCollectionNameEmbedding(ctx, c); err != nil {
-			logger.Warn("FileManager", "集合 [%s] 名称嵌入生成失败: %v（下次启动重试）", c.Name, err)
-			ok = false
-			continue
-		}
-		logger.Info("FileManager", "集合 [%s] 名称嵌入向量已生成（模型 %s）", c.Name, c.NameEmbeddingModel)
-	}
-	return ok
-}
-
-// ensureCollectionNameEmbedding 为单个集合补齐名称嵌入向量
-func (d *Store) ensureCollectionNameEmbedding(ctx context.Context, c *Collection) error {
-	c.mu.RLock()
-	ready := len(c.NameEmbedding) > 0 && (c.NameEmbeddingModel == "" || c.NameEmbeddingModel == currentEmbeddingModel())
-	name := c.Name
-	c.mu.RUnlock()
-	if ready {
-		return nil
-	}
-	model := currentEmbeddingModel()
-	vec, err := d.embedText(ctx, model, name)
-	if err != nil {
-		return fmt.Errorf("集合名嵌入失败: %w", err)
-	}
-	c.mu.Lock()
-	c.NameEmbedding = vec
-	c.NameEmbeddingModel = model
-	if c.Dimension == 0 {
-		c.Dimension = len(vec)
-	}
-	c.mu.Unlock()
-	return c.saveCollectionMeta()
 }
 
 // Ready 检查记忆库是否已初始化

@@ -9,25 +9,28 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
+// exportContext 智能修复的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	_ = includeImages
+	failures := failureSnapshot()
+	cooldowns := cooldownSnapshot()
+	return map[string]any{
+		"kind":          "savior-context",
+		"generated_at":  time.Now().Format(time.RFC3339),
+		"failures":      failures,
+		"cooldowns":     cooldowns,
+		"pending":       len(failures),
+		"message_count": len(failures),
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "savior",
 		Label:       "智能修复",
 		Group:       "Go 智能体",
 		Description: "智能修复的待处理故障队列（智能体、错误、尝试次数）与静默截止时间",
-		Export: func(includeImages bool) (any, error) {
-			_ = includeImages
-			failures := failureSnapshot()
-			cooldowns := cooldownSnapshot()
-			return map[string]any{
-				"kind":          "savior-context",
-				"generated_at":  time.Now().Format(time.RFC3339),
-				"failures":      failures,
-				"cooldowns":     cooldowns,
-				"pending":       len(failures),
-				"message_count": len(failures),
-			}, nil
-		},
+		Export:      exportContext,
 	})
 }
 

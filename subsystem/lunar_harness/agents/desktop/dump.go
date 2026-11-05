@@ -13,18 +13,21 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
+// exportContext 桌面操纵智能体各阶段的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	return map[string]any{
+		"kind":         "desktop-agent-phases",
+		"generated_at": time.Now().Format(time.RFC3339),
+		"phases":       snapshotPhases(),
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "desktop_agent",
 		Label:       "桌面操作-模型",
 		Group:       "Go 智能体",
 		Description: "桌面操纵智能体各阶段（编纂/启动/UIA/规划/操作）最近一次执行结果",
-		Export: func(includeImages bool) (any, error) {
-			return map[string]any{
-				"kind":         "desktop-agent-phases",
-				"generated_at": time.Now().Format(time.RFC3339),
-				"phases":       snapshotPhases(),
-			}, nil
-		},
+		Export:      exportContext,
 	})
 }

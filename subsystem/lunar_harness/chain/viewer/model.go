@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/model/llama"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
+	"LunarSubsystem/LunarHarness/protocol/modellease"
 )
 
 const lifeModelRole = "哔哩观影"
@@ -18,7 +18,7 @@ func unloadModel(model string) {
 	if strings.TrimSpace(model) == "" {
 		return
 	}
-	if _, err := llama.UnloadModelByID(model); err != nil {
+	if _, err := modellease.Unload(model); err != nil {
 		logger.Warn("BilibiliViewer", "卸载模型[%s]失败（不影响流程）: %v", model, err)
 		return
 	}

@@ -4,12 +4,12 @@ package fileflow
 // 同时确认新库首次打开不再读取旧 flow_ops.db。
 
 import (
-	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/dbopen"
 	"LunarSubsystem/LunarHarness/internal/testenv"
 )
 
@@ -120,7 +120,7 @@ func TestNewStoreDoesNotReadLegacyFlowOps(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
 		t.Fatalf("创建旧库目录失败: %v", err)
 	}
-	legacy, err := sql.Open("sqlite3", legacyPath)
+	legacy, err := dbopen.Open(legacyPath, dbopen.Options{NoDSNParams: true})
 	if err != nil {
 		t.Fatalf("创建旧库失败: %v", err)
 	}

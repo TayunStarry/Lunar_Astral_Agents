@@ -226,9 +226,6 @@ var workspaceTextExtensions = map[string]bool{
 	".dockerfile": true, ".env": true, ".gitignore": true, ".editorconfig": true,
 }
 
-// bvIDPattern B 站视频号（BV + 10 位字母数字）
-var bvIDPattern = regexp.MustCompile(`BV[0-9A-Za-z]{10}`)
-
 // qqCDNHosts 腾讯图床 / 媒体域名（只接受 https）
 var qqCDNHosts = []string{"gchat.qpic.cn", "multimedia.nt.qq.com.cn"}
 

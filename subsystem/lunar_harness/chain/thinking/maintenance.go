@@ -15,7 +15,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/model/llama"
+	"LunarSubsystem/LunarHarness/protocol/modellease"
 )
 
 const (
@@ -98,7 +98,7 @@ func unloadDialogModels() {
 			continue
 		}
 		seen[model] = true
-		if _, err := llama.UnloadModelByID(model); err != nil {
+		if _, err := modellease.Unload(model); err != nil {
 			logger.Warn(tickModule, "[维护] 卸载模型[%s]失败（继续）: %v", model, err)
 			continue
 		}

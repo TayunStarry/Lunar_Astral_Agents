@@ -11,7 +11,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("creative", "自由创作",
 		"自由创作的跨轮记录（上一轮计划、备忘、参考资料、错误与收尾）；reset 清空这些记录",
-		resetJournal)
+		resetJournal,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetJournal 清空两种模式的调用轮次记录，让下一轮调度从空白计划开始；文件变更与回退记录保留。

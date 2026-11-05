@@ -98,12 +98,27 @@ function buildVoiceTranscriptBlock(att) {
 
 /** 音乐卡片：后端推送的音频 + 共享播放器（播放/暂停、波形、进度、时长） */
 function buildMusicCard(msg) {
-    return LunarMusicPlayer.createCard({
+    const audioUrl = String(msg.musicAudio || msg.audio || '');
+    const card = LunarMusicPlayer.createCard({
         title: msg.musicTitle || '月华演奏曲',
         summary: msg.musicSummary || '',
         duration: msg.musicDuration,
-        audio: msg.musicAudio || msg.audio || ''
+        audio: audioUrl,
+        // 桌面端点击卡片本体即可在完整卡片与迷你条之间切换
+        toggleOnCardClick: true,
+        // 桌面端折叠为迷你条，保留播放器实例与进度，不打断正在播放的音频
+        pauseOnClose: false,
+        onClose: (target) => {
+            LunarMusicPlayer.dismiss(audioUrl);
+            target.setCollapsed(true);
+        },
+        onExpand: () => {
+            LunarMusicPlayer.undismiss(audioUrl);
+        }
     });
+    // 历史消息重渲染时保持上次的收起状态，避免「关了又出现」
+    if (LunarMusicPlayer.isDismissed(audioUrl)) card.setCollapsed(true);
+    return card;
 }
 
 function buildAudioReplay(msg) {

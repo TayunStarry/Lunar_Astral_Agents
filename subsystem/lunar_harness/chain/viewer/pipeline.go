@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
 
 // startup 执行启动阶段；成功时浏览器保持打开，等待 Tick 继续观看。
@@ -34,13 +35,13 @@ func (r *runner) startup() (text string, err error) {
 	}
 	r.mid = r.browser.ownMid()
 
-	// 清掉历史遗留的机械化记忆与视频摘要（切片过程文本 / 运行统计）
-	if removed := cleanupMechanicalMemories(); removed > 0 {
-		logger.Info("BilibiliViewer", "已清理 %d 条机械化观影记忆", removed)
-	}
+	// 初始化观影记忆库，并把统一记忆库里的历史观影条目一次性迁移进来。
+	prepareViewerMemory()
 	if removed := cleanupMechanicalVideoSummaries(); removed > 0 {
 		logger.Info("BilibiliViewer", "已清理 %d 条机械化视频摘要", removed)
 	}
+	// 轨迹只保留最近若干轮，避免本地过程文件无限堆积。
+	pruneTraces()
 
 	// 指令里点名了某条 B 站视频时，本轮直接看这一条；否则按关键词选片。
 	direct, hasDirect := directVideoLink(r.instruction)
@@ -162,7 +163,7 @@ func (r *runner) focusTopVideo() {
 // fetch_resources 取到「从未看过、也没有摘要」的 B 站链接时会安排强制观影事件，
 // 指令里带着该视频地址；这里按 BV 号直接观看，而不是把它当搜索关键词再随机选片。
 func directVideoLink(instruction string) (videoLink, bool) {
-	bvid := bvidRe.FindString(instruction)
+	bvid := viewerstore.ExtractBVID(instruction)
 	if bvid == "" {
 		return videoLink{}, false
 	}

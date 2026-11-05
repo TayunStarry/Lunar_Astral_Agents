@@ -11,8 +11,8 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/Responder"
 	"LunarSubsystem/LunarHarness/agents/Savior"
-	"LunarSubsystem/LunarHarness/chain/thinking/tickloop"
 	"LunarSubsystem/LunarHarness/chain/life"
+	"LunarSubsystem/LunarHarness/chain/thinking/tickloop"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 

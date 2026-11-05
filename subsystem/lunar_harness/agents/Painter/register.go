@@ -17,24 +17,28 @@ var (
 	lastRun = map[string]any{}
 )
 
+// exportContext 绘制者的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	_ = includeImages
+	return map[string]any{
+		"kind":         "painter-run",
+		"generated_at": time.Now().Format(time.RFC3339),
+		"last_run":     snapshotRun(),
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          agentID,
 		Label:       roleLabel,
 		Group:       "Go 智能体",
 		Description: "绘制者最近一次绘制任务的说明、产出句柄与跨轮上下文条数",
-		Export: func(includeImages bool) (any, error) {
-			_ = includeImages
-			return map[string]any{
-				"kind":         "painter-run",
-				"generated_at": time.Now().Format(time.RFC3339),
-				"last_run":     snapshotRun(),
-			}, nil
-		},
+		Export:      exportContext,
 	})
 	agentrepair.RegisterResettable(agentID, roleLabel,
 		"绘制者的跨任务画作、最近作品路径与跨轮上下文；reset 清空这些运行时状态",
-		resetState)
+		resetState,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // recordRun 记录最近一次绘制任务的结果。

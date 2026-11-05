@@ -12,17 +12,17 @@ package thinking
 
 // maybeSendFastAck 复合工具的快速应答（在工具执行前调用）
 func maybeSendFastAck(functionName string) {
+	// 判定与置位必须在同一临界区：否则并发调用（多工具同轮执行）会各推一次旁白
 	stateMu.Lock()
 	if fastAckSent {
 		stateMu.Unlock()
 		return
 	}
-	stateMu.Unlock()
 	text := fastAckText(functionName)
 	if text == "" {
+		stateMu.Unlock()
 		return
 	}
-	stateMu.Lock()
 	fastAckSent = true
 	stateMu.Unlock()
 	// 快速应答恒定标记 auto=true：它是执行长任务前的旁白，永远不消费 QQ 的应答份额。

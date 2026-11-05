@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
 
 // TestSliceUnderstandPromptIsFeeling 钉住切片任务是「观看感受」，不是分时段内容摘要。
@@ -85,49 +86,16 @@ func TestNewRunnerDefaults(t *testing.T) {
 	}
 }
 
-// TestMemoryContentFormat 钉住统一记忆格式：[B站视频][类别]<正文>。
-func TestMemoryContentFormat(t *testing.T) {
-	content, err := formatMemoryContent("吐槽", "这个视频太吵了")
-	if err != nil {
-		t.Fatalf("格式化失败: %v", err)
-	}
-	if want := "[B站视频][吐槽]这个视频太吵了"; content != want {
-		t.Fatalf("记忆格式不符：%q", content)
-	}
-
-	entry, ok := parseMemoryContent("id-1", content)
-	if !ok || entry.Kind != "吐槽" || entry.Text != "这个视频太吵了" {
-		t.Fatalf("解析失败：%+v ok=%v", entry, ok)
-	}
-
-	// 前缀改了也不应丢历史条目：解析不依赖前缀文字。
-	legacy, ok := parseMemoryContent("id-3", "[BiliBili-生活日记][评价]旧前缀的正文")
-	if !ok || legacy.Kind != "评价" || legacy.Text != "旧前缀的正文" {
-		t.Fatalf("旧前缀条目应能解析且不含前缀：%+v ok=%v", legacy, ok)
-	}
-
-	fallback, _ := formatMemoryContent("不存在的类别", "正文")
-	if want := "[B站视频][印象]正文"; fallback != want {
-		t.Fatalf("非法类别应回落为印象：%q", fallback)
-	}
-	if _, ok := parseMemoryContent("id-2", "别的智能体的记忆"); ok {
-		t.Fatal("非哔哩观影记忆不应解析成功")
-	}
-	if _, err := formatMemoryContent("印象", "  "); err == nil {
-		t.Fatal("空正文应返回错误")
-	}
-}
-
 // TestMemoryTextHuman 钉住记忆正文过滤：机械切片文本不写入，只保留人格化内容。
 func TestMemoryTextHuman(t *testing.T) {
 	junk := "《X》是同一个视频，下面按时间顺序给出 1 个 60 秒切片的理解，请合成为整体观看感受"
-	if !memoryLooksMechanical(junk) {
+	if !viewerstore.LooksMechanical(junk) {
 		t.Fatal("机械切片文本应被识别")
 	}
 	if got := cleanMemoryText("【第 1/1 个 60 秒切片】内容概述\n这段音乐听着很舒服，我循环了好几遍。"); got != "这段音乐听着很舒服，我循环了好几遍。" {
 		t.Fatalf("清洗后应只剩人格化正文，实得 %q", got)
 	}
-	if memoryLooksMechanical("这段音乐听着很舒服，我循环了好几遍。") {
+	if viewerstore.LooksMechanical("这段音乐听着很舒服，我循环了好几遍。") {
 		t.Fatal("人格化感受不应被误判")
 	}
 }

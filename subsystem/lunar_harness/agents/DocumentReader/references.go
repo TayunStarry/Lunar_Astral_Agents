@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // buildReferences 扫描全文的引用关系
@@ -81,7 +82,7 @@ func buildReferences(doc *docContext) []fileReference {
 			resolved, exists := resolveReference(doc, target)
 			refs = append(refs, fileReference{
 				Line:     index + 1,
-				Raw:      truncateRunes(trimmed, 512),
+				Raw:      textutil.TruncateRunes(trimmed, 512),
 				Target:   target,
 				Resolved: resolved,
 				Exists:   exists,

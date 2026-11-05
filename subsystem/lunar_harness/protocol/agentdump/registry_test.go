@@ -39,3 +39,11 @@ func TestRegisterListAndExport(t *testing.T) {
 		t.Fatal("未知目标应返回错误")
 	}
 }
+
+func TestExportRejectsEmptyID(t *testing.T) {
+	for _, id := range []string{"", "   "} {
+		if _, err := Export(id, false); err == nil {
+			t.Fatalf("空导出目标 %q 应返回错误", id)
+		}
+	}
+}

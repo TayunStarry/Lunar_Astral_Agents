@@ -10,7 +10,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable(AgentID, "搜索者-规划",
 		"搜索者-规划的最近一次结构化决策；reset 清空该记录",
-		resetPlannerState)
+		resetPlannerState,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetPlannerState 清空最近一次规划记录。

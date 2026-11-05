@@ -1,12 +1,14 @@
 package Dialogue
 
-// tools.go 对话者的工具声明：schema + 说明 + 所属智能体 ID（dialogue）。
+// tools.go 对话者的工具声明与执行器注册：schema + 说明 + 所属智能体 ID（dialogue）。
 //
-// 按四层定义，「工具声明」归智能体；执行函数仍由装配层（chain/thinking）注册，
-// 本包不导入任何链，也不执行工具。动态枚举（qq_send 就绪后才出现）通过
+// 按四层定义，「工具声明」与「工具执行器」都归智能体：本包在 init 中把执行器
+// 注册进 protocol/toolreg（实现见 tool_*.go），跨链能力由装配层以函数变量注入，
+// 本包不导入任何链。动态枚举（qq_send 就绪后才出现、扩展应用清单）通过
 // toolreg.RegisterProvider 在查询时重新计算，避免 init 时把状态固化。
 
 import (
+	"context"
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
@@ -64,6 +66,27 @@ func init() {
 		},
 	)
 	toolreg.RegisterProvider("dialogue", networkExploreSchemas)
+	toolreg.RegisterProvider("dialogue", crystalRemoteSchemas)
+	registerExecutors()
+}
+
+// registerExecutors 把工具执行器注册进全局注册表（同名后写覆盖先写）。
+func registerExecutors() {
+	toolreg.RegisterExecutor(ToolDispatchTechnique, func(_ context.Context, args map[string]any) (any, error) {
+		return ExecuteDispatchTechnique(args), nil
+	})
+	toolreg.RegisterExecutor(ToolFetchResources, func(_ context.Context, args map[string]any) (any, error) {
+		return ExecuteFetchResources(args), nil
+	})
+	toolreg.RegisterExecutor(ToolLifePlanning, func(_ context.Context, args map[string]any) (any, error) {
+		return ExecuteLifePlanning(args), nil
+	})
+	toolreg.RegisterExecutor(ToolNetworkExplore, func(_ context.Context, args map[string]any) (any, error) {
+		return ExecuteNetworkExplore(args), nil
+	})
+	toolreg.RegisterExecutor(ToolUseTheProgram, func(_ context.Context, args map[string]any) (any, error) {
+		return ExecuteUseTheProgram(args), nil
+	})
 }
 
 // networkExploreSchemas 联网探索工具声明：qq_send 仅在通讯桥接就绪时加入枚举。

@@ -3,14 +3,16 @@ package DialogueBridging
 import (
 	"strings"
 	"testing"
+
+	"LunarSubsystem/LunarHarness/clients/napcat"
 )
 
-func testDirectory() ([]QQGroup, []QQFriend) {
-	groups := []QQGroup{
+func testDirectory() ([]napcat.QQGroup, []napcat.QQFriend) {
+	groups := []napcat.QQGroup{
 		{GroupID: 1001, GroupName: "测试群"},
 		{GroupID: 1002, GroupName: "测试群二"},
 	}
-	friends := []QQFriend{
+	friends := []napcat.QQFriend{
 		{UserID: 2001, Nickname: "小明"},
 		{UserID: 2002, Nickname: "小红", Remark: "同桌"},
 	}

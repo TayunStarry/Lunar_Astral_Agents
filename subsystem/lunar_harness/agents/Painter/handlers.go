@@ -9,6 +9,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // executeTool 执行绘画工具调用。
@@ -392,7 +393,7 @@ func collectPaintingDetail(call chatCall, paintings *[]PaintingDetail) {
 		if name == "image_to_image" {
 			strengthNote = fmt.Sprintf("（强度 %.2f）", normalizeStrength(numberArg(args, "strength"), "图生图"))
 		}
-		*paintings = append(*paintings, PaintingDetail{ToolName: name, PromptSummary: truncateRunes(prompt, 512) + strengthNote})
+		*paintings = append(*paintings, PaintingDetail{ToolName: name, PromptSummary: textutil.TruncateRunes(prompt, 512) + strengthNote})
 	case "upscale_image":
 		label := "最近作品超分重建"
 		if tag := stringArg(args, "image_tag"); tag != "" {

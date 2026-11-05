@@ -22,7 +22,8 @@ import (
 var executeMu sync.Mutex
 
 // Execute 执行一次计划管理任务。
-func Execute(ctx context.Context, instruction string) (Result, error) {
+func Execute(ctx context.Context, instruction string) (result Result, err error) {
+	defer func() { recordRun(instruction, result, err) }()
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
 		return failResult("plan", fmt.Errorf("请用自然语言说明要如何调整计划表")), nil

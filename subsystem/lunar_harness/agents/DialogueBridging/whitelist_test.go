@@ -3,6 +3,8 @@ package DialogueBridging
 import (
 	"strings"
 	"testing"
+
+	"LunarSubsystem/LunarHarness/clients/napcat"
 )
 
 // TestWhitelistGateBlocksAndRequiresConfirmation 钉住主动投递的白名单闸门：
@@ -59,7 +61,7 @@ func TestExecutePlanWhitelistBlockedIsNotFailure(t *testing.T) {
 		Target:     "1001",
 		Text:       "晚安",
 	}}}
-	groups := []QQGroup{{GroupID: 1001, GroupName: "测试群"}}
+	groups := []napcat.QQGroup{{GroupID: 1001, GroupName: "测试群"}}
 	text, err := executePlan(plan, "给测试群发晚安", groups, nil)
 	if err != nil {
 		t.Fatalf("白名单拦截不应报投递失败: %v", err)

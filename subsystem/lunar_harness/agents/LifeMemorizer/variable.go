@@ -15,9 +15,12 @@ const (
 	// MaxTextRunes 单条整理后记忆的最大字符数（超出时在句读处结束，不硬切半句）。
 	MaxTextRunes = 512
 	// KeepPercent 整理后保留下限占输入条数的百分比（防止模型把整批压成寥寥几条）。
-	KeepPercent = 25
+	// 从 25 提高到 50：整理只允许温和合并，宁可条目多、每条短，也不丢事实。
+	KeepPercent = 50
 	// KeepFloor 保留下限的最小条数（小批次也要至少保留几条）。
-	KeepFloor = 4
+	KeepFloor = 8
+	// MinRetainPercent 输出正文总字数占输入总字数的下限（低于此值视为过度压缩）。
+	MinRetainPercent = 20
 	// KeepCeiling 保留下限的最大条数（大批次不要求输出过多条目）。
 	KeepCeiling = 48
 	// ModelRetry 模型输出解析失败后的额外重试次数。

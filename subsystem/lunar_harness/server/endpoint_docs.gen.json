@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.309.0019",
+    "version": "2026.310.0043",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -1030,8 +1030,8 @@
       "post": {
         "summary": "代理访问服务",
         "description": "代理访问服务",
-        "operationId": "thinking.ProxyHandler",
-        "x-handler": "thinking.ProxyHandler",
+        "operationId": "proxyHandler",
+        "x-handler": "proxyHandler",
         "responses": {
           "200": {
             "description": "成功"
@@ -1132,8 +1132,8 @@
       "post": {
         "summary": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
         "description": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
-        "operationId": "thinking.MessageBatchHandler",
-        "x-handler": "thinking.MessageBatchHandler",
+        "operationId": "messageBatchHandler",
+        "x-handler": "messageBatchHandler",
         "responses": {
           "200": {
             "description": "成功"

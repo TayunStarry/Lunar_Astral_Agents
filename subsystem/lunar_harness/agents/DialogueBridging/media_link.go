@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
@@ -32,7 +33,7 @@ const channelFileReadPath = "/file/read/"
 func mediaLinkText(source, name string) string {
 	raw := strings.TrimSpace(source)
 	if raw != "" {
-		if data, err := fetchFileBytes(raw); err == nil && len(data) > 0 {
+		if data, err := napcat.FetchFileBytes(raw); err == nil && len(data) > 0 {
 			if localURL := saveVideoFileURL(name, data); localURL != "" {
 				if res, admitErr := resource.AdmitURL(resource.URLAdmitInput{
 					URL:      localURL,

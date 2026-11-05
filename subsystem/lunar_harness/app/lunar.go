@@ -9,10 +9,12 @@ import (
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/chain/thinking"
 	"LunarSubsystem/LunarHarness/clients"
+	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
+	"LunarSubsystem/LunarHarness/protocol/modellease"
 )
 
 // assembleLunar 装配月华人格局的生产者部分：模型代理、绘图协处理器与 QQ 桥接。
@@ -32,6 +34,9 @@ func assembleLunar() error {
 
 	// ==== llama.cpp 本地模型代理 ====
 	llama.Init()
+	// ==== 模型卸载单一入口 ====
+	// 各链与执行体只调用 protocol/modellease，卸载实现由装配层注入。
+	modellease.SetUnloader(llama.UnloadModelByID)
 
 	// ==== 扩散生成任务协处理器 ====
 	image.StartTaskProcessor()
@@ -76,6 +81,11 @@ func initNapcatBridge() {
 		logger.Error("LunarHarness", "加载桥接配置失败: %v", err)
 		return
 	}
+
+	// NapCat 传输客户端由装配层构造并注入：端点与 token 来自桥接配置，
+	// 连接状态、重连与业务语义仍归 DialogueBridging。
+	endpoint, token := DialogueBridging.BridgingEndpoint()
+	napcat.SetDefault(napcat.New(napcat.Config{Endpoint: endpoint, Token: token}))
 
 	// QQ 消息（OpenAI 格式）按到达顺序推送到智能体统一未读队列
 	DialogueBridging.SendMessageToAgent = func(messages []map[string]any) {

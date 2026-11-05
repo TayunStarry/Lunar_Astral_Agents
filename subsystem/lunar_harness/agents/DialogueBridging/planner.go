@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/prompts"
 )
 
 // planSend 调用规划模型，返回一次投递计划。
-func planSend(instruction string, groups []QQGroup, friends []QQFriend) (sendPlan, error) {
+func planSend(instruction string, groups []napcat.QQGroup, friends []napcat.QQFriend) (sendPlan, error) {
 	system, err := prompts.Read("dialogueBridging.md")
 	if err != nil {
 		return sendPlan{}, fmt.Errorf("读取 通讯桥接提示词失败: %w", err)
@@ -53,7 +54,7 @@ func (plan *sendPlan) normalize() {
 }
 
 // buildPlanMaterial 组装模型输入：可投递目标清单 + 对话者需求。
-func buildPlanMaterial(instruction string, groups []QQGroup, friends []QQFriend) string {
+func buildPlanMaterial(instruction string, groups []napcat.QQGroup, friends []napcat.QQFriend) string {
 	var builder strings.Builder
 	builder.WriteString("【可投递目标】\n")
 	if len(groups) == 0 && len(friends) == 0 {

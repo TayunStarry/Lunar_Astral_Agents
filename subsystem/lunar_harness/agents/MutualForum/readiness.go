@@ -117,7 +117,7 @@ func InspectStatus(ctx context.Context) (*Status, error) {
 	} else if acct != nil {
 		status.Identity = accountView(acct)
 		client := newClient(cfg)
-		client.apiKey = acct.APIKey
+		client.SetAPIKey(acct.APIKey)
 		meCtx, meCancel := context.WithTimeout(ctx, cfg.RequestTimeout())
 		me, meErr := client.Me(meCtx)
 		meCancel()

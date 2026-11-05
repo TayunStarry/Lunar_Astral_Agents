@@ -57,6 +57,16 @@ func Step(ctx context.Context) error {
 			return err
 		}
 		mu.Lock()
+		// 事件启动后即可判定「本次没有实际动作」（如没有待合并组）：回滚刚扣的额度，
+		// 让空跑不占当日次数。
+		if nw, ok := run.(NoWorkRun); ok && nw.NoWork() {
+			if state.Used[event.ID()] > 0 {
+				state.Used[event.ID()]--
+			}
+			triggered = state.Used[event.ID()]
+			saveStateLocked()
+			logger.Info(Module, "[生活] 事件 %s 本次没有实际动作，不消耗当日额度", event.ID())
+		}
 		if state.Active != nil && state.Active.Event == event.ID() {
 			state.Active.Data = run.Snapshot()
 			saveStateLocked()

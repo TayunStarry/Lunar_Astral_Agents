@@ -12,8 +12,7 @@ import (
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-
-	_ "github.com/mattn/go-sqlite3"
+	"LunarSubsystem/LunarHarness/engine/dbopen"
 )
 
 // setupKnowledgeTest 在临时目录中隔离全部数据库路径与单例。
@@ -123,7 +122,7 @@ func TestExecuteOnRegisteredDomain(t *testing.T) {
 		if archiveDB != nil {
 			return archiveDB, nil
 		}
-		db, err := sql.Open("sqlite3", archivePath)
+		db, err := dbopen.Open(archivePath, dbopen.Options{NoDSNParams: true})
 		if err != nil {
 			return nil, err
 		}

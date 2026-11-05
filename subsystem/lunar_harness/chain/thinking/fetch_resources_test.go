@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
@@ -25,7 +26,7 @@ func TestFetchResourcesValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := handleFetchResources(tc.args).Text
+			got := Dialogue.ExecuteFetchResources(tc.args).Text
 			if !strings.Contains(got, tc.want) {
 				t.Fatalf("提示应包含 %q，实际 %q", tc.want, got)
 			}
@@ -78,12 +79,12 @@ func TestFetchResourcesListAndHandleEmpty(t *testing.T) {
 		config.LocalDir, config.ArchiveDBPath = origDir, origDB
 	})
 
-	list := handleFetchResources(map[string]any{"type": "list", "query": []any{"I"}, "limit": float64(5)}).Text
+	list := Dialogue.ExecuteFetchResources(map[string]any{"type": "list", "query": []any{"I"}, "limit": float64(5)}).Text
 	if !strings.Contains(list, "资源目录为空") {
 		t.Fatalf("空库 list 应返回空目录提示，实际 %q", list)
 	}
 
-	missing := handleFetchResources(map[string]any{"type": "handle", "query": []any{"@D.001"}}).Text
+	missing := Dialogue.ExecuteFetchResources(map[string]any{"type": "handle", "query": []any{"@D.001"}}).Text
 	if !strings.Contains(missing, "取回失败") || !strings.Contains(missing, "fetch_resources") {
 		t.Fatalf("缺失句柄应提示用 fetch_resources 确认，实际 %q", missing)
 	}
@@ -122,19 +123,19 @@ func TestFetchResourcesListFilters(t *testing.T) {
 		{"D", "06-前端资源库.md"},      // 类型码 + 文件名
 	}
 	for _, query := range cases {
-		got := handleFetchResources(map[string]any{"type": "list", "query": query}).Text
+		got := Dialogue.ExecuteFetchResources(map[string]any{"type": "list", "query": query}).Text
 		if !strings.Contains(got, admitted.Handle) {
 			t.Fatalf("query=%v 应列出句柄 %s，实际 %q", query, admitted.Handle, got)
 		}
 	}
 
-	miss := handleFetchResources(map[string]any{"type": "list", "query": []any{"不存在.md"}}).Text
+	miss := Dialogue.ExecuteFetchResources(map[string]any{"type": "list", "query": []any{"不存在.md"}}).Text
 	if strings.Contains(miss, admitted.Handle) || !strings.Contains(miss, "没有匹配") {
 		t.Fatalf("无匹配时应提示没有匹配，实际 %q", miss)
 	}
 
 	// handle 模式只认句柄：文件名应被明确拦截并提示改用 path
-	read := handleFetchResources(map[string]any{
+	read := Dialogue.ExecuteFetchResources(map[string]any{
 		"type": "handle", "query": []any{"06-前端资源库.md"},
 	}).Text
 	if !strings.Contains(read, "不是句柄") || !strings.Contains(read, "type=\"path\"") {
@@ -142,7 +143,7 @@ func TestFetchResourcesListFilters(t *testing.T) {
 	}
 
 	// path 模式按文件名 / 路径解析为句柄后取回
-	byPath := handleFetchResources(map[string]any{
+	byPath := Dialogue.ExecuteFetchResources(map[string]any{
 		"type": "path", "query": []any{"documents/06-前端资源库.md"},
 	}).Text
 	if !strings.Contains(byPath, admitted.Handle) || !strings.Contains(byPath, "常用前端依赖清单") {

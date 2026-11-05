@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -125,7 +126,7 @@ func buildPrivateMessages(entries []GroupPoolEntry) []map[string]any {
 }
 
 // handlePrivateMessage 处理私聊消息：入池后按「关键词立即触发 / 概率触发 + 合并窗口」推送
-func handlePrivateMessage(msg NapcatMessage) {
+func handlePrivateMessage(msg napcat.NapcatMessage) {
 	if !isAllowedTarget(msg.UserID) {
 		logger.SubInfo("LunarCore", "Napcat", "忽略未授权用户 %d 的私聊消息", msg.UserID)
 		return

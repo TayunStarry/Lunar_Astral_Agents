@@ -18,6 +18,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // admitResultOf 把 URL 主表记录转换为入库结果
@@ -120,7 +121,7 @@ func Admit(in AdmitInput) (AdmitResult, error) {
 		SizeBytes:   size,
 		Title:       strings.TrimSuffix(filepath.Base(in.Name), ext),
 		Origin:      in.Origin,
-		Retain:      firstNonEmpty(in.Retain, DefaultRetain(in.Origin)),
+		Retain:      textutil.FirstNonEmpty(in.Retain, DefaultRetain(in.Origin)),
 		State:       StateActive,
 		BlobOwned:   blobOwned,
 	}

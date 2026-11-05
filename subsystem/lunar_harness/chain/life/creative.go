@@ -8,6 +8,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // CreativeIntent 读取当前创作参考字符串；没有时返回空串。
@@ -30,7 +31,7 @@ func SetCreativeIntent(text string) error {
 		logger.Warn(Module, "[创作参考] 写入失败: %v", err)
 		return err
 	}
-	logger.Info(Module, "[创作参考] 已更新：%s", truncateRunes(text, 512))
+	logger.Info(Module, "[创作参考] 已更新：%s", textutil.TruncateRunes(text, 512))
 	return nil
 }
 

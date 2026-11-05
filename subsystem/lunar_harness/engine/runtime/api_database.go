@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/dbopen"
 
 	"github.com/dop251/goja"
 )
@@ -46,7 +47,8 @@ func ensureDB() (*sql.DB, error) {
 	}
 	dir := databaseDir()
 	_ = os.MkdirAll(dir, 0755)
-	db, err := sql.Open("sqlite3", filepath.Join(dir, "knowledge.db"))
+	// 历史上此站点裸开库（不带 DSN 参数），WAL 由随后的 PRAGMA 单独开启
+	db, err := dbopen.Open(filepath.Join(dir, "knowledge.db"), dbopen.Options{NoDSNParams: true})
 	if err != nil {
 		return nil, err
 	}

@@ -49,15 +49,17 @@ func (d *Store) Documents(collectionName string, offset, limit int) ([]DocumentE
 			role = docType
 		}
 		entries[i-offset] = DocumentEntry{
-			ID:         doc.ID,
-			Type:       docType,
-			Role:       role,
-			Content:    doc.Content,
-			URL:        doc.URL,
-			Base64:     doc.Base64,
-			Collection: c.Name,
-			Source:     doc.Source,
-			Timestamp:  doc.Timestamp,
+			ID:             doc.ID,
+			Type:           docType,
+			Role:           role,
+			Content:        doc.Content,
+			URL:            doc.URL,
+			Base64:         doc.Base64,
+			Collection:     c.Name,
+			Source:         doc.Source,
+			Timestamp:      doc.Timestamp,
+			Pending:        doc.Pending,
+			PendingPartner: doc.PendingPartner,
 		}
 	}
 	return entries, total
@@ -83,6 +85,8 @@ func (d *Store) Reload(collectionName string) error {
 		return fmt.Errorf("重新加载分组失败: %w", err)
 	}
 	c.updateLastModTime()
+	// 外部直接改写分片文件后，正文可能已变化：索引已建立则按当前文档幂等重建
+	d.rebuildKeywordIndexIfReady()
 	return nil
 }
 
@@ -106,7 +110,7 @@ func (d *Store) HasSyncMismatch(collectionName string) bool {
 	return false
 }
 
-// DeleteCollection 删除整个集合及其所有数据
+// DeleteCollection 删除整个簇及其所有数据（目录与索引同步移除）。
 func (d *Store) DeleteCollection(collectionName string) error {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -121,16 +125,18 @@ func (d *Store) DeleteCollection(collectionName string) error {
 	delete(d.collections, collectionName)
 	d.collectionsMu.Unlock()
 
-	// 先移出集合注册表，再清理媒体：引用检查只会看到其它集合，不会误判本集合仍在使用
-	d.removeMemoryMediaForDocs(collectionName, docs)
+	// 先移出簇注册表，再清理媒体：引用检查只会看到其它簇，不会误判本簇仍在使用
+	d.removeMemoryMediaForDocs(docs)
+	d.dropClusterFromIndex(collectionName)
+	d.keywordIndexRemoveDocs(documentIDs(docs))
 
 	if err := os.RemoveAll(c.collDir); err != nil {
-		return fmt.Errorf("删除集合目录失败: %w", err)
+		return fmt.Errorf("删除簇目录失败: %w", err)
 	}
 	return nil
 }
 
-// ClearCollection 清空集合所有数据，保留 metadata.json
+// ClearCollection 清空簇的所有数据，并删除空目录（空簇不保留空目录）。
 func (d *Store) ClearCollection(collectionName string) error {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -143,29 +149,20 @@ func (d *Store) ClearCollection(collectionName string) error {
 
 	c.mu.Lock()
 	c.Documents = make([]Document, 0)
+	c.positions = make(map[string]int)
 	c.mu.Unlock()
-
-	// 删除所有分块文件（文档 + 嵌入向量）
-	files, _ := filepath.Glob(filepath.Join(c.collDir, "documents_*.json"))
-	for _, f := range files {
-		os.Remove(f)
-	}
-	embFiles, _ := filepath.Glob(filepath.Join(c.collDir, "embeddings_*.json"))
-	for _, f := range embFiles {
-		os.Remove(f)
-	}
-
-	c.mu.Lock()
-	c.documentsChunkCount = 0
-	c.embeddingsChunkCount = 0
-	c.mu.Unlock()
-
-	if err := c.saveCollectionMeta(); err != nil {
-		return err
-	}
 
 	// 文档已清空，再清理不再被任何条目引用的媒体实体
-	d.removeMemoryMediaForDocs(collectionName, docs)
+	d.removeMemoryMediaForDocs(docs)
+	d.dropClusterFromIndex(collectionName)
+	d.keywordIndexRemoveDocs(documentIDs(docs))
+
+	d.collectionsMu.Lock()
+	delete(d.collections, collectionName)
+	d.collectionsMu.Unlock()
+	if err := os.RemoveAll(c.collDir); err != nil {
+		return fmt.Errorf("删除空簇目录失败: %w", err)
+	}
 	return nil
 }
 
@@ -194,6 +191,7 @@ func (d *Store) CollectionInfo(collectionName string) map[string]any {
 
 	return map[string]any{
 		"name":                     c.Name,
+		"dir":                      c.collDir,
 		"embedding_dimension":      c.Dimension,
 		"name_embedding_model":     c.NameEmbeddingModel,
 		"name_embedding_dimension": len(c.NameEmbedding),
@@ -204,9 +202,9 @@ func (d *Store) CollectionInfo(collectionName string) map[string]any {
 	}
 }
 
-// Rebuild 重建集合的文档内容嵌入向量：
+// Rebuild 重建簇内文档的内容嵌入向量：
 // 文本记忆以正文重新嵌入；图片记忆重新调用多模态生成标签并以标签文本重新嵌入。
-// 当嵌入模型变更时调用。
+// 当嵌入模型变更时调用；重建后按新向量重新聚类并搬迁簇目录。
 func (d *Store) Rebuild(ctx context.Context, collectionName, modelName string, progress func(int, int)) error {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -267,23 +265,11 @@ func (d *Store) Rebuild(ctx context.Context, collectionName, modelName string, p
 	if err := c.saveDocumentsToFile(); err != nil {
 		return fmt.Errorf("保存文档失败: %w", err)
 	}
-	// 模型变更后集合名向量也必须同步重建，否则内容归组仍在旧向量空间里比较
-	c.mu.RLock()
-	nameStale := len(c.NameEmbedding) == 0 || c.NameEmbeddingModel != effectiveModel
-	c.mu.RUnlock()
-	if nameStale {
-		c.mu.Lock()
-		c.NameEmbedding = nil
-		c.NameEmbeddingModel = ""
-		c.mu.Unlock()
-		if err := d.ensureCollectionNameEmbedding(ctx, c); err != nil {
-			logger.Warn("FileManager", "重建集合 [%s] 名称嵌入失败: %v", c.Name, err)
-		}
+	// 向量空间可能已变化：强制重建聚类索引并按新簇归属迁移磁盘目录
+	if _, err := d.prepareLayout(true); err != nil {
+		return fmt.Errorf("重建簇目录布局失败: %w", err)
 	}
-	if err := c.saveCollectionMeta(); err != nil {
-		return fmt.Errorf("保存元数据失败: %w", err)
-	}
-
+	d.refreshKeywordIndexCollections()
 	return nil
 }
 

@@ -12,16 +12,21 @@ import (
 
 // runToolLoop 执行一次应答周期。
 //
-// 轮次编排、重复签名拦截与故障上报由对话者智能体（agents/Dialogue）负责；
-// 本文件只保留对话者特有的每轮逻辑（上下文重组、轮次上限收尾）。
+// 轮次编排、轮次上限、重复签名拦截与故障上报由对话者智能体（agents/Dialogue）负责；
+// 本文件只保留对话者特有的每轮上下文重组与收尾回调。
 func (role *DialogueRole) runToolLoop(cache *ChatCache) {
 	Dialogue.RunToolLoop(context.Background(), Dialogue.LoopHook{
 		Role:               role.RoleTag,
-		MaxRounds:          maxToolRounds + 1, // 5 轮工具执行 + 1 轮收尾，对齐原 ToolRounds 判定
+		MaxRounds:          maxToolRounds + 1, // 5 轮工具执行 + 1 轮收尾；轮次上限判定统一在 RunToolLoop
+		MaxToolRounds:      maxToolRounds,
 		MaxRepeats:         dialogueMaxRepeats,
 		MaxToolResultRunes: -1, // 原手写循环对工具结果不做截断
 		Call: func(ctx context.Context, round int) (agentbase.Reply, error) {
 			return role.roundReply(ctx, round, cache)
+		},
+		OnToolRoundsExhausted: func(ctx context.Context, round int, reply agentbase.Reply) (agentbase.Reply, error) {
+			role.exhaustToolRounds(round, reply)
+			return role.finalizeReply(), nil
 		},
 		Execute: func(ctx context.Context, call agentbase.ToolCall) (string, bool, error) {
 			return role.executeToolCall(call)
@@ -36,6 +41,21 @@ func (role *DialogueRole) runToolLoop(cache *ChatCache) {
 			reportDialogueFailure(err)
 		},
 	})
+}
+
+// exhaustToolRounds 工具轮次用尽：说明上限、回填未执行原因，实际计数与判定在 RunToolLoop。
+func (role *DialogueRole) exhaustToolRounds(round int, reply agentbase.Reply) {
+	logger.Warn(lunarCoreModule, "[对话者] 工具调用轮次达到上限（%d），停止继续调用", maxToolRounds)
+	role.speakAssistantText(strings.TrimSpace(reply.Text))
+	calls := make([]ToolCallItem, 0, len(reply.ToolCalls))
+	for _, call := range reply.ToolCalls {
+		calls = append(calls, ToolCallItem{
+			ID:       call.ID,
+			Type:     call.Type,
+			Function: ToolCallFunction{Name: call.Function.Name, Arguments: call.Function.Arguments},
+		})
+	}
+	role.rejectToolCalls(calls)
 }
 
 // roundReply 单轮模型调用：请求模型、处理工具调用，返回基座回复。
@@ -65,12 +85,6 @@ func (role *DialogueRole) roundReply(ctx context.Context, round int, cache *Chat
 	if len(calls) > 0 {
 		role.writeContext(messageFromAssistant(message))
 		assistantWritten = true
-		if round > maxToolRounds {
-			logger.Warn(lunarCoreModule, "[对话者] 工具调用轮次达到上限（%d），停止继续调用", maxToolRounds)
-			role.speakAssistantText(content)
-			role.rejectToolCalls(calls)
-			return role.finalizeReply(), nil
-		}
 		if hasExecutableTool(calls) {
 			// 模型一边说话一边调用工具：这段正文是模型真实产出的对话，按正常消息推送并合成语音（不并入终稿，也不当快速应答）。
 			role.speakAssistantText(content)

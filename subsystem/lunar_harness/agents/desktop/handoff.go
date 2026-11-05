@@ -9,6 +9,8 @@ package desktop
 import (
 	"fmt"
 	"strings"
+
+	desktopos "LunarSubsystem/LunarHarness/engine/desktop"
 )
 
 // buildPlanContext 组装任务目标/验收标准/预期步骤，供各角色提示词复用。
@@ -63,8 +65,8 @@ func appendAttempt(list []ActionAttempt, attempt ActionAttempt) []ActionAttempt 
 // 状态只来自真实前台窗口与工具返回值，避免模型臆测出「桌面 / 记事本未打开」之类的错误画面描述。
 func advanceHandoff(h HandoffRecord, attempt ActionAttempt) HandoffRecord {
 	h.Round = attempt.Round
-	h.Foreground = DTForegroundTitle()
-	h.ForegroundProcess = dtForegroundProcess()
+	h.Foreground = desktopos.ForegroundTitle()
+	h.ForegroundProcess = desktopos.ForegroundProcess()
 	h.LastAction = attempt.Result
 	h.Evidence = attempt.Result
 	switch {

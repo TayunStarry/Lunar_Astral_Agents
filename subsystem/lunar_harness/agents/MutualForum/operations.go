@@ -3,18 +3,17 @@ package MutualForum
 // operations.go 论坛原生能力的桥接：轮询、话题、发言、发起者动作与本地检索。
 //
 // 所有导出函数都自行读取独立配置、校验开关与地址，并在需要身份时复用/申领账号。
-// 调用方（agents/MutualForum）只需要表达业务意图，不必关心 HTTP 细节。
+// HTTP 与 DTO 在 engine/forum；本层只做参数校验、轮次编排、本地状态落盘与检索。
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/url"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var topicIDPattern = regexp.MustCompile(`^t_[0-9a-f]{8,32}$`)
@@ -33,11 +32,7 @@ func clientWithConfig() (Config, *Client, error) {
 
 // signedIn 确保客户端带有可用身份。
 func signedIn(ctx context.Context, cfg Config, c *Client) (*Account, error) {
-	acct, err := c.EnsureAccount(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-	return acct, nil
+	return EnsureAccount(ctx, cfg, c)
 }
 
 // CheckHealth 返回论坛健康状态（不需要身份）。
@@ -66,7 +61,8 @@ func Identity(ctx context.Context) (*Me, error) {
 /* ---------------- 轮询与轮次 ---------------- */
 
 // Poll 领取新轮次，并返回可参与的话题与自己的话题摘要。
-func Poll(ctx context.Context, sinceSeq int64) (*PollResult, error) {
+// status 默认 all（含 open / completed，不含 closed），由服务端过滤。
+func Poll(ctx context.Context, sinceSeq int64, status string) (*PollResult, error) {
 	cfg, c, err := clientWithConfig()
 	if err != nil {
 		return nil, err
@@ -75,11 +71,15 @@ func Poll(ctx context.Context, sinceSeq int64) (*PollResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pollWithAccount(ctx, cfg, c, acct, sinceSeq)
+	status, err = normalizeStatus(status, "all")
+	if err != nil {
+		return nil, err
+	}
+	return pollWithAccount(ctx, cfg, c, acct, sinceSeq, status)
 }
 
 // pollWithAccount 在已有账号状态上执行轮询：遵守最小间隔、处理 429、落盘新轮次。
-func pollWithAccount(ctx context.Context, cfg Config, c *Client, acct *Account, sinceSeq int64) (*PollResult, error) {
+func pollWithAccount(ctx context.Context, cfg Config, c *Client, acct *Account, sinceSeq int64, status string) (*PollResult, error) {
 	if sinceSeq < 0 {
 		sinceSeq = 0
 	}
@@ -98,20 +98,18 @@ func pollWithAccount(ctx context.Context, cfg Config, c *Client, acct *Account, 
 		}
 	}
 
-	query := url.Values{}
-	query.Set("since_seq", fmt.Sprintf("%d", sinceSeq))
-
-	var result PollResult
+	var result *PollResult
 	for attempt := 0; ; attempt++ {
-		_, err := c.request(ctx, http.MethodGet, "poll", query, nil, true, &result)
+		current, err := c.Poll(ctx, sinceSeq, status)
 		if err == nil {
+			result = current
 			break
 		}
 		var apiErr *APIError
-		if !errors.As(err, &apiErr) || apiErr.Code != "poll_too_frequent" || attempt >= maxPollRetries {
+		if !errors.As(err, &apiErr) || !isPollRetryCode(apiErr.Code) || attempt >= maxPollRetries {
 			return nil, err
 		}
-		wait := time.Duration(apiErr.RetryAfter) * time.Second
+		wait := apiErr.RetryAfter
 		if wait <= 0 {
 			wait = time.Second
 		}
@@ -123,10 +121,21 @@ func pollWithAccount(ctx context.Context, cfg Config, c *Client, acct *Account, 
 	}
 
 	now := time.Now().Unix()
-	acct.RoundID = result.RoundID
-	acct.RoundIssuedAt = now
+	if result.RoundID != "" {
+		acct.RoundID = result.RoundID
+		acct.RoundIssuedAt = now
+		acct.RoundUsed = false
+	}
 	acct.LastPollAt = now
+	// cursor.reset_required 时服务端要求整段重放；last_seq 以服务端回显为准。
 	acct.LastSeq = result.Cursor.LastSeq
+	if result.Cursor.ResetRequired {
+		acct.LastSeq = 0
+	}
+	// event_cursor 只用于诊断与向模型展示；不主动前移 EventSeq，避免跳过尚未消费的事件。
+	if result.EventCursor.ResetRequired {
+		acct.EventSeq = 0
+	}
 	if result.MinIntervalSeconds > 0 {
 		acct.MinInterval = result.MinIntervalSeconds
 	}
@@ -136,31 +145,44 @@ func pollWithAccount(ctx context.Context, cfg Config, c *Client, acct *Account, 
 	if err := saveAccount(cfg, acct); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return result, nil
 }
 
-// EnsureRound 返回当前可用轮次；没有或临近过期时自动轮询续领。
+// isPollRetryCode 这些错误代表「现在不该轮询 / 正在部署」，可安全地按 Retry-After 重试。
+func isPollRetryCode(code string) bool {
+	switch code {
+	case "poll_too_frequent", "poll_in_progress", "forum_deploying":
+		return true
+	default:
+		return false
+	}
+}
+
+// EnsureRound 返回当前可用轮次；没有、已用过或临近过期时自动轮询续领。
 func EnsureRound(ctx context.Context, cfg Config, c *Client, acct *Account) (string, error) {
 	ttl := acct.RoundTTL
 	if ttl <= 0 {
 		ttl = cfg.RoundTTL()
 	}
-	if acct.RoundID != "" && acct.RoundIssuedAt > 0 {
+	if acct.RoundID != "" && !acct.RoundUsed && acct.RoundIssuedAt > 0 {
 		age := time.Now().Unix() - acct.RoundIssuedAt
 		if age < int64(ttl-roundRefreshGuard) {
 			return acct.RoundID, nil
 		}
 	}
-	result, err := pollWithAccount(ctx, cfg, c, acct, acct.LastSeq)
+	result, err := pollWithAccount(ctx, cfg, c, acct, acct.LastSeq, "all")
 	if err != nil {
 		return "", err
+	}
+	if strings.TrimSpace(result.RoundID) == "" {
+		return "", errors.New("互助论坛当前没有可用轮次（服务端返回空 round_id）")
 	}
 	return result.RoundID, nil
 }
 
 /* ---------------- 话题与发言读取 ---------------- */
 
-// ListTopics 按状态列出话题。
+// ListTopics 按状态列出话题；status 默认 open（与文档一致）。
 func ListTopics(ctx context.Context, status string, sinceSeq int64, limit int) (*TopicList, error) {
 	cfg, c, err := clientWithConfig()
 	if err != nil {
@@ -169,23 +191,19 @@ func ListTopics(ctx context.Context, status string, sinceSeq int64, limit int) (
 	if _, err := signedIn(ctx, cfg, c); err != nil {
 		return nil, err
 	}
-	status = normalizeStatus(status)
-	limit = clampInt(limit, 1, 50, 20)
-
-	query := url.Values{}
-	query.Set("status", status)
-	query.Set("since_seq", fmt.Sprintf("%d", maxInt64(sinceSeq, 0)))
-	query.Set("limit", fmt.Sprintf("%d", limit))
-
-	var list TopicList
-	if _, err := c.request(ctx, http.MethodGet, "topics", query, nil, true, &list); err != nil {
+	status, err = normalizeStatus(status, "open")
+	if err != nil {
 		return nil, err
 	}
-	return &list, nil
+	limit = clampInt(limit, 1, 50, 20)
+	if sinceSeq < 0 {
+		sinceSeq = 0
+	}
+	return c.ListTopics(ctx, status, sinceSeq, limit)
 }
 
-// ListMyTopics 列出发起者自己的话题与回应摘要。
-func ListMyTopics(ctx context.Context, status string, limit int) (*MyTopics, error) {
+// ListMyTopics 分页列出发起者自己的话题与回应摘要；status 默认 all。
+func ListMyTopics(ctx context.Context, status string, beforeSeq int64, limit int) (*MyTopics, error) {
 	cfg, c, err := clientWithConfig()
 	if err != nil {
 		return nil, err
@@ -193,15 +211,14 @@ func ListMyTopics(ctx context.Context, status string, limit int) (*MyTopics, err
 	if _, err := signedIn(ctx, cfg, c); err != nil {
 		return nil, err
 	}
-	query := url.Values{}
-	query.Set("status", normalizeStatus(status))
-	query.Set("limit", fmt.Sprintf("%d", clampInt(limit, 1, 50, 50)))
-
-	var mine MyTopics
-	if _, err := c.request(ctx, http.MethodGet, "me/topics", query, nil, true, &mine); err != nil {
+	status, err = normalizeStatus(status, "all")
+	if err != nil {
 		return nil, err
 	}
-	return &mine, nil
+	if beforeSeq < 0 {
+		beforeSeq = 0
+	}
+	return c.ListMyTopics(ctx, status, beforeSeq, clampInt(limit, 1, 50, 50))
 }
 
 // GetTopic 读取话题详情与发言分页。
@@ -216,15 +233,10 @@ func GetTopic(ctx context.Context, topicID string, afterSeq int64, limit int) (*
 	if _, err := signedIn(ctx, cfg, c); err != nil {
 		return nil, err
 	}
-	query := url.Values{}
-	query.Set("after_seq", fmt.Sprintf("%d", maxInt64(afterSeq, 0)))
-	query.Set("limit", fmt.Sprintf("%d", clampInt(limit, 1, 100, 50)))
-
-	var detail TopicDetail
-	if _, err := c.request(ctx, http.MethodGet, "topics/"+topicID, query, nil, true, &detail); err != nil {
-		return nil, err
+	if afterSeq < 0 {
+		afterSeq = 0
 	}
-	return &detail, nil
+	return c.Topic(ctx, strings.TrimSpace(topicID), afterSeq, clampInt(limit, 1, 100, 50))
 }
 
 // ListPosts 只读取某话题的发言分页。
@@ -239,15 +251,10 @@ func ListPosts(ctx context.Context, topicID string, afterSeq int64, limit int) (
 	if _, err := signedIn(ctx, cfg, c); err != nil {
 		return nil, err
 	}
-	query := url.Values{}
-	query.Set("after_seq", fmt.Sprintf("%d", maxInt64(afterSeq, 0)))
-	query.Set("limit", fmt.Sprintf("%d", clampInt(limit, 1, 100, 100)))
-
-	var page PostPage
-	if _, err := c.request(ctx, http.MethodGet, "topics/"+topicID+"/posts", query, nil, true, &page); err != nil {
-		return nil, err
+	if afterSeq < 0 {
+		afterSeq = 0
 	}
-	return &page, nil
+	return c.Posts(ctx, strings.TrimSpace(topicID), afterSeq, clampInt(limit, 1, 100, 100))
 }
 
 /* ---------------- 写操作 ---------------- */
@@ -263,33 +270,35 @@ func CreateTopic(ctx context.Context, title, body, requestID string) (*CreateTop
 	}
 	title = strings.TrimSpace(title)
 	body = strings.TrimSpace(body)
-	if title == "" || body == "" {
-		return nil, errors.New("话题标题和正文都不能为空")
+	if err := validateTitle(title); err != nil {
+		return nil, err
 	}
-	payload := map[string]any{"title": title, "body": body}
+	if err := validateBody(body, topicBodyMaxRunes, "话题正文"); err != nil {
+		return nil, err
+	}
+	if err := validatePayloadSize(title, body); err != nil {
+		return nil, err
+	}
 	if requestID = strings.TrimSpace(requestID); requestID == "" {
 		requestID = newRequestID("lm-topic")
 	}
-	payload["client_request_id"] = requestID
-
-	var result CreateTopicResult
-	if _, err := c.request(ctx, http.MethodPost, "topics", nil, payload, true, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return c.CreateTopic(ctx, title, body, requestID)
 }
 
 // Reply 在指定话题发言。
 //
 // 服务端「一轮一条」：内部自动领取轮次并在成功后清空本地轮次；
-// 旧轮次失效或过期时自动重新轮询并重试一次。
+// 轮次失效/过期/已消耗时自动重新轮询并重试一次（沿用同一 client_request_id）。
 func Reply(ctx context.Context, topicID, body, requestID string) (*CreatePostResult, error) {
 	if err := validateTopicID(topicID); err != nil {
 		return nil, err
 	}
 	body = strings.TrimSpace(body)
-	if body == "" {
-		return nil, errors.New("发言内容不能为空")
+	if err := validateBody(body, topicBodyMaxRunes, "发言内容"); err != nil {
+		return nil, err
+	}
+	if requestID = strings.TrimSpace(requestID); requestID == "" {
+		requestID = newRequestID("lm-reply")
 	}
 
 	cfg, c, err := clientWithConfig()
@@ -305,40 +314,44 @@ func Reply(ctx context.Context, topicID, body, requestID string) (*CreatePostRes
 		return nil, err
 	}
 
-	payload := func(round string) map[string]any {
-		key := strings.TrimSpace(requestID)
-		if key == "" {
-			key = newRequestID("lm-reply")
-		}
-		return map[string]any{"body": body, "round_id": round, "client_request_id": key}
-	}
-
-	var result CreatePostResult
-	_, err = c.request(ctx, http.MethodPost, "topics/"+topicID+"/posts", nil, payload(roundID), true, &result)
+	result, err := c.CreatePost(ctx, strings.TrimSpace(topicID), body, roundID, requestID)
 	if err != nil {
 		var apiErr *APIError
-		if errors.As(err, &apiErr) && (apiErr.Code == "round_superseded" || apiErr.Code == "round_expired") {
-			acct.RoundID = ""
-			acct.RoundIssuedAt = 0
-			newRound, roundErr := EnsureRound(ctx, cfg, c, acct)
-			if roundErr != nil {
-				return nil, roundErr
-			}
-			_, retryErr := c.request(ctx, http.MethodPost, "topics/"+topicID+"/posts", nil, payload(newRound), true, &result)
-			if retryErr != nil {
-				return nil, retryErr
-			}
-		} else {
+		if !errors.As(err, &apiErr) || !isRoundRetryCode(apiErr.Code) {
+			return nil, err
+		}
+		// 旧轮次已不可用：清空本地轮次后重新 /poll，再重试一次。
+		acct.RoundID = ""
+		acct.RoundIssuedAt = 0
+		acct.RoundUsed = false
+		freshRound, roundErr := EnsureRound(ctx, cfg, c, acct)
+		if roundErr != nil {
+			return nil, roundErr
+		}
+		result, err = c.CreatePost(ctx, strings.TrimSpace(topicID), body, freshRound, requestID)
+		if err != nil {
 			return nil, err
 		}
 	}
 
+	// 成功后本地轮次即视为已消耗，下一轮回复会重新 /poll。
 	acct.RoundID = ""
 	acct.RoundIssuedAt = 0
+	acct.RoundUsed = false
 	if err := saveAccount(cfg, acct); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return result, nil
+}
+
+// isRoundRetryCode 轮次类错误可安全地重新领轮后重试；already_posted 属于业务拒绝，不重试。
+func isRoundRetryCode(code string) bool {
+	switch code {
+	case "round_superseded", "round_expired", "round_consumed", "round_required":
+		return true
+	default:
+		return false
+	}
 }
 
 // ManageTopic 执行发起者动作：reset / clear / complete / close。
@@ -360,11 +373,7 @@ func ManageTopic(ctx context.Context, topicID, action string) (*ActionResult, er
 	if _, err := signedIn(ctx, cfg, c); err != nil {
 		return nil, err
 	}
-	var result ActionResult
-	if _, err := c.request(ctx, http.MethodPost, "topics/"+topicID+"/actions/"+action, nil, nil, true, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return c.ManageTopic(ctx, strings.TrimSpace(topicID), action)
 }
 
 /* ---------------- 本地检索 ---------------- */
@@ -504,18 +513,51 @@ func scoreText(title, body string, terms []string) (int, []string) {
 	return score, matched
 }
 
-/* ---------------- 小工具 ---------------- */
+/* ---------------- 校验与小工具 ---------------- */
 
-func normalizeStatus(status string) string {
+// normalizeStatus 校验状态；空值使用端点默认值，非法值直接报错（不静默改写语义）。
+func normalizeStatus(status, fallback string) (string, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
-	switch status {
-	case "", "all":
-		return "all"
-	case "open", "completed", "closed":
-		return status
-	default:
-		return "all"
+	if status == "" {
+		return fallback, nil
 	}
+	switch status {
+	case "all", "open", "completed", "closed":
+		return status, nil
+	default:
+		return "", fmt.Errorf("不支持的状态 %q（只允许 open / completed / closed / all）", status)
+	}
+}
+
+func validateTitle(title string) error {
+	if title == "" {
+		return errors.New("话题标题不能为空")
+	}
+	if utf8.RuneCountInString(title) > topicTitleMaxRunes {
+		return fmt.Errorf("话题标题过长：%d 字，上限 %d 字", utf8.RuneCountInString(title), topicTitleMaxRunes)
+	}
+	return nil
+}
+
+func validateBody(body string, maxRunes int, label string) error {
+	if body == "" {
+		return fmt.Errorf("%s不能为空", label)
+	}
+	if count := utf8.RuneCountInString(body); count > maxRunes {
+		return fmt.Errorf("%s过长：%d 字，上限 %d 字", label, count, maxRunes)
+	}
+	return nil
+}
+
+func validatePayloadSize(parts ...string) error {
+	total := 0
+	for _, part := range parts {
+		total += len(part)
+	}
+	if total > payloadMaxBytes {
+		return fmt.Errorf("请求正文超过 %d KB，请缩短后重试", payloadMaxBytes>>10)
+	}
+	return nil
 }
 
 func clampInt(value, low, high, fallback int) int {
@@ -527,13 +569,6 @@ func clampInt(value, low, high, fallback int) int {
 	}
 	if value > high {
 		return high
-	}
-	return value
-}
-
-func maxInt64(value, fallback int64) int64 {
-	if value < 0 {
-		return fallback
 	}
 	return value
 }

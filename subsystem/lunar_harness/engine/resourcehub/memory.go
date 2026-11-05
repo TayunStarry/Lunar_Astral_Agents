@@ -70,7 +70,8 @@ func ensureMemoryReady() bool {
 	return true
 }
 
-// searchMemory 向量 + 关键词双路并行召回，融合去重后按综合相关度排序
+// searchMemory 薄封装：召回、去重、融合、排序、topK 裁剪全部由 memory.HybridQuery 负责；
+// 这里只做参数映射与正文去重（同文多条只保留融合分最高的一条）。
 func searchMemory(ctx context.Context, keywords []string, topK int) []memory.Entry {
 	results, err := memory.HybridQuery(ctx, keywords, "text", topK, memory.HybridQueryOptions{})
 	if err != nil {

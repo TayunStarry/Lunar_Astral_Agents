@@ -20,32 +20,35 @@ var (
 	lastPlanItem *lastPlanRecord
 )
 
+// exportContext 搜索者-规划的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	_ = includeImages
+	lastPlanMu.Lock()
+	record := lastPlanItem
+	lastPlanMu.Unlock()
+	if record == nil {
+		return map[string]any{
+			"kind":          "search-planner-context",
+			"generated_at":  time.Now().Format(time.RFC3339),
+			"message_count": 0,
+			"note":          "本次进程内还没有执行过搜索规划",
+		}, nil
+	}
+	return map[string]any{
+		"kind":          "search-planner-context",
+		"generated_at":  time.Now().Format(time.RFC3339),
+		"message_count": 1,
+		"last_plan":     record,
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          AgentID,
 		Label:       "搜索者-规划",
 		Group:       "Go 智能体",
 		Description: "搜索者-规划最近一次结构化决策（管线 / 检索词 / 参数 / 把握）",
-		Export: func(includeImages bool) (any, error) {
-			_ = includeImages
-			lastPlanMu.Lock()
-			record := lastPlanItem
-			lastPlanMu.Unlock()
-			if record == nil {
-				return map[string]any{
-					"kind":          "search-planner-context",
-					"generated_at":  time.Now().Format(time.RFC3339),
-					"message_count": 0,
-					"note":          "本次进程内还没有执行过搜索规划",
-				}, nil
-			}
-			return map[string]any{
-				"kind":          "search-planner-context",
-				"generated_at":  time.Now().Format(time.RFC3339),
-				"message_count": 1,
-				"last_plan":     record,
-			}, nil
-		},
+		Export:      exportContext,
 	})
 }
 

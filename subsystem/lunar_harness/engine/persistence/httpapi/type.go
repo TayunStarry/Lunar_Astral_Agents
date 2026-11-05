@@ -56,12 +56,6 @@ type memoryFuseRequest struct {
 type memoryInitRequest struct {
 }
 
-// memoryCollectionRequest 创建/打开集合请求
-// 集合是内容自动归入的分组；创建时按集合名调用嵌入模型生成名称向量
-type memoryCollectionRequest struct {
-	Name string `json:"name"`
-}
-
 // memoryMessageData 记忆条目（文本/图片/音频统一，客户端依据 type 取用对应内容）
 type memoryMessageData struct {
 	ID         string  `json:"id"`                   // 消息 ID

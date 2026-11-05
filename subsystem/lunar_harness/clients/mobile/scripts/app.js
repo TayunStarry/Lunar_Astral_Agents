@@ -239,12 +239,19 @@ class LunarCoreApp {
 	showMusic(data) {
 		const dock = document.getElementById('musicDock');
 		if (!dock || !window.LunarMusicPlayer) return;
+		const audioUrl = String(data.audio || '');
 		dock.innerHTML = '';
 		dock.appendChild(window.LunarMusicPlayer.createCard({
 			title: data.title || '月华演奏曲',
 			summary: data.summary || '',
 			duration: Number(data.duration) || 0,
-			audio: data.audio || ''
+			audio: audioUrl,
+			onClose: () => {
+				// 用户手动收起：记住这首，刷新/重开页面不再自动复活
+				window.LunarMusicPlayer.dismiss(audioUrl);
+				dock.hidden = true;
+				dock.innerHTML = '';
+			}
 		}));
 		dock.hidden = false;
 	}
@@ -256,9 +263,11 @@ class LunarCoreApp {
 			if (!res.ok) return;
 			const records = await res.json();
 			if (!Array.isArray(records)) return;
+			if (!window.LunarMusicPlayer) return;
 			const latest = records.slice().reverse().find(item => item
 				&& Array.isArray(item.categories) && item.categories.includes('music')
-				&& item.audio);
+				&& item.audio
+				&& !window.LunarMusicPlayer.isDismissed(item.audio));
 			if (!latest) return;
 			this.showMusic({
 				title: latest.musicTitle || '',

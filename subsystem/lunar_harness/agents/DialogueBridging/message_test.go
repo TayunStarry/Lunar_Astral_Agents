@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
@@ -69,7 +70,7 @@ func TestAdmitForwardImageDataURI(t *testing.T) {
 	})
 
 	const onePixelPNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-	handle, ok := admitInboundImage(ImageData{URL: onePixelPNG})
+	handle, ok := admitInboundImage(napcat.ImageData{URL: onePixelPNG})
 	if !ok || handle == "" {
 		t.Fatal("data URI 转发图片入库失败，会退化成 [图片]")
 	}
@@ -77,7 +78,7 @@ func TestAdmitForwardImageDataURI(t *testing.T) {
 		t.Fatalf("转发图片应返回图片句柄，实得 %q", handle)
 	}
 
-	if _, ok := admitInboundImage(ImageData{}); ok {
+	if _, ok := admitInboundImage(napcat.ImageData{}); ok {
 		t.Fatal("空图片数据不应返回句柄")
 	}
 }
@@ -98,12 +99,12 @@ func TestExtractSegmentTextAdmitsImage(t *testing.T) {
 
 	const onePixelPNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 	data, _ := json.Marshal(map[string]string{"url": onePixelPNG})
-	quoted := extractSegmentText(0, 0, []MessageSegment{{Type: "image", Data: data}})
+	quoted := extractSegmentText(0, 0, []napcat.MessageSegment{{Type: "image", Data: data}})
 	if !strings.Contains(quoted, "[@I.") || strings.Contains(quoted, "[图片]") {
 		t.Fatalf("引用图片应输出句柄占位，实际 %q", quoted)
 	}
 
-	fallback := extractSegmentText(0, 0, []MessageSegment{{Type: "image", Data: json.RawMessage(`{}`)}})
+	fallback := extractSegmentText(0, 0, []napcat.MessageSegment{{Type: "image", Data: json.RawMessage(`{}`)}})
 	if fallback != "图片.png" {
 		t.Fatalf("图片入库失败时应退化为文件名而非占位符，实际 %q", fallback)
 	}
@@ -128,12 +129,12 @@ func TestExtractSegmentTextAdmitsMedia(t *testing.T) {
 		"file": "clip.mp4",
 		"url":  "data:video/mp4;base64," + base64.StdEncoding.EncodeToString([]byte("fake-mp4-bytes")),
 	})
-	videoText := extractSegmentText(0, 0, []MessageSegment{{Type: "video", Data: videoData}})
+	videoText := extractSegmentText(0, 0, []napcat.MessageSegment{{Type: "video", Data: videoData}})
 	if !strings.Contains(videoText, "[@V.") || !strings.Contains(videoText, "clip.mp4") {
 		t.Fatalf("视频应输出链接句柄 + 文件名，实际 %q", videoText)
 	}
 	// 同一内容重复发送必须复用同一句柄，不能每次累加新句柄。
-	videoTextAgain := extractSegmentText(0, 0, []MessageSegment{{Type: "video", Data: videoData}})
+	videoTextAgain := extractSegmentText(0, 0, []napcat.MessageSegment{{Type: "video", Data: videoData}})
 	if videoTextAgain != videoText {
 		t.Fatalf("同一视频重复发送应复用句柄，首次=%q 再次=%q", videoText, videoTextAgain)
 	}
@@ -142,7 +143,7 @@ func TestExtractSegmentTextAdmitsMedia(t *testing.T) {
 		"file": "voice.amr",
 		"url":  "data:audio/mp3;base64," + base64.StdEncoding.EncodeToString([]byte("fake-mp3-bytes")),
 	})
-	audioText := extractSegmentText(0, 0, []MessageSegment{{Type: "record", Data: audioData}})
+	audioText := extractSegmentText(0, 0, []napcat.MessageSegment{{Type: "record", Data: audioData}})
 	if !strings.Contains(audioText, "voice.mp3") {
 		t.Fatalf("语音应带纠正扩展名后的文件名，实际 %q", audioText)
 	}
@@ -151,7 +152,7 @@ func TestExtractSegmentTextAdmitsMedia(t *testing.T) {
 		"file_name": "note.md",
 		"url":       "data:text/markdown;base64," + base64.StdEncoding.EncodeToString([]byte("# hi")),
 	})
-	fileText := extractSegmentText(0, 0, []MessageSegment{{Type: "file", Data: fileData}})
+	fileText := extractSegmentText(0, 0, []napcat.MessageSegment{{Type: "file", Data: fileData}})
 	if !strings.Contains(fileText, "[@D.") || !strings.Contains(fileText, "note.md") {
 		t.Fatalf("文件应输出句柄 + 文件名，实际 %q", fileText)
 	}
@@ -182,7 +183,7 @@ type fakeSend struct {
 	Action   string
 	GroupID  int64
 	UserID   int64
-	Segments []MessageSegment
+	Segments []napcat.MessageSegment
 }
 
 // fakeNapcat 最小 NapCat HTTP 假服务：应答登录/群信息/成员列表/消息详情，并记录投递请求。
@@ -211,9 +212,9 @@ func startFakeNapcat(t *testing.T, selfID int64) *fakeNapcat {
 	recordSend := func(action string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			var payload struct {
-				GroupID int64            `json:"group_id"`
-				UserID  int64            `json:"user_id"`
-				Message []MessageSegment `json:"message"`
+				GroupID int64                   `json:"group_id"`
+				UserID  int64                   `json:"user_id"`
+				Message []napcat.MessageSegment `json:"message"`
 			}
 			_ = json.NewDecoder(r.Body).Decode(&payload)
 			fake.mu.Lock()
@@ -255,10 +256,6 @@ func startBridgeTest(t *testing.T, groupID int64) (*fakeNapcat, *int) {
 	origSender := SendMessageToAgent
 	origAudio := SendAudioToAgent
 	origPools := groupPools
-	origWarmed := memberListWarmed
-	origNames := groupNameCache
-	origMemberNames := memberNameCache
-	origBotLoaded := botInfoLoaded
 	origAwaiting := awaitingResponse
 	origStarted := responseStarted
 	origQueue := requestQueue
@@ -267,10 +264,6 @@ func startBridgeTest(t *testing.T, groupID int64) (*fakeNapcat, *int) {
 		SendMessageToAgent = origSender
 		SendAudioToAgent = origAudio
 		groupPools = origPools
-		memberListWarmed = origWarmed
-		groupNameCache = origNames
-		memberNameCache = origMemberNames
-		botInfoLoaded = origBotLoaded
 		flowMutex.Lock()
 		awaitingResponse = origAwaiting
 		responseStarted = origStarted
@@ -283,17 +276,27 @@ func startBridgeTest(t *testing.T, groupID int64) (*fakeNapcat, *int) {
 		BridgingUsers:                   []int64{groupID},
 		BridgingGroupTriggerProbability: &zero,
 	}
+	// 注入指向假服务的传输客户端：各接口缓存天然为空，登录信息由假服务提供
+	useNapcatTestClient(t, fake.server.URL)
 	delivered := 0
 	SendMessageToAgent = func(messages []map[string]any) { delivered++ }
 	SendAudioToAgent = func(urls []string) {}
-	// 重置登录信息缓存：让 resolveAtDisplay 走假服务拿到测试用 selfID
-	botInfoLoaded = false
 	return fake, &delivered
 }
 
+// useNapcatTestClient 把默认传输客户端指向假 NapCat 服务，测试结束还原。
+func useNapcatTestClient(t *testing.T, serverURL string) {
+	t.Helper()
+	prev := napcat.Default()
+	napcat.SetDefault(napcat.New(napcat.Config{
+		Endpoint: "ws://" + strings.TrimPrefix(serverURL, "http://"),
+	}))
+	t.Cleanup(func() { napcat.SetDefault(prev) })
+}
+
 // groupMsg 构造一条群聊消息（segments 为消息段）
-func groupMsg(groupID, userID int64, segments ...MessageSegment) NapcatMessage {
-	return NapcatMessage{
+func groupMsg(groupID, userID int64, segments ...napcat.MessageSegment) napcat.NapcatMessage {
+	return napcat.NapcatMessage{
 		SelfID:      testSelfID,
 		UserID:      userID,
 		GroupID:     groupID,
@@ -303,23 +306,23 @@ func groupMsg(groupID, userID int64, segments ...MessageSegment) NapcatMessage {
 	}
 }
 
-func atSeg(qq string) MessageSegment {
-	return MessageSegment{Type: "at", Data: json.RawMessage(`{"qq":"` + qq + `"}`)}
+func atSeg(qq string) napcat.MessageSegment {
+	return napcat.MessageSegment{Type: "at", Data: json.RawMessage(`{"qq":"` + qq + `"}`)}
 }
 
-func textSeg(text string) MessageSegment {
+func textSeg(text string) napcat.MessageSegment {
 	raw, _ := json.Marshal(map[string]string{"text": text})
-	return MessageSegment{Type: "text", Data: raw}
+	return napcat.MessageSegment{Type: "text", Data: raw}
 }
 
-func replySeg(id string) MessageSegment {
-	return MessageSegment{Type: "reply", Data: json.RawMessage(`{"id":"` + id + `"}`)}
+func replySeg(id string) napcat.MessageSegment {
+	return napcat.MessageSegment{Type: "reply", Data: json.RawMessage(`{"id":"` + id + `"}`)}
 }
 
 // deliverAndSettle 投递一条群消息并模拟月华完成应答。
 // pumpNext 推送时持有 flowMutex 且会置位等待状态，只能在消息之间
 // 走真实的应答收尾链路（HandleAgentResponse + NotifyAgentIdle）推进流程。
-func deliverAndSettle(msg NapcatMessage) {
+func deliverAndSettle(msg napcat.NapcatMessage) {
 	handleGroupMessage(msg)
 	HandleAgentResponse("text", "好哒", false)
 	NotifyAgentIdle()
@@ -401,15 +404,15 @@ func TestDirectAtOther(t *testing.T) {
 	selfStr := "999"
 	cases := []struct {
 		name     string
-		segments []MessageSegment
+		segments []napcat.MessageSegment
 		want     bool
 	}{
-		{"at他人", []MessageSegment{atSeg("222")}, true},
-		{"at自己", []MessageSegment{atSeg("999")}, false},
-		{"at自己与at他人", []MessageSegment{atSeg("999"), atSeg("222")}, true},
-		{"at全体", []MessageSegment{atSeg("all")}, false},
-		{"at零号", []MessageSegment{atSeg("0")}, false},
-		{"无at", []MessageSegment{textSeg("大家好")}, false},
+		{"at他人", []napcat.MessageSegment{atSeg("222")}, true},
+		{"at自己", []napcat.MessageSegment{atSeg("999")}, false},
+		{"at自己与at他人", []napcat.MessageSegment{atSeg("999"), atSeg("222")}, true},
+		{"at全体", []napcat.MessageSegment{atSeg("all")}, false},
+		{"at零号", []napcat.MessageSegment{atSeg("0")}, false},
+		{"无at", []napcat.MessageSegment{textSeg("大家好")}, false},
 	}
 	for _, tc := range cases {
 		if got := directAtOther(tc.segments, selfStr); got != tc.want {
@@ -436,7 +439,7 @@ func TestResolveImageURLReadsLocalPath(t *testing.T) {
 	if err := os.WriteFile(path, testPNG(t, 4, 4), 0o644); err != nil {
 		t.Fatalf("写测试图片失败: %v", err)
 	}
-	got := resolveImageURL(ImageData{Path: path})
+	got := resolveImageURL(napcat.ImageData{Path: path})
 	if !strings.HasPrefix(got, "data:image/png;base64,") {
 		t.Fatalf("path 来源未转成 data URI: %q", got)
 	}
@@ -444,9 +447,6 @@ func TestResolveImageURLReadsLocalPath(t *testing.T) {
 
 // TestResolveImageURLUsesFileID 图片段只给 file_id 时，必须带 file_id 调 get_image
 func TestResolveImageURLUsesFileID(t *testing.T) {
-	originalPath := bridgeConfig.BridgingPath
-	t.Cleanup(func() { bridgeConfig.BridgingPath = originalPath })
-
 	payload := testPNG(t, 4, 4)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/get_image" {
@@ -465,9 +465,9 @@ func TestResolveImageURLUsesFileID(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	bridgeConfig.BridgingPath = server.URL
+	useNapcatTestClient(t, server.URL)
 
-	got := resolveImageURL(ImageData{FileID: "abc123"})
+	got := resolveImageURL(napcat.ImageData{FileID: "abc123"})
 	if !strings.HasPrefix(got, "data:image/png;base64,") {
 		t.Fatalf("file_id 来源未取到图片: %q", got)
 	}
@@ -476,7 +476,7 @@ func TestResolveImageURLUsesFileID(t *testing.T) {
 // TestParseMessageSegmentsMFaceText 旧版 NapCat 以 mface 下发商城表情：
 // 没有图片地址时必须退回摘要文案，不能把整条消息当空消息丢弃
 func TestParseMessageSegmentsMFaceText(t *testing.T) {
-	segments := []MessageSegment{{
+	segments := []napcat.MessageSegment{{
 		Type: "mface",
 		Data: json.RawMessage(`{"emoji_package_id":1,"emoji_id":"2","key":"k","summary":"[比心]"}`),
 	}}
@@ -500,7 +500,7 @@ func TestParseMessageSegmentsFileChannelImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("序列化文件段失败: %v", err)
 	}
-	content, hasImages, _ := parseMessageSegments(0, []MessageSegment{{Type: "file", Data: data}})
+	content, hasImages, _ := parseMessageSegments(0, []napcat.MessageSegment{{Type: "file", Data: data}})
 	if !hasImages {
 		t.Fatalf("文件通道图片未被识别: %#v", content)
 	}
@@ -514,34 +514,7 @@ func TestParseMessageSegmentsFileChannelImage(t *testing.T) {
 	}
 }
 
-// TestFetchFileBytesDataURI NapCat 可能直接把文件内容以 data URI 填在 url 字段
-func TestFetchFileBytesDataURI(t *testing.T) {
-	raw := []byte{0x89, 'P', 'N', 'G'}
-	got, err := fetchFileBytes("data:image/png;base64," + base64.StdEncoding.EncodeToString(raw))
-	if err != nil {
-		t.Fatalf("data URI 解码失败: %v", err)
-	}
-	if !bytes.Equal(got, raw) {
-		t.Fatalf("data URI 解码结果不一致: %v", got)
-	}
-}
-
 // ==================== 随机触发自动引用 / 私聊攒批 ====================
-
-// TestBuildOutboundSegmentsQuotesFirst 引用段必须位于消息段首位（QQ 的硬性要求）
-func TestBuildOutboundSegmentsQuotesFirst(t *testing.T) {
-	segments := buildOutboundSegments(0, "是挺热的呀", 0, 9001)
-	if len(segments) < 2 {
-		t.Fatalf("消息段数量异常: %#v", segments)
-	}
-	if segments[0]["type"] != "reply" {
-		t.Fatalf("引用段不在首位: %#v", segments)
-	}
-	data, _ := segments[0]["data"].(map[string]string)
-	if data["id"] != "9001" {
-		t.Fatalf("引用消息 ID 异常: %#v", data)
-	}
-}
 
 // TestPickQuoteMessageIDFallbacks 单条候选直接引用；回应为空时退回最新一条；
 // 无候选时不引用（避免调用嵌入服务）
@@ -614,14 +587,14 @@ func TestPrivateMessagesAreBatched(t *testing.T) {
 	SendMessageToAgent = func(messages []map[string]any) { deliveries = append(deliveries, messages) }
 	SendAudioToAgent = func(urls []string) {}
 
-	newPrivate := func(text string) NapcatMessage {
-		return NapcatMessage{
+	newPrivate := func(text string) napcat.NapcatMessage {
+		return napcat.NapcatMessage{
 			SelfID:      testSelfID,
 			UserID:      testUserID,
 			PostType:    "message",
 			MessageType: "private",
-			Sender:      Sender{Nickname: "测试用户"},
-			Message:     []MessageSegment{textSeg(text)},
+			Sender:      napcat.Sender{Nickname: "测试用户"},
+			Message:     []napcat.MessageSegment{textSeg(text)},
 		}
 	}
 	handlePrivateMessage(newPrivate("先发一句"))

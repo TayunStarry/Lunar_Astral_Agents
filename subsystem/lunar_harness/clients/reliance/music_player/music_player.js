@@ -11,8 +11,47 @@
     const PEAK_COUNT = 96;
     // 已解析的波形峰值缓存（同一音频地址只解码一次，历史重渲染直接复用）
     const peakCache = new Map();
+    // 用户显式收起/关闭过的音频地址（刷新或重开页面后不再自动展开）
+    const DISMISSED_KEY = 'lunar.music.dismissed';
     // 共享 AudioContext：decodeAudioData 不需要用户手势
     let sharedContext = null;
+
+    function readDismissed() {
+        try {
+            const list = JSON.parse(global.localStorage.getItem(DISMISSED_KEY) || '[]');
+            return Array.isArray(list) ? list : [];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function writeDismissed(list) {
+        try {
+            global.localStorage.setItem(DISMISSED_KEY, JSON.stringify(list));
+        } catch (error) {
+            // 本地存储不可用时静默：不影响播放器本身
+        }
+    }
+
+    function isDismissed(url) {
+        const key = String(url || '');
+        if (!key) return false;
+        return readDismissed().indexOf(key) !== -1;
+    }
+
+    function dismiss(url) {
+        const key = String(url || '');
+        if (!key) return;
+        const list = readDismissed().filter(item => item !== key);
+        list.push(key);
+        writeDismissed(list);
+    }
+
+    function undismiss(url) {
+        const key = String(url || '');
+        if (!key) return;
+        writeDismissed(readDismissed().filter(item => item !== key));
+    }
 
     function getAudioContext() {
         if (!sharedContext) {
@@ -77,6 +116,15 @@
         titleText.textContent = opts.title || '月华演奏曲';
         title.appendChild(titleText);
         head.appendChild(title);
+
+        // 收起按钮：优先交给调用方处理（如折叠为迷你条），未提供时直接移除卡片
+        const collapse = document.createElement('button');
+        collapse.type = 'button';
+        collapse.className = 'lunar-music-collapse';
+        collapse.title = '收起';
+        collapse.setAttribute('aria-label', '收起音乐卡片');
+        collapse.innerHTML = '<i class="fas fa-chevron-down"></i>';
+        head.appendChild(collapse);
         card.appendChild(head);
 
         if (opts.summary) {
@@ -232,6 +280,57 @@
             }
         });
 
+        // 折叠/展开状态：折叠后由调用方决定迷你条呈现方式
+        function setCollapsed(collapsed) {
+            const isCollapsed = Boolean(collapsed);
+            card.classList.toggle('is-collapsed', isCollapsed);
+            card.dataset.collapsed = isCollapsed ? '1' : '0';
+            collapse.title = isCollapsed ? '展开' : '收起';
+            collapse.setAttribute('aria-label', isCollapsed ? '展开音乐卡片' : '收起音乐卡片');
+            collapse.innerHTML = isCollapsed
+                ? '<i class="fas fa-chevron-up"></i>'
+                : '<i class="fas fa-chevron-down"></i>';
+        }
+        card.setCollapsed = setCollapsed;
+
+        function expandCard() {
+            setCollapsed(false);
+            if (typeof opts.onExpand === 'function') opts.onExpand(card);
+        }
+
+        function collapseCard() {
+            // 收起时默认暂停，避免卡片不可见但声音仍在播放；调用方可显式关闭该行为
+            if (opts.pauseOnClose !== false && audio && !audio.paused) audio.pause();
+            if (typeof opts.onClose === 'function') {
+                opts.onClose(card);
+            } else {
+                if (resizeObserver) resizeObserver.disconnect();
+                card.remove();
+            }
+        }
+
+        function toggleCard() {
+            if (card.classList.contains('is-collapsed')) {
+                expandCard();
+            } else {
+                collapseCard();
+            }
+        }
+
+        collapse.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggleCard();
+        });
+
+        // 桌面端可选：点击卡片本体即可展开/收起；移动端不启用，避免误触
+        if (opts.toggleOnCardClick) {
+            card.classList.add('is-clickable');
+            card.addEventListener('click', (event) => {
+                if (event.target.closest('button, .lunar-music-wave, a, input, textarea, select')) return;
+                toggleCard();
+            });
+        }
+
         if (audio) {
             audio.addEventListener('loadedmetadata', () => {
                 if (Number.isFinite(audio.duration) && audio.duration > 0) fallbackDuration = audio.duration;
@@ -312,5 +411,5 @@
         return card;
     }
 
-    global.LunarMusicPlayer = { createCard };
+    global.LunarMusicPlayer = { createCard, isDismissed, dismiss, undismiss };
 })(window);

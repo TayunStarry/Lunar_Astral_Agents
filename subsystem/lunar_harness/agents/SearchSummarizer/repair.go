@@ -10,7 +10,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable(AgentID, "搜索者-摘要",
 		"搜索者-摘要的最近一次摘要记录；reset 清空该记录",
-		resetSummarizerState)
+		resetSummarizerState,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetSummarizerState 清空最近一次摘要记录。

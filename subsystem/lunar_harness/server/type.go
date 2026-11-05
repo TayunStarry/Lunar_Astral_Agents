@@ -78,3 +78,35 @@ type AgentChatResponse struct {
 type AgentChatError struct {
 	Message string `json:"message"`
 }
+
+// AgentRequest 外部推理排队请求（server 只声明结构，入队实现由装配层注入）
+type AgentRequest struct {
+	// Messages 完整消息数组（原样透传给模型）
+	Messages json.RawMessage
+	// Params 其余请求参数（temperature / top_p / max_tokens 等）
+	Params map[string]json.RawMessage
+	// Reply 结果回执（有且仅有一次写入）
+	Reply chan AgentResult
+}
+
+// AgentResult 外部推理结果
+type AgentResult struct {
+	Content      string
+	Reasoning    string
+	ToolCalls    json.RawMessage
+	FinishReason string
+	Err          error
+}
+
+// DataDumpKind 数据导出类型
+type DataDumpKind string
+
+// DataDumpRequest 一次数据导出请求（TUI 与 HTTP handler 共用同一服务入口）
+type DataDumpRequest struct {
+	// Kind 导出类型
+	Kind DataDumpKind
+	// Agent 智能体上下文导出目标（仅 DataDumpContext 使用）
+	Agent string
+	// IncludeImages 是否保留图片原始 base64（仅 DataDumpContext 使用）
+	IncludeImages bool
+}

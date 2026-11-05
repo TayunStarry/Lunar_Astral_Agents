@@ -98,8 +98,9 @@ func TestEndToEndTypeRouting(t *testing.T) {
 	if err := d.EnsureReady(); err != nil {
 		t.Fatalf("记忆库初始化失败: %v", err)
 	}
-	if got := d.CollectionCount(); got < len(DefaultCollections) {
-		t.Fatalf("默认分组未全部创建: %d < %d", got, len(DefaultCollections))
+	// 空库加载 store-all（总库是必需的）；正式簇需 ≥16 条高相似才升级
+	if got := d.CollectionCount(); got != 1 {
+		t.Fatalf("空库应只加载 store-all（总库），实得 %d", got)
 	}
 
 	ctx := context.Background()
@@ -198,7 +199,7 @@ func TestAddImageDedupByContent(t *testing.T) {
 		t.Fatalf("图片记忆类型/URL 不正确: %+v", entry)
 	}
 	if !strings.Contains(entry.URL, "/multimedia/memory/") {
-		t.Fatalf("新版图片应落在 multimedia/memory/<分组>/，实得 %s", entry.URL)
+		t.Fatalf("新版图片应落在 multimedia/memory/<条目ID>/，实得 %s", entry.URL)
 	}
 	imageAbs := filepath.Join(config.LocalDir, filepath.FromSlash(strings.TrimPrefix(entry.URL, "/file/read/")))
 	if _, err := os.Stat(imageAbs); err != nil {
@@ -256,40 +257,61 @@ func TestAddImageDedupByContent(t *testing.T) {
 	}
 }
 
-// TestNameEmbeddingPersisted 集合创建后应把集合名向量写入 metadata.json，
-// 重启加载时无需再次请求嵌入服务即可参与归组。
-func TestNameEmbeddingPersisted(t *testing.T) {
-	server := startFakeEmbeddingServer(t)
-	defer server.Close()
+// TestClusterLayoutPersistedAcrossRestart 重启后应复用 clusters.json 与簇目录，
+// 同一批条目的簇归属与目录名保持不变，且不会触发再次搬迁。
+func TestClusterLayoutPersistedAcrossRestart(t *testing.T) {
+	restore := setEmbedTextsHook(func(_ context.Context, _ string, texts []string) ([][]float32, error) {
+		out := make([][]float32, len(texts))
+		for i, text := range texts {
+			out[i] = fakeEmbeddingVector(text)
+		}
+		return out, nil
+	})
+	defer restore()
 
 	isolateStorage(t)
-	origURL := config.AgentEmbeddingURL
-	origModel := config.AgentEmbeddingModel
-	config.AgentEmbeddingURL = server.URL + "/v1"
-	config.AgentEmbeddingModel = "test-embedding"
-	t.Cleanup(func() {
-		config.AgentEmbeddingURL = origURL
-		config.AgentEmbeddingModel = origModel
-	})
-
 	base := t.TempDir()
 	first := newStore(base)
 	if err := first.EnsureReady(); err != nil {
 		t.Fatalf("首次初始化失败: %v", err)
 	}
 
-	// 模拟重启：新的实例从同一目录加载，集合名向量应从 metadata 恢复
-	server.Close()
+	ctx := context.Background()
+	assignments := make(map[string]string)
+	for _, text := range []string{"今天天气不错", "心情很开心"} {
+		id, err := first.AddText(ctx, "user", text)
+		if err != nil {
+			t.Fatalf("写入记忆失败: %v", err)
+		}
+		entry, err := first.Get(id)
+		if err != nil {
+			t.Fatalf("读取记忆失败: %v", err)
+		}
+		assignments[id] = entry.Collection
+		if _, err := os.Stat(filepath.Join(base, clusterDirName(entry.Collection))); err != nil {
+			t.Fatalf("簇目录未落盘: %v", err)
+		}
+	}
+
+	// 模拟重启：新的实例从同一目录加载，簇归属与目录名必须保持不变
 	second := newStore(base)
 	if err := second.EnsureReady(); err != nil {
 		t.Fatalf("重启初始化失败: %v", err)
 	}
-	info := second.CollectionInfo(DefaultCollections[0])
-	if info == nil {
-		t.Fatal("重启后集合信息为空")
+	for id, want := range assignments {
+		entry, err := second.Get(id)
+		if err != nil {
+			t.Fatalf("重启后读取记忆失败: %v", err)
+		}
+		if entry.Collection != want {
+			t.Fatalf("重启后簇归属发生变化: %s != %s", entry.Collection, want)
+		}
 	}
-	hasEmbedding, _ := info["has_name_embedding"].(bool)
-	if !hasEmbedding {
-		t.Fatalf("重启后集合名向量未恢复: %+v", info)
+	report, err := second.prepareLayout(false)
+	if err != nil {
+		t.Fatalf("重启后布局检查失败: %v", err)
+	}
+	if !report.ReusedIndex || report.MovedDocs != 0 || report.BackupDir != "" {
+		t.Fatalf("重启后不应重新搬迁或生成备份: %+v", report)
 	}
 }

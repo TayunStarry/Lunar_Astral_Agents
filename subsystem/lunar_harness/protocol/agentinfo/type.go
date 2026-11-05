@@ -11,11 +11,12 @@ type Tool struct {
 	Description string `json:"description"`
 }
 
-// Agent 一个 Go 智能体及其工具清单
+// Agent 一个具备工具的条目及其工具清单；Kind 区分智能体 / 链 / 执行体。
 type Agent struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
-	Source string `json:"source"` // 代码位置，如 lunar / agents/Vision
+	Source string `json:"source"`         // 代码位置，如 lunar / agents/Vision
+	Kind   string `json:"kind,omitempty"` // agent / chain / executor，空值等价于 agent
 	Note   string `json:"note,omitempty"`
 	Tools  []Tool `json:"tools"`
 }

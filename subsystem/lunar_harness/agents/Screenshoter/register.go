@@ -17,24 +17,28 @@ var (
 	lastRun = map[string]any{}
 )
 
+// exportContext 截图者的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	_ = includeImages
+	return map[string]any{
+		"kind":         "screenshoter-run",
+		"generated_at": time.Now().Format(time.RFC3339),
+		"last_run":     snapshotRun(),
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          agentID,
 		Label:       roleLabel,
 		Group:       "Go 智能体",
 		Description: "截图者最近一次截图任务的说明、是否带主帧与跨轮上下文条数",
-		Export: func(includeImages bool) (any, error) {
-			_ = includeImages
-			return map[string]any{
-				"kind":         "screenshoter-run",
-				"generated_at": time.Now().Format(time.RFC3339),
-				"last_run":     snapshotRun(),
-			}, nil
-		},
+		Export:      exportContext,
 	})
 	agentrepair.RegisterResettable(agentID, roleLabel,
 		"截图者的跨任务会话上下文；reset 清空这些运行时状态",
-		resetState)
+		resetState,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // recordRun 记录最近一次截图任务的结果。

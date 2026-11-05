@@ -34,6 +34,11 @@ type Entry struct {
 	KeywordScore float32 `json:"keyword_score,omitempty"`
 	// MatchedBy 命中来源：vector / keyword / both（仅混合检索填写）
 	MatchedBy string `json:"matched_by,omitempty"`
+	// Pending 待处理（待合并）标记：写入时命中高度相似条目，等待整理合并。
+	// 检索默认不返回待处理条目，只对整理可见。
+	Pending bool `json:"pending,omitempty"`
+	// PendingPartner 形成待合并组时记录的高度相似既有条目 ID
+	PendingPartner string `json:"pending_partner,omitempty"`
 }
 
 // DocumentEntry 文档条目 — 用于前端分页列表（不含嵌入向量，避免传输开销）
@@ -47,16 +52,34 @@ type DocumentEntry struct {
 	Collection string `json:"collection,omitempty"` // 所属分组集合名
 	Source     string `json:"source,omitempty"`     // 写入来源标记
 	Timestamp  int64  `json:"timestamp,omitempty"`  // 入库时间 Unix 秒级时间戳，旧数据无此字段
+	// Pending 待处理（待合并）标记；PendingPartner 待合并组中的高度相似既有条目 ID
+	Pending        bool   `json:"pending,omitempty"`
+	PendingPartner string `json:"pending_partner,omitempty"`
 }
 
 // QueryOptions 记忆向量检索选项
 type QueryOptions struct {
-	// ForceGlobal 强制全局检索：跳过「集合名向量」快速路由，扫描全部集合。
+	// ForceGlobal 强制全局检索：跳过「簇质心路由」，直接扫描全库（总库 + 全部正式簇）。
 	//
-	// 默认 false（快速检索）：先查与查询含义最接近的集合；命中则再查第 2~5 近的
-	// 集合，首集合未命中则回退扫描其余全部集合。集合越多，快速检索省下的全量
-	// 向量比较越多；需要“确保不漏”时（如表情包等稀疏媒体）显式打开本项。
+	// 默认 false（快速检索）：先算查询与各正式簇质心的余弦，按 ClusterCentroidGate
+	// 过滤后取前 QueryTopClusters 个簇，只在簇内成员里取 topK；结果不足时回落总库
+	// （含未被路由命中的簇）补齐。需要“确保不漏、可接受全扫成本”时显式打开本项。
 	ForceGlobal bool
+}
+
+// QueryStats 单次向量检索的路由观测数据（用于性能验证、日志与测试断言）。
+//
+// DocsCompared 是"本次实际计算了多少次条目余弦"，是衡量查询加速的唯一口径：
+// 全库扫描时等于库内同类型带向量条目数；簇路由命中时只统计簇内成员 + 回落条目。
+type QueryStats struct {
+	ClustersTotal    int  `json:"clusters_total"`    // 索引中的正式簇总数
+	ClustersCompared int  `json:"clusters_compared"` // 实际计算了质心余弦的簇数（维度不符的不计）
+	ClustersHit      int  `json:"clusters_hit"`      // 通过质心门限、进入簇内检索的簇数（最多 QueryTopClusters）
+	ClusterDocs      int  `json:"cluster_docs"`      // 簇内实际比较的成员条目数
+	FallbackDocs     int  `json:"fallback_docs"`     // 回落阶段实际比较的条目数
+	DocsCompared     int  `json:"docs_compared"`     // 实际比较条目总数（ClusterDocs + FallbackDocs）
+	UsedFallback     bool `json:"used_fallback"`     // 是否发生回落（无簇命中或结果不足 topK）
+	ForceGlobal      bool `json:"force_global"`      // 是否走了强制全局全扫
 }
 
 // HybridQueryOptions 混合检索（向量 + 关键词）选项
@@ -84,6 +107,93 @@ type hybridCandidate struct {
 	keywordScore float32 // 关键词命中强度（0~1）
 	vectorHit    bool    // 是否被向量通道命中
 	keywordHit   bool    // 是否被关键词通道命中
+}
+
+// =============================================================================
+// 关键词倒排索引类型 — token → 条目 ID 倒排表，独立召回通道
+// =============================================================================
+
+// KeywordIndexStats 倒排索引体积与规模观测数据（用于容量评估与测试断言）。
+type KeywordIndexStats struct {
+	Docs           int   `json:"docs"`            // 索引内条目数（含媒体条目，媒体通常无词元）
+	Tokens         int   `json:"tokens"`          // 倒排词表大小（不同 token 数）
+	Postings       int   `json:"postings"`        // 倒排记录总数（token-条目 对数）
+	FileBytes      int64 `json:"file_bytes"`      // 落盘文件字节数（gzip）；未落盘为 0
+	EstimatedBytes int64 `json:"estimated_bytes"` // 内存体积估算（postings 按固定字节 + 词表开销）
+}
+
+// keywordIndexFile 倒排索引持久化快照（gzip JSON）。
+// 文档顺序即文档序号（postings 中引用）；Tokens 为词表，Postings 扁平存放 [序号, 词频] 对。
+type keywordIndexFile struct {
+	Version     int                  `json:"version"`
+	GeneratedAt int64                `json:"generated_at,omitempty"`
+	Docs        []keywordDocRecord   `json:"docs"`
+	Tokens      []keywordTokenRecord `json:"tokens"`
+}
+
+// keywordDocRecord 倒排索引中的条目元数据（不存正文，正文仍以分片文件为准）。
+type keywordDocRecord struct {
+	ID        string `json:"id"`
+	Type      string `json:"type,omitempty"`
+	Timestamp int64  `json:"ts,omitempty"`
+	Pending   bool   `json:"pending,omitempty"`
+	Hash      uint32 `json:"hash,omitempty"` // 正文哈希，用于启动时快速对账
+}
+
+// keywordTokenRecord 词元倒排表；Postings 按 [文档序号, 词频, 文档序号, 词频, ...] 扁平存储。
+type keywordTokenRecord struct {
+	Token    string   `json:"t"`
+	Postings []uint32 `json:"p"`
+}
+
+// keywordIndex 内存倒排索引。由 Store.keywordMu 保护，内部方法不自行加锁。
+type keywordIndex struct {
+	docs   map[string]*keywordDoc      // 条目 ID → 条目元数据
+	ords   []*keywordDoc               // 序号 → 条目元数据（删除后留 nil 空洞）
+	tokens map[string][]keywordPosting // token → 倒排记录
+	free   []uint32                    // 可复用的序号空洞
+}
+
+// keywordDoc 倒排索引中的单条记忆元数据。
+type keywordDoc struct {
+	ID         string
+	Type       string
+	Timestamp  int64
+	Pending    bool
+	Hash       uint32
+	Collection string            // 运行时字段：当前所在集合名，不持久化，启动/搬迁时刷新
+	Ord        uint32            // 文档序号
+	Terms      map[string]uint16 // 该条目的词元与词频，用于删除/更新时精确撤销倒排
+}
+
+// keywordPosting 一条倒排记录。
+type keywordPosting struct {
+	Ord uint32 // 文档序号
+	TF  uint16 // 词频（仅存储，覆盖率打分不使用命中次数）
+}
+
+// keywordIndexSource 重建索引时的条目来源快照（文档 + 所在集合）。
+type keywordIndexSource struct {
+	Doc        Document
+	Collection string
+}
+
+// keywordRecallStats 单次关键词索引召回的观测数据。
+type keywordRecallStats struct {
+	UsedIndex       bool // 是否走倒排索引
+	QueryTokens     int  // 生效查询词元数
+	PostingsScanned int  // 扫描的倒排记录数（“比较条目数”口径）
+	Candidates      int  // 去重后的候选条目数
+	DocsScored      int  // 通过类型/待处理过滤后实际打分的条目数
+	Hits            int  // 最终返回条目数
+}
+
+// keywordHitCandidate 倒排召回后的候选（仅保留构建 Entry 所需的最小字段）。
+type keywordHitCandidate struct {
+	ID         string
+	Collection string
+	Timestamp  int64
+	Score      float32
 }
 
 // FuseOptions 权重融合参数（仅作用于文本记忆）
@@ -124,6 +234,42 @@ type FuseResult struct {
 	Groups         []FuseGroup `json:"groups"`
 }
 
+// TextCluster 一组语义相近的文本条目（只读规划结果，不做任何写入）。
+// IDs/Contents/Roles 按入库时间升序对齐；Role 取簇内出现次数最多的角色。
+type TextCluster struct {
+	IDs             []string `json:"ids"`
+	Contents        []string `json:"contents"`
+	Roles           []string `json:"roles,omitempty"`
+	Role            string   `json:"role,omitempty"`
+	MinSimilarity   float32  `json:"min_similarity"`
+	OldestTimestamp int64    `json:"oldest_timestamp,omitempty"`
+	NewestTimestamp int64    `json:"newest_timestamp,omitempty"`
+}
+
+// ReplaceOptions 批量替换文本记忆的参数（记忆整理落库使用）
+type ReplaceOptions struct {
+	// Role 新条目角色；为空时按 assistant 处理
+	Role string
+	// Source 新条目来源标记；为空时按 consolidation 处理
+	Source string
+}
+
+// ReplaceResult 批量替换结果
+type ReplaceResult struct {
+	// CreatedIDs 本次新建的条目 ID（回滚时只删除这些）
+	CreatedIDs []string `json:"created_ids,omitempty"`
+	// ReusedIDs 命中「完全同文」的既有条目 ID（不重复写入）
+	ReusedIDs []string `json:"reused_ids,omitempty"`
+	// DeletedIDs 本次成功删除的旧条目 ID
+	DeletedIDs []string `json:"deleted_ids,omitempty"`
+}
+
+// docSnapshot 替换前对旧条目的完整快照（含所属集合，用于失败回滚）
+type docSnapshot struct {
+	Doc        Document
+	Collection string
+}
+
 // Document 统一文档结构（文本 / 图片 / 音频记忆共用，混合存储在同一个集合）
 // content 与 url 二选一：文本记忆 content 存储文本内容、url 为空；
 // 媒体记忆 url 指向 multimedia|audios/<集合名>/ 下的实体文件、content 通常为空。
@@ -138,6 +284,11 @@ type Document struct {
 	Base64    string `json:"base64,omitempty"`    // 旧版图片内联数据（仅历史数据兼容）
 	Source    string `json:"source,omitempty"`    // 写入来源标记（插件 / 内部调用），仅作溯源信息
 	Timestamp int64  `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳
+	// Pending 待处理（待合并）标记：命中高度相似条目但保留新措辞，等待整理合并。
+	// 旧库没有该字段时按 false 处理，无需迁移。
+	Pending bool `json:"pending,omitempty"`
+	// PendingPartner 待合并组中的高度相似既有条目 ID（仅 Pending 为 true 时有值）
+	PendingPartner string `json:"pending_partner,omitempty"`
 	// Embedding 文档内容嵌入向量，json:"-" 使其不随文档持久化，
 	// 单独存储于 embeddings_NNNN.json 切片文件（见 embeddingRecord）
 	Embedding []float32 `json:"-"`
@@ -161,40 +312,113 @@ type collectionMeta struct {
 	EmbeddingsChunkCount int       `json:"embeddings_chunk_count"`         // 嵌入向量分块数
 }
 
-// Collection 单个记忆集合 — 内容按语义自动归入的分组
-// 集合本身也有一份「集合名嵌入向量」：入库时把内容的嵌入向量与所有集合名向量比较，
-// 归入最相关的一组；查询则在全部集合中检索，不再由调用方指定集合。
+// Collection 物理存储单元 — 总库或正式簇。
+//
+// 语义（v6）：总库是主体（Name = "store-all"），正式簇是加速结构（Name = "cluster-xxx"）。
+// 所有条目默认进总库；只有高相似组 ≥ 16 条才升级为正式簇。
+// 总库条目**不出现在** ClusterIndex.Assignments 里（隐含归属）。
+//
 // 存储布局：
 //
-//	<collDir>/metadata.json
-//	<collDir>/documents_NNNN.json   (文本/图片/音频统一分块存储，不含向量，100 条/块)
-//	<collDir>/embeddings_NNNN.json  (内容嵌入向量分块存储，100 条/块)
+//	总库：<baseDir>/store-all/{metadata.json, documents_*.json, embeddings_*.json}
+//	簇  ：<baseDir>/c-<sha256(簇 ID)[:8]>/{metadata.json, documents_*.json, embeddings_*.json}
 type Collection struct {
-	Name                 string       // 集合名
-	Dimension            int          // 锁定的向量维度
-	NameEmbedding        []float32    // 集合名嵌入向量
-	NameEmbeddingModel   string       // 集合名嵌入所用模型
-	Documents            []Document   // 统一文档列表（文本/图片/音频混合，含内存嵌入向量）
-	mu                   sync.RWMutex // 数据读写锁
-	collDir              string       // 集合目录绝对路径
-	metaPath             string       // metadata.json 路径
-	documentsChunkCount  int          // 文档分块数
-	embeddingsChunkCount int          // 嵌入向量分块数
-	lastFileModTime      time.Time    // metadata.json 最近加载时间，用于跨进程一致性检测
+	Name                 string         // ID：总库固定 "store-all"；簇为 "cluster-xxx"
+	Kind                 string         // "store" 或 "cluster"
+	Dimension            int            // 锁定的向量维度
+	NameEmbedding        []float32      // 旧版集合名向量（仅历史兼容，不再参与归组）
+	NameEmbeddingModel   string         // 旧版集合名向量模型（仅历史兼容）
+	Documents            []Document     // 该单元条目列表（文本/图片/音频混合，含内存嵌入向量）
+	mu                   sync.RWMutex   // 数据读写锁
+	collDir              string         // 目录绝对路径（总库 = store-all；簇 = c-<hash8>）
+	metaPath             string         // metadata.json 路径
+	documentsChunkCount  int            // 文档分块数
+	embeddingsChunkCount int            // 嵌入向量分块数
+	lastFileModTime      time.Time      // metadata.json 最近加载时间，用于跨进程一致性检测
+	positions            map[string]int // 条目 ID → Documents 下标（倒排索引召回后 O(1) 定位正文）
 }
 
-// Store 记忆库实例（多集合分组架构）
-// 职责：嵌入服务连接、LLM 标签生成、集合管理、记忆 CRUD、维度锁定、持久化
-// 模型配置为本地固定值，与智能体共用嵌入/多模态模型（不再有独立记忆库模型配置）
-// 存储布局：<baseDir>/<collectionName>/{metadata.json, documents_*.json, embeddings_*.json}
+// Store 记忆库实例（总库 + 正式簇 双轨架构）
+// 职责：嵌入服务连接、LLM 标签生成、簇管理、记忆 CRUD、维度锁定、持久化
+// 存储布局：
+//
+//	<baseDir>/store-all/{metadata.json, documents_*.json, embeddings_*.json}  总库
+//	<baseDir>/c-<hash8>/{metadata.json, documents_*.json, embeddings_*.json}  正式簇
+//	<baseDir>/clusters.json  聚类索引（唯一的分组依据：条目 ID → 簇 ID；总库条目**不在** Assignments 里）
 type Store struct {
 	initMu        sync.Mutex             // 实例初始化互斥锁（启动/懒加载并发保护）
 	initialized   bool                   // 记忆库实例是否初始化完成
 	httpClient    *http.Client           // HTTP 客户端（嵌入 + LLM 共享）
 	llmMu         sync.Mutex             // LLM 调用互斥锁（严格单线程）
 	baseDir       string                 // 记忆存储根目录绝对路径
-	collections   map[string]*Collection // 集合名 → 集合实例
+	loadErr       error                  // 启动加载首个失败原因（nil 表示加载正常），供 ListWithError 表达「读不到数据」
+	collections   map[string]*Collection // 簇 ID → 该簇的物理存储单元
 	collectionsMu sync.RWMutex           // collections map 读写锁
+	clusterMu     sync.RWMutex           // 聚类索引读写锁
+	clusterIndex  *ClusterIndex          // 向量空间聚类索引（nil 表示尚未加载/迁移）
+	clusterMod    time.Time              // clusters.json 最近加载时间，用于外部变更检测
+	keywordMu     sync.RWMutex           // 倒排索引读写锁
+	keywordIndex  *keywordIndex          // 关键词倒排索引（nil 表示尚未建立，查询时懒加载/重建）
+}
+
+// ClusterIndex 聚类索引 — 总库为主，正式簇为加速结构。
+// 持久化到 <baseDir>/clusters.json。
+//
+// Assignments 只包含**正式簇**的成员；总库条目不在此表里（隐含归属）。
+// 不在 Assignments 里的条目就是总库条目。
+type ClusterIndex struct {
+	Version      int               `json:"version"`   // 索引版本（v6 = 2）
+	Threshold    float32           `json:"threshold"` // 入簇阈值（簇内成员与质心余弦）
+	Model        string            `json:"model,omitempty"`
+	Dimension    int               `json:"dimension"`
+	StoreSize    int               `json:"store_size"`    // 总库条目数
+	StoreVectors int               `json:"store_vectors"` // 总库带向量条目数
+	Clusters     []ClusterNode     `json:"clusters"`      // 正式簇列表（不含总库）
+	Assignments  map[string]string `json:"assignments"`   // 条目 ID → 正式簇 ID（总库条目不在此表）
+	UpdatedAt    int64             `json:"updated_at"`
+}
+
+// ClusterNode 一个向量簇：质心、成员与规模。
+type ClusterNode struct {
+	ID        string    `json:"id"`                   // 簇 ID（重建时由簇内最早条目的 ID 派生，保证幂等）
+	Centroid  []float32 `json:"centroid"`             // 归一化的簇质心
+	DocIDs    []string  `json:"doc_ids"`              // 簇内条目 ID（按并入顺序）
+	Size      int       `json:"size"`                 // 成员数量（与 DocIDs 长度对账）
+	UpdatedAt int64     `json:"updated_at,omitempty"` // 最近更新时间
+}
+
+// ClusterMigrationReport 聚类迁移/重建的对账结果。
+type ClusterMigrationReport struct {
+	BackupDir     string `json:"backup_dir,omitempty"`
+	DocCount      int    `json:"doc_count"`      // 全部条目数
+	VectorCount   int    `json:"vector_count"`   // 带向量的条目数
+	StoreSize     int    `json:"store_size"`     // 迁移后总库条目数
+	ClusterCount  int    `json:"cluster_count"`  // 迁移后正式簇数量
+	AssignedCount int    `json:"assigned_count"` // 正式簇成员总数
+	FileCount     int    `json:"file_count"`     // 所有目录分片文件总数（总库 + 簇）
+	MovedDocs     int    `json:"moved_docs"`     // 搬迁条目数（旧布局→新布局 或 簇↔总库）
+	LegacyDirs    int    `json:"legacy_dirs"`    // 迁移后删除的旧布局目录数
+	ReusedIndex   bool   `json:"reused_index"`   // 是否复用既有 clusters.json
+}
+
+// ClusterBackupManifest 迁移备份清单。
+type ClusterBackupManifest struct {
+	Timestamp       int64          `json:"timestamp"`
+	HadClusterIndex bool           `json:"had_cluster_index"`
+	DocCount        int            `json:"doc_count"`
+	VectorCount     int            `json:"vector_count"`
+	Dirs            map[string]int `json:"dirs,omitempty"`
+	LegacyDirs      []string       `json:"legacy_dirs,omitempty"`
+}
+
+// diskLayout 磁盘扫描结果。
+type diskLayout struct {
+	Docs        map[string]Document // 全部条目（旧目录优先）
+	DocDirs     map[string]string   // 条目 ID → 当前所在目录
+	LegacyDirs  []string            // 旧布局目录（迁移后删除）
+	StoreDir    string              // 总库目录路径（存在时）
+	ClusterDirs []string            // 正式簇目录 c-*
+	FileCount   int                 // 所有目录分片文件总数
 }
 
 // fuseCluster 一个相似簇：indices 指向候选切片，首元素为代表条目

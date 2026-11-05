@@ -1,76 +1,82 @@
 package life
 
-// memory_batch_test.go 记忆整理「候选挑选」规则的回归测试
+// memory_batch_test.go 整理事件的自动触发开关回归测试。
 //
-// 条目化整理（保留下限 / 保底 / 解析 / 提示词）已随模型调用迁入 agents/LifeMemorizer，
-// 对应用例在 agents/LifeMemorizer/memory_test.go；本文件只钉住链侧的触发条件与取批规则。
+// 「按条数/时间挑选候选」的旧规则已随整理精简移除（整理只处理待合并组），
+// 候选与批次规划的用例见 memory_pending_test.go / memory_consolidate_test.go。
 
 import (
-	"fmt"
-	"strings"
 	"testing"
-	"time"
+
+	"LunarSubsystem/LunarHarness/engine/config"
 )
 
-// TestSelectMemoryCandidates 触发条件：≥500 条、取最久 50 条、全部满 10 天
-func TestSelectMemoryCandidates(t *testing.T) {
-	now := time.Date(2026, 10, 31, 12, 0, 0, 0, time.Local)
+// TestMemoryAutoConsolidateGate 自动整理开关关闭时权重为 0（随机挑选跳过），
+// 打开且存在待合并条目时恢复默认权重；手动触发在关闭状态下依然可用。
+func TestMemoryAutoConsolidateGate(t *testing.T) {
+	resetLifeForTest(t)
+	oldSwitch := config.MemoryAutoConsolidate
+	oldCount := pendingCountHook
+	t.Cleanup(func() {
+		config.MemoryAutoConsolidate = oldSwitch
+		pendingCountHook = oldCount
+	})
 
-	// 不足 500 条：不触发
-	if got, reason := selectMemoryCandidates(makeMemoryItems(499, 30, now), now); len(got) != 0 {
-		t.Fatalf("499 条不应触发，实得 %d 条", len(got))
-	} else if !strings.Contains(reason, "500") {
-		t.Fatalf("原因应提到触发线 500，实得 %q", reason)
+	// 即便有待合并条目，关闭开关后也不参与随机挑选
+	pendingCountHook = func() int { return 1 }
+	config.MemoryAutoConsolidate = false
+	if got := registeredMemoryEvent(t).Weight(); got != 0 {
+		t.Fatalf("开关关闭时权重应为 0，实得 %d", got)
 	}
 
-	// 满 500 条但全部不满 10 天：不触发
-	if got, reason := selectMemoryCandidates(makeMemoryItems(500, 1, now), now); len(got) != 0 {
-		t.Fatalf("全部新记忆不应触发，实得 %d 条", len(got))
-	} else if !strings.Contains(reason, "10") {
-		t.Fatalf("原因应提到 10 天门槛，实得 %q", reason)
-	}
-
-	// 满 500 条但满 10 天的只有 49 条：不触发
-	items := makeMemoryItems(49, 12, now)
-	items = append(items, makeMemoryItems(451, 1, now)...)
-	if got, reason := selectMemoryCandidates(items, now); len(got) != 0 {
-		t.Fatalf("满 10 天不足 50 条不应触发，实得 %d 条", len(got))
-	} else if !strings.Contains(reason, "50") {
-		t.Fatalf("原因应提到单次 50 条，实得 %q", reason)
-	}
-
-	// 满 10 天的有 60 条：只取最久的 50 条
-	items = makeMemoryItems(60, 12, now)
-	items = append(items, makeMemoryItems(440, 1, now)...)
-	got, reason := selectMemoryCandidates(items, now)
-	if len(got) != memoryBatchItems {
-		t.Fatalf("应选 %d 条，实得 %d 条（reason=%q）", memoryBatchItems, len(got), reason)
-	}
-	for i, item := range got {
-		if item.ID != fmt.Sprintf("item-%03d", i) {
-			t.Fatalf("第 %d 条应是最旧的 item-%03d，实得 %s", i, i, item.ID)
+	mu.Lock()
+	for _, event := range registry {
+		if event.ID() != "memory" && event.ID() != "daze" {
+			state.Used[event.ID()] = event.DailyQuota()
 		}
 	}
-
-	// 缺失时间戳按最久远处理
-	legacy := makeMemoryItems(500, 0, now)
-	for i := range legacy {
-		legacy[i].Timestamp = 0
+	picked := pickLocked()
+	mu.Unlock()
+	if picked == nil || picked.ID() != "daze" {
+		t.Fatalf("关闭自动整理后随机挑选应跳过 memory，实际 %v", picked)
 	}
-	if got, _ := selectMemoryCandidates(legacy, now); len(got) != memoryBatchItems {
-		t.Fatalf("缺失时间戳的旧数据应可整理，实得 %d 条", len(got))
+
+	if !RequestMemoryConsolidation("") {
+		t.Fatal("关闭自动整理后仍应支持手动触发")
+	}
+	env := Env{}
+	mu.Lock()
+	taken := takeForcedEventLocked(&env)
+	mu.Unlock()
+	if taken == nil || taken.ID() != "memory" {
+		t.Fatalf("手动触发应取出 memory 事件，实际 %v", taken)
+	}
+	if env.Instruction != defaultMemoryInstruction {
+		t.Fatalf("手动触发应带默认指令，实际 %q", env.Instruction)
+	}
+
+	config.MemoryAutoConsolidate = true
+	if got := registeredMemoryEvent(t).Weight(); got != defaultEvents["memory"].Weight {
+		t.Fatalf("开关打开后权重应恢复为 %d，实得 %d", defaultEvents["memory"].Weight, got)
+	}
+
+	// 没有待合并条目时整理无事可做，权重归零，避免空跑占额度
+	pendingCountHook = func() int { return 0 }
+	if got := registeredMemoryEvent(t).Weight(); got != 0 {
+		t.Fatalf("没有待合并条目时权重应为 0，实得 %d", got)
 	}
 }
 
-// makeMemoryItems 生成按入库时间升序的测试条目；ageDays 为入库距今天数（0 表示现在）
-func makeMemoryItems(count int, ageDays int, now time.Time) []memoryItem {
-	items := make([]memoryItem, 0, count)
-	for i := 0; i < count; i++ {
-		items = append(items, memoryItem{
-			ID:        fmt.Sprintf("item-%03d", i),
-			Content:   fmt.Sprintf("记忆 %03d", i),
-			Timestamp: now.Add(-time.Duration(ageDays) * 24 * time.Hour).Add(time.Duration(i) * time.Second).Unix(),
-		})
+// registeredMemoryEvent 返回注册表中的 memory 事件。
+func registeredMemoryEvent(t *testing.T) Event {
+	t.Helper()
+	mu.Lock()
+	defer mu.Unlock()
+	for _, event := range registry {
+		if event.ID() == "memory" {
+			return event
+		}
 	}
-	return items
+	t.Fatal("memory 事件未注册")
+	return nil
 }

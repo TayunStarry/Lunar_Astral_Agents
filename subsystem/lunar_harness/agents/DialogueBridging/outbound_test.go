@@ -2,33 +2,22 @@ package DialogueBridging
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
-// resetOutboundTest 备份/还原主动投递相关的全局状态
+// resetOutboundTest 备份/还原主动投递相关的业务全局状态。
 func resetOutboundTest(t *testing.T) {
 	t.Helper()
 	origConfig := bridgeConfig
 	origState := GetBridgeState()
-	origLoaded, origID, origNick := botInfoLoaded, botUserID, botNickname
-	origAt, origGroups, origFriends, origErr := qqDirectoryAt, qqDirectoryGroups, qqDirectoryFriends, qqDirectoryErr
 	resetWhitelistPending()
 	t.Cleanup(func() {
 		resetWhitelistPending()
 		bridgeConfig = origConfig
 		setBridgeState(origState)
-		botInfoLoaded, botUserID, botNickname = origLoaded, origID, origNick
-		qqDirectoryMu.Lock()
-		qqDirectoryAt, qqDirectoryGroups, qqDirectoryFriends, qqDirectoryErr = origAt, origGroups, origFriends, origErr
-		qqDirectoryMu.Unlock()
 	})
 }
 
@@ -68,12 +57,8 @@ func TestQQTargetsAndBridgeReady(t *testing.T) {
 	resetOutboundTest(t)
 	server := startOutboundFake(t, &[]map[string]any{})
 	defer server.Close()
-	bridgeConfig.BridgingPath = "ws://" + strings.TrimPrefix(server.URL, "http://")
+	useNapcatTestClient(t, server.URL)
 	setBridgeState(BridgeConnected)
-	botInfoLoaded, botUserID = false, 0
-	qqDirectoryMu.Lock()
-	qqDirectoryAt = time.Time{}
-	qqDirectoryMu.Unlock()
 
 	groups, friends, err := QQTargets()
 	if err != nil {
@@ -90,59 +75,11 @@ func TestQQTargetsAndBridgeReady(t *testing.T) {
 	}
 }
 
-// TestUnconfirmedUploadTreatedAsSuccess 钉住 NapCat 文件上传的事件回执超时：
-// 文件实际已上传成功，不能因为 onMsgInfoListUpdate 超时把投递判为失败并打 WARN。
-func TestUnconfirmedUploadTreatedAsSuccess(t *testing.T) {
-	cases := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{
-			name: "上传后事件回执超时",
-			err: errors.New("/upload_group_file 返回错误: Timeout: NTEvent serviceAndMethod:NodeIKernelMsgService/sendMsg " +
-				"ListenerName:NodeIKernelMsgListener/onMsgInfoListUpdate EventRet:\n{}"),
-			want: true,
-		},
-		{name: "普通接口失败", err: errors.New("/upload_group_file 返回错误: 权限不足"), want: false},
-		{name: "非事件超时", err: errors.New("文件不可读"), want: false},
-		{name: "空错误", err: nil, want: false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := isUnconfirmedUpload(tc.err); got != tc.want {
-				t.Fatalf("isUnconfirmedUpload=%v，应为 %v（%v）", got, tc.want, tc.err)
-			}
-		})
-	}
-}
-
-// TestOutboundSendTextAndFile 钉住主动投递：文本原样、文件走上传接口且带显示名。
-func TestOutboundSendTextAndFile(t *testing.T) {
+// TestQQTargetsRequiresConnection 桥接器未连接时不得读取目录。
+func TestQQTargetsRequiresConnection(t *testing.T) {
 	resetOutboundTest(t)
-	var calls []map[string]any
-	server := startOutboundFake(t, &calls)
-	defer server.Close()
-	bridgeConfig.BridgingPath = "ws://" + strings.TrimPrefix(server.URL, "http://")
-
-	if err := SendGroupPlainTextMessage(1001, "晚安，今天辛苦了"); err != nil {
-		t.Fatalf("发送群文本失败: %v", err)
-	}
-	file := filepath.Join(t.TempDir(), "报告.txt")
-	if err := os.WriteFile(file, []byte("hello"), 0o644); err != nil {
-		t.Fatalf("写临时文件失败: %v", err)
-	}
-	if err := SendGroupFile(1001, file, "报告.txt"); err != nil {
-		t.Fatalf("发送群文件失败: %v", err)
-	}
-
-	if len(calls) != 2 {
-		t.Fatalf("应调用发送接口 2 次，实际 %d", len(calls))
-	}
-	if calls[0]["group_id"] != float64(1001) {
-		t.Fatalf("群号参数错误: %#v", calls[0])
-	}
-	if calls[1]["file"] != file || calls[1]["name"] != "报告.txt" {
-		t.Fatalf("文件上传参数错误: %#v", calls[1])
+	setBridgeState(BridgeDisconnected)
+	if _, _, err := QQTargets(); err == nil {
+		t.Fatal("未连接时应返回错误")
 	}
 }

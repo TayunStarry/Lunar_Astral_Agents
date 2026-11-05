@@ -1,18 +1,31 @@
 package life
 
-// memory_event.go 整理记忆事件：全量文本记忆分批整理，带批次意图日志。
+// memory_event.go 整理记忆事件：唯一的整理调度入口。
 //
-// 顺序必须是「先删旧、再写新」：记忆库对 0.98 相似内容会判重，
-// 若先写新，新内容会被旧条目判定为重复而不落库，随后旧条目被删就会丢数据。
+// 每轮只做一件事：取当前全部待合并组（Pending + 伙伴），逐组处理。
+// 流程：pending → partner 连边 + 嵌入相似度聚类分组（只留含 Pending 且 ≥2 条的组）
+// → 推理模型合并改写（输出一条或多条事实条目）→ 嵌入双向校验（新结果不跑偏、
+// 旧事实不丢失）→ 归档旧条目 → ReplaceTexts 事务替换。
+//
+// 没有任何待合并组时整轮不动作、不消耗额度；组内条目不会因为「够旧/够多」被挑选，
+// 也不存在基于条数或时间的强制淘汰兜底。
+//
+// 落库顺序必须是「先写新、再删旧」：任何一步失败都能保留原条目；
+// 引擎层 ReplaceTexts 负责写后校验（数量 + 内容指纹）与失败回滚，
+// 因此这里只保留计划/日志的编排，不做逐条删除与写入。
+//
+// 自动触发默认开启（config.MemoryAutoConsolidate=true，权重 20、额度 12 次/天）；
+// 关闭后权重归零，随机挑选跳过本事件，仍可手动/按需触发：
+//   - 启动参数 -memory-consolidate-once；
+//   - life.RequestMemoryConsolidation("...") 或 life.RequestEvent("memory", "...")。
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,8 +39,20 @@ type memoryEvent struct{ params eventParams }
 
 func newMemoryEvent() Event { return &memoryEvent{params: paramsOf("memory")} }
 
-func (e *memoryEvent) ID() string       { return "memory" }
-func (e *memoryEvent) Weight() int      { return e.params.Weight }
+func (e *memoryEvent) ID() string { return "memory" }
+
+// Weight 自动触发权重：自动整理开启且存在待合并条目时才参与随机挑选。
+// 没有待合并组时返回 0——整理无事可做，不应空跑一次并占用当日额度；
+// 手动触发走 RequestEvent，不经过权重。
+func (e *memoryEvent) Weight() int {
+	if !config.MemoryAutoConsolidate {
+		return 0
+	}
+	if pendingCountHook() <= 0 {
+		return 0
+	}
+	return e.params.Weight
+}
 func (e *memoryEvent) DailyQuota() int  { return e.params.Quota }
 func (e *memoryEvent) NewRun() EventRun { return &memoryRun{} }
 
@@ -36,27 +61,36 @@ type memoryRun struct {
 	plan *memoryPlan
 }
 
-// selectMemoryCandidates 按触发条件选出本次要整理的条目。
-//
-// 三条硬规则：可整理条目 ≥ memoryTriggerMin 才触发；只取入库时间最久的
-// memoryBatchItems 条；这些条目的入库时长必须都 ≥ memoryMinAge。
-// 任一条件不满足都返回空列表与原因，调用方据此直接按「本次整理完成」收尾。
-func selectMemoryCandidates(items []memoryItem, now time.Time) ([]memoryItem, string) {
-	if len(items) < memoryTriggerMin {
-		return nil, fmt.Sprintf("可整理记忆 %d 条，未达到 %d 条触发线", len(items), memoryTriggerMin)
+// NoWork 本次整理没有产生任何动作（没有待合并组）：调度层据此回滚当日额度。
+func (r *memoryRun) NoWork() bool { return r.data.Total == 0 }
+
+// 手动触发（不受自动整理开关影响）。
+const defaultMemoryInstruction = "手动触发一次记忆整理"
+
+// RequestMemoryConsolidation 手动登记一次记忆整理，下一空闲 Tick 执行。
+// 即使 config.MemoryAutoConsolidate 关闭，本入口仍然可用（按需整理）。
+func RequestMemoryConsolidation(instruction string) bool {
+	instruction = strings.TrimSpace(instruction)
+	if instruction == "" {
+		instruction = defaultMemoryInstruction
 	}
-	eligible := make([]memoryItem, 0, len(items))
-	for _, item := range items {
-		// 缺失时间戳的旧数据按最久远处理，避免被永久排除在整理之外
-		if item.Timestamp <= 0 || now.Sub(time.Unix(item.Timestamp, 0)) >= memoryMinAge {
-			eligible = append(eligible, item)
-		}
+	return RequestEvent("memory", instruction)
+}
+
+// registerStartupConsolidationLocked 处理启动参数 -memory-consolidate-once：
+// 登记一次手动整理；调用方需持有锁。
+func registerStartupConsolidationLocked() {
+	if !config.MemoryConsolidateOnce {
+		return
 	}
-	if len(eligible) < memoryBatchItems {
-		return nil, fmt.Sprintf("入库满 %d 天的记忆仅 %d 条，不足单次整理的 %d 条", memoryMinAgeDays, len(eligible), memoryBatchItems)
+	if strings.TrimSpace(state.PendingEvent) != "" {
+		logger.Warn(Module, "[记忆整理] 已存在待执行事件 %s，跳过启动一次性整理", state.PendingEvent)
+		return
 	}
-	// listAllTextMemories 已按入库时间升序排列，前 memoryBatchItems 条即最久的一批
-	return eligible[:memoryBatchItems], ""
+	state.PendingEvent = "memory"
+	state.PendingInstruction = defaultMemoryInstruction
+	saveStateLocked()
+	logger.Info(Module, "[记忆整理] 已登记启动后一次性整理（-memory-consolidate-once）")
 }
 
 func (r *memoryRun) Start(ctx context.Context, _ Env) error {
@@ -67,22 +101,42 @@ func (r *memoryRun) Start(ctx context.Context, _ Env) error {
 		return fmt.Errorf("恢复记忆整理日志失败: %w", err)
 	}
 	items := listAllTextMemories()
-	candidates, skipReason := selectMemoryCandidates(items, time.Now())
-	if len(candidates) == 0 {
-		// 触发条件不满足：不写计划、不调模型，直接按「本次整理完成」收尾
-		r.data = memoryRunData{PlanFile: memoryPlanFile, Reason: skipReason}
-		logger.Info(Module, "[记忆整理] 本次不整理：%s（可整理共 %d 条）", skipReason, len(items))
+
+	// 唯一的整理输入：当前全部待合并组（Pending + 伙伴）。
+	pending, partners := pendingCandidateSet(items)
+	pending = clearOrphanPending(ctx, pending, partners)
+	groupItems := pendingGroupItems(pending, partners)
+	var clusters []memory.TextCluster
+	if len(groupItems) > 0 {
+		candidateIDs := make([]string, 0, len(groupItems))
+		for _, item := range groupItems {
+			candidateIDs = append(candidateIDs, item.ID)
+		}
+		var err error
+		clusters, _, err = memory.ClusterTextCandidates(ctx, "", candidateIDs, memoryClusterThreshold)
+		if err != nil {
+			return fmt.Errorf("待合并组聚类失败: %w", err)
+		}
+	}
+
+	batches, reason := planPendingBatches(groupItems, clusters)
+	if len(batches) == 0 {
+		r.data = memoryRunData{PlanFile: memoryPlanFile, Reason: reason}
+		logger.Info(Module, "[记忆整理] 本次不整理：%s（待处理 %d 条、伙伴 %d 条）", reason, len(pending), len(partners))
 		return nil
 	}
-	batches := buildMemoryBatches(candidates)
 	r.data = memoryRunData{PlanFile: memoryPlanFile, Total: len(batches)}
-	plan := memoryPlan{ID: fmt.Sprintf("mem-%d", time.Now().UnixNano()), Batches: batches}
+	plan := memoryPlan{Version: memoryPlanVersion, ID: fmt.Sprintf("mem-%d", time.Now().UnixNano()), Batches: batches}
 	if err := saveMemoryPlan(plan); err != nil {
 		return err
 	}
 	r.plan = &plan
-	logger.Info(Module, "[记忆整理] 可整理 %d 条，本次取入库最久的 %d 条，分 %d 批处理",
-		len(items), len(candidates), len(batches))
+	grouped := 0
+	for _, batch := range batches {
+		grouped += len(batch.Items)
+	}
+	logger.Info(Module, "[记忆整理] 待合并 %d 条（伙伴 %d 条）聚类出 %d 个组（共 %d 条），分 %d 批逐组处理",
+		len(pending), len(partners), len(batches), grouped, len(batches))
 	return nil
 }
 
@@ -169,6 +223,9 @@ func loadMemoryPlan() (*memoryPlan, error) {
 	if err := json.Unmarshal(raw, &plan); err != nil {
 		return nil, fmt.Errorf("解析记忆整理计划失败: %w", err)
 	}
+	if plan.Version != memoryPlanVersion {
+		return nil, fmt.Errorf("记忆整理计划版本过旧（%d != %d）", plan.Version, memoryPlanVersion)
+	}
 	return &plan, nil
 }
 
@@ -181,79 +238,99 @@ func removeMemoryPlan() {
 
 // ==== 单批处理 ====
 
+// processMemoryBatch 整理一个待合并组。
+//
+// 保守处理：模型失败/空结果/没有实际合并/向量校验不通过/归档失败/替换失败时
+// 都只跳过本组，绝不删除旧条目；该组保持待处理状态等待下一轮重试，
+// 不存在基于条数或时间的强制淘汰兜底。
+// 落库交给引擎 ReplaceTexts：先写新条目，校验通过后才删旧条目；失败自动回滚。
 func processMemoryBatch(ctx context.Context, planID string, index int, batch memoryBatch) error {
-	newTexts, err := consolidateBatch(ctx, batch)
-	if err != nil {
-		return err
-	}
 	batchID := fmt.Sprintf("%s-%03d", planID, index)
+	newTexts, err := mergeBatch(ctx, batch)
+	if err != nil {
+		logger.Warn(Module, "[记忆整理] 批次 %s 合并模型不可用，保留原 %d 条记忆不动: %v", batchID, len(batch.Items), err)
+		return nil
+	}
+	if len(newTexts) == 0 {
+		logger.Warn(Module, "[记忆整理] 批次 %s 整理结果为空，保留原 %d 条记忆不动", batchID, len(batch.Items))
+		return nil
+	}
+	oldTexts := batchContents(batch)
+	if sameTextSet(oldTexts, newTexts) {
+		logger.Info(Module, "[记忆整理] 批次 %s 没有可合并的相似内容，%d 条原样保留", batchID, len(batch.Items))
+		return nil
+	}
+	oldIDs := make([]string, 0, len(batch.Items))
+	for _, item := range batch.Items {
+		oldIDs = append(oldIDs, item.ID)
+	}
+	// 嵌入模型校验：新条目不能跑偏，旧条目不能被丢事实；不通过就保留原条目。
+	if verifyErr := verifyHook(ctx, oldIDs, newTexts, memoryVerifyThreshold); verifyErr != nil {
+		logger.Warn(Module, "[记忆整理] 批次 %s 向量校验未通过，保留原 %d 条记忆不动: %v", batchID, len(batch.Items), verifyErr)
+		return nil
+	}
+	// 先归档旧条目再替换：归档失败就不删旧，避免淘汰后无法追溯。
+	if archiveErr := archiveMemoryBatch(batchID, batch); archiveErr != nil {
+		logger.Warn(Module, "[记忆整理] 批次 %s 归档旧条目失败，保留原记忆不动: %v", batchID, archiveErr)
+		return nil
+	}
 	journal := memoryJournal{
-		BatchID:    batchID,
-		Status:     "prepared",
-		OldEntries: batch.Items,
-		NewTexts:   newTexts,
-		UpdatedAt:  time.Now().Unix(),
+		BatchID:     batchID,
+		Status:      "prepared",
+		OldEntries:  batch.Items,
+		NewTexts:    newTexts,
+		BeforeCount: len(batch.Items),
+		UpdatedAt:   time.Now().Unix(),
 	}
 	if err := saveJournal(journal); err != nil {
-		return err
+		logger.Warn(Module, "[记忆整理] 批次 %s 写入意图日志失败，保留原记忆不动: %v", batchID, err)
+		return nil
 	}
-	if err := deleteOldEntries(ctx, &journal); err != nil {
-		return err
-	}
-	if err := writeNewTexts(ctx, &journal); err != nil {
-		return err
+	result, err := applyReplace(ctx, &journal)
+	if err != nil {
+		// 替换失败已由引擎回滚（旧条目全部保留），本组留待下一轮重试。
+		return nil
 	}
 	journal.Status = "done"
+	journal.AfterCount = len(result.CreatedIDs) + len(result.ReusedIDs)
 	journal.UpdatedAt = time.Now().Unix()
-	_ = saveJournal(journal)
-	deleteJournal(batchID)
-	logger.Info(Module, "[记忆整理] 批次 %s 完成：旧 %d 条 → 新 %d 条", batchID, len(batch.Items), len(newTexts))
+	// 保留 done 日志：若紧接着进程崩溃（Index 尚未持久化），下次 recoverBatch 见到
+	// done 会直接清理并跳过本批，避免对同一批旧条目重复调用模型、重复写入整理结果。
+	if err := saveJournal(journal); err != nil {
+		logger.Warn(Module, "[记忆整理] 批次 %s 写入完成日志失败（结果已落库）: %v", batchID, err)
+	}
+	logger.Info(Module, "[记忆整理] 批次 %s 完成：旧 %d 条 → 新 %d 条（新建 %d、复用 %d、删除 %d）",
+		batchID, len(batch.Items), journal.AfterCount, len(result.CreatedIDs), len(result.ReusedIDs), len(result.DeletedIDs))
 	return nil
 }
 
-func deleteOldEntries(ctx context.Context, journal *memoryJournal) error {
+// applyReplace 调用引擎层的「先写后删」事务替换，并把校验结果记入日志。
+// 引擎会先快照旧条目，新文本全部落库并校验通过后才删除旧条目；
+// 任一步失败都会回滚（删除本次新建、恢复旧条目），因此旧记忆不会因失败而消失。
+func applyReplace(ctx context.Context, journal *memoryJournal) (memory.ReplaceResult, error) {
+	oldIDs := make([]string, 0, len(journal.OldEntries))
 	for _, item := range journal.OldEntries {
-		if idIn(item.ID, journal.DeletedIDs) {
-			continue
-		}
-		if err := memory.Delete(ctx, item.ID); err != nil && !errors.Is(err, memory.ErrNotFound) {
-			journal.UpdatedAt = time.Now().Unix()
-			_ = saveJournal(*journal)
-			return fmt.Errorf("删除旧记忆 %s 失败: %w", item.ID, err)
-		}
-		journal.DeletedIDs = append(journal.DeletedIDs, item.ID)
-		journal.UpdatedAt = time.Now().Unix()
-		if err := saveJournal(*journal); err != nil {
-			return err
-		}
+		oldIDs = append(oldIDs, item.ID)
 	}
-	journal.Status = "deleted"
+	result, err := replaceHook(ctx, oldIDs, journal.NewTexts, memory.ReplaceOptions{
+		Role:   "assistant",
+		Source: memoryReplaceSource,
+	})
+	journal.WrittenIDs = append([]string(nil), result.CreatedIDs...)
+	journal.ReusedIDs = append([]string(nil), result.ReusedIDs...)
+	journal.DeletedIDs = append([]string(nil), result.DeletedIDs...)
 	journal.UpdatedAt = time.Now().Unix()
-	return saveJournal(*journal)
-}
-
-func writeNewTexts(ctx context.Context, journal *memoryJournal) error {
-	for _, text := range journal.NewTexts {
-		id, err := memory.AddText(ctx, "assistant", text)
-		if err != nil {
-			journal.Status = "write_failed"
-			journal.UpdatedAt = time.Now().Unix()
-			_ = saveJournal(*journal)
-			return fmt.Errorf("写入整理后记忆失败: %w", err)
-		}
-		journal.WrittenIDs = append(journal.WrittenIDs, id)
-		journal.UpdatedAt = time.Now().Unix()
-		if err := saveJournal(*journal); err != nil {
-			return err
-		}
+	if err != nil {
+		journal.Status = "failed"
+		journal.Error = err.Error()
+		_ = saveJournal(*journal)
+		logger.Warn(Module, "[记忆整理] 批次 %s 替换失败，旧记忆已保留: %v", journal.BatchID, err)
+		return result, err
 	}
-	journal.Status = "written"
-	journal.UpdatedAt = time.Now().Unix()
-	return saveJournal(*journal)
-}
-
-func idIn(id string, list []string) bool {
-	return slices.Contains(list, id)
+	journal.Status = "replaced"
+	journal.Error = ""
+	_ = saveJournal(*journal)
+	return result, nil
 }
 
 // ==== 意图日志 ====
@@ -311,14 +388,24 @@ func recoverBatch(ctx context.Context, planID string, index int) (bool, error) {
 		return true, nil
 	}
 	logger.Info(Module, "[记忆整理] 恢复批次 %s（状态=%s）", journal.BatchID, journal.Status)
-	if err := deleteOldEntries(ctx, journal); err != nil {
-		return false, err
-	}
-	if err := writeNewTexts(ctx, journal); err != nil {
+	if err := recoverJournal(ctx, journal); err != nil {
 		return false, err
 	}
 	deleteJournal(batchID)
 	return true, nil
+}
+
+// recoverJournal 重放一个未完成的批次。
+//
+// 幂等：新文本按「完全同文复用」落库，旧条目缺失按已删除处理；
+// 结果为空时直接丢弃日志，绝不执行任何删除。
+func recoverJournal(ctx context.Context, journal *memoryJournal) error {
+	if len(journal.NewTexts) == 0 {
+		logger.Warn(Module, "[记忆整理] 批次 %s 日志中待写入内容为空，保留旧记忆并清理日志", journal.BatchID)
+		return nil
+	}
+	_, err := applyReplace(ctx, journal)
+	return err
 }
 
 // recoverJournals 启动/新事件开始时恢复未完成的批次。
@@ -346,12 +433,8 @@ func recoverJournals(ctx context.Context) error {
 			continue
 		}
 		logger.Info(Module, "[记忆整理] 恢复批次 %s（状态=%s）", journal.BatchID, journal.Status)
-		if err := deleteOldEntries(ctx, journal); err != nil {
-			logger.Warn(Module, "[记忆整理] 恢复批次 %s 删除旧记忆失败: %v", journal.BatchID, err)
-			continue
-		}
-		if err := writeNewTexts(ctx, journal); err != nil {
-			logger.Warn(Module, "[记忆整理] 恢复批次 %s 写入新记忆失败: %v", journal.BatchID, err)
+		if err := recoverJournal(ctx, journal); err != nil {
+			logger.Warn(Module, "[记忆整理] 恢复批次 %s 失败（旧记忆保持不动）: %v", journal.BatchID, err)
 			continue
 		}
 		deleteJournal(journal.BatchID)

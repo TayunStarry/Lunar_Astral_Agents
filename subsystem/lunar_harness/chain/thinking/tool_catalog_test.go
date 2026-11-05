@@ -4,7 +4,11 @@ package thinking
 //  1. 记忆者不是独立智能体，不出现在工具列表；
 //  2. 对话者的 LTPX 聚合工具 use_the_program 必须出现在清单里。
 
-import "testing"
+import (
+	"testing"
+
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
+)
 
 func TestToolCatalogIncludesLTPXAndExcludesMemorizer(t *testing.T) {
 	catalog := ToolCatalog()
@@ -29,12 +33,12 @@ func TestToolCatalogIncludesLTPXAndExcludesMemorizer(t *testing.T) {
 	}
 	found := false
 	for _, name := range dialogueTools {
-		if name == crystalToolName {
+		if name == Dialogue.ToolUseTheProgram {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("对话者工具清单缺少 LTPX 聚合工具 %s：%v", crystalToolName, dialogueTools)
+		t.Fatalf("对话者工具清单缺少 LTPX 聚合工具 %s：%v", Dialogue.ToolUseTheProgram, dialogueTools)
 	}
 }

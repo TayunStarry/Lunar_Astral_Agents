@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -21,6 +20,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
 	"LunarSubsystem/LunarHarness/prompts"
 )
 
@@ -28,8 +28,6 @@ const (
 	biliUA      = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 	biliReferer = "https://www.bilibili.com/"
 )
-
-var bvidRe = regexp.MustCompile(`(BV[0-9A-Za-z]{10})`)
 
 func biliHTTPGetJSON(target string, out any) error {
 	req, err := http.NewRequest(http.MethodGet, target, nil)
@@ -108,10 +106,7 @@ func fetchVideoInfo(bvid string) (videoInfo, error) {
 
 // bvidOf 从视频链接里提取 BV 号（无法提取时返回空串）
 func bvidOf(href string) string {
-	if match := bvidRe.FindStringSubmatch(href); len(match) > 0 {
-		return match[1]
-	}
-	return ""
+	return viewerstore.ExtractBVID(href)
 }
 
 // fetchVideoTags 读取视频的内容标签，参与参考词打分。
@@ -298,5 +293,5 @@ func isBilibiliSummaryKey(key string) bool {
 	if strings.Contains(key, "bilibili.com") {
 		return true
 	}
-	return regexp.MustCompile(`^BV[0-9A-Za-z]+$`).MatchString(key)
+	return viewerstore.IsBVID(key)
 }

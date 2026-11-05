@@ -34,7 +34,7 @@ func reviewVideo(video *videoRecord) videoReview {
 	if review.Pass {
 		review.Reason = ""
 		review.Slices = clampReviewSlices(video.Info.Duration, review.Slices)
-		review.Evaluation = finishComment(review.Evaluation, 80)
+		review.Evaluation = finishComment(review.Evaluation, dynamicCommentMaxRunes)
 	} else {
 		review.Reason = strings.TrimSpace(review.Reason)
 		if review.Reason == "" {

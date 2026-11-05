@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	desktopos "LunarSubsystem/LunarHarness/engine/desktop"
 )
 
 // editorPhase 提示词编纂者：将用户原始指令解析为结构化任务 JSON。
@@ -77,7 +79,7 @@ func launcherPhase(ctx context.Context, plan editorTask, handoff *HandoffRecord)
 					}
 				}
 				activated, _ := callDesktop(ctx, 3*time.Second, "激活目标窗口", func() (string, error) {
-					return DTActivateLaunchByName(key), nil
+					return desktopos.ActivateLaunchByName(key), nil
 				})
 				if activated != "" {
 					traceAuto("【启动者】启动即置前台: %s", activated)
@@ -90,7 +92,7 @@ func launcherPhase(ctx context.Context, plan editorTask, handoff *HandoffRecord)
 						case <-time.After(600 * time.Millisecond):
 						}
 						retried, _ := callDesktop(ctx, 3*time.Second, "激活目标窗口", func() (string, error) {
-							return DTActivateLaunchByName(key), nil
+							return desktopos.ActivateLaunchByName(key), nil
 						})
 						if retried != "" {
 							traceAuto("【启动者】启动即置前台（重试 %d）: %s", attempt+1, retried)
@@ -111,7 +113,7 @@ func launcherPhase(ctx context.Context, plan editorTask, handoff *HandoffRecord)
 		}
 		return fmt.Errorf("启动者未发起任何打开应用的调用，任务中止")
 	}
-	handoff.Foreground = DTForegroundTitle()
+	handoff.Foreground = desktopos.ForegroundTitle()
 	handoff.TargetApp = openedKey
 	return nil
 }

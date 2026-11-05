@@ -1,12 +1,8 @@
 package app
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"strconv"
 	"strings"
 	"time"
 
@@ -93,22 +89,21 @@ func WireTUIMaintenanceHook() {
 }
 
 // WireTUIDataDumpHooks 把「数据导出」能力注入控制台：控制台只负责触发与展示回执，
-// 取数与落盘的逻辑复用同一批 HTTP 端点处理器（server/data_dump.go）。
+// 取数与落盘直接调用 server 的数据导出服务函数（server.DataDump），不再经 HTTP 自调。
 //
-// 为什么复用端点处理器而不是在 app 层重写一遍：导出的**日志/实况/上下文结构**必须
+// 为什么复用服务函数而不是在 app 层重写一遍：导出的**日志/实况/上下文结构**必须
 // 与对外端点保持同一份定义，否则"控制台导出的文件"和"调用端点拿到的文件"会逐渐分叉。
-// 这里经 httptest 在进程内直调处理器（无 socket、无端口），只多一次 JSON 往返。
 func WireTUIDataDumpHooks() {
 	console.SetDataDumpHooks(
 		func() (console.DataDumpResult, error) {
-			return callDumpHandler(server.DataDumpLogsHandler, "/debug/dump/logs")
+			return callDataDump(server.DataDumpRequest{Kind: server.DataDumpLogs})
 		},
 		// 核心智能实况（模型调用轮次）——与另外两项并列，因为其数据来源互不重叠
 		func() (console.DataDumpResult, error) {
-			return callDumpHandler(server.DataDumpTranscriptHandler, "/debug/dump/transcript")
+			return callDataDump(server.DataDumpRequest{Kind: server.DataDumpTranscript})
 		},
 		func(target string) (console.DataDumpResult, error) {
-			return callDumpHandler(server.DataDumpContextHandler, "/debug/dump/context?agent="+target)
+			return callDataDump(server.DataDumpRequest{Kind: server.DataDumpContext, Agent: target})
 		},
 	)
 }
@@ -231,20 +226,16 @@ func buildToolCatalog() []agentinfo.Agent {
 	return out
 }
 
-// callDumpHandler 进程内直调导出端点处理器并解析回执
-func callDumpHandler(handler http.HandlerFunc, target string) (console.DataDumpResult, error) {
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, target, nil)
-	handler(rec, req)
-
-	var resp server.DataDumpResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		return console.DataDumpResult{}, fmt.Errorf("解析导出回执失败: %w", err)
+// callDataDump 直接调用导出服务并解析回执。
+func callDataDump(req server.DataDumpRequest) (console.DataDumpResult, error) {
+	resp, err := server.DataDump(context.Background(), req)
+	if err != nil {
+		return console.DataDumpResult{}, err
 	}
 	if !resp.OK {
 		reason := resp.Error
 		if reason == "" {
-			reason = "导出失败（HTTP " + strconv.Itoa(rec.Code) + "）"
+			reason = "导出失败"
 		}
 		return console.DataDumpResult{}, errors.New(reason)
 	}

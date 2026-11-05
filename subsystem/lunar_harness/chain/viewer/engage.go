@@ -20,6 +20,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/ViewerShare"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
 	"LunarSubsystem/LunarHarness/protocol/loopguard"
 )
 
@@ -86,8 +87,9 @@ func (r *runner) runWatchStep(step pipelineStep) error {
 		return fmt.Errorf("第 %d 段理解为空", step.Slice+1)
 	}
 	video.Summaries[step.Slice] = text
-	// 按要求把该片段的理解内容输出到运行日志（Tick 成果）
-	logger.Info("BilibiliViewer", "《%s》第 %d/%d 段理解：%s", video.Info.Title, step.Slice+1, len(video.Segments), truncate(text, 512))
+	// 完整理解写入单轮轨迹（可追溯，不进长期记忆）；日志只做摘要展示。
+	r.recordSliceTrace(video, step.Slice+1, len(video.Segments), text)
+	logger.Info("BilibiliViewer", "《%s》第 %d/%d 段理解：%s", video.Info.Title, step.Slice+1, len(video.Segments), truncate(text, viewerstore.TextMaxRunes))
 	return nil
 }
 
@@ -137,11 +139,12 @@ func (r *runner) runMergeStep(step pipelineStep) error {
 	if len(summaries) == 0 {
 		return fmt.Errorf("《%s》没有可合并的切片理解", video.Info.Title)
 	}
-	// 切片理解只作素材：先合成人格化观影感受，再按 URL 写入摘要库与记忆库。
+	// 切片理解只作素材：先合成完整解读（SQL/轨迹），再抽高层结论写入记忆库（单视频单条）。
 	video.WatchSummary = summarizeWatch(video, summaries)
 	if video.WatchSummary != "" {
 		storeVideoSummary(video.Info, video.WatchSummary)
-		recordWatchMemory(video)
+		r.recordMergeTrace(video, video.WatchSummary)
+		upsertWatchMemory(video)
 	} else {
 		logger.Warn("BilibiliViewer", "《%s》观影感受生成失败，跳过摘要库与记忆写入", video.Info.Title)
 	}
@@ -274,7 +277,7 @@ func (r *runner) generateShareComment() string {
 		logger.Warn("BilibiliViewer", "生成分享评论失败: %v", err)
 		return ""
 	}
-	return finishComment(strings.ReplaceAll(text, "@", ""), 50)
+	return finishComment(strings.ReplaceAll(text, "@", ""), dynamicCommentMaxRunes)
 }
 
 // pickMentionTargets 从特别关注列表随机挑 1-3 人。

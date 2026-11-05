@@ -11,12 +11,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
 // executePlan 依次执行多目标投递计划，并汇总每个目标的成败。
-func executePlan(plan sendPlan, instruction string, groups []QQGroup, friends []QQFriend) (string, error) {
+func executePlan(plan sendPlan, instruction string, groups []napcat.QQGroup, friends []napcat.QQFriend) (string, error) {
 	if len(plan.Deliveries) == 0 {
 		reason := plan.Reason
 		if reason == "" {
@@ -57,7 +58,7 @@ func executePlan(plan sendPlan, instruction string, groups []QQGroup, friends []
 }
 
 // executeDelivery 执行单个目标的投递，返回报告与该目标是否至少成功投递一项。
-func executeDelivery(delivery sendDelivery, instruction string, groups []QQGroup, friends []QQFriend) (string, bool) {
+func executeDelivery(delivery sendDelivery, instruction string, groups []napcat.QQGroup, friends []napcat.QQFriend) (string, bool) {
 	plan := delivery.asPlan()
 	if plan.Target == "" {
 		reason := plan.Reason
@@ -182,7 +183,7 @@ func cleanHandle(raw string) string {
 }
 
 // resolveTarget 把计划中的目标解析为群号 / QQ 号；名称必须唯一匹配。
-func resolveTarget(plan sendPlan, groups []QQGroup, friends []QQFriend) (resolvedTarget, error) {
+func resolveTarget(plan sendPlan, groups []napcat.QQGroup, friends []napcat.QQFriend) (resolvedTarget, error) {
 	kind := strings.ToLower(strings.TrimSpace(plan.TargetType))
 	raw := strings.Trim(strings.TrimSpace(plan.Target), "「」『』《》\"'`[]()（） ")
 	if kind != "group" && kind != "user" {
@@ -211,7 +212,7 @@ func resolveTarget(plan sendPlan, groups []QQGroup, friends []QQFriend) (resolve
 }
 
 // inferTargetKind 模型没给类型时，用号码/名称在两边目录中的唯一匹配推断。
-func inferTargetKind(raw string, groups []QQGroup, friends []QQFriend) string {
+func inferTargetKind(raw string, groups []napcat.QQGroup, friends []napcat.QQFriend) string {
 	if id, ok := parseID(raw); ok {
 		for _, group := range groups {
 			if group.GroupID == id {
@@ -248,16 +249,16 @@ func inferTargetKind(raw string, groups []QQGroup, friends []QQFriend) string {
 }
 
 // matchGroup 按号码或名称定位唯一群
-func matchGroup(raw string, groups []QQGroup) (QQGroup, error) {
+func matchGroup(raw string, groups []napcat.QQGroup) (napcat.QQGroup, error) {
 	if id, ok := parseID(raw); ok {
 		for _, group := range groups {
 			if group.GroupID == id {
 				return group, nil
 			}
 		}
-		return QQGroup{}, fmt.Errorf("群 %d 不在可投递列表中", id)
+		return napcat.QQGroup{}, fmt.Errorf("群 %d 不在可投递列表中", id)
 	}
-	var matched []QQGroup
+	var matched []napcat.QQGroup
 	for _, group := range groups {
 		if strings.EqualFold(strings.TrimSpace(group.GroupName), raw) {
 			matched = append(matched, group)
@@ -274,23 +275,23 @@ func matchGroup(raw string, groups []QQGroup) (QQGroup, error) {
 	case 1:
 		return matched[0], nil
 	case 0:
-		return QQGroup{}, fmt.Errorf("找不到群「%s」", raw)
+		return napcat.QQGroup{}, fmt.Errorf("找不到群「%s」", raw)
 	default:
-		return QQGroup{}, fmt.Errorf("群「%s」匹配到 %d 个，请提供群号", raw, len(matched))
+		return napcat.QQGroup{}, fmt.Errorf("群「%s」匹配到 %d 个，请提供群号", raw, len(matched))
 	}
 }
 
 // matchFriend 按号码或名称（备注/昵称）定位唯一好友
-func matchFriend(raw string, friends []QQFriend) (QQFriend, error) {
+func matchFriend(raw string, friends []napcat.QQFriend) (napcat.QQFriend, error) {
 	if id, ok := parseID(raw); ok {
 		for _, friend := range friends {
 			if friend.UserID == id {
 				return friend, nil
 			}
 		}
-		return QQFriend{}, fmt.Errorf("好友 %d 不在可投递列表中", id)
+		return napcat.QQFriend{}, fmt.Errorf("好友 %d 不在可投递列表中", id)
 	}
-	var matched []QQFriend
+	var matched []napcat.QQFriend
 	for _, friend := range friends {
 		if friendNameEquals(friend, raw) {
 			matched = append(matched, friend)
@@ -307,14 +308,14 @@ func matchFriend(raw string, friends []QQFriend) (QQFriend, error) {
 	case 1:
 		return matched[0], nil
 	case 0:
-		return QQFriend{}, fmt.Errorf("找不到好友「%s」", raw)
+		return napcat.QQFriend{}, fmt.Errorf("找不到好友「%s」", raw)
 	default:
-		return QQFriend{}, fmt.Errorf("好友「%s」匹配到 %d 个，请提供 QQ 号", raw, len(matched))
+		return napcat.QQFriend{}, fmt.Errorf("好友「%s」匹配到 %d 个，请提供 QQ 号", raw, len(matched))
 	}
 }
 
 // countGroupExact / countFriendExact 精确同名计数
-func countGroupExact(raw string, groups []QQGroup) int {
+func countGroupExact(raw string, groups []napcat.QQGroup) int {
 	count := 0
 	for _, group := range groups {
 		if strings.EqualFold(strings.TrimSpace(group.GroupName), raw) {
@@ -324,7 +325,7 @@ func countGroupExact(raw string, groups []QQGroup) int {
 	return count
 }
 
-func countFriendExact(raw string, friends []QQFriend) int {
+func countFriendExact(raw string, friends []napcat.QQFriend) int {
 	count := 0
 	for _, friend := range friends {
 		if friendNameEquals(friend, raw) {
@@ -335,7 +336,7 @@ func countFriendExact(raw string, friends []QQFriend) int {
 }
 
 // countGroupMatches / countFriendMatches 包含匹配计数（用于类型推断）
-func countGroupMatches(raw string, groups []QQGroup) int {
+func countGroupMatches(raw string, groups []napcat.QQGroup) int {
 	count := 0
 	for _, group := range groups {
 		if containsFold(group.GroupName, raw) {
@@ -345,7 +346,7 @@ func countGroupMatches(raw string, groups []QQGroup) int {
 	return count
 }
 
-func countFriendMatches(raw string, friends []QQFriend) int {
+func countFriendMatches(raw string, friends []napcat.QQFriend) int {
 	count := 0
 	for _, friend := range friends {
 		if containsFold(friend.Remark, raw) || containsFold(friend.Nickname, raw) {
@@ -355,7 +356,7 @@ func countFriendMatches(raw string, friends []QQFriend) int {
 	return count
 }
 
-func friendNameEquals(friend QQFriend, raw string) bool {
+func friendNameEquals(friend napcat.QQFriend, raw string) bool {
 	return strings.EqualFold(strings.TrimSpace(friend.Nickname), raw) ||
 		strings.EqualFold(strings.TrimSpace(friend.Remark), raw)
 }
@@ -404,9 +405,9 @@ func handleMentioned(handle, instruction string) bool {
 // sendText 按目标类型发送纯文本
 func sendText(target resolvedTarget, text string) error {
 	if target.Kind == "group" {
-		return SendGroupPlainTextMessage(target.ID, text)
+		return napcat.SendGroupPlainTextMessage(target.ID, text)
 	}
-	return SendPrivateTextMessage(target.ID, text)
+	return napcat.SendPrivateTextMessage(target.ID, text)
 }
 
 // sendImages 按目标类型发送图片（本地绝对路径由 napcat 归一为可上传地址）
@@ -415,17 +416,17 @@ func sendImages(target resolvedTarget, paths []string) error {
 		return nil
 	}
 	if target.Kind == "group" {
-		return SendGroupImageMessage(target.ID, paths)
+		return napcat.SendGroupImageMessage(target.ID, paths)
 	}
-	return SendPrivateImageMessage(target.ID, paths)
+	return napcat.SendPrivateImageMessage(target.ID, paths)
 }
 
 // sendFile 按目标类型上传文件
 func sendFile(target resolvedTarget, path, name string) error {
 	if target.Kind == "group" {
-		return SendGroupFile(target.ID, path, name)
+		return napcat.SendGroupFile(target.ID, path, name)
 	}
-	return SendPrivateFile(target.ID, path, name)
+	return napcat.SendPrivateFile(target.ID, path, name)
 }
 
 // report 组装给对话者的简要报告

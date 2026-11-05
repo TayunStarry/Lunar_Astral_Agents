@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/Painter"
 	"LunarSubsystem/LunarHarness/chain/life"
@@ -24,8 +25,7 @@ func Start() error {
 		return nil
 	}
 	initSchedules()
-	registerDialogueTools()
-	syncLTPXRemoteTools()
+	Dialogue.SyncLTPXRemoteTools()
 
 	// 角色实例：绘制者外观由扁平智能体提供，对话者复用其基础外观
 	lunarAppearance, crystalAppearance := Painter.Appearances()
@@ -162,7 +162,7 @@ func runDialogueTurn(incoming []PostMessage) {
 		if failure != "" {
 			// 交给拯救者：上下文类故障（超长、坏图）由后勤体系在后续 Tick 修复
 			reportDialogueFailure(errors.New(failure))
-			pushAssistantContext("text", failureReply, "", false)
+			pushAssistantContext("text", failureReply, synthesizeSpeech(failureReply), false)
 			logger.Warn(lunarCoreModule, "[思维链] 本轮应答失败: %s", failure)
 			return
 		}
@@ -179,7 +179,8 @@ func runDialogueTurn(incoming []PostMessage) {
 	cleaned := strings.TrimSpace(strings.Join(validMessage, "\n"))
 	if cleaned == "" {
 		logger.Error(lunarCoreModule, "[思维链] 清洗后的文本为空")
-		pushAssistantContext("text", randomDefaultMessage(), "", false)
+		fallback := randomDefaultMessage()
+		pushAssistantContext("text", fallback, synthesizeSpeech(fallback), false)
 		return
 	}
 	replyText := strings.TrimSpace(parsed.DisplayText)
@@ -198,14 +199,22 @@ func runDialogueTurn(incoming []PostMessage) {
 		}
 	}
 
-	for _, thinking := range parsed.ThinkingBlocks {
-		pushAssistantContext("text", thinking, "", false)
-	}
-	for _, code := range parsed.CodeBlocks {
-		pushAssistantContext("text", code, "", false)
-	}
+	pushProcessBlocks(parsed.ThinkingBlocks, parsed.CodeBlocks)
 	audio := synthesizeSpeech(cleanTextForTTS(replyText))
 	pushAssistantContext("text", replyText, audio, false)
+}
+
+// pushProcessBlocks 推送思考区与代码块等过程内容。
+//
+// 这些块只用于前端展示，不是终稿：auto=true 保证它们既不消费 QQ 的 @ / 引用回执，
+// 也不会提前置位「已回应」把排队请求顶上 currentTarget；终稿才负责收尾。
+func pushProcessBlocks(thinkingBlocks, codeBlocks []string) {
+	for _, thinking := range thinkingBlocks {
+		pushAssistantContext("text", thinking, "", true)
+	}
+	for _, code := range codeBlocks {
+		pushAssistantContext("text", code, "", true)
+	}
 }
 
 // randomDefaultMessage 随机回答

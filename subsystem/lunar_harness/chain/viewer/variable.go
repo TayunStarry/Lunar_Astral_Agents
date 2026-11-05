@@ -82,25 +82,14 @@ const (
 	modelLight = "light_reasoning"
 )
 
-// ==== 记忆库格式 ====
+// 观影记忆的存储、上限与迁移规则见 engine/viewerstore（viewer.db 全部由该包负责）。
 
 const (
-	// memoryTagPrefix 哔哩观影记忆在统一记忆库里的固定前缀（记忆条目格式）
-	memoryTagPrefix = "[B站视频]"
-	// memorySource 写入统一记忆库时的来源标记（用于取回本智能体写入的条目）
-	memorySource = "bilibili_viewer"
-	// memoryTextMaxRunes 单条人格化记忆正文的长度上限
-	memoryTextMaxRunes = 512
+	// traceKeepFiles 单轮观看轨迹最多保留的轮次数（超出按最旧清理）
+	traceKeepFiles = 50
+	// traceDirName 观看轨迹目录名（相对 local_data/database/bilibili）
+	traceDirName = "trace"
 )
-
-// mechanicalMemoryMarkers 机械过程文本 / 运行统计的特征词。
-//
-// 记忆库只存人格化的印象、感受与记忆；命中这些词的正文既不写入，也会在启动时清理。
-var mechanicalMemoryMarkers = []string{
-	"60 秒切片", "切片的理解", "请合成为", "按时间顺序给出", "【第", "内容概述",
-	"画面理解", "帧号", "Frame ", "时间轴", "这一轮看了", "条 B 站互动",
-	"发了一条观影动态", "UP主：",
-}
 
 // ==== 全局状态 ====
 

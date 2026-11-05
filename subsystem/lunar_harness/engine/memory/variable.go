@@ -6,21 +6,42 @@ import (
 )
 
 // MediaSubdir 记忆库图片在 multimedia 下的专属子目录：
-// 图片实体统一落在 multimedia/memory/<集合名>/，与生成图、背景图、截图等隔离，便于清理。
+// 图片实体统一落在 multimedia/memory/<条目ID>/，与生成图、背景图、截图等隔离，便于清理。
 const MediaSubdir = "memory"
 
-// v5 记忆库配置常量 — 文本/图片/音频混合存储，仅内容嵌入向量
+// =============================================================================
+// 磁盘布局常量 — 总库 + 正式簇 双轨
+//
+// 语义：总库是主体，簇是加速结构。所有条目默认进总库；
+// 只有当总库中高相似条目攒到 ≥ ClusterUpgradeSize 条时才升级成正式簇。
+// =============================================================================
 const (
-	CurrentVersion     = 5    // 当前数据格式版本号（v5: 混合存储 + 仅内容嵌入）
+	// StoreCollectionID 总库的固定 ID（也是总库目录名）
+	StoreCollectionID = "store-all"
+	// ClusterDirPrefix 正式簇目录名前缀；完整名称为 c-<sha256(簇 ID)[:8]>
+	ClusterDirPrefix = "c-"
+	// ClusterDirHashLen 簇目录短标识的哈希长度（十六进制字符数）
+	ClusterDirHashLen = 8
+	// ClusterLayoutManifest 迁移备份目录内的布局清单文件名
+	ClusterLayoutManifest = "manifest.json"
+)
+
+// v6 记忆库配置常量 — 总库 + 正式簇 双轨存储
+const (
+	CurrentVersion     = 6    // 数据格式版本号（v6: 总库 + 正式簇，簇需 ≥ 16 条）
 	DocumentsChunkSize = 100  // 文档分块大小（条/块，各类型统一；100 条一块）
-	DedupThreshold     = 0.98 // 内容嵌入向量去重阈值（余弦相似度，判定重复记忆）
+	DedupThreshold     = 0.98 // 判重阈值（余弦相似度）：≥ 0.98 算同一条记忆
 	DocRankThreshold   = 0.30 // 文档内容余弦得分门槛（低于此值不返回）
 	MaxTagRetries      = 3    // 图片多模态标签生成最大重试次数
-
-	// FastSearchCollectionLimit 快速检索的集合范围上限（含最相近的那个）
-	// 首集合命中后只补查第 2~5 近的集合；首集合未命中则回退扫描其余全部集合。
-	FastSearchCollectionLimit = 5
 )
+
+// 阈值语义分开说明：
+//   DedupThreshold    = 0.98  判重：两个条目几乎完全相同才算重复
+//   ClusterAdmitThreshold = 0.90  入簇：簇内成员与质心相似度需 ≥ 0.90
+//   ClusterUpgradeSize   = 16 升级：总库中高相似组 ≥ 16 条才升簇
+//   ClusterDowngradeSize = 8  降级：簇内删除到 < 8 条 → 解散回总库
+//   ClusterCentroidGate  = 0.70 查询时质心剪枝门限：余弦 < 0.70 跳过该簇
+//   ClusterMemberGate    = 0.80 查询时簇内成员门限：余弦 < 0.80 跳过
 
 // 记忆类型 — 查询与列举时按类型过滤，不再按集合名过滤
 const (
@@ -41,6 +62,22 @@ const (
 	FuseMaxCandidates = 2000
 	// FuseMaxContentChars 送入模型整合时单条内容的最大字符数
 	FuseMaxContentChars = 1500
+)
+
+// 记忆整理候选聚类参数（chain/life 与 Fuse 管理端点共用同一套聚类原语）
+const (
+	// ClusterDefaultThreshold 默认相似度阈值：同簇条目与该簇最早条目（代表）需达到此值
+	ClusterDefaultThreshold float32 = 0.90
+	// ClusterMinThreshold 允许的最小阈值，低于此值会被夹回默认值
+	ClusterMinThreshold float32 = 0.50
+	// ClusterVerifyThreshold 整理结果与来源记忆的双向相似度校验门槛
+	ClusterVerifyThreshold float32 = 0.80
+	// ClusterMaxItems 单个相似簇的条目上限，避免把一大片弱相关记忆串成一簇
+	ClusterMaxItems = 8
+	// ClusterMaxRunes 单个相似簇的正文总字符上限
+	ClusterMaxRunes = 6000
+	// fuseReplaceSource Fuse 管理端点整合后新条目的来源标记
+	fuseReplaceSource = "fusion"
 )
 
 // 记忆融合策略
@@ -68,6 +105,58 @@ const (
 	HybridKeywordOccurrenceFloor float32 = 0.6
 	// HybridVectorTimeout 向量通道超时（嵌入服务不可用时尽快降级到关键词通道）
 	HybridVectorTimeout = 8 * time.Second
+)
+
+// 关键词倒排索引参数 — 与向量通道共享召回预算，独立召回后统一融合
+const (
+	// KeywordIndexVersion 倒排索引版本号；版本不一致时启动阶段幂等重建
+	KeywordIndexVersion = 1
+	// KeywordIndexFile 倒排索引文件名（位于记忆库根目录，gzip 压缩的 JSON）
+	KeywordIndexFile = "keyword_index.json.gz"
+	// KeywordExactWeight 精确串（路径/错误码/编号等）词元权重倍数：可单独触发召回
+	KeywordExactWeight float32 = 1.6
+	// KeywordMaxQueryTokens 单次查询参与召回的词元上限（优先保留精确串与稀有词）
+	KeywordMaxQueryTokens = 12
+	// KeywordMinScore 关键词覆盖率得分下限：低于此值视为弱相关（如仅命中大停用词），不进入融合候选
+	KeywordMinScore float32 = 0.05
+	// KeywordMinASCIIWordLen ASCII 单词最短长度（单字符噪声大，不建索引）
+	KeywordMinASCIIWordLen = 2
+	// KeywordPostingBytesEstimate 单条倒排记录（文档序号+词频）的体积估算字节数
+	KeywordPostingBytesEstimate = 8
+)
+
+// 向量空间聚类索引参数 — 总库为主，正式簇为加速
+const (
+	// ClusterIndexVersion 聚类索引版本
+	ClusterIndexVersion = 2
+	// ClusterIndexFile 聚类索引文件名（位于记忆库根目录）
+	ClusterIndexFile = "clusters.json"
+	// ClusterMigrateBackupDir 迁移备份目录名（位于记忆库根目录下）
+	ClusterMigrateBackupDir = "migration_backup"
+
+	// ===== 入簇/升级/降级阈值（语义分开）=====
+	// ClusterAdmitThreshold 入簇阈值：簇内成员与质心余弦 ≥ 本值才能留在簇（保证簇内紧凑）
+	ClusterAdmitThreshold float32 = 0.90
+	// ClusterUpgradeSize 升级门槛：总库中高相似组 ≥ 本条才升为正式簇
+	ClusterUpgradeSize = 16
+	// ClusterDowngradeSize 降级门槛：簇内删除到 < 本条 → 解散回总库
+	ClusterDowngradeSize = 8
+
+	// ===== 簇内聚类辅助参数（重建时使用，非最终对外语义）=====
+	// ClusterMergeThreshold 重建时合并质心余弦 ≥ 本值的簇
+	ClusterMergeThreshold float32 = 0.95
+	// ClusterSplitThreshold 簇内平均紧凑度低于本值时触发分裂
+	ClusterSplitThreshold float32 = 0.60
+	// ClusterMaxMembers 单簇成员上限（超过触发分裂）
+	ClusterMaxMembers = 64
+
+	// ===== 查询路由参数（剪枝门限，越宽松剪枝越多但可能漏召回）=====
+	// ClusterCentroidGate 查询时质心剪枝门限：余弦 < 本值跳过该簇
+	ClusterCentroidGate float32 = 0.70
+	// ClusterMemberGate 查询时簇内成员门限：余弦 < 本值跳过
+	ClusterMemberGate float32 = 0.80
+	// QueryTopClusters 查询时质心排序后前 N 个簇参与簇内检索（其余簇走总库回落）
+	QueryTopClusters = 5
 )
 
 // 混合检索命中的来源标记（Entry.MatchedBy）
@@ -99,36 +188,13 @@ var (
 
 	// Types 全部合法记忆类型（顺序固定，便于错误提示与遍历）
 	Types = []string{TypeText, TypeImage, TypeAudio}
+)
 
-	// DefaultCollections 默认分组集合名 — 覆盖聊天记忆可能对应的方方面面。
-	//
-	// 集合不再承担“查询表”职责，只是内容归组：启动时确保这些组存在并逐一用集合名
-	// 生成嵌入向量；入库时把内容向量与全部集合名向量比较，归入最相关的一组。
-	DefaultCollections = []string{
-		// 对话与人物
-		"日常闲聊",
-		"人物信息",
-		"关系互动",
-		"情感心情",
-		"兴趣爱好",
-		"偏好习惯",
-		"观点态度",
-		"动作行为",
-		// 经历与事务
-		"事件经历",
-		"计划日程",
-		"工作学习",
-		"知识见闻",
-		"地点场景",
-		// 媒体分组（按查询类型取用，集合本身只是语义分组）
-		"表情包",
-		"图片素材",
-		"截图",
-		"绘画作品",
-		"语音消息",
-		"音乐音频",
-		"环境声音",
-	}
+// 待处理（待合并）队列参数
+var (
+	// PendingMaxEntries 待处理条目的写入上限（全局）。达到上限后新条目仍然照常写入，
+	// 只是不再打待处理标记：队列不会无限膨胀，任何情况下都不会先丢数据。
+	PendingMaxEntries = 200
 )
 
 // globalStore 全局记忆库实例（由 Init 创建，供包级 API 复用）

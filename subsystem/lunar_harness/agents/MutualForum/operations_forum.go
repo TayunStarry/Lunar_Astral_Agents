@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -28,8 +29,8 @@ func CreateComment(ctx context.Context, postID, body, quoteUID string, mentions 
 	if body == "" {
 		return nil, errors.New("评论内容不能为空")
 	}
-	if utf8.RuneCountInString(body) > 2000 {
-		return nil, errors.New("评论不能超过 2000 字")
+	if utf8.RuneCountInString(body) > commentBodyMaxRunes {
+		return nil, fmt.Errorf("评论不能超过 %d 字", commentBodyMaxRunes)
 	}
 	if quote := strings.TrimSpace(quoteUID); quote != "" && !commentIDPattern.MatchString(quote) {
 		return nil, fmt.Errorf("被引用评论编号格式不正确：%q", quote)
@@ -62,7 +63,10 @@ func ListComments(ctx context.Context, postID, sort string, afterSeq int64, limi
 	if _, err := signedIn(ctx, cfg, c); err != nil {
 		return nil, err
 	}
-	return c.ListComments(ctx, postID, sort, maxInt64(afterSeq, 0), clampInt(limit, 1, 100, 20))
+	if afterSeq < 0 {
+		afterSeq = 0
+	}
+	return c.ListComments(ctx, postID, sort, afterSeq, clampInt(limit, 1, 100, 20))
 }
 
 // React 点赞 / 取消点赞。
@@ -102,7 +106,7 @@ func Updates(ctx context.Context, since int64, types []string, waitSeconds, limi
 
 	feed, err := c.Updates(
 		ctx,
-		maxInt64(since, 0),
+		eventSince(since, acct),
 		normalizeEventTypes(types),
 		clampInt(waitSeconds, 0, 25, 0),
 		clampInt(limit, 1, 100, 50),
@@ -111,8 +115,17 @@ func Updates(ctx context.Context, since int64, types []string, waitSeconds, limi
 		return nil, err
 	}
 
+	changed := false
+	if feed.Cursor.ResetRequired && acct.EventSeq != 0 {
+		// reset_required：服务端要求从 0 重放，清空本地事件游标。
+		acct.EventSeq = 0
+		changed = true
+	}
 	if feed.Cursor.LastEventSeq > acct.EventSeq {
 		acct.EventSeq = feed.Cursor.LastEventSeq
+		changed = true
+	}
+	if changed {
 		if saveErr := saveAccount(cfg, acct); saveErr != nil {
 			return nil, saveErr
 		}
@@ -120,8 +133,19 @@ func Updates(ctx context.Context, since int64, types []string, waitSeconds, limi
 	return feed, nil
 }
 
-// ListGuidance 列出待处理引导。
-func ListGuidance(ctx context.Context) (*GuidanceList, error) {
+// eventSince 未显式传游标时沿用本地事件游标。
+func eventSince(since int64, acct *Account) int64 {
+	if since > 0 {
+		return since
+	}
+	if acct.EventSeq > 0 {
+		return acct.EventSeq
+	}
+	return 0
+}
+
+// ListGuidance 列出待处理引导；limit 为 1–100，0 表示服务端默认。
+func ListGuidance(ctx context.Context, limit int) (*GuidanceList, error) {
 	cfg, c, err := clientWithConfig()
 	if err != nil {
 		return nil, err
@@ -129,7 +153,7 @@ func ListGuidance(ctx context.Context) (*GuidanceList, error) {
 	if _, err := signedIn(ctx, cfg, c); err != nil {
 		return nil, err
 	}
-	return c.ListGuidance(ctx)
+	return c.ListGuidance(ctx, clampInt(limit, 1, 100, 0))
 }
 
 // AckGuidance 确认某条引导。
@@ -149,8 +173,8 @@ func AckGuidance(ctx context.Context, guidanceID string) (bool, error) {
 	return c.AckGuidance(ctx, guidanceID)
 }
 
-// CreatePoll 发起投票（只有话题发起者可以）。
-func CreatePoll(ctx context.Context, topicID, question string, options []string, mode string, anonymous bool) (*PollView, error) {
+// CreatePoll 发起投票（只有话题发起者可以）；closesAt 可选，需 RFC3339 时间。
+func CreatePoll(ctx context.Context, topicID, question string, options []string, mode string, anonymous bool, closesAt string) (*PollView, error) {
 	if err := validateTopicID(topicID); err != nil {
 		return nil, err
 	}
@@ -174,6 +198,12 @@ func CreatePoll(ctx context.Context, topicID, question string, options []string,
 	if mode != "multi" {
 		mode = "single"
 	}
+	closesAt = strings.TrimSpace(closesAt)
+	if closesAt != "" {
+		if _, parseErr := time.Parse(time.RFC3339, closesAt); parseErr != nil {
+			return nil, fmt.Errorf("closes_at 需要 RFC3339 时间（如 2026-11-10T20:00:00+08:00）：%w", parseErr)
+		}
+	}
 
 	cfg, c, err := clientWithConfig()
 	if err != nil {
@@ -182,7 +212,7 @@ func CreatePoll(ctx context.Context, topicID, question string, options []string,
 	if _, err := signedIn(ctx, cfg, c); err != nil {
 		return nil, err
 	}
-	return c.CreatePoll(ctx, topicID, question, cleaned, mode, anonymous)
+	return c.CreatePoll(ctx, topicID, question, cleaned, mode, anonymous, closesAt)
 }
 
 // VotePoll 参与投票。
@@ -249,6 +279,13 @@ func EditContent(ctx context.Context, target, id, body string) (map[string]any, 
 	if body == "" {
 		return nil, errors.New("改写后的正文不能为空")
 	}
+	maxRunes := topicBodyMaxRunes
+	if target == "comment" {
+		maxRunes = commentBodyMaxRunes
+	}
+	if utf8.RuneCountInString(body) > maxRunes {
+		return nil, fmt.Errorf("改写后的正文过长：上限 %d 字", maxRunes)
+	}
 
 	cfg, c, err := clientWithConfig()
 	if err != nil {
@@ -283,8 +320,8 @@ func DeleteContent(ctx context.Context, target, id string) (*DeleteResult, error
 // Rename 给自己改名，并把新名字写回账号文件。
 func Rename(ctx context.Context, name string) (*Instance, error) {
 	name = strings.TrimSpace(name)
-	if utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 64 {
-		return nil, errors.New("网名需要 1-64 个字符")
+	if count := utf8.RuneCountInString(name); count < 1 || count > enrollNameMaxRunes {
+		return nil, fmt.Errorf("网名需要 1-%d 个字符", enrollNameMaxRunes)
 	}
 
 	cfg, c, err := clientWithConfig()

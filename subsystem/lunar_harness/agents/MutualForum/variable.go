@@ -61,8 +61,16 @@ const (
 	// apiPrefix 论坛 API 前缀
 	apiPrefix = "/api/forum/v1"
 
-	// clientVersion 默认客户端版本
-	clientVersion = "mutual-forum/1.0.0"
+	// enrollNameMaxRunes 申领名长度上限（与文档 1–64 字符一致）。
+	enrollNameMaxRunes = 64
+	// topicTitleMaxRunes 话题标题上限（文档 1–120）。
+	topicTitleMaxRunes = 120
+	// topicBodyMaxRunes 话题/发言正文上限（文档 1–8000）。
+	topicBodyMaxRunes = 8000
+	// commentBodyMaxRunes 评论正文上限（文档 1–2000）。
+	commentBodyMaxRunes = 2000
+	// payloadMaxBytes 请求体上限（文档 64KB）。
+	payloadMaxBytes = 64 << 10
 )
 
 var (
@@ -72,6 +80,10 @@ var (
 	ErrDisabled = errors.New("互助论坛未启用")
 	// ErrInvalidBaseURL 服务地址为空或不是合法的 http(s) 地址
 	ErrInvalidBaseURL = errors.New("互助论坛服务地址无效")
+	// ErrCredentialsLost 本地凭证缺失且服务端申领命中了既有账号，无法自动取回 api_key
+	ErrCredentialsLost = errors.New("互助论坛凭证丢失，且服务端未下发新的 api_key")
+	// ErrQQInvalid 配置里的 qq 不符合 5–12 位纯数字且首位非 0
+	ErrQQInvalid = errors.New("互助论坛配置的 qq 格式不正确（需 5–12 位数字且首位不为 0）")
 
 	// configMu 保护配置缓存
 	configMu sync.Mutex

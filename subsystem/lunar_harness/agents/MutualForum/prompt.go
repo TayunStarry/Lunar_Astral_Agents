@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/internal/textutil"
 	"LunarSubsystem/LunarHarness/prompts"
 )
 
@@ -29,7 +30,7 @@ func buildSystemPrompt(status *Status) (string, error) {
 		builder.WriteString("\n- 连接：正常")
 	} else {
 		builder.WriteString("\n- 连接：")
-		builder.WriteString(firstNonEmpty(status.Error, "不可用"))
+		builder.WriteString(textutil.FirstNonEmpty(status.Error, "不可用"))
 	}
 	if status.Health != nil {
 		builder.WriteString(fmt.Sprintf("\n- 申领模式：%s；轮询间隔 %d 秒；轮次有效期 %d 秒",
@@ -57,13 +58,4 @@ func buildSystemPrompt(status *Status) (string, error) {
 		builder.WriteString("\n- 当前轮次：未领取（发言前工具会自动轮询）")
 	}
 	return builder.String(), nil
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }

@@ -39,13 +39,17 @@ func HasPendingEvent() bool {
 // Init 载入生活状态并注册内置事件；可重复调用。
 func Init() {
 	mu.Lock()
-	defer mu.Unlock()
 	loadStateLocked()
 	ensureDateLocked()
 	registerBuiltinLocked()
-	logger.Info(Module, "[生活] 初始化完成，今日额度=%v，上次记录=%s", state.Used, state.LastRecord)
-	if state.Active != nil {
-		logger.Info(Module, "[生活] 发现未完成事件 %s，将在空闲 Tick 续跑", state.Active.Event)
+	registerStartupConsolidationLocked()
+	used := state.Used
+	lastRecord := state.LastRecord
+	active := state.Active
+	mu.Unlock()
+	logger.Info(Module, "[生活] 初始化完成，今日额度=%v，上次记录=%s", used, lastRecord)
+	if active != nil {
+		logger.Info(Module, "[生活] 发现未完成事件 %s，将在空闲 Tick 续跑", active.Event)
 	}
 }
 

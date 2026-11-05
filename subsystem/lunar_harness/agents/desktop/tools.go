@@ -8,80 +8,82 @@ import (
 	"fmt"
 	"image"
 	"strings"
+
+	desktopos "LunarSubsystem/LunarHarness/engine/desktop"
 )
 
 // dispatchTool 按工具名分发到对应桌面操作原语，返回统一结果。
 func dispatchTool(name string, args map[string]any) ltpToolResult {
 	// 自己人窗口保护：当前前台若是本程序（TUI 控制台 / 月华 / 琉璃），
 	// 键鼠与 UIA 写入会打进自己的界面（实测会把“notepad”敲进控制台而无法启动任何程序）。
-	if isSelfOpTool(name) && dtForegroundIsSelf() {
+	if isSelfOpTool(name) && desktopos.ForegroundIsSelf() {
 		return fail("当前前台是本程序自己的窗口（控制台/桌面），已拒绝执行；请先把目标应用窗口切到前台再重试")
 	}
 	switch name {
 	case "list_windows":
-		wins := DTListWindows()
+		wins := desktopos.ListWindows()
 		if len(wins) == 0 {
 			return ok("未发现可见窗口")
 		}
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "当前前台窗口：%s\n共 %d 个窗口：\n", DTForegroundTitle(), len(wins))
+		fmt.Fprintf(&sb, "当前前台窗口：%s\n共 %d 个窗口：\n", desktopos.ForegroundTitle(), len(wins))
 		for _, w := range wins {
 			fmt.Fprintf(&sb, "- %s（进程:%s, 类:%s, PID:%d）\n", w.Title, w.Process, w.Class, w.PID)
 		}
 		return ok(sb.String())
 
 	case "activate_window":
-		if err := DTActivateWindow(ltpArgStr(args, "title")); err != nil {
+		if err := desktopos.ActivateWindow(ltpArgStr(args, "title")); err != nil {
 			return fail(err.Error())
 		}
 		return ok("已激活窗口「" + ltpArgStr(args, "title") + "」")
 
 	case "launch_program":
-		s, err := DTLaunchProgram(ltpArgStr(args, "name"))
+		s, err := desktopos.LaunchProgram(ltpArgStr(args, "name"))
 		if err != nil {
 			return fail(err.Error())
 		}
 		return ok(s)
 
 	case "open_folder":
-		s, err := DTOpenFolder(ltpArgStr(args, "path"))
+		s, err := desktopos.OpenFolder(ltpArgStr(args, "path"))
 		if err != nil {
 			return fail(err.Error())
 		}
 		return ok(s)
 
 	case "close_window":
-		s, err := DTCloseWindow(ltpArgStr(args, "title"))
+		s, err := desktopos.CloseWindow(ltpArgStr(args, "title"))
 		if err != nil {
 			return fail(err.Error())
 		}
 		return ok(s)
 
 	case "type_text":
-		if err := DTTypeText(ltpArgStr(args, "text")); err != nil {
+		if err := desktopos.TypeText(ltpArgStr(args, "text")); err != nil {
 			return fail(err.Error())
 		}
 		return ok("已键入文本")
 
 	case "type_and_send":
-		s, err := DTTypeAndSend(ltpArgStr(args, "text"))
+		s, err := desktopos.TypeAndSend(ltpArgStr(args, "text"))
 		if err != nil {
 			return fail(err.Error())
 		}
 		return ok(s)
 
 	case "press_key":
-		if err := DTPressKey(ltpArgStr(args, "key")); err != nil {
+		if err := desktopos.PressKey(ltpArgStr(args, "key")); err != nil {
 			return fail(err.Error())
 		}
 		return ok("已按下「" + ltpArgStr(args, "key") + "」")
 
 	case "click":
-		sx, sy, err := DTWindowToScreen(ltpArgInt(args, "x"), ltpArgInt(args, "y"))
+		sx, sy, err := desktopos.WindowToScreen(ltpArgInt(args, "x"), ltpArgInt(args, "y"))
 		if err != nil {
 			return fail(err.Error())
 		}
-		if err := DTMouseClick(sx, sy, ltpArgStr(args, "button"), ltpArgBool(args, "double")); err != nil {
+		if err := desktopos.MouseClick(sx, sy, ltpArgStr(args, "button"), ltpArgBool(args, "double")); err != nil {
 			return fail(err.Error())
 		}
 		btn := ltpArgStr(args, "button")
@@ -91,43 +93,43 @@ func dispatchTool(name string, args map[string]any) ltpToolResult {
 		return ok(fmt.Sprintf("已在窗口(%d,%d)%s点击", ltpArgInt(args, "x"), ltpArgInt(args, "y"), btn))
 
 	case "mouse_hold":
-		sx, sy, err := DTWindowToScreen(ltpArgInt(args, "x"), ltpArgInt(args, "y"))
+		sx, sy, err := desktopos.WindowToScreen(ltpArgInt(args, "x"), ltpArgInt(args, "y"))
 		if err != nil {
 			return fail(err.Error())
 		}
-		if err := DTMouseButton(sx, sy, ltpArgStr(args, "button"), ltpArgInt(args, "hold_ms")); err != nil {
+		if err := desktopos.MouseButton(sx, sy, ltpArgStr(args, "button"), ltpArgInt(args, "hold_ms")); err != nil {
 			return fail(err.Error())
 		}
 		return ok(fmt.Sprintf("已在窗口(%d,%d)按住", ltpArgInt(args, "x"), ltpArgInt(args, "y")))
 
 	case "mouse_drag":
-		if err := DTMouseDrag(ltpArgInt(args, "x1"), ltpArgInt(args, "y1"), ltpArgInt(args, "x2"), ltpArgInt(args, "y2"), 10); err != nil {
+		if err := desktopos.MouseDrag(ltpArgInt(args, "x1"), ltpArgInt(args, "y1"), ltpArgInt(args, "x2"), ltpArgInt(args, "y2"), 10); err != nil {
 			return fail(err.Error())
 		}
 		return ok(fmt.Sprintf("已拖拽从(%d,%d)到(%d,%d)", ltpArgInt(args, "x1"), ltpArgInt(args, "y1"), ltpArgInt(args, "x2"), ltpArgInt(args, "y2")))
 
 	case "move_mouse":
-		sx, sy, err := DTWindowToScreen(ltpArgInt(args, "x"), ltpArgInt(args, "y"))
+		sx, sy, err := desktopos.WindowToScreen(ltpArgInt(args, "x"), ltpArgInt(args, "y"))
 		if err != nil {
 			return fail(err.Error())
 		}
-		if err := DTMoveMouse(sx, sy); err != nil {
+		if err := desktopos.MoveMouse(sx, sy); err != nil {
 			return fail(err.Error())
 		}
 		return ok(fmt.Sprintf("已移动光标到窗口(%d,%d)", ltpArgInt(args, "x"), ltpArgInt(args, "y")))
 
 	case "scroll_wheel":
-		sx, sy, err := DTWindowToScreen(ltpArgInt(args, "x"), ltpArgInt(args, "y"))
+		sx, sy, err := desktopos.WindowToScreen(ltpArgInt(args, "x"), ltpArgInt(args, "y"))
 		if err != nil {
 			return fail(err.Error())
 		}
-		if err := DTScrollWheel(sx, sy, ltpArgStr(args, "direction"), ltpArgInt(args, "amount")); err != nil {
+		if err := desktopos.ScrollWheel(sx, sy, ltpArgStr(args, "direction"), ltpArgInt(args, "amount")); err != nil {
 			return fail(err.Error())
 		}
 		return ok("已滚动滚轮：" + ltpArgStr(args, "direction"))
 
 	case "uia_click":
-		brief, ok2, err := DTUIAClick(ltpArgStr(args, "target"), ltpArgStr(args, "control_type"))
+		brief, ok2, err := desktopos.UIAClick(ltpArgStr(args, "target"), ltpArgStr(args, "control_type"))
 		if err != nil {
 			return fail(err.Error())
 		}
@@ -137,7 +139,7 @@ func dispatchTool(name string, args map[string]any) ltpToolResult {
 		return ok("已点击 UIA 元素 " + brief)
 
 	case "uia_input":
-		brief, ok2, err := DTUIAInput(ltpArgStr(args, "target"), ltpArgStr(args, "text"))
+		brief, ok2, err := desktopos.UIAInput(ltpArgStr(args, "target"), ltpArgStr(args, "text"))
 		if err != nil {
 			return fail(err.Error())
 		}
@@ -147,7 +149,7 @@ func dispatchTool(name string, args map[string]any) ltpToolResult {
 		return ok("已向 UIA 元素输入文本 " + brief)
 
 	case "capture_screenshot":
-		if _, err := DTCaptureAnnotated(); err != nil {
+		if _, err := desktopos.CaptureAnnotated(); err != nil {
 			return fail(err.Error())
 		}
 		return ok("已截取当前窗口（含坐标网格），截图已归档供视觉定位与记录")
@@ -194,9 +196,9 @@ func dispatchWithDiff(ctx context.Context, name string, args map[string]any) (lt
 		return fail("操作已中断"), false, ErrCanceled
 	}
 	outcome, err := callDesktop(ctx, desktopCallTimeout, "桌面操作", func() (diffCallOutcome, error) {
-		var before any
+		var before *image.RGBA
 		if isOpTool(name) {
-			img, captureErr := dtCaptureWindowThumb()
+			img, captureErr := desktopos.CaptureWindowThumb()
 			if captureErr == nil {
 				before = img
 			}
@@ -207,8 +209,8 @@ func dispatchWithDiff(ctx context.Context, name string, args map[string]any) (lt
 		// 不能仅凭截图差异判失败；点击类工具则必须看到画面变化才算有效。
 		inputTool := isTextInputTool(name)
 		if before != nil {
-			if after, captureErr := dtCaptureWindowThumb(); captureErr == nil {
-				changed, ratio, detail := DTDiffWindowThumb(before.(*image.RGBA), after)
+			if after, captureErr := desktopos.CaptureWindowThumb(); captureErr == nil {
+				changed, ratio, detail := desktopos.DiffWindowThumb(before, after)
 				if changed {
 					res.Text += fmt.Sprintf("\n【差异检测】操作后画面有变化：%s（变化占比约 %.1f%%）——这从画面侧佐证了操作可能已生效，请再结合截图确认。", detail, ratio*100)
 				} else if inputTool {

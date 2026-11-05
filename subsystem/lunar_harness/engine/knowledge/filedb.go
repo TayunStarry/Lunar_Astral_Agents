@@ -13,6 +13,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/dbopen"
 )
 
 // fileDB 打开（或复用）database 目录内指定 *.db 的连接（懒加载，不创建文件）。
@@ -55,13 +56,14 @@ func (d *Store) fileDB(name string) (*sql.DB, error) {
 	if string(magic) != "SQLite format 3\x00" {
 		return nil, fmt.Errorf("非有效的 SQLite 数据库: %s", dbPath)
 	}
-	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=10000&_journal_mode=WAL")
+	db, err := dbopen.Open(dbPath, dbopen.Options{
+		MaxOpenConns:    2,
+		MaxIdleConns:    1,
+		ConnMaxLifetime: 5 * time.Minute,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("连接 SQLite 失败: %v", err)
 	}
-	db.SetMaxOpenConns(2)
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(5 * time.Minute)
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("测试 SQLite 连接失败: %v", err)

@@ -79,8 +79,7 @@
     will-change:transform,opacity;
     transition:border-color .25s,box-shadow .25s;
   }
-  .node.entry{--tint:148,168,192}
-  .node.exit{--tint:148,168,192}
+  .node.end{--tint:148,168,192}
   .node.chain{--tint:56,223,245}
   .node.agent{--tint:255,180,87}
   .node.executor{--tint:180,224,90}
@@ -235,25 +234,15 @@ const TONE = {
 };
 
 const NODES = [
-  /* 入口（固定） */
-  {id:"ent_web",layer:"entry",short:"月华前端",title:"月华前端 Web UI",w:172,h:56,x:34,y:210,fixed:true,
-   meta:{path:"subsystem/lunar_harness/server",report:"—",model:"不参与模型调用",tools:"WebSocket /ws"}},
-  {id:"ent_qq_pri",layer:"entry",short:"QQ 私聊",title:"QQ 私聊",w:172,h:56,x:58,y:372,fixed:true,
-   meta:{path:"subsystem/lunar_harness/agents/DialogueBridging",report:"—",model:"不参与模型调用",tools:"NapCat 私聊事件"}},
-  {id:"ent_qq_grp",layer:"entry",short:"QQ 群聊",title:"QQ 群聊",w:172,h:56,x:28,y:534,fixed:true,
-   meta:{path:"subsystem/lunar_harness/agents/DialogueBridging",report:"—",model:"不参与模型调用",tools:"NapCat 群事件"}},
-  {id:"ent_http",layer:"entry",short:"HTTP 调用",title:"HTTP 调用",w:172,h:56,x:66,y:696,fixed:true,
-   meta:{path:"subsystem/lunar_harness/server",report:"—",model:"不参与模型调用",tools:"/agent/chat/completions"}},
-
-  /* 出口（固定） */
-  {id:"out_web",layer:"exit",short:"流式回推",title:"前端输出 · 流式回推",w:174,h:56,x:1698,y:206,fixed:true,
-   meta:{path:"subsystem/lunar_harness/server + engine/websocket",report:"—",model:"不参与模型调用",tools:"stream → WebSocket"}},
-  {id:"out_qq_pri",layer:"exit",short:"投递私聊",title:"投递 QQ 私聊",w:174,h:56,x:1664,y:372,fixed:true,
-   meta:{path:"subsystem/lunar_harness/agents/DialogueBridging",report:"—",model:"不参与模型调用",tools:"send_text / send_images / send_files"}},
-  {id:"out_qq_grp",layer:"exit",short:"投递群聊",title:"投递 QQ 群聊",w:174,h:56,x:1704,y:538,fixed:true,
-   meta:{path:"subsystem/lunar_harness/agents/DialogueBridging",report:"—",model:"不参与模型调用",tools:"send_text / send_images / send_files"}},
-  {id:"out_http",layer:"exit",short:"HTTP 响应",title:"回应 HTTP 调用",w:174,h:56,x:1670,y:704,fixed:true,
-   meta:{path:"subsystem/lunar_harness/server",report:"—",model:"不参与模型调用",tools:"200 OK · OpenAI 结构"}},
+  /* 四端（固定）：同一节点既收也发，去程来自这里、回程也回到这里 */
+  {id:"end_web",layer:"end",short:"月华前端",title:"月华前端 · WebSocket 双向",w:172,h:56,x:34,y:210,fixed:true,
+   meta:{path:"subsystem/lunar_harness/server + engine/websocket",report:"—",model:"不参与模型调用",tools:"WebSocket /ws 收消息 · 流式回推"}},
+  {id:"end_qq_pri",layer:"end",short:"QQ 私聊",title:"QQ 私聊 · 收 / 发",w:172,h:56,x:58,y:372,fixed:true,
+   meta:{path:"subsystem/lunar_harness/clients/napcat",report:"—",model:"不参与模型调用",tools:"NapCat 私聊事件收 · send_text / send_images / send_files 发"}},
+  {id:"end_qq_grp",layer:"end",short:"QQ 群聊",title:"QQ 群聊 · 收 / 发",w:172,h:56,x:28,y:534,fixed:true,
+   meta:{path:"subsystem/lunar_harness/clients/napcat",report:"—",model:"不参与模型调用",tools:"NapCat 群事件收 · send_text / send_images / send_files 发"}},
+  {id:"end_http",layer:"end",short:"HTTP 调用",title:"HTTP 调用 · 收 / 回",w:172,h:56,x:66,y:696,fixed:true,
+   meta:{path:"subsystem/lunar_harness/server",report:"—",model:"不参与模型调用",tools:"/agent/chat/completions 入站 · 200 JSON 回程"}},
 
   /* 核心（固定） */
   {id:"a_bridging",layer:"agent",short:"发送者",title:"发送者 DialogueBridging",w:186,h:66,x:460,y:430,fixed:true,core:true,
@@ -261,9 +250,9 @@ const NODES = [
   {id:"a_dialogue",layer:"agent",short:"对话者",title:"对话者 Dialogue",w:204,h:86,x:790,y:420,fixed:true,core:true,
    meta:{path:"subsystem/lunar_harness/agents/Dialogue",report:"dialogue",model:"StreamWithRetry + RunToolLoop（5 轮 + 收尾轮）",tools:"dispatch_technique / fetch_resources / life_planning / network_explore / qq_send"}},
   {id:"c_thinking",layer:"chain",short:"思维链",title:"思维链 · chain/thinking",w:216,h:86,x:760,y:590,fixed:true,core:true,
-   meta:{path:"subsystem/lunar_harness/chain/thinking",report:"dialogue（Tick 失败上报）",model:"不直接调用；委托对话者",tools:"tickloop / tool_registry / LTPX schema"}},
+   meta:{path:"subsystem/lunar_harness/chain/thinking",report:"dialogue（Tick 失败上报）",model:"不直接调用；委托对话者",tools:"tickloop / tool_registry"}},
   {id:"hub",layer:"chain",short:"工具分派",title:"工具分派 · dispatch_technique",w:168,h:50,x:812,y:838,fixed:true,
-   meta:{path:"subsystem/lunar_harness/chain/thinking/tools.go",report:"—",model:"不调用模型",tools:"dispatch_technique / network_explore / life_planning"}},
+   meta:{path:"subsystem/lunar_harness/agents/Dialogue/tools.go",report:"—",model:"不调用模型",tools:"dispatch_technique / network_explore / life_planning"}},
   {id:"a_responder",layer:"agent",short:"响应者",title:"响应者 Responder",w:176,h:62,x:470,y:690,fixed:true,
    meta:{path:"subsystem/lunar_harness/agents/Responder",report:"responder",model:"原生 Stream + 自建重试（无工具）",tools:"无工具（HTTP 透传）"}},
 
@@ -297,7 +286,7 @@ const NODES = [
   {id:"a_search_summarizer",layer:"agent",short:"搜索摘要",title:"搜索者-摘要 SearchSummarizer",w:136,h:40,cluster:"search",
    meta:{path:"subsystem/lunar_harness/agents/SearchSummarizer",report:"search_summarizer",model:"StreamWithRetry（HoldLease）",tools:"digest_pages"}},
   {id:"x_crawler",layer:"executor",short:"搜索抓取",title:"搜索抓取 SearchCrawler",w:142,h:40,cluster:"search",
-   meta:{path:"subsystem/lunar_harness/executors/SearchCrawler",report:"—（执行体不参与运行上报）",model:"零模型调用",tools:"Fetch / Extract"}},
+   meta:{path:"subsystem/lunar_harness/chain/search/crawler",report:"—（执行体不参与运行上报）",model:"零模型调用",tools:"Fetch / Extract"}},
 
   /* 创作簇：规划者、文件操作与解析执行体 */
   {id:"a_creator",layer:"agent",short:"创作规划",title:"创作规划者 CreatorPlanner",w:136,h:40,cluster:"creation",
@@ -335,7 +324,7 @@ const NODES = [
 
   /* 引擎能力组（远景固定，单行低压） */
   {id:"e_model",layer:"engine",short:"模型装配",title:"模型与装配 · model / protocolwire / config",w:124,h:32,x:48,y:1130,fixed:true,chip:true,
-   meta:{path:"engine/model、engine/protocolwire、engine/config",report:"—",model:"不调度模型（E3 在 runtime）",tools:"模型配置注入"}},
+   meta:{path:"engine/model/llama、engine/protocolwire、engine/config",report:"—",model:"不调度模型（E3 在 runtime）",tools:"模型配置注入"}},
   {id:"e_console",layer:"engine",short:"控制台",title:"控制台与通信 · console / websocket / broadcaster",w:124,h:32,x:212,y:1130,fixed:true,chip:true,
    meta:{path:"engine/console、engine/websocket、engine/broadcaster",report:"—",model:"不调度模型",tools:"TUI / logger / broadcast"}},
   {id:"e_browser",layer:"engine",short:"浏览器",title:"浏览器与采集 · browser / capture / debugsnap",w:124,h:32,x:376,y:1130,fixed:true,chip:true,
@@ -353,7 +342,7 @@ const NODES = [
   {id:"e_fileflow",layer:"engine",short:"文件流",title:"文件流 · fileflow",w:124,h:32,x:1360,y:1130,fixed:true,chip:true,
    meta:{path:"engine/fileflow",report:"—",model:"不调度模型",tools:"增量内容库"}},
   {id:"e_runtime",layer:"engine",short:"运行时",title:"运行时与扩展 · runtime / ltpxhost",w:124,h:32,x:1524,y:1130,fixed:true,chip:true,
-   meta:{path:"engine/runtime、engine/ltpxhost",report:"—",model:"脚本 llm.chat 直连（E3）",tools:"ExecuteScript / Module"}},
+   meta:{path:"engine/runtime、agents/ltpxhost",report:"—",model:"脚本 llm.chat 直连（E3）",tools:"ExecuteScript / Module"}},
   {id:"e_weather",layer:"engine",short:"天气",title:"天气能力 · weather",w:124,h:32,x:1688,y:1130,fixed:true,chip:true,
    meta:{path:"engine/weather",report:"—",model:"不调度模型",tools:"Query"}},
 
@@ -388,10 +377,10 @@ const CLUSTERS = {
 
 /* 连线只保留端点与语义，形状由布局生成 */
 const EDGES = [
-  {from:"ent_web",to:"c_thinking",kind:"in"},
-  {from:"ent_qq_pri",to:"a_bridging",kind:"in"},
-  {from:"ent_qq_grp",to:"a_bridging",kind:"in"},
-  {from:"ent_http",to:"a_responder",kind:"in"},
+  {from:"end_web",to:"c_thinking",kind:"in"},
+  {from:"end_qq_pri",to:"a_bridging",kind:"in"},
+  {from:"end_qq_grp",to:"a_bridging",kind:"in"},
+  {from:"end_http",to:"a_responder",kind:"in"},
 
   {from:"a_bridging",to:"a_dialogue",kind:"in"},
   {from:"a_dialogue",to:"c_thinking",kind:"in"},
@@ -456,10 +445,10 @@ const EDGES = [
   {from:"c_search",to:"c_thinking",kind:"out"},
   {from:"a_dialogue",to:"a_bridging",kind:"out"},
 
-  {from:"a_bridging",to:"out_qq_pri",kind:"out"},
-  {from:"a_bridging",to:"out_qq_grp",kind:"out"},
-  {from:"c_thinking",to:"out_web",kind:"out"},
-  {from:"a_responder",to:"out_http",kind:"out"},
+  {from:"a_bridging",to:"end_qq_pri",kind:"out"},
+  {from:"a_bridging",to:"end_qq_grp",kind:"out"},
+  {from:"c_thinking",to:"end_web",kind:"out"},
+  {from:"a_responder",to:"end_http",kind:"out"},
 
   {from:"a_dialogue",to:"e_memory",kind:"engine"},
   {from:"a_dialogue",to:"e_model",kind:"engine"},
@@ -500,18 +489,18 @@ const EDGES = [
 const SCENARIOS = [
   /* ---- 1 普通对话 ---- */
   {id:"front_chat",name:"前端对话",hint:"用户普通聊天",tag:"user",weight:1.4,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"WebSocket /ws 收到：『{{msg}}』",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"WebSocket /ws 收到：『{{msg}}』",dur:1200},
     {stay:"c_thinking",tone:"system",log:"EnqueueMessage → tickloop 唤醒对话者",dur:900},
     {from:"c_thinking",to:"a_dialogue",tone:"in",log:"对话者接住本轮，RunToolLoop 装配上下文"},
     {stay:"a_dialogue",tone:"system",log:"StreamWithRetry 逐段生成",dur:1300},
     {from:"a_dialogue",to:"c_thinking",tone:"in",log:"回复写回思维链记忆"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"思考 / 输出流式回推前端",dur:1500},
-    {stay:"out_web",tone:"out",log:"finish_reason=stop，连接保持"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"思考 / 输出流式回推前端",dur:1500},
+    {stay:"end_web",tone:"out",log:"finish_reason=stop，连接保持"}
   ]},
 
   /* ---- 2 绘制者 ---- */
   {id:"front_paint",name:"前端对话",hint:"用户要求画图",tag:"user",weight:1.1,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『画一张{{style}}风格的{{subject}}』",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『画一张{{style}}风格的{{subject}}』",dur:1200},
     {from:"c_thinking",to:"a_dialogue",tone:"in",log:"对话者识别为绘图意图"},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(painter)"},
     {from:"hub",to:"a_painter",tone:"tool",log:"绘制者接到绘画任务"},
@@ -519,13 +508,13 @@ const SCENARIOS = [
     {from:"a_painter",to:"e_multimodal",tone:"engine",log:"engine/multimodal 渲染图像",dur:1200},
     {stay:"a_painter",tone:"out",log:"图像句柄 @I.xxx 返回绘制者"},
     {from:"a_painter",to:"c_thinking",tone:"out",log:"图像结果回填思维链"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"图文回推前端",dur:1400},
-    {stay:"out_web",tone:"out",log:"本轮完成：图片已送达"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"图文回推前端",dur:1400},
+    {stay:"end_web",tone:"out",log:"本轮完成：图片已送达"}
   ]},
 
   /* ---- 3 演奏者 ---- */
   {id:"front_music",name:"前端对话",hint:"用户要求演奏",tag:"user",weight:1.0,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『唱一首关于{{song}}的歌』",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『唱一首关于{{song}}的歌』",dur:1200},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(musician)"},
     {from:"hub",to:"a_musician",tone:"tool",log:"演奏者开始编排"},
     {stay:"a_musician",tone:"system",log:"StreamWithRetry：歌词 / 编曲 / 风格",dur:1400},
@@ -533,13 +522,13 @@ const SCENARIOS = [
     {stay:"a_musician",tone:"out",log:"音频句柄回填演奏者"},
     {from:"a_musician",to:"c_thinking",tone:"out",log:"产出回填思维链"},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者组织回复文本"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"音频与文本流式回推",dur:1500},
-    {stay:"out_web",tone:"out",log:"本轮完成：音频已送达"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"音频与文本流式回推",dur:1500},
+    {stay:"end_web",tone:"out",log:"本轮完成：音频已送达"}
   ]},
 
   /* ---- 4 写文件 ---- */
   {id:"front_write",name:"前端对话",hint:"用户要求写文件",tag:"user",weight:1.0,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『把这段内容写到 {{file}}』",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『把这段内容写到 {{file}}』",dur:1200},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(creation)"},
     {from:"hub",to:"c_creation",tone:"tool",log:"创作链接管：规划 → 文件编辑"},
     {from:"c_creation",to:"a_creator",tone:"in",log:"创作规划者拆解章节"},
@@ -551,13 +540,13 @@ const SCENARIOS = [
     {from:"c_creation",to:"a_bridging",tone:"in",log:"成果登记，交回发送者"},
     {from:"a_bridging",to:"a_dialogue",tone:"in",log:"发送者把文件句柄转交对话者"},
     {from:"a_dialogue",to:"c_thinking",tone:"in",log:"回复与句柄写回思维链"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"回推前端：已落盘 {{file}}",dur:1400},
-    {stay:"out_web",tone:"out",log:"本轮完成：文件写入成功"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"回推前端：已落盘 {{file}}",dur:1400},
+    {stay:"end_web",tone:"out",log:"本轮完成：文件写入成功"}
   ]},
 
   /* ---- 5 联网搜索 ---- */
   {id:"front_search",name:"前端对话",hint:"用户要求联网搜索",tag:"user",weight:1.2,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『查一下{{kw}}』",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『查一下{{kw}}』",dur:1200},
     {from:"c_thinking",to:"hub",tone:"tool",log:"工具命中：network_explore(web_search)"},
     {from:"hub",to:"c_search",tone:"tool",log:"搜索链接管：规划 → 抓取 → 摘要"},
     {from:"c_search",to:"a_search_planner",tone:"in",log:"搜索者-规划产出检索词与参数"},
@@ -567,37 +556,37 @@ const SCENARIOS = [
     {from:"a_search_summarizer",to:"c_search",tone:"out",log:"摘要回填，搜索链收口"},
     {from:"c_search",to:"c_thinking",tone:"out",log:"检索结果进入思维链上下文"},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者依据结果生成回复"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"带引用的回答流式回推",dur:1500},
-    {stay:"out_web",tone:"out",log:"本轮完成：检索答案已送达"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"带引用的回答流式回推",dur:1500},
+    {stay:"end_web",tone:"out",log:"本轮完成：检索答案已送达"}
   ]},
 
   /* ---- 6 记忆检索 ---- */
   {id:"front_memory",name:"前端对话",hint:"用户要求查询记忆",tag:"user",weight:0.9,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『还记得{{topic}}那次吗』",dur:1100},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『还记得{{topic}}那次吗』",dur:1100},
     {from:"c_thinking",to:"a_dialogue",tone:"in",log:"对话者调用 fetch_resources"},
     {from:"a_dialogue",to:"e_memory",tone:"engine",log:"engine/memory 标签检索 / 融合",dur:1200},
     {stay:"e_memory",tone:"system",log:"命中记忆片段，返回句柄",dur:900},
     {from:"a_dialogue",to:"c_thinking",tone:"in",log:"记忆片段写回上下文"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"回忆内容流式回推",dur:1400},
-    {stay:"out_web",tone:"out",log:"本轮完成：记忆已引用"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"回忆内容流式回推",dur:1400},
+    {stay:"end_web",tone:"out",log:"本轮完成：记忆已引用"}
   ]},
 
   /* ---- 7 论坛（用户） ---- */
   {id:"front_forum",name:"前端对话",hint:"用户要求刷论坛",tag:"user",weight:0.9,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『去论坛{{forumAction}}：{{topic}}』",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『去论坛{{forumAction}}：{{topic}}』",dur:1200},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(forum)"},
     {from:"hub",to:"c_forum",tone:"tool",log:"论坛链接管"},
     {from:"c_forum",to:"a_forum",tone:"in",log:"论坛角色执行{{forumAction}}"},
     {from:"a_forum",to:"e_plans",tone:"engine",log:"engine/plans 记录论坛动作"},
     {from:"a_forum",to:"c_forum",tone:"out",log:"动作完成，回填论坛链"},
     {stay:"c_forum",tone:"out",log:"帖子 / 回复已提交",dur:1100},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"回推前端：论坛动作结果",dur:1300},
-    {stay:"out_web",tone:"out",log:"本轮完成"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"回推前端：论坛动作结果",dur:1300},
+    {stay:"end_web",tone:"out",log:"本轮完成"}
   ]},
 
   /* ---- 8 用户看视频 ---- */
   {id:"front_view",name:"前端对话",hint:"用户要求看视频",tag:"user",weight:1.0,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『看下{{video}}』",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『看下{{video}}』",dur:1200},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(viewer)"},
     {from:"hub",to:"c_viewer",tone:"tool",log:"观影链接管"},
     {from:"c_viewer",to:"a_screening",tone:"in",log:"阅片：抽帧理解 / 选片关键词"},
@@ -607,13 +596,13 @@ const SCENARIOS = [
     {from:"c_viewer",to:"a_share",tone:"in",log:"分享：生成观影动态"},
     {from:"a_share",to:"c_viewer",tone:"out",log:"动态发布到 B 站"},
     {stay:"c_viewer",tone:"out",log:"观影记忆写入上下文",dur:1100},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"回推前端：观后感摘要",dur:1400},
-    {stay:"out_web",tone:"out",log:"本轮完成"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"回推前端：观后感摘要",dur:1400},
+    {stay:"end_web",tone:"out",log:"本轮完成"}
   ]},
 
   /* ---- 9 用户发来视频 ---- */
   {id:"front_video_in",name:"前端对话",hint:"用户发来视频要求解读",tag:"user",weight:0.9,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户上传视频 {{video}}，要求解读",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户上传视频 {{video}}，要求解读",dur:1200},
     {from:"c_thinking",to:"x_archivereader",tone:"in",log:"资源接入：视频入队待抽帧"},
     {from:"x_archivereader",to:"e_resource",tone:"engine",log:"engine/resource 解析媒体元信息",dur:1100},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(vision)"},
@@ -622,25 +611,25 @@ const SCENARIOS = [
     {stay:"a_vision",tone:"out",log:"视觉结论回填（帧描述 + 场景标签）"},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者综合视觉结论"},
     {from:"a_dialogue",to:"c_thinking",tone:"in",log:"解读文本写回上下文"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"解读结果回推前端",dur:1500},
-    {stay:"out_web",tone:"out",log:"本轮完成：视频解读结束"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"解读结果回推前端",dur:1500},
+    {stay:"end_web",tone:"out",log:"本轮完成：视频解读结束"}
   ]},
 
   /* ---- 10 用户发来语音 ---- */
   {id:"front_voice",name:"前端对话",hint:"用户发来语音",tag:"user",weight:0.9,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户发来语音 {{voiceLen}}，等待转写",dur:1100},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户发来语音 {{voiceLen}}，等待转写",dur:1100},
     {from:"c_thinking",to:"x_archivereader",tone:"in",log:"资源接入：音频登记句柄"},
     {from:"x_archivereader",to:"e_resource",tone:"engine",log:"engine/resource ASR 直连（E4）",dur:1300},
     {stay:"e_resource",tone:"system",log:"转写完成，返回文本句柄",dur:900},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者拿到转写文本"},
     {from:"a_dialogue",to:"c_thinking",tone:"in",log:"回复写回上下文"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"语音回复回推前端",dur:1400},
-    {stay:"out_web",tone:"out",log:"本轮完成：语音已处理"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"语音回复回推前端",dur:1400},
+    {stay:"end_web",tone:"out",log:"本轮完成：语音已处理"}
   ]},
 
   /* ---- 11 操作程序 / LTPX ---- */
   {id:"front_program",name:"前端对话",hint:"用户要求操作程序",tag:"user",weight:1.0,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『帮我{{programAction}} {{program}}』",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『帮我{{programAction}} {{program}}』",dur:1200},
     {from:"c_thinking",to:"hub",tone:"tool",log:"use_the_program → 桌控链"},
     {from:"hub",to:"c_desktop",tone:"tool",log:"桌控链接管"},
     {from:"c_desktop",to:"a_desktop",tone:"in",log:"桌控角色解析窗口与坐标"},
@@ -649,26 +638,26 @@ const SCENARIOS = [
     {from:"a_desktop",to:"c_desktop",tone:"out",log:"动作回执，链接收口"},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者汇总操作结果"},
     {from:"a_dialogue",to:"a_savior",tone:"out",log:"复杂脚本交 LTPX"},
-    {from:"a_savior",to:"e_runtime",tone:"engine",log:"engine/ltpxhost 执行脚本",dur:1100},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"回推前端：操作结果",dur:1400},
-    {stay:"out_web",tone:"out",log:"本轮完成：程序已响应"}
+    {from:"a_savior",to:"e_runtime",tone:"engine",log:"agents/ltpxhost 执行脚本",dur:1100},
+    {from:"c_thinking",to:"end_web",tone:"out",log:"回推前端：操作结果",dur:1400},
+    {stay:"end_web",tone:"out",log:"本轮完成：程序已响应"}
   ]},
 
   /* ---- 12 截图 ---- */
   {id:"front_shot",name:"前端对话",hint:"用户要求截图",tag:"user",weight:0.8,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『截一张{{program}}的画面』",dur:1100},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『截一张{{program}}的画面』",dur:1100},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(screenshotter)"},
     {from:"hub",to:"a_screenshoter",tone:"tool",log:"截图者接到任务"},
     {from:"a_screenshoter",to:"e_multimodal",tone:"engine",log:"engine/capture 捕获画面",dur:1100},
     {stay:"a_screenshoter",tone:"out",log:"截图句柄 @I.xxx 返回"},
     {from:"a_screenshoter",to:"c_thinking",tone:"out",log:"图片回填思维链"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"截图回推前端",dur:1300},
-    {stay:"out_web",tone:"out",log:"本轮完成"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"截图回推前端",dur:1300},
+    {stay:"end_web",tone:"out",log:"本轮完成"}
   ]},
 
   /* ---- 13 QQ 私聊 ---- */
   {id:"qq_pri",name:"QQ 私聊",hint:"收发对话",tag:"platform",weight:1.2,steps:[
-    {from:"ent_qq_pri",to:"a_bridging",tone:"in",log:"私聊 {{nick}}：『{{msg}}』",dur:1200},
+    {from:"end_qq_pri",to:"a_bridging",tone:"in",log:"私聊 {{nick}}：『{{msg}}』",dur:1200},
     {from:"a_bridging",to:"e_memory",tone:"engine",log:"读取该联系人记忆"},
     {from:"a_bridging",to:"e_console",tone:"engine",log:"engine/console 记录入站事件"},
     {from:"a_bridging",to:"a_dialogue",tone:"in",log:"发送者解析来源与身份，转交对话者"},
@@ -676,13 +665,13 @@ const SCENARIOS = [
     {stay:"c_thinking",tone:"system",log:"tickloop 排定本轮",dur:900},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者生成回复"},
     {from:"a_dialogue",to:"a_bridging",tone:"out",log:"回复交回发送者"},
-    {from:"a_bridging",to:"out_qq_pri",tone:"out",log:"send_text 投递私聊",dur:1300},
-    {stay:"out_qq_pri",tone:"out",log:"本轮完成：私聊已送达"}
+    {from:"a_bridging",to:"end_qq_pri",tone:"out",log:"send_text 投递私聊",dur:1300},
+    {stay:"end_qq_pri",tone:"out",log:"本轮完成：私聊已送达"}
   ]},
 
   /* ---- 14 QQ 群聊画图 ---- */
   {id:"qq_grp_paint",name:"QQ 群聊",hint:"用户要求画图",tag:"platform",weight:1.0,steps:[
-    {from:"ent_qq_grp",to:"a_bridging",tone:"in",log:"群 {{group}} 收到 @：『画一张{{style}}的{{subject}}』",dur:1300},
+    {from:"end_qq_grp",to:"a_bridging",tone:"in",log:"群 {{group}} 收到 @：『画一张{{style}}的{{subject}}』",dur:1300},
     {from:"a_bridging",to:"a_dialogue",tone:"in",log:"发送者解析群与成员身份"},
     {from:"a_dialogue",to:"c_thinking",tone:"in",log:"群聊上下文进入思维链"},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(painter)"},
@@ -691,20 +680,20 @@ const SCENARIOS = [
     {from:"a_painter",to:"c_thinking",tone:"out",log:"图像结果回填思维链"},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者组织群聊回复"},
     {from:"a_dialogue",to:"a_bridging",tone:"out",log:"回复与图片交回发送者"},
-    {from:"a_bridging",to:"out_qq_grp",tone:"out",log:"send_images 投递群聊",dur:1400},
-    {stay:"out_qq_grp",tone:"out",log:"本轮完成：群聊已送达"}
+    {from:"a_bridging",to:"end_qq_grp",tone:"out",log:"send_images 投递群聊",dur:1400},
+    {stay:"end_qq_grp",tone:"out",log:"本轮完成：群聊已送达"}
   ]},
 
   /* ---- 15 定向投递 ---- */
   {id:"qq_target",name:"QQ 私聊",hint:"定向投递指定对象",tag:"platform",weight:0.9,steps:[
-    {from:"ent_qq_pri",to:"a_bridging",tone:"in",log:"私聊 {{nick}}：『把这段内容发给 {{target}}』",dur:1200},
+    {from:"end_qq_pri",to:"a_bridging",tone:"in",log:"私聊 {{nick}}：『把这段内容发给 {{target}}』",dur:1200},
     {from:"a_bridging",to:"a_dialogue",tone:"in",log:"发送者解析目标（resolve_target）"},
     {from:"a_dialogue",to:"c_thinking",tone:"in",log:"整理投递内容"},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者确认文案"},
     {from:"a_dialogue",to:"a_bridging",tone:"out",log:"投递计划交回发送者"},
     {from:"a_bridging",to:"e_memory",tone:"engine",log:"查询目标会话"},
-    {from:"a_bridging",to:"out_qq_grp",tone:"out",log:"定向投递：{{target}}",dur:1300},
-    {stay:"out_qq_grp",tone:"out",log:"投递完成"}
+    {from:"a_bridging",to:"end_qq_grp",tone:"out",log:"定向投递：{{target}}",dur:1300},
+    {stay:"end_qq_grp",tone:"out",log:"投递完成"}
   ]},
 
   /* ---- 16 自发看视频 ---- */
@@ -746,18 +735,18 @@ const SCENARIOS = [
 
   /* ---- 19 HTTP 调用 ---- */
   {id:"http_call",name:"HTTP 调用",hint:"OpenAI 兼容接口",tag:"system",weight:0.7,steps:[
-    {from:"ent_http",to:"a_responder",tone:"in",log:"POST /agent/chat/completions（非流式）",dur:1100},
+    {from:"end_http",to:"a_responder",tone:"in",log:"POST /agent/chat/completions（非流式）",dur:1100},
     {stay:"a_responder",tone:"system",log:"请求入队，等待主调度空档"},
     {from:"a_responder",to:"c_thinking",tone:"in",log:"空档期读取上下文快照"},
     {from:"c_thinking",to:"a_responder",tone:"out",log:"快照返回响应者"},
     {from:"a_responder",to:"e_model",tone:"engine",log:"原生 Stream 调用模型（无工具）",dur:1200},
-    {from:"a_responder",to:"out_http",tone:"out",log:"HTTP 200 JSON 响应",dur:1300},
-    {stay:"out_http",tone:"out",log:"连接关闭"}
+    {from:"a_responder",to:"end_http",tone:"out",log:"HTTP 200 JSON 响应",dur:1300},
+    {stay:"end_http",tone:"out",log:"连接关闭"}
   ]},
 
   /* ---- 20 归档 / 文献解析 ---- */
   {id:"front_archive",name:"前端对话",hint:"用户要求归档文献解析",tag:"user",weight:0.8,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『解析这份资料并归档：{{file}}』",dur:1200},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『解析这份资料并归档：{{file}}』",dur:1200},
     {from:"c_thinking",to:"x_archivereader",tone:"in",log:"归档读取执行体加载原文"},
     {from:"x_archivereader",to:"e_resource",tone:"engine",log:"engine/resource 解析文本与元信息",dur:1200},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(archive)"},
@@ -767,20 +756,20 @@ const SCENARIOS = [
     {from:"a_docreader",to:"e_resource",tone:"engine",log:"结构化输出",dur:1100},
     {stay:"a_docreader",tone:"out",log:"解析完成，回填摘要"},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者总结要点"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"摘要回推前端",dur:1400},
-    {stay:"out_web",tone:"out",log:"本轮完成：文献已归档"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"摘要回推前端",dur:1400},
+    {stay:"end_web",tone:"out",log:"本轮完成：文献已归档"}
   ]},
 
   /* ---- 21 计划管理 ---- */
   {id:"front_plan",name:"前端对话",hint:"用户管理计划",tag:"user",weight:0.8,steps:[
-    {from:"ent_web",to:"c_thinking",tone:"in",log:"用户：『把{{topic}}排进计划』",dur:1100},
+    {from:"end_web",to:"c_thinking",tone:"in",log:"用户：『把{{topic}}排进计划』",dur:1100},
     {from:"c_thinking",to:"hub",tone:"tool",log:"dispatch_technique(planner)"},
     {from:"hub",to:"a_plan",tone:"tool",log:"计划者拆解任务"},
     {from:"a_plan",to:"e_plans",tone:"engine",log:"engine/plans 写入计划条目",dur:1200},
     {stay:"a_plan",tone:"out",log:"计划 ID 返回"},
     {from:"c_thinking",to:"a_dialogue",tone:"out",log:"对话者确认排期"},
-    {from:"c_thinking",to:"out_web",tone:"out",log:"回推前端：计划已创建",dur:1300},
-    {stay:"out_web",tone:"out",log:"本轮完成"}
+    {from:"c_thinking",to:"end_web",tone:"out",log:"回推前端：计划已创建",dur:1300},
+    {stay:"end_web",tone:"out",log:"本轮完成"}
   ]},
 
   /* ---- 22 自发生活整理 ---- */
@@ -836,9 +825,9 @@ function buildScene(def){
     steps:def.steps.map(st => {
       const out = Object.assign({}, st);
       if (out.log) out.log = fillTokens(out.log, vars);
-      if (toPri && (out.to === "out_qq_grp" || out.stay === "out_qq_grp")){
-        if (out.to === "out_qq_grp") out.to = "out_qq_pri";
-        if (out.stay === "out_qq_grp") out.stay = "out_qq_pri";
+      if (toPri && (out.to === "end_qq_grp" || out.stay === "end_qq_grp")){
+        if (out.to === "end_qq_grp") out.to = "end_qq_pri";
+        if (out.stay === "end_qq_grp") out.stay = "end_qq_pri";
       }
       return out;
     })
@@ -1496,9 +1485,10 @@ function minAngleAtNodes(routes, kinds){
 /* 交叉收敛：主干优先放置，逐边在「零穿卡」候选形态里挑与已放置边交叉最少的，
    交叉数相同则取弯幅更小的。只在已有零穿卡解附近微调，不会引入新的穿卡。 */
 const TRUNK_ORDER = [
-  "ent_qq_pri|a_bridging", "ent_web|a_bridging", "a_bridging|a_dialogue",
-  "a_dialogue|c_thinking", "c_thinking|a_dialogue", "a_dialogue|a_bridging",
-  "a_bridging|out_qq_pri", "a_bridging|out_qq_grp", "ent_http|a_dialogue"
+  "end_web|c_thinking", "end_qq_pri|a_bridging", "end_qq_grp|a_bridging",
+  "a_bridging|a_dialogue", "a_dialogue|c_thinking", "c_thinking|a_dialogue",
+  "a_dialogue|a_bridging", "c_thinking|end_web", "a_bridging|end_qq_pri",
+  "a_bridging|end_qq_grp"
 ];
 
 function routePoly(rt, n){

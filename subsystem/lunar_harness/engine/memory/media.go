@@ -38,11 +38,11 @@ func animatedPerceptionRefs(raw []byte) ([]string, error) {
 	return slice.Images, nil
 }
 
-// saveMemoryImageFile 把图片实体写入 multimedia/memory/<集合名>/，返回前端可读取的 URL
+// saveMemoryImageFile 把图片实体写入 multimedia/memory/<条目ID>/，返回前端可读取的 URL
 //
-// 记忆库图片统一收进 memory 子目录，避免与生成图、背景图、截图等混在一起；
+// 按条目 ID 分目录，与簇目录解耦：簇分裂/合并时媒体文件无需搬迁，URL 始终有效。
 // 命名沿用内容哈希（同内容只存一份），由 SaveFileEx 顺带登记句柄映射。
-func saveMemoryImageFile(collectionName, dataURI string) (string, error) {
+func saveMemoryImageFile(docID, dataURI string) (string, error) {
 	// 必须在创建临时文件之前初始化资源目录：否则初始化时的存储扫描会把
 	// SaveFileEx 刚创建的临时文件登记成正式实体，导致返回临时文件名。
 	if err := resource.EnsureReady(); err != nil {
@@ -68,7 +68,7 @@ func saveMemoryImageFile(collectionName, dataURI string) (string, error) {
 		ext = sniffExt
 	}
 	sum := sha256.Sum256(raw)
-	rel := path.Join(resource.StorageRootMultimedia, MediaSubdir, collectionName, hex.EncodeToString(sum[:])[:16]+ext)
+	rel := path.Join(resource.StorageRootMultimedia, MediaSubdir, docID, hex.EncodeToString(sum[:])[:16]+ext)
 	result, saveErr := persistence.SaveFileEx(rel, persistence.SaveOptions{Overwrite: true, MustStore: true}, bytes.NewReader(raw))
 	if saveErr != nil {
 		return "", saveErr
@@ -77,8 +77,8 @@ func saveMemoryImageFile(collectionName, dataURI string) (string, error) {
 	return "/file/read/" + result.RelPath, nil
 }
 
-// saveMemoryAudioFile 把音频实体写入 audios/<集合名>/，返回可读取的 URL
-func saveMemoryAudioFile(collectionName, dataURI string) (string, error) {
+// saveMemoryAudioFile 把音频实体写入 audios/memory/<条目ID>/，返回可读取的 URL
+func saveMemoryAudioFile(docID, dataURI string) (string, error) {
 	// 必须在创建临时文件之前初始化资源目录：否则初始化时的存储扫描会把
 	// SaveFileEx 刚创建的临时文件登记成正式实体，导致返回临时文件名。
 	if err := resource.EnsureReady(); err != nil {
@@ -90,7 +90,7 @@ func saveMemoryAudioFile(collectionName, dataURI string) (string, error) {
 	}
 	ext := audioFileExt(mimeType)
 	sum := sha256.Sum256(raw)
-	rel := path.Join(resource.StorageRootAudios, collectionName, hex.EncodeToString(sum[:])[:16]+ext)
+	rel := path.Join(resource.StorageRootAudios, MediaSubdir, docID, hex.EncodeToString(sum[:])[:16]+ext)
 	result, saveErr := persistence.SaveFileEx(rel, persistence.SaveOptions{Overwrite: true, MustStore: true}, bytes.NewReader(raw))
 	if saveErr != nil {
 		return "", saveErr
@@ -168,29 +168,85 @@ func normalizeMemoryMediaURL(rawURL string) string {
 
 // memoryMediaRelForDoc 返回该文档可以安全清理的媒体相对路径。
 //
-// 只认本分组专属的媒体目录：
-//   - 图片：multimedia/memory/<分组>/
-//   - 音频：audios/<分组>/
+//   - 图片：multimedia/memory/ 下（新布局为 <条目ID>/，旧布局为 <旧分组>/）
+//   - 音频：audios/memory/ 下；旧布局 audios/<旧分组>/ 仅在文件名为内容哈希时接受
 //
 // 其它路径（生成图、截图、公共图片等）即使被记忆条目引用也不删除，避免误删共享资源。
-func memoryMediaRelForDoc(collection string, doc Document) (string, bool) {
+func memoryMediaRelForDoc(doc Document) (string, bool) {
 	rel, ok := memoryMediaRelFromURL(doc.URL)
 	if !ok {
 		return "", false
 	}
 	switch documentType(doc) {
 	case TypeImage:
-		prefix := path.Join(resource.StorageRootMultimedia, MediaSubdir, collection) + "/"
+		prefix := path.Join(resource.StorageRootMultimedia, MediaSubdir) + "/"
 		if strings.HasPrefix(rel, prefix) {
 			return rel, true
 		}
 	case TypeAudio:
-		prefix := path.Join(resource.StorageRootAudios, collection) + "/"
+		prefix := path.Join(resource.StorageRootAudios, MediaSubdir) + "/"
 		if strings.HasPrefix(rel, prefix) {
+			return rel, true
+		}
+		// 历史数据：audios/<旧分组>/<16位内容哈希>.<扩展名>
+		if strings.HasPrefix(rel, resource.StorageRootAudios+"/") && isContentHashFileName(filepath.Base(rel)) {
 			return rel, true
 		}
 	}
 	return "", false
+}
+
+// mediaContentKey 媒体实体的稳定去重键：子树类型 + 内容哈希文件名。
+// 新布局按条目 ID 分目录，同一实体的完整 URL 每次写入都不同，
+// 判重必须比较「实体内容」而不是完整 URL。
+func mediaContentKey(rawURL string) string {
+	rel, ok := memoryMediaRelFromURL(rawURL)
+	if !ok {
+		return ""
+	}
+	base := path.Base(rel)
+	if !isContentHashFileName(base) {
+		return ""
+	}
+	switch {
+	case strings.HasPrefix(rel, resource.StorageRootMultimedia+"/"):
+		return TypeImage + "/" + base
+	case strings.HasPrefix(rel, resource.StorageRootAudios+"/"):
+		return TypeAudio + "/" + base
+	default:
+		return ""
+	}
+}
+
+// discardSavedMediaFile 删除刚写入但因判重被放弃的媒体实体及其空目录。
+func discardSavedMediaFile(rawURL string) {
+	rel, ok := memoryMediaRelFromURL(rawURL)
+	if !ok {
+		return
+	}
+	abs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(rel))
+	if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+		logger.Warn("FileManager", "清理重复媒体文件失败 [%s]: %v", rel, err)
+		return
+	}
+	if err := resource.EnsureReady(); err == nil {
+		resource.ForgetPath(rel)
+	}
+	_ = os.Remove(filepath.Dir(abs))
+}
+
+// isContentHashFileName 判断文件名是否为「16 位十六进制内容哈希 + 扩展名」。
+func isContentHashFileName(name string) bool {
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	if len(base) != 16 {
+		return false
+	}
+	for _, r := range base {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // mediaURLReferenced 判断某个媒体 URL 是否仍被任意集合的记忆条目引用
@@ -215,8 +271,8 @@ func (d *Store) mediaURLReferenced(rawURL string) bool {
 // removeMemoryMediaForDoc 删除文档对应的媒体实体，并清理资源目录中的句柄行。
 //
 // 只有在没有其它记忆条目引用同一 URL 时才删除；无法确定归属的公共资源一律跳过。
-func (d *Store) removeMemoryMediaForDoc(collection string, doc Document) {
-	rel, ok := memoryMediaRelForDoc(collection, doc)
+func (d *Store) removeMemoryMediaForDoc(doc Document) {
+	rel, ok := memoryMediaRelForDoc(doc)
 	if !ok {
 		return
 	}
@@ -243,7 +299,7 @@ func (d *Store) removeMemoryMediaForDoc(collection string, doc Document) {
 }
 
 // removeMemoryMediaForDocs 批量清理一组文档的媒体实体（按 URL 去重）
-func (d *Store) removeMemoryMediaForDocs(collection string, docs []Document) {
+func (d *Store) removeMemoryMediaForDocs(docs []Document) {
 	seen := make(map[string]bool, len(docs))
 	for _, doc := range docs {
 		if doc.URL == "" {
@@ -254,7 +310,7 @@ func (d *Store) removeMemoryMediaForDocs(collection string, docs []Document) {
 			continue
 		}
 		seen[key] = true
-		d.removeMemoryMediaForDoc(collection, doc)
+		d.removeMemoryMediaForDoc(doc)
 	}
 }
 

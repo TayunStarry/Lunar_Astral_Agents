@@ -5,6 +5,8 @@ package modellease
 import "sync"
 
 var (
+	// unloader 模型卸载实现（由装配层注入，见 SetUnloader）
+	unloader func(model string) (bool, error)
 	// swapMu 串行化所有「卸载主模型 → 使用轻量模型」的切换任务，
 	// 避免视觉理解、网络搜索、文献解析同时争抢同一张显卡。
 	swapMu sync.Mutex

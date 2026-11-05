@@ -275,8 +275,3 @@ func firstMeaningfulLines(lines []string, n int) string {
 	}
 	return strings.Join(picked, "\n")
 }
-
-// truncateRunes 按字符截断，统一使用基座实现。
-func truncateRunes(text string, limit int) string {
-	return agentbase.TruncateRunes(text, limit)
-}

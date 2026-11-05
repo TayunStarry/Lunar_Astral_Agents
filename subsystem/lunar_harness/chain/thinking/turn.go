@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // writeMessage 写入消息（文本或多模态内容）
@@ -29,11 +30,11 @@ func writeMessage(role, source string, content any) {
 			logger.Info(lunarCoreModule, "收到文本: %s", item.Text)
 		case ContentImageURL:
 			if item.ImageURL != nil {
-				logger.Info(lunarCoreModule, "收到图片: %s", truncateRunes(item.ImageURL.URL, 512))
+				logger.Info(lunarCoreModule, "收到图片: %s", textutil.TruncateRunes(item.ImageURL.URL, 512))
 			}
 		case ContentInputAudio:
 			if item.InputAudio != nil {
-				logger.Info(lunarCoreModule, "收到音频: %s", truncateRunes(item.InputAudio.Data, 512))
+				logger.Info(lunarCoreModule, "收到音频: %s", textutil.TruncateRunes(item.InputAudio.Data, 512))
 			}
 		case ContentVideoURL:
 			if item.VideoURL != nil {

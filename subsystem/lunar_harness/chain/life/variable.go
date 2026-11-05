@@ -1,10 +1,13 @@
 package life
 
 import (
+	"math/rand"
 	"sync"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/LifeMemorizer"
 	"LunarSubsystem/LunarHarness/engine/affection"
+	"LunarSubsystem/LunarHarness/engine/memory"
 )
 
 const (
@@ -22,27 +25,45 @@ const (
 	defaultIdleThreshold = 600
 	// planWindow 未来计划摘要窗口
 	planWindow = time.Hour
-	// batchMaxRunes 记忆整理单批最大字符数
-	batchMaxRunes = 10000
-	// memoryTriggerMin 触发记忆整理的可整理条目下限：不足时直接视为本次整理完成
-	memoryTriggerMin = 500
-	// memoryBatchItems 单次整理取「入库时间最久」的条数
-	memoryBatchItems = 50
-	// memoryMinAgeDays 被整理条目的最小入库天数
-	memoryMinAgeDays = 10
-	// memoryMinAge 最小入库时长（与 memoryMinAgeDays 保持一致）
-	memoryMinAge = memoryMinAgeDays * 24 * time.Hour
+	// memoryReplaceSource 整理后新条目的来源标记，便于追溯与排除
+	memoryReplaceSource = "consolidation"
+	// memoryPlanVersion 记忆整理计划格式版本
+	// 2：计划只包含待合并组；旧版（1）按时间窗口分批的计划不再续跑
+	memoryPlanVersion = 2
+	// memoryClusterThreshold 相似条目聚类阈值（与引擎 ClusterDefaultThreshold 对齐）
+	memoryClusterThreshold float32 = 0.90
+	// memoryVerifyThreshold 整理结果与来源记忆的双向相似度校验门槛
+	memoryVerifyThreshold float32 = 0.80
+	// memoryArchiveFile 被整理替换掉的旧条目归档日志（相对 LocalDir）
+	memoryArchiveFile = "database/life/memory_archive.jsonl"
+	// viewerMemorySource 观影链写入来源；生活整理只按 Source 排除，不看正文前缀
+	viewerMemorySource = "bilibili_viewer"
+	// pendingGroupMaxItems 单个待合并组的条目上限（与聚类上限一致，避免模型输入过大）
+	pendingGroupMaxItems = memory.ClusterMaxItems
 )
 
-// 默认事件参数：权重 / 每日额度。
+// 默认事件参数：权重 / 每日额度（额度单位为「次/自然日」，跨日清零）。
+//
+// 权重总和固定为 100，按「发生频率 × 重要性」配比：
+//
+//	| 事件     | 权重 | 每日额度 | 依据                                                    |
+//	|----------|------|----------|---------------------------------------------------------|
+//	| watch    | 18   | 6 次     | 高频休闲，一天刷几次视频                                 |
+//	| daze     | 40   | 几乎不限 | 兜底事件，无模型开销；保持最高的基础占比                  |
+//	| forum    | 12   | 6 次     | 中频休闲，比刷视频略低                                    |
+//	| memory   | 20   | 12 次    | 只在有待合并组时工作，高权重保证待合并队列及时排空        |
+//	| creative | 10   | 32 次    | 低频高价值；受创作参考字符串是否更新约束                  |
+//
+// memory 事件的 Weight() 在没有待合并条目时返回 0，因此日常随机挑选里
+// 它只会「有待合并组」时参与，权重 20 不会挤占其它事件的常态频率。
 var defaultEvents = map[string]struct {
 	Weight int
 	Quota  int
 }{
-	"watch":    {Weight: 14, Quota: 6},
-	"daze":     {Weight: 50, Quota: 99999},
-	"forum":    {Weight: 18, Quota: 6},
-	"memory":   {Weight: 4, Quota: 2},
+	"watch":    {Weight: 18, Quota: 6},
+	"daze":     {Weight: 40, Quota: 99999},
+	"forum":    {Weight: 12, Quota: 6},
+	"memory":   {Weight: 20, Quota: 12},
 	"creative": {Weight: 10, Quota: 32},
 }
 
@@ -79,4 +100,20 @@ var (
 	lastMoodInput string
 	// idleThreshold 可通过配置覆盖（当前先用默认值）
 	idleThreshold = defaultIdleThreshold
+
+	// 以下为外部依赖注入点：生产环境直接落到引擎/智能体，测试替换为确定性桩，
+	// 避免单元测试依赖全局记忆库实例、真实嵌入服务与模型服务。
+
+	// pendingCountHook 待处理（待合并）条目计数：为 0 时整理事件不参与随机挑选。
+	pendingCountHook = memory.PendingCount
+	// pendingClearHook 清除单条记忆的待处理标记（孤儿待处理条目回收使用）。
+	pendingClearHook = memory.ClearPending
+	// mergeHook 待合并组的模型合并改写。
+	mergeHook = LifeMemorizer.Merge
+	// verifyHook 整理结果与来源记忆的双向语义校验。
+	verifyHook = memory.VerifyReplacementSimilarity
+	// replaceHook 记忆整理的事务替换（先写新、校验通过后再删旧）。
+	replaceHook = memory.ReplaceTexts
+	// pickRandHook 权重挑选的随机源；生产用 math/rand.Intn，测试可替换为确定性序列。
+	pickRandHook = rand.Intn
 )

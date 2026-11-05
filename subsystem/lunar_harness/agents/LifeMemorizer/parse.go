@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // minKeepFor 整理后至少保留的条数：按输入条数比例取下限，并夹在 [floor, ceiling]。
@@ -14,6 +15,32 @@ func minKeepFor(count int) int {
 		return 0
 	}
 	return min(min(max(count*KeepPercent/100, KeepFloor), KeepCeiling), count)
+}
+
+// retainEnough 校验输出正文总量是否达到输入的下限比例。
+//
+// 只按条数下限还不够：模型可能交出足够多条、但每条只剩一句笼统概括。
+// 正文总量低于输入 MinRetainPercent 时视为过度压缩，交由调用方重试或走保底整理。
+func retainEnough(contents, texts []string) bool {
+	in := totalRunes(contents)
+	if in == 0 {
+		return len(texts) > 0
+	}
+	out := totalRunes(texts)
+	return out*100 >= in*MinRetainPercent
+}
+
+// totalRunes 统计非空白字符总量（忽略纯空白，避免格式化差异影响判断）。
+func totalRunes(texts []string) int {
+	total := 0
+	for _, text := range texts {
+		for _, r := range text {
+			if !unicode.IsSpace(r) {
+				total++
+			}
+		}
+	}
+	return total
 }
 
 // fallbackTexts 模型过度压缩时的保底：原条目逐条去重、折叠空白并截短，

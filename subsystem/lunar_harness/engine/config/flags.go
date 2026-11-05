@@ -42,6 +42,8 @@ func RegisterFlags() {
 	flag.IntVar(&SyncFetchTimeout, "sync-fetch-timeout", SyncFetchTimeout, "内部模型请求超时时间(秒)")
 	flag.BoolVar(&AllowLAN, "allow-lan", AllowLAN, "允许局域网访问引擎服务（默认仅本机回环可访问）")
 	flag.BoolVar(&InsecureTLS, "insecure-tls", InsecureTLS, "插件网络请求跳过 TLS 证书校验（不推荐）")
+	flag.BoolVar(&MemoryAutoConsolidate, "memory-auto-consolidate", MemoryAutoConsolidate, "允许生活体系自动触发记忆整理（默认开启；传 =false 关闭后仅在手动触发时整理）")
+	flag.BoolVar(&MemoryConsolidateOnce, "memory-consolidate-once", MemoryConsolidateOnce, "启动后手动触发一次记忆整理（一次性命令，不受自动整理开关影响）")
 
 	// ==== 图像与视觉 ====
 	flag.IntVar(&MaxWidth, "max-width", MaxWidth, "最大宽度")

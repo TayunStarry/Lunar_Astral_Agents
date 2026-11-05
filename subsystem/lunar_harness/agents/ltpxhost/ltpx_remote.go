@@ -7,11 +7,9 @@ import (
 	"LunarSubsystem/LunarHarness/engine/websocket"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"math/rand"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -108,22 +106,11 @@ func appendAtoaTools(defs []LTPXRemoteToolDef, pkgMap map[string]string, data []
 // appendInternalAtoaTools 扫描内嵌在琉璃前端里的内置包元数据
 //
 // 内置包随二进制发布（clients/crystal/<name>），
-// 因此不能只扫描 local_data/package；这里从 go:embed 的文件系统读取。
+// 因此不能只扫描 local_data/package；目录枚举与 metadata 读取统一经
+// clients.CrystalModules，与 /api/packages 内置包清单同源。
 func appendInternalAtoaTools(defs []LTPXRemoteToolDef, pkgMap map[string]string) []LTPXRemoteToolDef {
-	entries, err := fs.ReadDir(clients.EmbeddedFiles, "crystal")
-	if err != nil {
-		return defs
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		metaPath := path.Join("crystal", entry.Name(), "metadata.json")
-		data, err := fs.ReadFile(clients.EmbeddedFiles, metaPath)
-		if err != nil {
-			continue
-		}
-		defs = appendAtoaTools(defs, pkgMap, data, metaPath)
+	for _, mod := range clients.CrystalModules() {
+		defs = appendAtoaTools(defs, pkgMap, mod.Metadata, "crystal/"+mod.Name+"/metadata.json")
 	}
 	return defs
 }

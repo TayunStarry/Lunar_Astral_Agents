@@ -4,7 +4,6 @@ package DialogueBridging
 // 下半部为 QQ 桥接层（NapCat 协议）。
 
 import (
-	"net/http"
 	"sync"
 	"time"
 )
@@ -99,7 +98,8 @@ var requestQueue []BridgeRequest
 // awaitingResponse 是否存在已推送、正等待月华回应的请求
 var awaitingResponse bool
 
-// responseStarted 当前等待的请求是否已收到月华回应（用于区分真实的回合结束与空闲信号）
+// responseStarted 当前等待的请求是否已收到终稿回应（用于区分真实的回合结束与空闲信号；
+// 快速应答、工具轮次正文、思考块以及中途的音乐 / 图片都不会置位）
 var responseStarted bool
 
 // currentTarget 当前等待回应的请求目标
@@ -127,54 +127,8 @@ const privateBatchWindow = 1500 * time.Millisecond
 // privatePoolMaxSize 私聊缓存池上限
 const privatePoolMaxSize = 20
 
-// groupNameCache 群名称缓存
-var groupNameCache = make(map[int64]string)
-
-// memberNameCache 群成员名称缓存：群号 → (QQ号 → 群名片/昵称)
-// 供入站 @ 渲染为 [对 <用户名> 说]、出站 [对 <用户名> 说] 反向转换为真实 @ 段
-var memberNameCache = make(map[int64]map[int64]string)
-
-// memberListWarmed 已预取过成员列表的群（每进程最多拉取一次全量列表）
-var memberListWarmed = make(map[int64]bool)
-
-// groupMutex 保护群聊缓存池、群名称缓存与群成员名称缓存的并发访问
+// groupMutex 保护群聊缓存池的并发访问
 var groupMutex sync.Mutex
-
-// ==== 当前登录账号信息缓存 ====
-
-// botInfoMutex 保护当前登录账号信息缓存
-var botInfoMutex sync.Mutex
-
-// botInfoLoaded 当前登录账号信息是否已成功加载（失败时下次调用重试）
-var botInfoLoaded bool
-
-// botUserID 当前登录账号 QQ 号
-var botUserID int64
-
-// botNickname 当前登录账号昵称
-var botNickname string
-
-// ==== 主动投递目标目录缓存 ====
-//
-// 群/好友列表来自 NapCat 接口，模板对话每轮都会询问「能否投递」，
-// 因此缓存一小段时间，避免每轮都打两次接口。
-const qqDirectoryTTL = 30 * time.Second
-
-var (
-	qqDirectoryMu      sync.Mutex
-	qqDirectoryAt      time.Time
-	qqDirectoryGroups  []QQGroup
-	qqDirectoryFriends []QQFriend
-	qqDirectoryErr     error
-)
-
-// ==== Napcat 客户端全局变量 ====
-
-// httpClient Napcat HTTP API 客户端
-var httpClient = &http.Client{Timeout: 10 * time.Second}
-
-// uploadHTTPClient 文件上传专用客户端：大文件上传可能远超普通接口的 10 秒超时
-var uploadHTTPClient = &http.Client{Timeout: 120 * time.Second}
 
 // ==== 消息发送回调 ====
 

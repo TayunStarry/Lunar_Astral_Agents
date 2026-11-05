@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/chain/search"
 	"LunarSubsystem/LunarHarness/chain/viewer"
@@ -94,17 +95,6 @@ func init() {
 		logger.Error(lunarCoreModule, "PushMessageFunc 未初始化, 消息类型: %s", msgType)
 	}
 }
-
-// ==== LTPX 工具链缓存 ====
-
-var (
-	// ltpMu 保护聚合工具缓存
-	ltpMu sync.RWMutex
-	// ltpSubTools 可调用应用清单
-	ltpSubTools []LTPXRemoteToolRef
-	// ltpLoggedNames 上次打日志的应用名清单
-	ltpLoggedNames []string
-)
 
 // ==== 对话缓存 ====
 
@@ -230,18 +220,18 @@ var fastAckEndings = []string{
 // 的候选池随机取一条；每个工具至少两条，文案集中在这里便于后续调整。
 var fastAckLines = map[string][]string{
 	// dispatch_technique 技法创作（绘制 / 音乐 / 截图 / 文件操作共用一套口吻）
-	techniqueToolName: {
+	Dialogue.ToolDispatchTechnique: {
 		"这就开工", "我这就动手", "马上给你安排", "这就安排上", "我来接手",
 		"这就去办", "包在我身上", "给我点时间，我这就弄", "马上开始", "这就处理",
 	},
 	// network_explore 联网探索（检索 / 观影 / 论坛 / 通讯共用一套口吻）
-	networkExploreToolName: {
+	Dialogue.ToolNetworkExplore: {
 		"这就去网上看看", "我先查查看", "我这就去跑一趟", "稍等，我去了解一下",
 		"这就去翻一翻", "我去打听打听", "马上帮你查", "让我去看看情况",
 		"这就去联网瞧瞧", "我去搜一圈",
 	},
 	// use_the_program 扩展应用（打开 / 调用应用共用一套口吻）
-	crystalToolName: {
+	Dialogue.ToolUseTheProgram: {
 		"这就帮你打开", "我这就去调它", "稍等，我去启动一下", "马上把程序调起来",
 		"这就把应用打开", "我去运行看看", "让我先启动一下", "这就连接过去",
 		"马上给你打开", "我这就安排应用",

@@ -1,11 +1,11 @@
 // Package agents 收纳月华与琉璃两个人格局及其内部智能体，Go 与 JS 实现同处一层：
 //
 //	agents/Screenshoter/  截图智能体（Go：显示器/窗口枚举、区域截图、多帧推送与主帧回传）
-//	engine/ltpxhost/       琉璃协议宿主（Go：LTPX 协调 / 模块创建 / WebView 会话 / 前端守卫）
+//	agents/ltpxhost/       琉璃协议宿主（Go：LTPX 协调 / 模块创建 / WebView 会话 / 前端守卫）
 //	agents/desktop/        桌面操纵智能体（Go：UIA / 输入 / 进程 / 窗口）
 //	agents/SearchPlanner/    搜索者-规划智能体（Go：结构化管线决策）
 //	agents/SearchSummarizer/ 搜索者-摘要智能体（Go：多页正文一次提炼）
-//	executors/SearchCrawler/ 搜索抓取执行体（Go：引擎降级 / 详情页采集 / 缓存；不发起模型调用）
+//	chain/search/crawler/ 搜索抓取执行体（Go：引擎降级 / 详情页采集 / 缓存；不发起模型调用）
 //	agents/Vision/           视觉理解智能体（Go：图片 / 动图 / 视频的视觉副本、观看与描述）
 //	agents/DocumentReader/   文献解析智能体（Go：格式识别、按行 / 分批解析超大规模文本）
 //	executors/ArchiveReader/ 归档解析执行体（Go：压缩包结构 / 条目读取 / GGUF 元数据；不发起模型调用）
@@ -27,7 +27,7 @@
 // 之所以把 JS 脚本从"前端静态资源"里搬出来：它们不是前端页面的一部分，而是
 // 由三个 handler 单独下发、注入到 iframe 里运行的智能体本体。放在前端目录里时，
 // 资源在 web/、而读取方写的是 "assets/xxx"，编译器与 tsc 都不报错，只有真跑
-// 一遍 handler 才暴露 500（见 engine/ltpxhost/asset_serve_test.go 覆盖的历史缺陷）。
+// 一遍 handler 才暴露 500（见 agents/ltpxhost/asset_serve_test.go 覆盖的历史缺陷）。
 // 现在"脚本"与"内嵌脚本的代码"同处 agents/ 下，前缀错配在结构上不再可能发生。
 package agents
 

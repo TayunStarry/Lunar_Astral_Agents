@@ -219,7 +219,7 @@ func generateInboxReply(item inboxItem) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return finishComment(text, 120), nil
+	return finishComment(text, dynamicCommentMaxRunes), nil
 }
 
 // inboxScene 互动发生的场景描述。

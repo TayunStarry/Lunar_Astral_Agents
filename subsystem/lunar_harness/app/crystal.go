@@ -3,11 +3,11 @@ package app
 import (
 	"net/http"
 
+	"LunarSubsystem/LunarHarness/agents/ltpxhost"
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
-	"LunarSubsystem/LunarHarness/engine/ltpxhost"
 	"LunarSubsystem/LunarHarness/engine/memory"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/protocol/ltpx"

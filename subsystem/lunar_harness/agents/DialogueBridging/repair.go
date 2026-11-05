@@ -13,7 +13,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("dialogue_bridging", "通讯桥接",
 		"通讯桥接最近一次需求、投递清单与执行报告；reset 清空该记录",
-		resetDelivery)
+		resetDelivery,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetDelivery 清空最近一次投递记录。

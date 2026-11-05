@@ -61,21 +61,32 @@ func TestPainterConfigFileShape(t *testing.T) {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		t.Fatalf("解析 %s 失败: %v", path, err)
 	}
-	if cfg.DefaultScheme != "quality" {
-		t.Fatalf("default_scheme 应为 quality，实得 %q", cfg.DefaultScheme)
+	// painter.json 属于用户数据：方案集合允许用户增删，测试只校验结构不变量。
+	if cfg.DefaultScheme == "" {
+		t.Fatal("default_scheme 不能为空")
 	}
-	if len(cfg.Schemes) != 2 {
-		t.Fatalf("顶层应含 turbo / quality 两套方案，实得 %d 套", len(cfg.Schemes))
+	if len(cfg.Schemes) == 0 {
+		t.Fatalf("顶层应至少含一套方案，实得 %d 套", len(cfg.Schemes))
 	}
-	turbo, quality := cfg.Schemes["turbo"], cfg.Schemes["quality"]
-	if turbo.Steps != 8 || quality.Steps != 40 {
-		t.Fatalf("方案步数不一致: turbo=%d quality=%d", turbo.Steps, quality.Steps)
+	if _, ok := cfg.Schemes[cfg.DefaultScheme]; !ok {
+		t.Fatalf("default_scheme %q 不在顶层方案中（现有 %d 套）", cfg.DefaultScheme, len(cfg.Schemes))
 	}
-	if turbo.DiffusionModel != "./local_data/models/painter/qwen-image-2.1-turbo-Q4_K_M.gguf" {
-		t.Fatalf("turbo 扩散模型路径不一致: %q", turbo.DiffusionModel)
+	for name, scheme := range cfg.Schemes {
+		if scheme.DiffusionModel == "" || scheme.Steps <= 0 {
+			t.Fatalf("方案 %q 缺少 diffusion_model 或 steps: %+v", name, scheme)
+		}
 	}
-	if quality.DiffusionModel != "./local_data/models/painter/qwen-image-2.1-Q4_K_M.gguf" {
-		t.Fatalf("quality 扩散模型路径不一致: %q", quality.DiffusionModel)
+	// 只有确实存在内置 turbo / quality 方案时才校验迁移前的取值，
+	// 用户自行裁剪方案不应被判成迁移回归。
+	if turbo, ok := cfg.Schemes["turbo"]; ok {
+		if turbo.Steps != 8 || turbo.DiffusionModel != "./local_data/models/painter/qwen-image-2.1-turbo-Q4_K_M.gguf" {
+			t.Fatalf("turbo 方案取值不一致: %+v", turbo)
+		}
+	}
+	if quality, ok := cfg.Schemes["quality"]; ok {
+		if quality.Steps != 40 || quality.DiffusionModel != "./local_data/models/painter/qwen-image-2.1-Q4_K_M.gguf" {
+			t.Fatalf("quality 方案取值不一致: %+v", quality)
+		}
 	}
 	// 顶层扩散参数逐项对照拆分前 general.json 的 diffusion 内容。
 	d := cfg.Diffusion

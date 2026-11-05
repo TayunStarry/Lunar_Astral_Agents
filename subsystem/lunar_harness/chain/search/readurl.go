@@ -16,8 +16,9 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
+	"LunarSubsystem/LunarHarness/chain/search/crawler"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/executors/SearchCrawler"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // ReadURL 打开指定页面并提炼摘要：返回页面标题与摘要
@@ -36,7 +37,7 @@ func ReadURL(target, instruction string) (title, summary string, err error) {
 	runMu.Lock()
 	defer runMu.Unlock()
 
-	cfg := SearchCrawler.LoadConfig()
+	cfg := crawler.LoadConfig()
 	// 单页读取使用独立预算：不复用整轮多页检索的 MaxRunSeconds。
 	budget := cfg.MaxRunSeconds
 	if budget <= 0 || budget > readPageMaxSeconds {
@@ -45,18 +46,18 @@ func ReadURL(target, instruction string) (title, summary string, err error) {
 	deadline := time.Now().Add(time.Duration(budget) * time.Second)
 	runCtx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
-	logger.Info("CrystalAstral", "Web-Search 打开指定页面: %s", SearchCrawler.TruncateRunes(target, 512))
+	logger.Info("CrystalAstral", "Web-Search 打开指定页面: %s", textutil.TruncateRunes(target, 512))
 
 	// 模型生命周期与网络搜索一致：卸主模型 → 搜索模型提炼 → 收尾卸搜索模型
 	model, unloadSearchModel := prepareSearchModel(cfg)
 	defer unloadSearchModel()
 
-	cap, fetchErr := SearchCrawler.FetchPage(target, budget, cfg, deadline)
+	cap, fetchErr := crawler.FetchPage(target, budget, cfg, deadline)
 	if fetchErr != nil {
 		return "", "", fetchErr
 	}
 
-	title = SearchCrawler.FirstNonEmpty(cap.Title, SearchCrawler.DomainOf(target), target)
+	title = textutil.FirstNonEmpty(cap.Title, crawler.DomainOf(target), target)
 	summary, err = SearchSummarizer.Digest(runCtx, instruction, title, []SearchSummarizer.Source{{
 		Label: "指定页面",
 		Title: title,
@@ -72,9 +73,9 @@ func ReadURL(target, instruction string) (title, summary string, err error) {
 	}
 
 	// 记入近期访问缓存：同一地址下次直接命中，不再重复开页面
-	if cacheErr := SearchCrawler.RememberSummary(target, title, summary, cfg); cacheErr != nil {
+	if cacheErr := crawler.RememberSummary(target, title, summary, cfg); cacheErr != nil {
 		logger.SubWarn("CrystalAstral", "WebSearch", "近期访问缓存不可用，本次结果不回填: %v", cacheErr)
 	}
-	logger.Info("CrystalAstral", "Web-Search 指定页面提炼完成: %s", SearchCrawler.TruncateRunes(target, 512))
+	logger.Info("CrystalAstral", "Web-Search 指定页面提炼完成: %s", textutil.TruncateRunes(target, 512))
 	return title, summary, nil
 }

@@ -21,10 +21,11 @@ import (
 //       → 用合并正文重新生成嵌入向量 → 删除原条目并写入整合条目。
 // =============================================================================
 
-// Fuse 对指定集合的文本记忆执行权重融合。
+// Fuse 对指定集合的文本记忆执行权重融合（管理端点使用的显式操作，不参与自动整理调度）。
 //
-// ids 为空表示扫描整个集合；ids 非空时只处理这些条目（其余条目可能被合并进同一簇，
-// 但只有命中的条目参与候选）。返回值说明本次合并了哪些簇、删了多少条、建了多少条。
+// ids 为空表示扫描整个集合；ids 非空时只处理这些条目。
+// 与 chain/life 的生活记忆整理共用同一套聚类原语、嵌入校验与 ReplaceTexts 事务，
+// 不再自己删除/追加文档，避免出现第二条绕过校验与回滚的写入路径。
 func (d *Store) Fuse(ctx context.Context, collectionName string, ids []string, opts FuseOptions) (FuseResult, error) {
 	result := FuseResult{Collection: collectionName, Groups: []FuseGroup{}}
 	normalized, err := NormalizeFuseStrategy(opts.Strategy)
@@ -34,166 +35,61 @@ func (d *Store) Fuse(ctx context.Context, collectionName string, ids []string, o
 	threshold := normalizeFuseThreshold(opts.Threshold)
 	result.Threshold = threshold
 
-	c, err := d.getCollection(collectionName)
+	// 1. 取候选 + 代表式聚类（与生活整理共用 cluster.go 的实现）
+	clusters, candidates, skipped, err := d.clusterTextCandidates(ctx, collectionName, ids, threshold, FuseMaxCandidates)
 	if err != nil {
 		return result, err
 	}
-	c.reloadIfChanged()
-
-	// 1. 取候选文本条目（跳过媒体/空正文/显式指定之外的条目）
-	c.mu.RLock()
-	docs := append([]Document(nil), c.Documents...)
-	c.mu.RUnlock()
-	model := currentEmbeddingModel()
-
-	wanted := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		if trimmed := strings.TrimSpace(id); trimmed != "" {
-			wanted[trimmed] = true
-		}
-	}
-
-	candidates := make([]Document, 0, len(docs))
-	for _, doc := range docs {
-		if len(wanted) > 0 && !wanted[doc.ID] {
-			continue
-		}
-		if documentType(doc) != TypeText || strings.TrimSpace(doc.Content) == "" || doc.URL != "" || doc.Base64 != "" {
-			result.SkippedMedia++
-			continue
-		}
-		candidates = append(candidates, doc)
-	}
-	if len(candidates) > FuseMaxCandidates {
-		return result, fmt.Errorf("本次候选 %d 条，超过单次融合上限 %d 条；请只勾选要融合的条目或分批执行", len(candidates), FuseMaxCandidates)
-	}
-	result.CandidateCount = len(candidates)
-	if len(candidates) < 2 {
+	result.CandidateCount = candidates
+	result.SkippedMedia = skipped
+	if len(clusters) == 0 {
 		return result, nil
 	}
 
-	// 2. 补齐内容向量（历史条目可能缺向量；维度不一致的条目无法比较，跳过）
-	valid := make([]Document, 0, len(candidates))
-	for _, doc := range candidates {
-		if len(doc.Embedding) == 0 {
-			vec, embedErr := d.embedText(ctx, model, doc.Content)
-			if embedErr != nil {
-				logger.Warn("FileManager", "融合跳过 %s：嵌入失败 %v", doc.ID, embedErr)
-				result.SkippedMedia++
-				continue
-			}
-			doc.Embedding = vec
-		}
-		valid = append(valid, doc)
-	}
-	if len(valid) < 2 {
-		return result, nil
-	}
-	// 以首条维度为准，避免不同模型产生的向量混算
-	dimension := len(valid[0].Embedding)
-	aligned := valid[:0]
-	for _, doc := range valid {
-		if len(doc.Embedding) != dimension {
-			result.SkippedMedia++
-			continue
-		}
-		aligned = append(aligned, doc)
-	}
-	valid = aligned
-
-	// 3. 代表式聚类：与簇代表条目相似度达阈值即并入，避免链式传递把不相关条目串成一簇
-	clusters := clusterMemoryDocs(valid, threshold)
-
-	// 4. 逐簇合并（模型/嵌入阶段不持锁）
-	type pendingMerge struct {
-		removeIDs []string
-		doc       Document
-		group     FuseGroup
-	}
-	pending := make([]pendingMerge, 0, len(clusters))
+	// 2. 逐簇合并：模型/嵌入阶段不持锁，写回统一走 ReplaceTexts
 	for _, cluster := range clusters {
-		if len(cluster.indices) < 2 {
-			continue
-		}
-		groupDocs := make([]Document, 0, len(cluster.indices))
-		for _, index := range cluster.indices {
-			groupDocs = append(groupDocs, valid[index])
-		}
-		contents := make([]string, len(groupDocs))
-		removeIDs := make([]string, len(groupDocs))
-		for i, doc := range groupDocs {
-			contents[i] = doc.Content
-			removeIDs[i] = doc.ID
-		}
-		mergedContent, usedStrategy := d.mergeFuseContents(ctx, contents, normalized)
+		mergedContent, usedStrategy := d.mergeFuseContents(ctx, cluster.Contents, normalized)
 		if strings.TrimSpace(mergedContent) == "" {
 			continue
 		}
-		vec, embedErr := d.embedText(ctx, model, mergedContent)
-		if embedErr != nil {
-			logger.Warn("FileManager", "融合簇跳过（整合向量生成失败）: %v", embedErr)
+		if verifyErr := d.VerifyReplacementSimilarity(ctx, cluster.IDs, []string{mergedContent}, ClusterVerifyThreshold); verifyErr != nil {
+			logger.Warn("FileManager", "融合簇跳过（向量校验未通过）: %v", verifyErr)
 			continue
 		}
 		role := opts.Role
 		if strings.TrimSpace(role) == "" {
-			role = majorityRole(groupDocs)
+			role = cluster.Role
 		}
-		doc := Document{
-			ID:        generateUUID(),
-			Type:      TypeText,
-			Role:      role,
-			Content:   mergedContent,
-			Source:    "fusion",
-			Embedding: vec,
-			Timestamp: time.Now().Unix(),
-		}
-		pending = append(pending, pendingMerge{
-			removeIDs: removeIDs,
-			doc:       doc,
-			group: FuseGroup{
-				IDs:        removeIDs,
-				Similarity: cluster.minSimilarity,
-				Content:    mergedContent,
-				Role:       role,
-				NewID:      doc.ID,
-				Strategy:   usedStrategy,
-			},
+		replaced, replaceErr := d.ReplaceTexts(ctx, cluster.IDs, []string{mergedContent}, ReplaceOptions{
+			Role:   role,
+			Source: fuseReplaceSource,
 		})
+		if replaceErr != nil {
+			logger.Warn("FileManager", "融合簇替换失败，原条目保留: %v", replaceErr)
+			continue
+		}
+		newID := ""
+		if len(replaced.CreatedIDs) > 0 {
+			newID = replaced.CreatedIDs[0]
+		} else if len(replaced.ReusedIDs) > 0 {
+			newID = replaced.ReusedIDs[0]
+		}
+		result.Groups = append(result.Groups, FuseGroup{
+			IDs:        cluster.IDs,
+			Similarity: cluster.MinSimilarity,
+			Content:    mergedContent,
+			Role:       role,
+			NewID:      newID,
+			Strategy:   usedStrategy,
+		})
+		result.GroupCount++
+		result.CreatedCount += len(replaced.CreatedIDs)
+		result.RemovedCount += len(replaced.DeletedIDs)
 	}
 
-	if len(pending) == 0 {
+	if result.GroupCount == 0 {
 		return result, nil
 	}
-
-	// 5. 一次性替换：删除原条目、追加整合条目，然后整体落盘
-	remove := make(map[string]bool)
-	for _, item := range pending {
-		for _, id := range item.removeIDs {
-			remove[id] = true
-		}
-	}
-	c.mu.Lock()
-	kept := make([]Document, 0, len(c.Documents))
-	for _, doc := range c.Documents {
-		if !remove[doc.ID] {
-			kept = append(kept, doc)
-		}
-	}
-	for _, item := range pending {
-		kept = append(kept, item.doc)
-		result.Groups = append(result.Groups, item.group)
-	}
-	c.Documents = kept
-	c.mu.Unlock()
-
-	if err := c.saveDocumentsToFile(); err != nil {
-		return result, fmt.Errorf("保存融合结果失败: %w", err)
-	}
-	c.updateLastModTime()
-
-	result.GroupCount = len(pending)
-	result.CreatedCount = len(pending)
-	result.RemovedCount = len(remove)
 	logger.Info("FileManager", "集合 [%s] 权重融合完成：%d 组，删除 %d 条，新增 %d 条（阈值 %.2f）",
 		collectionName, result.GroupCount, result.RemovedCount, result.CreatedCount, threshold)
 	return result, nil
@@ -219,32 +115,6 @@ func normalizeFuseThreshold(value float32) float32 {
 		return FuseDefaultThreshold
 	}
 	return value
-}
-
-// clusterMemoryDocs 代表式聚类：每条与已有簇的代表条目比较，达阈值即并入最相似的簇
-func clusterMemoryDocs(docs []Document, threshold float32) []fuseCluster {
-	clusters := make([]fuseCluster, 0)
-	for i, doc := range docs {
-		bestIndex := -1
-		bestSim := float32(0)
-		for ci := range clusters {
-			rep := docs[clusters[ci].indices[0]]
-			sim := cosineSimilarity(doc.Embedding, rep.Embedding)
-			if sim >= threshold && sim > bestSim {
-				bestSim = sim
-				bestIndex = ci
-			}
-		}
-		if bestIndex >= 0 {
-			clusters[bestIndex].indices = append(clusters[bestIndex].indices, i)
-			if bestSim < clusters[bestIndex].minSimilarity {
-				clusters[bestIndex].minSimilarity = bestSim
-			}
-			continue
-		}
-		clusters = append(clusters, fuseCluster{indices: []int{i}, minSimilarity: 1})
-	}
-	return clusters
 }
 
 // majorityRole 取簇内出现次数最多的角色；全为空时按用户消息处理

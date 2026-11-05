@@ -1,7 +1,8 @@
 package memory
 
 import (
-	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,126 +12,108 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
-// validateCollectionName 验证集合名格式
-func (d *Store) validateCollectionName(name string) error {
-	if name == "" {
-		return fmt.Errorf("集合名不能为空")
+// clusterDirName 返回 ID 对应的目录名：
+//   - 总库（StoreCollectionID = "store-all"）固定返回 "store-all"，直观且不用 hash
+//   - 正式簇返回 c-<sha256(簇 ID) 前 8 位十六进制>，同一簇 ID 永远同一目录名
+func clusterDirName(id string) string {
+	if id == StoreCollectionID {
+		return StoreCollectionID
 	}
-	if strings.ContainsAny(name, "/\\:*?\"<>|") {
-		return fmt.Errorf("集合名包含非法字符: %s", name)
-	}
-	return nil
+	sum := sha256.Sum256([]byte(id))
+	return ClusterDirPrefix + hex.EncodeToString(sum[:])[:ClusterDirHashLen]
 }
 
-// isCollectionValid 检查集合是否合法且已初始化
-func (d *Store) isCollectionValid(name string) error {
-	if err := d.validateCollectionName(name); err != nil {
-		return err
+// isClusterDirName 判断目录名是否为正式簇目录（c-<8 位十六进制>）
+func isClusterDirName(name string) bool {
+	if !strings.HasPrefix(name, ClusterDirPrefix) {
+		return false
 	}
-	if !d.initialized {
-		return fmt.Errorf("记忆库实例未初始化，请先调用 EnsureReady")
+	rest := strings.TrimPrefix(name, ClusterDirPrefix)
+	if len(rest) != ClusterDirHashLen {
+		return false
 	}
-	return nil
+	for _, r := range rest {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
-// InitCollection 初始化或打开一个分组集合。
-//
-// 集合是内容自动归入的语义分组：创建时立即用集合名调用嵌入模型，生成集合名向量。
-func (d *Store) InitCollection(ctx context.Context, name string) error {
-	if err := d.isCollectionValid(name); err != nil {
-		return err
-	}
+// isStoreDirName 判断目录名是否为总库目录
+func isStoreDirName(name string) bool {
+	return name == StoreCollectionID
+}
 
-	// 已在缓存：补齐磁盘目录与集合名向量即可
+// storeCollection 获取或创建总库的物理存储单元（首次写入时才落目录）。
+// 总库固定 ID = "store-all"，固定目录 = "store-all"，不做 hash。
+func (d *Store) storeCollection() (*Collection, error) {
+	return d.collectionForCluster(StoreCollectionID, true)
+}
+
+// clusterForCollection 获取或创建正式簇的物理存储单元（簇 ID 不允许等于总库 ID）。
+func (d *Store) clusterForCollection(clusterID string) (*Collection, error) {
+	if clusterID == StoreCollectionID {
+		return nil, fmt.Errorf("不能用正式簇 ID 创建总库目录")
+	}
+	return d.collectionForCluster(clusterID, false)
+}
+
+// collectionForID 按任意 ID 获取存储单元（总库或簇）。
+func (d *Store) collectionForID(id string) (*Collection, error) {
+	return d.collectionForCluster(id, id == StoreCollectionID)
+}
+
+// collectionForCluster 获取或创建存储单元（总库或簇）。
+// isStore 为 true 时强制 Kind = "store"。
+func (d *Store) collectionForCluster(clusterID string, isStore bool) (*Collection, error) {
+	clusterID = strings.TrimSpace(clusterID)
+	if clusterID == "" {
+		return nil, fmt.Errorf("存储单元 ID 不能为空")
+	}
 	d.collectionsMu.RLock()
-	existing, exists := d.collections[name]
+	existing, ok := d.collections[clusterID]
 	d.collectionsMu.RUnlock()
-	if exists {
-		if err := os.MkdirAll(filepath.Join(d.baseDir, name), 0755); err != nil {
-			return fmt.Errorf("确保集合目录存在失败: %w", err)
-		}
-		return d.ensureCollectionNameEmbedding(ctx, existing)
+	if ok {
+		return existing, nil
 	}
 
-	collDir := filepath.Join(d.baseDir, name)
+	collDir := filepath.Join(d.baseDir, clusterDirName(clusterID))
 	if err := os.MkdirAll(collDir, 0755); err != nil {
-		return fmt.Errorf("创建集合目录失败: %w", err)
+		return nil, fmt.Errorf("创建存储单元目录失败: %w", err)
 	}
-
-	metaPath := filepath.Join(collDir, "metadata.json")
-	modelName := currentEmbeddingModel()
-
-	// 已存在元数据：按现有数据加载（模型保持集合自身锁定的值，不再因配置变更清空用户记忆）
-	recreate := false
-	if _, err := os.Stat(metaPath); err == nil {
-		var meta collectionMeta
-		if err := readJSONFile(metaPath, &meta); err != nil {
-			return fmt.Errorf("读取元数据失败: %w", err)
-		}
-		if meta.Version < CurrentVersion || meta.EmbeddingDimension == 0 {
-			logger.Warn("FileManager", "集合 %s 元数据不满足新格式 (version=%d, dim=%d)，清空重建",
-				name, meta.Version, meta.EmbeddingDimension)
-			clearCollectionDir(collDir)
-			recreate = true
-		}
+	dim := 0
+	d.clusterMu.RLock()
+	if d.clusterIndex != nil {
+		dim = d.clusterIndex.Dimension
 	}
+	d.clusterMu.RUnlock()
 
-	if !recreate {
-		if _, err := os.Stat(metaPath); err == nil {
-			var meta collectionMeta
-			if err := readJSONFile(metaPath, &meta); err != nil {
-				return fmt.Errorf("读取元数据失败: %w", err)
-			}
-			c := &Collection{
-				Name:               name,
-				Dimension:          meta.EmbeddingDimension,
-				NameEmbedding:      meta.NameEmbedding,
-				NameEmbeddingModel: meta.NameEmbeddingModel,
-				collDir:            collDir,
-				metaPath:           metaPath,
-			}
-			if err := c.loadDocumentsFromFile(); err != nil {
-				return fmt.Errorf("加载文档失败: %w", err)
-			}
-			c.updateLastModTime()
-
-			d.collectionsMu.Lock()
-			d.collections[name] = c
-			d.collectionsMu.Unlock()
-
-			return d.ensureCollectionNameEmbedding(ctx, c)
-		}
-	}
-
-	// 全新创建：集合名向量同时决定向量维度，不再额外发探针嵌入请求
-	nameVec, err := d.embedText(ctx, modelName, name)
-	if err != nil {
-		return fmt.Errorf("集合名嵌入失败: %w", err)
+	kind := "cluster"
+	if isStore {
+		kind = "store"
 	}
 
 	c := &Collection{
-		Name:               name,
-		Dimension:          len(nameVec),
-		NameEmbedding:      nameVec,
-		NameEmbeddingModel: modelName,
-		Documents:          make([]Document, 0),
-		collDir:            collDir,
-		metaPath:           metaPath,
+		Name:      clusterID,
+		Kind:      kind,
+		Dimension: dim,
+		Documents: make([]Document, 0),
+		collDir:   collDir,
+		metaPath:  filepath.Join(collDir, "metadata.json"),
 	}
-
 	if err := c.saveCollectionMeta(); err != nil {
-		return fmt.Errorf("保存元数据失败: %w", err)
+		return nil, fmt.Errorf("保存元数据失败: %w", err)
 	}
 	c.updateLastModTime()
 
 	d.collectionsMu.Lock()
-	d.collections[name] = c
+	d.collections[clusterID] = c
 	d.collectionsMu.Unlock()
-
-	return nil
+	return c, nil
 }
 
-// clearCollectionDir 清空集合目录内旧数据文件（不做旧版数据迁移，直接废弃）
+// clearCollectionDir 清空簇目录内旧数据文件（不做旧版数据迁移，直接废弃）
 func clearCollectionDir(collDir string) {
 	patterns := []string{"documents_*.json", "images_*.json", "tags_*.json", "contents_*.json", "embeddings_*.json", "base64_*.json", "documents.json", "metadata.json"}
 	for _, pattern := range patterns {
@@ -141,18 +124,18 @@ func clearCollectionDir(collDir string) {
 	}
 }
 
-// getCollection 获取集合实例（线程安全）
+// getCollection 获取簇存储单元（线程安全）
 func (d *Store) getCollection(name string) (*Collection, error) {
 	d.collectionsMu.RLock()
 	c, ok := d.collections[name]
 	d.collectionsMu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("集合 '%s' 不存在，请先初始化", name)
+		return nil, fmt.Errorf("簇 '%s' 不存在，请先初始化", name)
 	}
 	return c, nil
 }
 
-// snapshotCollections 返回全部集合的快照（用于全局检索与内容归组）
+// snapshotCollections 返回全部簇存储单元的快照（用于全局检索与聚类）
 func (d *Store) snapshotCollections() []*Collection {
 	d.collectionsMu.RLock()
 	defer d.collectionsMu.RUnlock()
@@ -160,62 +143,133 @@ func (d *Store) snapshotCollections() []*Collection {
 	for _, c := range d.collections {
 		collections = append(collections, c)
 	}
-	// 固定顺序：归组在相似度并列时按集合名兜底，保证结果可复现
+	// 固定顺序：相似度并列时按簇 ID 兜底，保证结果可复现
 	sort.Slice(collections, func(i, j int) bool { return collections[i].Name < collections[j].Name })
 	return collections
 }
 
-// loadAllCollections 从磁盘加载所有集合（启动时一次载入全部）
-func (d *Store) loadAllCollections() {
-	entries, err := os.ReadDir(d.baseDir)
-	if err != nil {
-		logger.Error("FileManager", "读取记忆库目录失败: %v", err)
+// loadClusterCollections 按 clusters.json 加载存储单元：
+// 先加载总库（store-all），再加载索引中的正式簇（c-*）。
+// 不在索引中的 c-* 目录不会被加载（迁移成功后由迁移流程清理）。
+func (d *Store) loadClusterCollections(index *ClusterIndex) error {
+	d.collectionsMu.Lock()
+	d.collections = make(map[string]*Collection)
+	d.loadErr = nil
+	d.collectionsMu.Unlock()
+	if d.baseDir == "" {
+		return nil
+	}
+
+	// 1. 加载总库
+	d.loadSingleCollection(StoreCollectionID, "store")
+
+	// 2. 加载正式簇
+	if index != nil {
+		for _, node := range index.Clusters {
+			d.loadSingleCollection(node.ID, "cluster")
+		}
+	}
+
+	logger.Info("FileManager", "已加载总库 + %d 个正式簇目录", len(d.collections)-1)
+	return nil
+}
+
+// loadSingleCollection 加载单个存储单元（总库或正式簇）。不存在时跳过。
+func (d *Store) loadSingleCollection(id, kind string) {
+	dir := filepath.Join(d.baseDir, clusterDirName(id))
+	metaPath := filepath.Join(dir, "metadata.json")
+	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
 		return
 	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-
-		metaPath := filepath.Join(d.baseDir, name, "metadata.json")
-		var meta collectionMeta
-		if err := readJSONFile(metaPath, &meta); err != nil {
-			continue
-		}
-
-		// v5 版本检查
-		if meta.Version < CurrentVersion {
-			logger.Warn("FileManager", "集合 %s 版本过低 (%d < %d)，跳过加载", name, meta.Version, CurrentVersion)
-			continue
-		}
-		if meta.EmbeddingDimension == 0 {
-			logger.Warn("FileManager", "集合 %s 元数据不完整，跳过加载", name)
-			continue
-		}
-
-		c := &Collection{
-			Name:               name,
-			Dimension:          meta.EmbeddingDimension,
-			NameEmbedding:      meta.NameEmbedding,
-			NameEmbeddingModel: meta.NameEmbeddingModel,
-			collDir:            filepath.Join(d.baseDir, name),
-			metaPath:           metaPath,
-		}
-
-		if err := c.loadDocumentsFromFile(); err != nil {
-			logger.Error("FileManager", "加载集合 %s 文档失败: %v", name, err)
-			continue
-		}
-		c.updateLastModTime()
-
-		d.collectionsMu.Lock()
-		d.collections[name] = c
-		d.collectionsMu.Unlock()
-
-		logger.Info("FileManager", "已加载集合 %s (%d 文档, 名称向量=%v)", name, len(c.Documents), len(c.NameEmbedding) > 0)
+	var meta collectionMeta
+	if err := readJSONFile(metaPath, &meta); err != nil {
+		logger.Warn("FileManager", "%s 目录 %s 不可读，跳过加载: %v", kind, dir, err)
+		d.recordLoadError(fmt.Errorf("%s 目录 %s 不可读: %w", kind, dir, err))
+		return
 	}
+	c := &Collection{
+		Name:      id,
+		Kind:      kind,
+		Dimension: meta.EmbeddingDimension,
+		collDir:   dir,
+		metaPath:  metaPath,
+	}
+	if err := c.loadDocumentsFromFile(); err != nil {
+		logger.Error("FileManager", "加载 %s %s 文档失败: %v", kind, id, err)
+		d.recordLoadError(fmt.Errorf("加载 %s %s 文档失败: %w", kind, id, err))
+		return
+	}
+	c.updateLastModTime()
+
+	d.collectionsMu.Lock()
+	d.collections[id] = c
+	d.collectionsMu.Unlock()
+}
+
+// recordLoadError 记录启动加载的首个失败原因（只留第一条，避免掩盖根因）。
+func (d *Store) recordLoadError(err error) {
+	if err == nil {
+		return
+	}
+	d.collectionsMu.Lock()
+	if d.loadErr == nil {
+		d.loadErr = err
+	}
+	d.collectionsMu.Unlock()
+}
+
+// loadError 返回启动加载失败原因；nil 表示加载正常。
+func (d *Store) loadError() error {
+	d.collectionsMu.RLock()
+	defer d.collectionsMu.RUnlock()
+	return d.loadErr
+}
+
+// readDocumentsFromDir 读取任意目录（旧分组目录 / 簇目录）的文档与向量分片。
+// 返回文档（已挂回向量并补齐类型）、文档分块数、向量分块数；目录不存在时返回空。
+func readDocumentsFromDir(dir string) ([]Document, int, int, error) {
+	var allDocs []Document
+	docChunks := 0
+	for i := 1; ; i++ {
+		path := filepath.Join(dir, fmt.Sprintf("documents_%04d.json", i))
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			break
+		}
+		var docs []Document
+		if err := readJSONFile(path, &docs); err != nil {
+			return nil, 0, 0, fmt.Errorf("读取 %s 失败: %w", path, err)
+		}
+		allDocs = append(allDocs, docs...)
+		docChunks = i
+	}
+
+	embMap := make(map[string][]float32, len(allDocs))
+	embChunks := 0
+	for i := 1; ; i++ {
+		path := filepath.Join(dir, fmt.Sprintf("embeddings_%04d.json", i))
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			break
+		}
+		var records []embeddingRecord
+		if err := readJSONFile(path, &records); err != nil {
+			return nil, 0, 0, fmt.Errorf("读取 %s 失败: %w", path, err)
+		}
+		for _, rec := range records {
+			embMap[rec.ID] = rec.Embedding
+		}
+		embChunks = i
+	}
+
+	for j := range allDocs {
+		if vec, ok := embMap[allDocs[j].ID]; ok {
+			allDocs[j].Embedding = vec
+		}
+		// 旧数据没有 type 字段：按内容推断并回写，保证后续类型化查询可用
+		if allDocs[j].Type == "" {
+			allDocs[j].Type = documentType(allDocs[j])
+		}
+	}
+	return allDocs, docChunks, embChunks, nil
 }
 
 // =============================================================================
@@ -261,53 +315,43 @@ func (c *Collection) updateLastModTime() {
 // loadDocumentsFromFile 从分块文件加载文档与嵌入向量到内存
 // documents_NNNN.json 存文档本体（不含向量），embeddings_NNNN.json 存向量并以 ID 关联
 func (c *Collection) loadDocumentsFromFile() error {
-	var allDocs []Document
-
-	for i := 1; ; i++ {
-		path := c.documentsFilePath(i)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			break
-		}
-		var docs []Document
-		if err := readJSONFile(path, &docs); err != nil {
-			return fmt.Errorf("读取 %s 失败: %w", path, err)
-		}
-		allDocs = append(allDocs, docs...)
-		c.documentsChunkCount = i
+	docs, docChunks, embChunks, err := readDocumentsFromDir(c.collDir)
+	if err != nil {
+		return err
 	}
-
-	// 加载嵌入向量切片并按 ID 挂回文档
-	embMap := make(map[string][]float32, len(allDocs))
-	for i := 1; ; i++ {
-		path := c.embeddingsFilePath(i)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			break
-		}
-		var records []embeddingRecord
-		if err := readJSONFile(path, &records); err != nil {
-			return fmt.Errorf("读取 %s 失败: %w", path, err)
-		}
-		for _, rec := range records {
-			embMap[rec.ID] = rec.Embedding
-		}
-		c.embeddingsChunkCount = i
-	}
-
-	for j := range allDocs {
-		if vec, ok := embMap[allDocs[j].ID]; ok {
-			allDocs[j].Embedding = vec
-		}
-		// 旧数据没有 type 字段：按内容推断并回写，保证后续类型化查询可用
-		if allDocs[j].Type == "" {
-			allDocs[j].Type = documentType(allDocs[j])
-		}
-	}
-
 	c.mu.Lock()
-	c.Documents = allDocs
+	c.Documents = docs
+	c.documentsChunkCount = docChunks
+	c.embeddingsChunkCount = embChunks
+	c.rebuildPositionsLocked()
 	c.mu.Unlock()
-
 	return nil
+}
+
+// rebuildPositionsLocked 重建「条目 ID → 下标」映射（调用方须持有写锁）。
+func (c *Collection) rebuildPositionsLocked() {
+	c.positions = make(map[string]int, len(c.Documents))
+	for i := range c.Documents {
+		if id := c.Documents[i].ID; id != "" {
+			c.positions[id] = i
+		}
+	}
+}
+
+// documentByID 按 ID 取文档副本；倒排索引召回后用它 O(1) 定位正文。
+func (c *Collection) documentByID(id string) (Document, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if i, ok := c.positions[id]; ok && i >= 0 && i < len(c.Documents) && c.Documents[i].ID == id {
+		return c.Documents[i], true
+	}
+	// 兼容旧路径/测试直接构造的集合：位置表可能尚未建立，退化为线性查找
+	for i := range c.Documents {
+		if c.Documents[i].ID == id {
+			return c.Documents[i], true
+		}
+	}
+	return Document{}, false
 }
 
 // saveDocumentsToFile 将文档与嵌入向量保存到分块文件（100 条一块）

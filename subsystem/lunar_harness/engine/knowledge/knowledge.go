@@ -9,15 +9,12 @@ package knowledge
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-
-	_ "github.com/mattn/go-sqlite3"
+	"LunarSubsystem/LunarHarness/engine/dbopen"
 )
 
 func init() {
@@ -46,21 +43,18 @@ func InitKnowledge(dbPath string) error {
 
 // init 打开 SQLite 连接并设置连接池与 PRAGMA
 func (d *Store) init(dbPath string) error {
-	dir := filepath.Dir(dbPath)
-	if dir != "." && dir != "/" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("创建数据库目录失败: %v", err)
-		}
-	}
-
-	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=10000&_journal_mode=WAL")
+	db, err := dbopen.Open(dbPath, dbopen.Options{
+		CreateDir:       true,
+		MaxOpenConns:    10,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: 5 * time.Minute,
+	})
 	if err != nil {
+		if cause, isDir := dbopen.DirCause(err); isDir {
+			return fmt.Errorf("创建数据库目录失败: %v", cause)
+		}
 		return fmt.Errorf("连接SQLite失败: %v", err)
 	}
-
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
 
 	if err = db.Ping(); err != nil {
 		db.Close()

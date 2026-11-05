@@ -9,6 +9,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
+	"LunarSubsystem/LunarHarness/clients/napcat"
 )
 
 func sendGroupText(args map[string]any) toolOutcome {
@@ -20,7 +21,7 @@ func sendGroupText(args map[string]any) toolOutcome {
 	if strings.TrimSpace(text) == "" {
 		return failure(toolSendGroupText, fmt.Errorf("text 不能为空"))
 	}
-	if err := DialogueBridging.SendGroupPlainTextMessage(groupID, text); err != nil {
+	if err := napcat.SendGroupPlainTextMessage(groupID, text); err != nil {
 		return failure(toolSendGroupText, err)
 	}
 	return toolOutcome{
@@ -42,7 +43,7 @@ func sendGroupFile(args map[string]any) toolOutcome {
 	if name == "" {
 		name = filepathBase(full)
 	}
-	if err := DialogueBridging.SendGroupFile(groupID, full, name); err != nil {
+	if err := napcat.SendGroupFile(groupID, full, name); err != nil {
 		return failure(toolSendGroupFile, err)
 	}
 	return toolOutcome{

@@ -8,6 +8,8 @@ package desktop
 
 import (
 	"context"
+
+	desktopos "LunarSubsystem/LunarHarness/engine/desktop"
 )
 
 // uiaTreeResult UIA 树读取结果（用于带超时调用）
@@ -19,7 +21,7 @@ type uiaTreeResult struct {
 // uiaReaderPhase UIA 理解者：读取前台窗口 UI 树并让模型整理与任务相关的元素清单。
 func uiaReaderPhase(ctx context.Context, plan editorTask) (string, []string) {
 	result, err := callDesktop(ctx, uiaDumpTimeout, "读取 UIA 树", func() (uiaTreeResult, error) {
-		tree, ok, dumpErr := DTUIADump()
+		tree, ok, dumpErr := desktopos.UIADump()
 		return uiaTreeResult{tree: tree, ok: ok}, dumpErr
 	})
 	if err != nil || !result.ok {

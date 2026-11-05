@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/chain/life"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
@@ -27,11 +28,11 @@ func TestNetworkExploreLifeTriggersFixedReply(t *testing.T) {
 		kind  string
 		reply string
 	}{
-		{networkBilibiliTool, bilibiliFixedReply},
-		{networkMutualForumTool, forumFixedReply},
+		{Dialogue.NetworkBilibiliTool, Dialogue.BilibiliFixedReply},
+		{Dialogue.NetworkMutualForumTool, Dialogue.ForumFixedReply},
 	}
 	for _, tc := range cases {
-		result := decodeExploreResult(t, handleNetworkExplore(map[string]any{
+		result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(map[string]any{
 			"type":        tc.kind,
 			"instruction": "想看点猫咪视频",
 			"handle":      []any{},
@@ -50,7 +51,7 @@ func TestNetworkExploreLifeTriggersFixedReply(t *testing.T) {
 }
 
 func TestNetworkExploreUnknownType(t *testing.T) {
-	result := decodeExploreResult(t, handleNetworkExplore(map[string]any{
+	result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(map[string]any{
 		"type":        "unknown",
 		"instruction": "随便看看",
 		"handle":      []any{},
@@ -75,7 +76,7 @@ func TestNetworkExploreRejectsMalformedInput(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := decodeExploreResult(t, handleNetworkExplore(tc.args))
+			result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(tc.args))
 			if !strings.Contains(result.Error, tc.want) {
 				t.Fatalf("错误应包含 %q，实际 %q", tc.want, result.Error)
 			}
@@ -93,8 +94,8 @@ func TestNetworkExploreRejectsMalformedInput(t *testing.T) {
 func TestNetworkExploreDetailsHasNoSideEffect(t *testing.T) {
 	prepareExploreLifeDir(t)
 
-	result := decodeExploreResult(t, handleNetworkExplore(map[string]any{
-		"type":    networkBilibiliTool,
+	result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(map[string]any{
+		"type":    Dialogue.NetworkBilibiliTool,
 		"details": true,
 		"handle":  []any{},
 	}))

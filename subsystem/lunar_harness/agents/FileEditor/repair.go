@@ -12,7 +12,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("file_editor", "文件编辑",
 		"文件编辑按次执行、不保留对话上下文；reset 清理运行期状态",
-		resetEditor)
+		resetEditor,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetEditor 文件编辑没有持久上下文，重置是安全且幂等的。

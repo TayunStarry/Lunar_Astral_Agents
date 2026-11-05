@@ -150,9 +150,10 @@ func (f *fakeForum) handleEnroll(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	f.lastJoinCode = body.JoinCode
-	if f.requireJoinCode != "" && body.JoinCode != f.requireJoinCode {
-		writeAPIError(w, http.StatusForbidden, "join_code_invalid", "加入码不正确。")
-		return
+	testMode := false
+	if f.requireJoinCode != "" && body.JoinCode == f.requireJoinCode {
+		// v2 语义：join_code 是测试豁免码，正确时仅让账号进入 test_mode，不再是注册门槛。
+		testMode = true
 	}
 	if f.enrollMode == "closed" {
 		writeAPIError(w, http.StatusForbidden, "enroll_closed", "当前未开放账号申领。")
@@ -165,8 +166,9 @@ func (f *fakeForum) handleEnroll(w http.ResponseWriter, r *http.Request) {
 	}
 	f.instances[inst.Key] = inst
 	writeEnvelopeStatus(w, http.StatusCreated, EnrollResult{
-		Instance: Instance{UID: inst.UID, Name: inst.Name, Model: "test", CreatedAt: fakeNow()},
+		Instance: Instance{UID: inst.UID, Name: inst.Name, CreatedAt: fakeNow()},
 		APIKey:   inst.Key,
+		TestMode: testMode,
 		Poll:     EnrollPoll{IntervalSeconds: 60, MinIntervalSeconds: f.minInterval, RoundTTLSeconds: f.roundTTL},
 	})
 }
@@ -184,7 +186,7 @@ func (f *fakeForum) handleMe(w http.ResponseWriter, inst *fakeInstance) {
 		}
 	}
 	writeEnvelope(w, http.StatusOK, Me{
-		Instance: Instance{UID: inst.UID, Name: inst.Name, Model: "test", CreatedAt: fakeNow()},
+		Instance: Instance{UID: inst.UID, Name: inst.Name, CreatedAt: fakeNow()},
 		Stats:    Stats{TopicsCreated: created, PostsSent: posts},
 		Round:    RoundState{RoundID: inst.Round, Used: inst.Used},
 	})
@@ -334,7 +336,7 @@ func (f *fakeForum) handleCreatePost(w http.ResponseWriter, inst *fakeInstance, 
 	seq := f.nextSeq()
 	post := Post{
 		Seq: seq, TopicID: topic.UID,
-		Author: Instance{UID: inst.UID, Name: inst.Name, Model: "test"},
+		Author: Instance{UID: inst.UID, Name: inst.Name},
 		Kind:   "reply", Body: body.Body, CreatedAt: fakeNow(),
 	}
 	if isOwner {
@@ -454,7 +456,7 @@ func (f *fakeForum) publicTopic(topic *fakeTopic, viewer *fakeInstance) Topic {
 	}
 	return Topic{
 		TopicID: topic.UID, Title: topic.Title, Body: topic.Body, Status: topic.Status, Epoch: topic.Epoch,
-		Owner:     Instance{UID: topic.Owner.UID, Name: topic.Owner.Name, Model: "test"},
+		Owner:     Instance{UID: topic.Owner.UID, Name: topic.Owner.Name},
 		PostCount: len(topic.Posts), ReplyCount: topicReplyCount(topic), ResponderCount: len(topic.ResponderKeys),
 		LastSeq: topic.LastSeq, CreatedAt: topic.CreatedAt, UpdatedAt: topic.UpdatedAt,
 		IsOwner: isOwner, CanPost: canPost, PostBlockReason: reasonPtr, MyPostSeq: mySeq,
@@ -667,10 +669,15 @@ func TestEnrollSendsJoinCode(t *testing.T) {
 	wrong := testConfig(t, forum.URL())
 	wrong.JoinCode = "wrong-code"
 	installConfig(t, wrong)
-	_, err := ListTopics(context.Background(), "open", 0, 10)
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) || apiErr.Code != "join_code_invalid" {
-		t.Fatalf("错误加入码应被拒绝，实际 %v", err)
+	if _, err := ListTopics(context.Background(), "open", 0, 10); err != nil {
+		t.Fatalf("错误加入码不应阻塞申领（仅 test_mode=false）: %v", err)
+	}
+	acct, err := loadAccount(wrong)
+	if err != nil || acct == nil {
+		t.Fatalf("读取账号失败: acct=%+v err=%v", acct, err)
+	}
+	if acct.TestMode {
+		t.Fatal("错误加入码不应进入 test_mode")
 	}
 }
 
@@ -686,12 +693,20 @@ func TestReplyErrorMappingAndTopicLock(t *testing.T) {
 	}
 
 	forum.mu.Lock()
-	forum.failNextPost = "round_consumed"
+	forum.failNextPost = "already_posted"
 	forum.mu.Unlock()
 	_, err = Reply(ctx, created.TopicID, "这一条会被模拟拒绝。", "")
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) || apiErr.Code != "round_consumed" {
-		t.Fatalf("期望 round_consumed，实际 %v", err)
+	if !errors.As(err, &apiErr) || apiErr.Code != "already_posted" {
+		t.Fatalf("期望 already_posted，实际 %v", err)
+	}
+
+	// round_consumed 属于可重试的轮次错误：应自动重新 /poll 后成功，而不是直接失败。
+	forum.mu.Lock()
+	forum.failNextPost = "round_consumed"
+	forum.mu.Unlock()
+	if _, err := Reply(ctx, created.TopicID, "轮次已消耗时应自动重领轮次。", ""); err != nil {
+		t.Fatalf("round_consumed 应自动重试成功，实际 %v", err)
 	}
 
 	if _, err := ManageTopic(ctx, created.TopicID, "close"); err != nil {

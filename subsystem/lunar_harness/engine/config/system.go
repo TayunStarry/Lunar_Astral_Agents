@@ -14,6 +14,23 @@ var AllowLAN = false
 // InsecureTLS 插件沙箱网络是否跳过 TLS 证书校验。
 var InsecureTLS = false
 
+// 记忆整理（巩固/压缩）运行开关。
+//
+// 默认开启：生活体系按权重自动触发 memory 事件。整理只合并语义高度相似的条目，
+// 并保留全部既有保障（最新 50 条不参与、保留下限 50%、输出正文 ≥ 输入 20%、
+// 空结果拒绝删除、先写后删、指纹校验、失败回滚）。手动/按需触发同样可用：
+//   - 一次性命令：启动参数 -memory-consolidate-once，或代码调用
+//     life.RequestMemoryConsolidation("...")；
+//   - 显式事件：life.RequestEvent("memory", "指令")。
+//
+// 关闭自动整理：启动参数关闭对应开关或把本变量置为 false。
+var (
+	// MemoryAutoConsolidate 是否允许生活体系自动触发记忆整理（默认开启）。
+	MemoryAutoConsolidate = true
+	// MemoryConsolidateOnce 启动后登记一次记忆整理（一次性手动触发，默认关闭）。
+	MemoryConsolidateOnce = false
+)
+
 // 模型重复输出检测（loopguard）参数覆盖：0 表示沿用 loopguard 包的默认值
 // （1024 字节点 / 每节点 8 个 128 字段 / 平均相似度 0.65）。
 // 放在 system 下是为了不改代码即可按实际运行效果调阈值。

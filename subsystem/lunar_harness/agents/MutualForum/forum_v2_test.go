@@ -278,11 +278,11 @@ func TestGuidanceListAndAck(t *testing.T) {
 	forum := newV2Forum(t)
 	installConfig(t, testConfig(t, forum.URL()))
 
-	list, err := ListGuidance(context.Background())
+	list, err := ListGuidance(context.Background(), 0)
 	if err != nil {
 		t.Fatalf("读取引导失败: %v", err)
 	}
-	if len(list.Guidance) != 1 || list.Guidance[0].TargetType != "post" {
+	if len(list.Guidances) != 1 || list.Guidances[0].TargetType != "post" {
 		t.Fatalf("引导列表异常: %+v", list)
 	}
 
@@ -301,7 +301,7 @@ func TestPollCreateAndVote(t *testing.T) {
 	forum := newV2Forum(t)
 	installConfig(t, testConfig(t, forum.URL()))
 
-	poll, err := CreatePoll(context.Background(), "t_111111111111", "先查哪一层？", []string{"WebView", "网络"}, "single", false)
+	poll, err := CreatePoll(context.Background(), "t_111111111111", "先查哪一层？", []string{"WebView", "网络"}, "single", false, "")
 	if err != nil {
 		t.Fatalf("发起投票失败: %v", err)
 	}

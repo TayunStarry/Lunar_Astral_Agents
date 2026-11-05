@@ -11,7 +11,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("mutual_forum_agent", "互助论坛-模型",
 		"互助论坛智能体最近一次模型轮次诊断信息；reset 清除该记录",
-		resetForumAgentRun)
+		resetForumAgentRun,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetForumAgentRun 清空最近一次模型轮次诊断信息。

@@ -6,7 +6,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
@@ -197,19 +199,6 @@ func TestKeywordSearchAcrossCollections(t *testing.T) {
 	}
 }
 
-func TestDefaultCollectionsCoverage(t *testing.T) {
-	if len(DefaultCollections) < 10 {
-		t.Fatalf("默认分组过少: %d", len(DefaultCollections))
-	}
-	seen := map[string]bool{}
-	for _, name := range DefaultCollections {
-		if name == "" || seen[name] {
-			t.Fatalf("默认分组名重复或为空: %q", name)
-		}
-		seen[name] = true
-	}
-}
-
 // TestTagRequestDisablesThinking 标签生成必须显式关闭推理：
 // Gemma-4 等模型会先输出很长的 reasoning_content，max_tokens 被耗尽后 content 为空，
 // 表现为「LLM 返回空内容」并触发三次无意义重试（动态图标签尤其明显）。
@@ -246,5 +235,37 @@ func TestTagRequestDisablesThinking(t *testing.T) {
 	}
 	if got.MaxTokens < 512 {
 		t.Fatalf("标签请求 max_tokens 过小，推理可能耗尽输出: %d", got.MaxTokens)
+	}
+}
+
+// TestListWithErrorDistinguishesUnavailableFromEmpty 记忆库不可用时必须报错，
+// 已初始化且确实没有条目时才返回空列表 —— 迁移不能把「读不到」当成「没有」。
+func TestListWithErrorDistinguishesUnavailableFromEmpty(t *testing.T) {
+	// 1. 未初始化：返回错误而不是空列表。
+	unready := &Store{baseDir: t.TempDir(), collections: map[string]*Collection{}}
+	if _, _, err := unready.ListWithError("text", 0, 10); err == nil {
+		t.Fatal("未初始化的记忆库应返回错误")
+	}
+
+	// 2. 启动加载失败：错误必须能传出，而不是静默返回空列表。
+	failed := &Store{baseDir: t.TempDir(), initialized: true, collections: map[string]*Collection{}}
+	storeDir := filepath.Join(failed.baseDir, StoreCollectionID)
+	if err := os.MkdirAll(storeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(storeDir, "metadata.json"), []byte("{ 坏掉的 JSON"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	failed.loadSingleCollection(StoreCollectionID, "store")
+	_, _, err := failed.ListWithError("text", 0, 10)
+	if err == nil || !strings.Contains(err.Error(), "加载失败") {
+		t.Fatalf("加载失败应返回可识别错误，实际 %v", err)
+	}
+
+	// 3. 已初始化且确实没有条目：空列表 + 无错误。
+	empty := &Store{initialized: true, collections: map[string]*Collection{}}
+	entries, total, err := empty.ListWithError("text", 0, 10)
+	if err != nil || len(entries) != 0 || total != 0 {
+		t.Fatalf("空记忆库应返回空列表且无错误，实际 entries=%v total=%d err=%v", entries, total, err)
 	}
 }

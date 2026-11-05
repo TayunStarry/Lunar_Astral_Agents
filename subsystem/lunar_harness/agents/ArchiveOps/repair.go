@@ -12,7 +12,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("archive_ops", "归档操作",
 		"归档操作按次执行、不保留对话上下文；reset 清理运行期状态",
-		resetArchiveOps)
+		resetArchiveOps,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetArchiveOps 归档操作没有持久上下文，重置是安全且幂等的。

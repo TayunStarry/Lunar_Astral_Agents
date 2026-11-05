@@ -4,7 +4,7 @@ package search
 //
 //	步骤 0：卸载主多模态模型 → 加载搜索模型（链侧持有模型切换租约）
 //	步骤 1：调度「搜索者-规划」产出结构化决策（模型调用 1/2）；命中天气直连则直接返回
-//	步骤 2：调度执行体「SearchCrawler」完成引擎降级、详情页采集（不发起模型调用）
+//	步骤 2：调度抓取子包 crawler 完成引擎降级、详情页采集（不发起模型调用）
 //	步骤 3：调度「搜索者-摘要」把全部正文一次提取为针对性摘要（模型调用 2/2）
 //	步骤 4：摘要即最终输出；仅失败时走确定性兜底
 //	步骤 5：卸载搜索模型（主模型交给 router 按需重载），返回最终输出
@@ -19,9 +19,10 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/SearchPlanner"
 	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
+	"LunarSubsystem/LunarHarness/chain/search/crawler"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/weather"
-	"LunarSubsystem/LunarHarness/executors/SearchCrawler"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
@@ -37,12 +38,12 @@ func Run(instruction string) (out string, err error) {
 	runMu.Lock()
 	defer runMu.Unlock()
 
-	cfg := SearchCrawler.LoadConfig()
+	cfg := crawler.LoadConfig()
 	started := time.Now()
 	deadline := started.Add(time.Duration(cfg.MaxRunSeconds) * time.Second)
 	runCtx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
-	logger.Info("CrystalAstral", "Web-Search 网络搜索开始: %s", SearchCrawler.TruncateRunes(instruction, 512))
+	logger.Info("CrystalAstral", "Web-Search 网络搜索开始: %s", textutil.TruncateRunes(instruction, 512))
 
 	// 步骤 0 + 1：模型切换后调度规划智能体；决策失败时按其兜底决策继续（行为等价）
 	model, unloadSearchModel := prepareSearchModel(cfg)
@@ -52,7 +53,7 @@ func Run(instruction string) (out string, err error) {
 		logger.SubWarn("CrystalAstral", "WebSearch", "%v", planErr)
 	}
 	logger.Info("CrystalAstral", "Web-Search 路由决策: pipeline=%s 把握=%.2f query=%s",
-		decision.Pipeline, decisionConfidence(decision), SearchCrawler.TruncateRunes(decision.Query, 512))
+		decision.Pipeline, decisionConfidence(decision), textutil.TruncateRunes(decision.Query, 512))
 
 	// 直连管线：命中后直接返回结果，不进搜索引擎与浏览器
 	if decision.Pipeline == SearchPlanner.PipelineWeather {
@@ -70,10 +71,10 @@ func Run(instruction string) (out string, err error) {
 
 	// 步骤 2：调度抓取执行体（指令中的「前N个」优先于配置的条目余量）
 	n := cfg.DetailCount()
-	if m := SearchCrawler.PageCountFromInstruction(instruction); m > 0 {
+	if m := crawler.PageCountFromInstruction(instruction); m > 0 {
 		n = m
 	}
-	crawl, crawlErr := SearchCrawler.Crawl(query, n, cfg, deadline)
+	crawl, crawlErr := crawler.Crawl(query, n, cfg, deadline)
 	if crawlErr != nil {
 		return "", crawlErr
 	}
@@ -107,7 +108,7 @@ func Run(instruction string) (out string, err error) {
 }
 
 // buildSources 组装摘要来源：搜索结果页在前，详情页按打开顺序在后
-func buildSources(crawl SearchCrawler.CrawlResult) []SearchSummarizer.Source {
+func buildSources(crawl crawler.CrawlResult) []SearchSummarizer.Source {
 	sources := make([]SearchSummarizer.Source, 0, len(crawl.Pages)+1)
 	if strings.TrimSpace(crawl.SearchText) != "" {
 		sources = append(sources, SearchSummarizer.Source{
@@ -119,7 +120,7 @@ func buildSources(crawl SearchCrawler.CrawlResult) []SearchSummarizer.Source {
 	for i, cap := range crawl.Pages {
 		sources = append(sources, SearchSummarizer.Source{
 			Label: fmt.Sprintf("详情页 %d", i+1),
-			Title: SearchCrawler.FirstNonEmpty(cap.Title, cap.Domain),
+			Title: textutil.FirstNonEmpty(cap.Title, cap.Domain),
 			URL:   cap.URL,
 			Text:  cap.Text,
 		})

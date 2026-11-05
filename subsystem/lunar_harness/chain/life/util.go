@@ -12,14 +12,6 @@ func emptyAs(value, fallback string) string {
 	return value
 }
 
-func truncateRunes(text string, limit int) string {
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	return string(runes[:limit]) + "…"
-}
-
 // truncateAtSentence 在句读处切断，避免把一句话截成半句。
 //
 // 规则：在 limit 之前寻找最后一个句末标点（。！？；!?;…）或分句标点（，、,：:）或换行；

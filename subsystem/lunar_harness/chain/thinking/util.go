@@ -5,8 +5,6 @@ import (
 	"math/rand"
 	"reflect"
 	"strings"
-
-	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // asItems 把消息内容归一化为内容项数组（纯字符串消息返回 nil）
@@ -152,15 +150,6 @@ func randomFloor(min, max int) int {
 // randomFloat 生成区间内的随机浮点数并保留两位小数
 func randomFloat(min, max float64) float64 {
 	return float64(int((min+rand.Float64()*(max-min))*100)) / 100
-}
-
-// truncateRunes 按字符截断并追加省略号。
-// limit<=0 保留原文：agentbase.TruncateRunes 未处理非正数上限，这里先守住该分支。
-func truncateRunes(text string, limit int) string {
-	if limit <= 0 {
-		return text
-	}
-	return agentbase.TruncateRunes(text, limit)
 }
 
 // isHTTPURL 是否为可直接打开的 http(s) 地址

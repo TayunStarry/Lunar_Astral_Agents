@@ -90,25 +90,36 @@ func TestMemoryHandlerGlobalTypeAPI(t *testing.T) {
 		return payload
 	}
 
-	// 分组创建（新版前端用 POST /memory/collections + {"name"}）
-	created := call(http.MethodPost, "/memory/collections", `{"name":"测试分组"}`)
-	createData, _ := created["data"].(map[string]any)
-	if createData["name"] != "测试分组" || createData["has_name_embedding"] != true {
-		t.Fatalf("分组创建结果不正确: %v", created)
-	}
+	// 空库加载 store-all（总库是必需的）；正式簇需 ≥16 条才升级
 	collectionsPayload := call(http.MethodGet, "/memory/collections", "")
 	collectionsData, _ := collectionsPayload["data"].(map[string]any)
 	collectionList, _ := collectionsData["collections"].([]any)
-	if len(collectionList) == 0 {
-		t.Fatalf("分组列表为空: %v", collectionsPayload)
+	if len(collectionList) != 1 {
+		t.Fatalf("空库应加载 store-all（总库），实得 %v", collectionsPayload)
+	}
+	firstColl, _ := collectionList[0].(map[string]any)
+	if name, _ := firstColl["name"].(string); name != "store-all" {
+		t.Fatalf("分组名应为 store-all，实得 %s", name)
 	}
 
-	// 写入文本记忆（不指定集合，内容自动归组）
+	// 写入文本记忆（少量条目进 store-all，不自动建正式簇）
 	payload := call(http.MethodPost, "/memory/messages", `{"role":"user","content":"今天天气不错"}`)
 	data, _ := payload["data"].(map[string]any)
 	id, _ := data["id"].(string)
 	if id == "" {
 		t.Fatalf("添加记忆未返回 ID: %v", payload)
+	}
+
+	// 写入后仍是 store-all（只有 1 条，不升簇）
+	collectionsPayload = call(http.MethodGet, "/memory/collections", "")
+	collectionsData, _ = collectionsPayload["data"].(map[string]any)
+	collectionList, _ = collectionsData["collections"].([]any)
+	if len(collectionList) != 1 {
+		t.Fatalf("写入后仍应有 store-all，实得 %v", collectionsPayload)
+	}
+	firstColl, _ = collectionList[0].(map[string]any)
+	if name, _ := firstColl["name"].(string); name != "store-all" {
+		t.Fatalf("分组名应为 store-all，实得 %s", name)
 	}
 
 	// 文本查询命中；图像查询为空（返回结果只含指定类型）

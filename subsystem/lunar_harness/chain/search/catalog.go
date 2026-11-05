@@ -16,7 +16,7 @@ import (
 // 抓取与天气查询由执行体承担，不在智能体声明里。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
-		ID: "web_search", Name: "网络搜索", Source: "chain/search",
+		ID: "web_search", Name: "网络搜索", Source: "chain/search", Kind: agentinfo.KindChain,
 		Note: "搜索链：规划 → 抓取 → 摘要三段式调度，多引擎搜索并整理结构化报告。",
 		Tools: agentinfo.ToolsFromRegistry(
 			SearchPlanner.AgentID,

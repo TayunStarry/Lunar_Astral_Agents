@@ -10,18 +10,21 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
+// exportContext 互助论坛模型侧的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	return map[string]any{
+		"kind":         "mutual-forum-agent-run",
+		"generated_at": time.Now().Format(time.RFC3339),
+		"last_run":     snapshotLastRun(),
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "mutual_forum_agent",
 		Label:       "互助论坛-模型",
 		Group:       "Go 智能体",
 		Description: "互助论坛智能体最近一次模型轮次的轮次、工具调用数与错误（不含内部 api_key）",
-		Export: func(includeImages bool) (any, error) {
-			return map[string]any{
-				"kind":         "mutual-forum-agent-run",
-				"generated_at": time.Now().Format(time.RFC3339),
-				"last_run":     snapshotLastRun(),
-			}, nil
-		},
+		Export:      exportContext,
 	})
 }

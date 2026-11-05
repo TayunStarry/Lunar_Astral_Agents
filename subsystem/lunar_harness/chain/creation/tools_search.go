@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/chain/search"
 	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
 
@@ -17,7 +16,10 @@ func (s *session) webSearch(args map[string]any) toolOutcome {
 	if query == "" {
 		return failure(toolWebSearch, fmt.Errorf("query 不能为空"))
 	}
-	summary, err := search.Run(query)
+	if WebSearchHook == nil {
+		return failure(toolWebSearch, fmt.Errorf("联网搜索未接入"))
+	}
+	summary, err := WebSearchHook(query)
 	if err != nil {
 		return failure(toolWebSearch, err)
 	}

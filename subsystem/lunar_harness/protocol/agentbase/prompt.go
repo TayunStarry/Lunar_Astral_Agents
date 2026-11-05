@@ -5,10 +5,7 @@ package agentbase
 // 提示词集中存放在 LunarHarness/prompts 内嵌目录；本包只做缓存与替换，
 // 让各智能体不必再各维护一份提示词缓存。
 
-import (
-	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/prompts"
-)
+import "LunarSubsystem/LunarHarness/prompts"
 
 // PromptText 读取提示词文本（带进程内缓存；读取失败返回空串）
 func PromptText(name string) string {
@@ -19,7 +16,7 @@ func PromptText(name string) string {
 	}
 	data, err := prompts.Read(name)
 	if err != nil {
-		logger.Error("CrystalAstral", "智能体读取提示词 %s 失败: %v", name, err)
+		logError("智能体读取提示词 %s 失败: %v", name, err)
 		return ""
 	}
 	text := string(data)

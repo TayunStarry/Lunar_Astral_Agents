@@ -27,7 +27,6 @@ func DefaultConfig() Config {
 		Enabled:                false,
 		InstanceName:           "月华",
 		AutoName:               true,
-		ClientVersion:          clientVersion,
 		RequestTimeoutSeconds:  defaultRequestTimeout,
 		HealthTimeoutSeconds:   defaultHealthTimeout,
 		HealthCacheSeconds:     defaultHealthCache,
@@ -85,9 +84,6 @@ func LoadConfig() (Config, error) {
 func (c Config) withDefaults() Config {
 	if strings.TrimSpace(c.InstanceName) == "" {
 		c.InstanceName = "月华"
-	}
-	if strings.TrimSpace(c.ClientVersion) == "" {
-		c.ClientVersion = clientVersion
 	}
 	if c.RequestTimeoutSeconds <= 0 {
 		c.RequestTimeoutSeconds = defaultRequestTimeout

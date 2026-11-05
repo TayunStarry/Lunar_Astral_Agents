@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 	"LunarSubsystem/LunarHarness/protocol/ltpx"
 )
 
@@ -83,7 +84,7 @@ func (b *Broker) Submit(tool string, args map[string]any) (string, error) {
 		return resp.RequestID, nil
 	}
 	if !resp.Success {
-		return "", fmt.Errorf("工具 %s 受理被拒: %s", tool, ltpxFirstNonEmpty(resp.Error, "未知原因"))
+		return "", fmt.Errorf("工具 %s 受理被拒: %s", tool, textutil.FirstNonEmpty(resp.Error, "未知原因"))
 	}
 	return "", fmt.Errorf("工具 %s 未返回 request_id", tool)
 }
@@ -121,14 +122,4 @@ func (b *Broker) Call(ctx context.Context, tool string, args map[string]any) (lt
 		return ltpx.Result{}, err
 	}
 	return b.Await(ctx, requestID)
-}
-
-// ltpxFirstNonEmpty 返回首个非空字符串（错误信息兜底）
-func ltpxFirstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }

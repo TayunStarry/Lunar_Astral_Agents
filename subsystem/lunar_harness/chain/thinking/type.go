@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/chain/thinking/tickloop"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
@@ -156,11 +157,8 @@ type ToolCallItem struct {
 	Function ToolCallFunction `json:"function"`
 }
 
-// ToolResult 工具执行结果：文本 + 可选图片 data URI
-type ToolResult struct {
-	Text  string
-	Image string
-}
+// ToolResult 工具执行结果：文本 + 可选图片 data URI（定义归智能体侧，链内沿用同一类型）
+type ToolResult = Dialogue.ToolResult
 
 // ToolHandler 工具处理函数
 type ToolHandler func(args map[string]any) ToolResult
@@ -331,14 +329,6 @@ type PushImageData struct {
 	Type    string   `json:"type"`
 	Sticker bool     `json:"sticker,omitempty"`
 	Images  []string `json:"images"`
-}
-
-// ==== LTPX 工具链 ====
-
-// LTPXRemoteToolRef 可调用应用（名称 + 能力描述）
-type LTPXRemoteToolRef struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
 }
 
 // ==== Tick 调度 ====

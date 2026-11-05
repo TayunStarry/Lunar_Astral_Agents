@@ -1,12 +1,14 @@
 package thinking
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"LunarSubsystem/LunarHarness/protocol/toolreg"
 )
@@ -28,7 +30,9 @@ func useDialogueModel(t *testing.T, fn ModelRunFunc) {
 // useTestTool 注册一次性测试工具，测试结束移除。
 func useTestTool(t *testing.T, name string, handler ToolHandler) {
 	t.Helper()
-	registerTool(name, handler)
+	toolreg.RegisterExecutor(name, func(_ context.Context, args map[string]any) (any, error) {
+		return handler(args), nil
+	})
 	t.Cleanup(func() {
 		toolreg.UnregisterExecutor(name)
 	})
@@ -123,6 +127,44 @@ func countMessages(role *DialogueRole, roleName, needle string) int {
 		}
 	}
 	return count
+}
+
+// TestProcessBlocksPushedWithoutClaimingTurn 思考区/代码块 auto=true、不朗读：
+// 它们只用于前端展示，不能消费 QQ 的 @ / 引用，也不能提前收尾。
+func TestProcessBlocksPushedWithoutClaimingTurn(t *testing.T) {
+	oldDir := config.LocalDir
+	config.LocalDir = t.TempDir()
+	previous := PushMessageFunc
+	records := make([]PushContextData, 0, 2)
+	PushMessageFunc = func(msgType string, data any) {
+		if msgType != "context" {
+			return
+		}
+		if ctx, ok := data.(PushContextData); ok {
+			records = append(records, ctx)
+		}
+	}
+	t.Cleanup(func() {
+		PushMessageFunc = previous
+		config.LocalDir = oldDir
+	})
+
+	pushProcessBlocks([]string{"先想一想"}, []string{"```go\nfmt.Println(1)\n```"})
+
+	if len(records) != 2 {
+		t.Fatalf("思考区与代码块应各推送 1 次，实际 %d 次", len(records))
+	}
+	for i, ctx := range records {
+		if ctx.Type != "text" {
+			t.Fatalf("第 %d 条过程内容类型不符: %q", i+1, ctx.Type)
+		}
+		if ctx.Audio != "" {
+			t.Fatalf("第 %d 条过程内容不应合成语音", i+1)
+		}
+		if !ctx.Auto {
+			t.Fatalf("第 %d 条过程内容不是终稿，应标记 auto=true", i+1)
+		}
+	}
 }
 
 // useSpeechSynth 替换语音合成，测试结束恢复。

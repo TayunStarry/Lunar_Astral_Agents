@@ -18,13 +18,13 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 var (
 	// 文本中的网络地址（到空白或常见中英文标点为止）
 	textURLPattern = regexp.MustCompile(`(?i)https?://[^\s<>"'）】」，。；！？、]+`)
-	// 文本中裸写的 BV 号
-	textBVPattern = regexp.MustCompile(`BV[0-9A-Za-z]{10}`)
 	// 地址尾部可能粘上的英文标点
 	urlTrailingPunct = ".,;:!?)]}>'\""
 )
@@ -175,9 +175,10 @@ func textWithResourceHandles(text, origin string) string {
 		}
 		return handle + match[len(trimmed):]
 	})
-	return textBVPattern.ReplaceAllStringFunc(converted, func(match string) string {
+	converted = viewerstore.ReplaceBVID(converted, func(match string) string {
 		return urlHandleText(match, ".mp4", origin)
 	})
+	return converted
 }
 
 // urlDeservesHandle 文本里的 http(s) 地址与 BV 号一律转句柄
@@ -227,7 +228,7 @@ func animatedHandleText(source, _ string) string {
 	}
 	if admittedURL != "" {
 		if summary := strings.TrimSpace(resource.ParseTextOf(admittedURL)); summary != "" {
-			return tag + "（动图：" + truncateRunes(summary, 1200) + "）"
+			return tag + "（动图：" + textutil.TruncateRunes(summary, 1200) + "）"
 		}
 	}
 	return tag

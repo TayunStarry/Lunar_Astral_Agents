@@ -15,7 +15,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("responder", "通用应答",
 		"通用应答的排队状态（不保留上下文）；reset 丢弃尚未开始的排队请求",
-		resetQueueState)
+		resetQueueState,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetQueueState 清空待处理队列，正在执行的请求不受影响。

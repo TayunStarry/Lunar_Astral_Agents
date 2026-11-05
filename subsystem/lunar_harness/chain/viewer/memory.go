@@ -2,34 +2,42 @@ package viewer
 
 // memory.go 观影记忆的使用与动态文案。
 //
-// 记忆的枚举与增删改查见 memory_entries.go（统一记忆库适配，无独立存储）；
-// 这里只负责把记忆渲染进提示词，以及生成动态正文。
+// 记忆的存取、上限维持见 engine/viewerstore；这里只负责把记忆渲染进提示词、
+// 生成动态正文，以及把一轮观看结果写成新的观感。
 
 import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"LunarSubsystem/LunarHarness/agents/ViewerCritic"
 	"LunarSubsystem/LunarHarness/agents/ViewerShare"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
 	"LunarSubsystem/LunarHarness/prompts"
 )
 
-// recentMemoryText 把最近的记忆条目渲染成提示词材料（最多 limit 条）。
+// recentMemoryText 把近期观感与两个单槽渲染成提示词材料（最多 limit 条）。
 func recentMemoryText(limit int) string {
-	entries := MemoryEntries()
-	if len(entries) == 0 {
-		return ""
+	lines := make([]string, 0, viewerstore.ObservationMax+2)
+	observations, err := viewerstore.LoadObservations()
+	if err != nil {
+		logger.Warn("BilibiliViewer", "读取观影记忆失败: %v", err)
 	}
-	if limit <= 0 || limit > len(entries) {
-		limit = len(entries)
+	for _, obs := range observations {
+		lines = append(lines, "[印象]"+observationText(obs))
 	}
-	lines := make([]string, 0, limit)
-	for _, entry := range entries[len(entries)-limit:] {
-		lines = append(lines, fmt.Sprintf("[%s]%s", entry.Kind, entry.Text))
+	if value, _, ok, _ := viewerstore.LoadProfile(); ok && strings.TrimSpace(value) != "" {
+		lines = append(lines, "[习惯]"+viewerstore.SelectionMarker+value)
 	}
-	return strings.Join(lines, "\n")
+	if value, _, ok, _ := viewerstore.LoadStance(); ok && strings.TrimSpace(value) != "" {
+		lines = append(lines, "[评价]"+viewerstore.StanceMarker+value)
+	}
+	if limit <= 0 || limit > len(lines) {
+		limit = len(lines)
+	}
+	return strings.Join(lines[len(lines)-limit:], "\n")
 }
 
 // memoryMaterial 记忆注入的统一格式（无记忆时返回空串）。
@@ -39,17 +47,6 @@ func memoryMaterial(limit int) string {
 		return ""
 	}
 	return "## 我的观影记忆\n\n" + text + "\n\n（以上是我之前的观影记忆，可作为写作背景；不要照抄。）"
-}
-
-// memoryLooksMechanical 判断一段文本是不是机械过程/运行统计，而不是人格化记忆。
-func memoryLooksMechanical(text string) bool {
-	lower := strings.ToLower(text)
-	for _, marker := range mechanicalMemoryMarkers {
-		if strings.Contains(lower, strings.ToLower(marker)) {
-			return true
-		}
-	}
-	return false
 }
 
 // cleanMemoryText 去掉机械过程行，只保留人格化的正文。
@@ -65,35 +62,103 @@ func cleanMemoryText(text string) string {
 		if line == "" || strings.HasPrefix(line, "```") || strings.HasPrefix(line, "【") {
 			continue
 		}
-		if memoryLooksMechanical(line) {
+		if viewerstore.LooksMechanical(line) {
 			continue
 		}
 		kept = append(kept, line)
 	}
-	out := truncate(strings.Join(kept, " "), memoryTextMaxRunes)
-	if memoryLooksMechanical(out) {
+	out := truncate(strings.Join(kept, " "), viewerstore.TextMaxRunes)
+	if viewerstore.LooksMechanical(out) {
 		return ""
 	}
 	return out
 }
 
-// recordWatchMemory 把单个视频的观影感受写入记忆库（只存人格化印象）。
-func recordWatchMemory(video *videoRecord) {
-	if video == nil {
+// upsertWatchMemory 写入单个视频的高层结论（一个视频只保留一行，按 BV 号覆盖更新）。
+//
+// 完整的观看解读留在 SQL（URL 主表 parse_text）与单轮轨迹里；观感表只收
+// 「标题 + 链接 + 主题/氛围 + 首句结论」，避免同一段内容双写。
+func upsertWatchMemory(video *videoRecord) {
+	obs := buildObservation(video)
+	if strings.TrimSpace(obs.BV) == "" {
 		return
 	}
-	summary := cleanMemoryText(video.WatchSummary)
-	if summary == "" {
-		return
-	}
-	text := fmt.Sprintf("看了《%s》。%s", video.Info.Title, summary)
-	if memoryLooksMechanical(text) {
+	if viewerstore.LooksMechanical(obs.Conclusion) {
 		logger.Warn("BilibiliViewer", "观影记忆含机械化信息，已拒绝写入")
 		return
 	}
-	if _, err := MemoryAddEntry("印象", text); err != nil {
+	if err := viewerstore.SaveObservation(obs); err != nil {
 		logger.Warn("BilibiliViewer", "写入观看记忆失败: %v", err)
+		return
 	}
+}
+
+// buildObservation 从本轮视频结果组装一条观感（只保留首句结论）。
+func buildObservation(video *videoRecord) viewerstore.Observation {
+	if video == nil {
+		return viewerstore.Observation{}
+	}
+	summary := cleanMemoryText(video.WatchSummary)
+	if summary == "" {
+		return viewerstore.Observation{}
+	}
+	bv := strings.TrimSpace(video.Info.Bvid)
+	if bv == "" {
+		bv = viewerstore.ExtractBVID(video.Info.URL)
+	}
+	if bv == "" {
+		logger.Warn("BilibiliViewer", "《%s》没有 BV 号，跳过观感写入", video.Info.Title)
+		return viewerstore.Observation{}
+	}
+	return viewerstore.Observation{
+		BV:         bv,
+		Title:      strings.TrimSpace(video.Info.Title),
+		URL:        strings.TrimSpace(video.Info.URL),
+		Topics:     memoryTopics(video.Impression.Topics, viewerstore.TopicMax),
+		Tone:       strings.TrimSpace(video.Impression.Tone),
+		Conclusion: viewerstore.Conclusion(summary),
+		UpdatedAt:  time.Now().Unix(),
+	}
+}
+
+// observationText 把一条观感渲染成提示词中的一行。
+func observationText(obs viewerstore.Observation) string {
+	parts := make([]string, 0, 6)
+	if obs.Title != "" {
+		parts = append(parts, "《"+obs.Title+"》")
+	}
+	if obs.URL != "" {
+		parts = append(parts, obs.URL)
+	}
+	if obs.Topics != "" {
+		parts = append(parts, "主题："+obs.Topics)
+	}
+	if obs.Tone != "" {
+		parts = append(parts, "氛围："+obs.Tone)
+	}
+	if obs.Conclusion != "" {
+		parts = append(parts, obs.Conclusion)
+	}
+	return truncate(strings.Join(parts, "｜"), viewerstore.TextMaxRunes)
+}
+
+// memoryTopics 把主题词压成短标签（最多 limit 个）。
+func memoryTopics(topics []string, limit int) string {
+	if limit <= 0 {
+		limit = viewerstore.TopicMax
+	}
+	parts := make([]string, 0, limit)
+	for _, topic := range topics {
+		topic = strings.TrimSpace(topic)
+		if topic == "" {
+			continue
+		}
+		parts = append(parts, topic)
+		if len(parts) >= limit {
+			break
+		}
+	}
+	return strings.Join(parts, "、")
 }
 
 // recordRoundMemory 把一整轮的体验写成人格化记忆（不写数量、条目等运行信息）。
@@ -121,8 +186,42 @@ func recordRoundMemory(r *runner) {
 		logger.Warn("BilibiliViewer", "本轮观影记忆为空或含机械化信息，跳过写入")
 		return
 	}
-	if _, err := MemoryAddEntry("感受", memory); err != nil {
-		logger.Warn("BilibiliViewer", "写入本轮记忆失败: %v", err)
+	// 本轮体验直接覆盖「评论倾向」单行，维持当前有效倾向。
+	updateCommentStance(memory)
+	// 选片口味由当前观感重算，观感轮转后偏好会自然渐进修正。
+	refreshSelectionProfile()
+	saveRoundMemory(r, memory)
+}
+
+// saveRoundMemory 记录本轮观影轮次（按轮追溯用，超出上限按最旧归档）。
+func saveRoundMemory(r *runner, conclusion string) {
+	if r == nil {
+		return
+	}
+	bvids := make([]string, 0, len(r.approved))
+	for _, video := range r.approved {
+		if video == nil {
+			continue
+		}
+		bv := strings.TrimSpace(video.Info.Bvid)
+		if bv == "" {
+			bv = viewerstore.ExtractBVID(video.Info.URL)
+		}
+		if bv != "" {
+			bvids = append(bvids, bv)
+		}
+	}
+	if len(bvids) == 0 {
+		return
+	}
+	round := viewerstore.Round{
+		ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
+		BVIDs:      strings.Join(bvids, "、"),
+		Conclusion: viewerstore.Conclusion(conclusion),
+		CreatedAt:  time.Now().Unix(),
+	}
+	if err := viewerstore.SaveRound(round); err != nil {
+		logger.Warn("BilibiliViewer", "写入观影轮次失败: %v", err)
 	}
 }
 

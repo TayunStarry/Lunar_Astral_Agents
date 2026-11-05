@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // ConsumeDue 取出到期计划项并推进计划表；返回本次触发的计划项。
@@ -110,7 +112,7 @@ func Upcoming(now time.Time, window time.Duration) string {
 	sort.SliceStable(list, func(i, j int) bool { return list[i].due.Before(list[j].due) })
 	parts := make([]string, 0, len(list))
 	for _, item := range list {
-		parts = append(parts, item.due.Format("15:04")+" "+truncateRunes(item.content, 512))
+		parts = append(parts, item.due.Format("15:04")+" "+textutil.TruncateRunes(strings.TrimSpace(item.content), 512))
 	}
 	return strings.Join(parts, "；")
 }
@@ -150,13 +152,4 @@ func absDuration(value time.Duration) time.Duration {
 		return -value
 	}
 	return value
-}
-
-// truncateRunes 按字符截断并带省略号。
-func truncateRunes(text string, limit int) string {
-	runes := []rune(strings.TrimSpace(text))
-	if len(runes) <= limit {
-		return string(runes)
-	}
-	return string(runes[:limit]) + "…"
 }

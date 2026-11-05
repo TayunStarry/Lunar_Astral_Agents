@@ -14,6 +14,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"LunarSubsystem/LunarHarness/protocol/modellease"
 )
@@ -193,7 +194,7 @@ func notesFallback(notes []scanNote) string {
 	for _, note := range notes {
 		block := fmt.Sprintf("\n【片 #%d L%d-%d】\n%s\n",
 			note.Span.Index, note.Span.StartLine, note.Span.EndLine,
-			truncateRunes(note.Text, scanNoteMaxChars))
+			textutil.TruncateRunes(note.Text, scanNoteMaxChars))
 		blockChars := len([]rune(block))
 		if chars+blockChars > scanFallbackChars {
 			break

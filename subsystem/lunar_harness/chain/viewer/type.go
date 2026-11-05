@@ -201,14 +201,17 @@ type pipelineStep struct {
 	Slice int
 }
 
-// memoryEntry 统一记忆库里的一条哔哩观影记忆。
+// viewerTraceRecord 单轮观看轨迹的一行。
 //
-// 正文格式：[B站视频][印象/评价/习惯/问题/吐槽/...]<正文>
-type memoryEntry struct {
-	ID   string `json:"id"`
-	Kind string `json:"kind"`
-	Text string `json:"text"`
-	Time int64  `json:"time,omitempty"`
+// 轨迹只落本地 JSONL（单轮内可追溯切片 → 解读 → 结论），不写长期记忆。
+type viewerTraceRecord struct {
+	Time  int64  `json:"time"`
+	Kind  string `json:"kind"` // slice / merge
+	Bvid  string `json:"bvid,omitempty"`
+	Title string `json:"title,omitempty"`
+	Index int    `json:"index,omitempty"`
+	Total int    `json:"total,omitempty"`
+	Text  string `json:"text"`
 }
 
 // dynamicCommentTarget 一条动态真正的评论区（type + oid）。

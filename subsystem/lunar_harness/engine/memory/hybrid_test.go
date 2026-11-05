@@ -35,7 +35,7 @@ func configureHybridEmbedding(t *testing.T, url string) {
 //   - doc-weak-vector：向量相似度 0.35（刚过门槛），正文不含关键词（弱向量）。
 func hybridTestDocs() map[string][]Document {
 	return map[string][]Document{
-		"01-相近": {
+		"cluster-a": {
 			{ID: "doc-both", Type: TypeText, Role: "user", Content: "目标记录：目标很重要", Timestamp: 100, Embedding: []float32{0.8, 0.6}},
 			{ID: "doc-vector", Type: TypeText, Role: "user", Content: "完全无关的正文", Timestamp: 200, Embedding: []float32{0.95, 0.313}},
 			{ID: "doc-keyword", Type: TypeText, Role: "user", Content: "目标目标目标：原文", Timestamp: 300, Embedding: []float32{0.1, 0.995}},
@@ -62,8 +62,8 @@ func findHybridHit(hits []Entry, id string) (Entry, bool) {
 
 // TestHybridQueryFusesAndDedupes 覆盖融合排序与 ID 去重。
 //
-// 默认权重 0.6/0.4 下预期排序：
-// doc-both > doc-vector > doc-keyword > doc-keyword-weak > doc-weak-vector。
+// 默认权重 0.6/0.4 下预期排序（关键词按覆盖率打分，同覆盖率按时间倒序）：
+// doc-both > doc-vector > doc-keyword-weak > doc-keyword > doc-weak-vector。
 func TestHybridQueryFusesAndDedupes(t *testing.T) {
 	server := scopeEmbeddingServer(t)
 	defer server.Close()
@@ -75,7 +75,7 @@ func TestHybridQueryFusesAndDedupes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("混合检索失败: %v", err)
 	}
-	wantOrder := []string{"doc-both", "doc-vector", "doc-keyword", "doc-keyword-weak", "doc-weak-vector"}
+	wantOrder := []string{"doc-both", "doc-vector", "doc-keyword-weak", "doc-keyword", "doc-weak-vector"}
 	if len(hits) != len(wantOrder) {
 		t.Fatalf("返回条数 = %d，期望 %d：%+v", len(hits), len(wantOrder), hits)
 	}
@@ -142,7 +142,7 @@ func TestHybridQueryRespectsWeights(t *testing.T) {
 }
 
 // TestHybridQueryKeywordOnlyWhenEmbeddingFails 覆盖嵌入服务不可用时的降级：
-// 向量通道整路失败，但关键词通道仍按命中强度返回结果，整条检索不报错。
+// 向量通道整路失败，但关键词通道仍按覆盖率返回结果（同覆盖率按时间倒序），整条检索不报错。
 func TestHybridQueryKeywordOnlyWhenEmbeddingFails(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "embedding unavailable", http.StatusServiceUnavailable)
@@ -151,7 +151,7 @@ func TestHybridQueryKeywordOnlyWhenEmbeddingFails(t *testing.T) {
 	configureHybridEmbedding(t, server.URL+"/v1")
 
 	docs := map[string][]Document{
-		"01-相近": {
+		"cluster-a": {
 			{ID: "kw-strong", Type: TypeText, Role: "user", Content: "目标目标目标", Timestamp: 100, Embedding: []float32{1, 0}},
 			{ID: "kw-weak", Type: TypeText, Role: "user", Content: "目标只出现一次", Timestamp: 200, Embedding: []float32{1, 0}},
 			{ID: "no-match", Type: TypeText, Role: "user", Content: "完全无关", Timestamp: 300, Embedding: []float32{1, 0}},
@@ -166,8 +166,8 @@ func TestHybridQueryKeywordOnlyWhenEmbeddingFails(t *testing.T) {
 	if len(hits) != 2 {
 		t.Fatalf("应只返回 2 条关键词命中，实得 %d：%+v", len(hits), hits)
 	}
-	if hits[0].ID != "kw-strong" || hits[1].ID != "kw-weak" {
-		t.Fatalf("关键词应命中次数优先排序，实得 %v", hitIDs(hits))
+	if hits[0].ID != "kw-weak" || hits[1].ID != "kw-strong" {
+		t.Fatalf("关键词应同覆盖率按时间倒序，实得 %v", hitIDs(hits))
 	}
 	for _, hit := range hits {
 		if hit.MatchedBy != MatchedByKeyword {
@@ -198,7 +198,7 @@ func TestHybridQueryKeywordOnlyWhenVectorTimesOut(t *testing.T) {
 	configureHybridEmbedding(t, server.URL+"/v1")
 
 	docs := map[string][]Document{
-		"01-相近": {
+		"cluster-a": {
 			{ID: "kw-only", Type: TypeText, Role: "user", Content: "目标原文", Timestamp: 100, Embedding: []float32{1, 0}},
 		},
 	}
@@ -212,6 +212,166 @@ func TestHybridQueryKeywordOnlyWhenVectorTimesOut(t *testing.T) {
 	}
 	if len(hits) != 1 || hits[0].ID != "kw-only" || hits[0].MatchedBy != MatchedByKeyword {
 		t.Fatalf("超时后应仅返回关键词结果，实得 %+v", hits)
+	}
+}
+
+// TestHybridSharedBudgetVectorSurplus 覆盖共享额度：关键词只召回 2 条、
+// 向量召回 10 条时，向量补齐剩余额度（topK=5 时返回 2 条双路 + 3 条仅向量）。
+func TestHybridSharedBudgetVectorSurplus(t *testing.T) {
+	server := scopeEmbeddingServer(t)
+	defer server.Close()
+	configureHybridEmbedding(t, server.URL+"/v1")
+
+	docs := map[string][]Document{"cluster-a": {}}
+	for i := 0; i < 2; i++ {
+		docs["cluster-a"] = append(docs["cluster-a"], Document{
+			ID:        "both-" + string(rune('a'+i)),
+			Type:      TypeText,
+			Role:      "user",
+			Content:   "目标记录",
+			Timestamp: int64(100 + i),
+			Embedding: []float32{1, 0},
+		})
+	}
+	for i := 0; i < 8; i++ {
+		docs["cluster-a"] = append(docs["cluster-a"], Document{
+			ID:        "vector-" + string(rune('a'+i)),
+			Type:      TypeText,
+			Role:      "user",
+			Content:   "无关正文",
+			Timestamp: int64(200 + i),
+			Embedding: []float32{1, 0},
+		})
+	}
+	d := newHybridTestStore(server, docs)
+
+	hits, err := d.HybridQuery(context.Background(), []string{"目标"}, TypeText, 5, HybridQueryOptions{})
+	if err != nil {
+		t.Fatalf("混合检索失败: %v", err)
+	}
+	if len(hits) != 5 {
+		t.Fatalf("topK=5 时应返回 5 条（关键词不足由向量补足），实得 %d：%v", len(hits), hitIDs(hits))
+	}
+	vectorOnly, keywordOnly, both := hybridBudgetUsage(hits)
+	if both != 2 || keywordOnly != 0 || vectorOnly != 3 {
+		t.Fatalf("额度调配异常：双路 %d，仅关键词 %d，仅向量 %d（期望 2/0/3）", both, keywordOnly, vectorOnly)
+	}
+}
+
+// TestHybridSharedBudgetKeywordSurplus 覆盖反向调配：向量只有 2 条、
+// 关键词召回 10 条时，关键词补齐剩余额度（topK=5 时 2 条双路 + 3 条仅关键词）。
+func TestHybridSharedBudgetKeywordSurplus(t *testing.T) {
+	server := scopeEmbeddingServer(t)
+	defer server.Close()
+	configureHybridEmbedding(t, server.URL+"/v1")
+
+	docs := map[string][]Document{"cluster-a": {}}
+	for i := 0; i < 2; i++ {
+		docs["cluster-a"] = append(docs["cluster-a"], Document{
+			ID:        "both-" + string(rune('a'+i)),
+			Type:      TypeText,
+			Role:      "user",
+			Content:   "目标记录",
+			Timestamp: int64(100 + i),
+			Embedding: []float32{1, 0},
+		})
+	}
+	for i := 0; i < 8; i++ {
+		docs["cluster-a"] = append(docs["cluster-a"], Document{
+			ID:        "keyword-" + string(rune('a'+i)),
+			Type:      TypeText,
+			Role:      "user",
+			Content:   "目标无关向量",
+			Timestamp: int64(200 + i),
+			Embedding: []float32{0, 1},
+		})
+	}
+	d := newHybridTestStore(server, docs)
+
+	hits, err := d.HybridQuery(context.Background(), []string{"目标"}, TypeText, 5, HybridQueryOptions{})
+	if err != nil {
+		t.Fatalf("混合检索失败: %v", err)
+	}
+	if len(hits) != 5 {
+		t.Fatalf("topK=5 时应返回 5 条（向量不足由关键词补足），实得 %d：%v", len(hits), hitIDs(hits))
+	}
+	vectorOnly, keywordOnly, both := hybridBudgetUsage(hits)
+	if both != 2 || keywordOnly != 3 || vectorOnly != 0 {
+		t.Fatalf("额度调配异常：双路 %d，仅关键词 %d，仅向量 %d（期望 2/3/0）", both, keywordOnly, vectorOnly)
+	}
+}
+
+// TestHybridSharedBudgetNeverExceedsTopK 覆盖总返回条数硬约束。
+func TestHybridSharedBudgetNeverExceedsTopK(t *testing.T) {
+	server := scopeEmbeddingServer(t)
+	defer server.Close()
+	configureHybridEmbedding(t, server.URL+"/v1")
+
+	docs := map[string][]Document{"cluster-a": {}}
+	for i := 0; i < 10; i++ {
+		docs["cluster-a"] = append(docs["cluster-a"], Document{
+			ID:        "doc-" + string(rune('a'+i)),
+			Type:      TypeText,
+			Role:      "user",
+			Content:   "目标记录",
+			Timestamp: int64(100 + i),
+			Embedding: []float32{1, 0},
+		})
+	}
+	d := newHybridTestStore(server, docs)
+
+	hits, err := d.HybridQuery(context.Background(), []string{"目标"}, TypeText, 3, HybridQueryOptions{})
+	if err != nil {
+		t.Fatalf("混合检索失败: %v", err)
+	}
+	if len(hits) != 3 {
+		t.Fatalf("topK=3 时返回 %d 条，超出预算：%v", len(hits), hitIDs(hits))
+	}
+}
+
+// TestHybridQueryVectorOnlyWhenKeywordRegexInvalid 覆盖关键词正则非法时的降级：
+// 关键词通道报错，向量通道单独返回，整条检索不失败。
+func TestHybridQueryVectorOnlyWhenKeywordRegexInvalid(t *testing.T) {
+	server := scopeEmbeddingServer(t)
+	defer server.Close()
+	configureHybridEmbedding(t, server.URL+"/v1")
+
+	docs := map[string][]Document{
+		"cluster-a": {
+			{ID: "vec-only", Type: TypeText, Role: "user", Content: "目标记录", Timestamp: 100, Embedding: []float32{1, 0}},
+		},
+	}
+	d := newHybridTestStore(server, docs)
+
+	hits, err := d.HybridQuery(context.Background(), []string{"目标("}, TypeText, 3, HybridQueryOptions{Regex: true})
+	if err != nil {
+		t.Fatalf("关键词正则非法时不应让整条检索失败: %v", err)
+	}
+	if len(hits) != 1 || hits[0].ID != "vec-only" || hits[0].MatchedBy != MatchedByVector {
+		t.Fatalf("应仅返回向量结果，实得 %+v", hits)
+	}
+	if hits[0].KeywordScore != 0 || hits[0].VectorScore <= 0 {
+		t.Fatalf("降级结果应只含向量分：%+v", hits[0])
+	}
+}
+
+// TestHybridQueryFailsOnlyWhenBothChannelsFail 覆盖两路都失败才报错。
+func TestHybridQueryFailsOnlyWhenBothChannelsFail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "embedding unavailable", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	configureHybridEmbedding(t, server.URL+"/v1")
+
+	docs := map[string][]Document{
+		"cluster-a": {
+			{ID: "doc", Type: TypeText, Role: "user", Content: "目标记录", Timestamp: 100, Embedding: []float32{1, 0}},
+		},
+	}
+	d := newHybridTestStore(server, docs)
+
+	if _, err := d.HybridQuery(context.Background(), []string{"目标("}, TypeText, 3, HybridQueryOptions{Regex: true}); err == nil {
+		t.Fatalf("两路均失败时应返回错误")
 	}
 }
 

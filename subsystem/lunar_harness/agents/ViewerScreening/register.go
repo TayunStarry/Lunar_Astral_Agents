@@ -26,36 +26,40 @@ var (
 	lastScreeningItem *lastScreeningRecord
 )
 
+// exportContext 观影者-阅片的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	_ = includeImages
+	lastScreeningMu.Lock()
+	record := lastScreeningItem
+	lastScreeningMu.Unlock()
+	if record == nil {
+		return map[string]any{
+			"kind":          "viewer-screening-context",
+			"generated_at":  time.Now().Format(time.RFC3339),
+			"message_count": 0,
+			"note":          "本次进程内还没有执行过阅片",
+		}, nil
+	}
+	return map[string]any{
+		"kind":            "viewer-screening-context",
+		"generated_at":    time.Now().Format(time.RFC3339),
+		"message_count":   1,
+		"last_impression": record,
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          AgentID,
 		Label:       Role,
 		Group:       "Go 智能体",
 		Description: "观影者-阅片最近一次视频印象（摘要 / 主题 / 情绪）",
-		Export: func(includeImages bool) (any, error) {
-			_ = includeImages
-			lastScreeningMu.Lock()
-			record := lastScreeningItem
-			lastScreeningMu.Unlock()
-			if record == nil {
-				return map[string]any{
-					"kind":          "viewer-screening-context",
-					"generated_at":  time.Now().Format(time.RFC3339),
-					"message_count": 0,
-					"note":          "本次进程内还没有执行过阅片",
-				}, nil
-			}
-			return map[string]any{
-				"kind":            "viewer-screening-context",
-				"generated_at":    time.Now().Format(time.RFC3339),
-				"message_count":   1,
-				"last_impression": record,
-			}, nil
-		},
+		Export:      exportContext,
 	})
 	agentrepair.RegisterResettable(AgentID, Role,
 		"观影者-阅片的最近一次视频印象；reset 清空该记录",
-		resetScreeningState)
+		resetScreeningState,
+		func(int) (any, error) { return exportContext(false) })
 	toolreg.Register(AgentID,
 		toolreg.Schema{Name: "pick_keywords", Description: "综合指令、偏好、心情与记忆决定本轮选片关键词。"},
 		toolreg.Schema{Name: "screen_video", Description: "依据标题 / 标签 / 简介 / 评论 / 弹幕生成结构化视频印象。"},

@@ -13,7 +13,8 @@ import (
 func init() {
 	agentrepair.RegisterResettable("web_search", "网络搜索",
 		"网络搜索的最近一次检索记录（检索词 / 引擎 / 页数 / 报告）；reset 清空该记录",
-		resetSearchState)
+		resetSearchState,
+		func(int) (any, error) { return exportContext(false) })
 }
 
 // resetSearchState 清空最近一次检索记录，下一次搜索从空白状态开始。

@@ -8,10 +8,32 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 )
+
+// embedTextsHook 可注入的嵌入实现（测试专用）。
+// 非 nil 时 embedTexts 直接调用它而不访问 HTTP 嵌入服务，用于在无服务环境下
+// 验证聚类、迁移与检索逻辑的确定性；生产环境保持 nil，走真实 HTTP 调用。
+var (
+	embedTextsHookMu sync.RWMutex
+	embedTextsHook   func(ctx context.Context, model string, texts []string) ([][]float32, error)
+)
+
+// setEmbedTextsHook 设置注入的嵌入实现并返回恢复函数。
+func setEmbedTextsHook(hook func(ctx context.Context, model string, texts []string) ([][]float32, error)) func() {
+	embedTextsHookMu.Lock()
+	previous := embedTextsHook
+	embedTextsHook = hook
+	embedTextsHookMu.Unlock()
+	return func() {
+		embedTextsHookMu.Lock()
+		embedTextsHook = previous
+		embedTextsHookMu.Unlock()
+	}
+}
 
 // embedTexts 批量调用 /v1/embeddings 获取嵌入向量（document 语义：裸文本，不加前缀）
 // model 参数指定嵌入模型名（通常为集合锁定的 Model 字段）
@@ -21,12 +43,28 @@ func (d *Store) embedTexts(ctx context.Context, model string, texts []string) ([
 	if !d.initialized {
 		return nil, fmt.Errorf("记忆库未初始化, 请先调用 EnsureReady")
 	}
+	if len(texts) == 0 {
+		return nil, nil
+	}
+
+	// 测试注入点优先：无真实嵌入服务时也能确定性执行聚类/迁移/检索
+	embedTextsHookMu.RLock()
+	hook := embedTextsHook
+	embedTextsHookMu.RUnlock()
+	if hook != nil {
+		vectors, err := hook(ctx, model, texts)
+		if err != nil {
+			return nil, err
+		}
+		if len(vectors) != len(texts) {
+			return nil, fmt.Errorf("注入嵌入返回数量不匹配: 期望 %d, 实际 %d", len(texts), len(vectors))
+		}
+		return vectors, nil
+	}
+
 	embeddingURL := config.AgentEmbeddingURL
 	if embeddingURL == "" {
 		return nil, fmt.Errorf("嵌入服务 base_url 未配置")
-	}
-	if len(texts) == 0 {
-		return nil, nil
 	}
 
 	reqBody := embeddingRequest{

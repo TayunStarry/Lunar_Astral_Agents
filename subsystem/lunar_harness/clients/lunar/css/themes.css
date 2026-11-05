@@ -25,6 +25,12 @@
     /* 消息气泡 */
     --user-bubble: linear-gradient(135deg, rgba(220, 230, 255, 0.85), rgba(200, 215, 255, 0.8));
     --assistant-bubble: rgba(245, 248, 255, 0.65);
+    /* 气泡柔和玻璃：低透明度描边 + 轻微内外阴影 */
+    --bubble-border: rgba(120, 140, 190, 0.16);
+    --bubble-border-user: rgba(255, 255, 255, 0.42);
+    --bubble-inset: rgba(255, 255, 255, 0.45);
+    --bubble-shadow: 0 10px 26px rgba(30, 45, 80, 0.10);
+    --bubble-shadow-user: 0 14px 30px rgba(76, 84, 170, 0.16);
 
     /* 代码高亮 */
     --hljs-bg: rgba(252, 249, 240, 0.9);
@@ -84,6 +90,12 @@
 
     --user-bubble: linear-gradient(135deg, rgba(60, 70, 120, 0.85), rgba(50, 60, 110, 0.8));
     --assistant-bubble: rgba(50, 52, 60, 0.75);
+    /* 气泡柔和玻璃：低透明度描边 + 轻微内外阴影 */
+    --bubble-border: rgba(168, 190, 255, 0.12);
+    --bubble-border-user: rgba(205, 196, 255, 0.22);
+    --bubble-inset: rgba(255, 255, 255, 0.10);
+    --bubble-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+    --bubble-shadow-user: 0 14px 32px rgba(76, 64, 180, 0.24);
 
     --hljs-bg: rgba(30, 30, 38, 0.9);
     --hljs-text: #e6edf3;

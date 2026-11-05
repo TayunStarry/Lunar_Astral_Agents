@@ -6,6 +6,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/internal/testenv"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 func TestParseContentSeparatesBlocks(t *testing.T) {
@@ -146,6 +147,6 @@ func TestDialogueApplyAppendSettingsKeepsAddress(t *testing.T) {
 		t.Fatalf("重建系统提示词后仍残留占位符")
 	}
 	if !strings.Contains(role.SystemPrompt, "江苏省 南京市") {
-		t.Fatalf("重建系统提示词后缺少所在地: %q", truncateRunes(role.SystemPrompt, 200))
+		t.Fatalf("重建系统提示词后缺少所在地: %q", textutil.TruncateRunes(role.SystemPrompt, 200))
 	}
 }

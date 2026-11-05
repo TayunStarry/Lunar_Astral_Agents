@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
 // ChatStream 发起一次流式对话并返回助手消息（可能携带工具调用）。
@@ -73,7 +71,7 @@ func ChatWithRetryOptions(role string, messages []Message, tools []ToolDefinitio
 			lastErr = err
 		}
 		if attempt == 0 {
-			logger.Warn("CrystalAstral", "%s：%s 推理失败，稍后重试: %v", role, label, lastErr)
+			logWarn("%s：%s 推理失败，稍后重试: %v", role, label, lastErr)
 			time.Sleep(retryWait)
 		}
 	}

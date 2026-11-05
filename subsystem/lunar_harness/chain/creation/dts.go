@@ -1,19 +1,20 @@
 package creation
 
-// dts.go 运行时 API 契约查阅：契约按能力拆分为多个 prompts/runtimeAPI/*API.d.ts 并嵌入二进制，
-// 运行期用 prompts.ListDTS / prompts.Read 列出与读取，便于按需只加载所需模块。
+// dts.go 运行时 API 契约查阅：契约按能力拆分为多个 *API.d.ts，内嵌在
+// engine/runtime/contracts 包，运行期用 contracts.ListDTS / contracts.Read
+// 列出与读取，便于按需只加载所需模块。
 
 import (
 	"fmt"
 	"sort"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/prompts"
+	"LunarSubsystem/LunarHarness/engine/runtime/contracts"
 )
 
 // listDTSDocs 列出可查阅的运行时文档（全部内嵌 *API.d.ts，按名称升序）。
 func listDTSDocs() ([]docInfo, error) {
-	docs, err := prompts.ListDTS()
+	docs, err := contracts.ListDTS()
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func readDTSDoc(name string) (string, error) {
 		if doc.Name != name {
 			continue
 		}
-		data, rerr := prompts.Read(name)
+		data, rerr := contracts.Read(name)
 		if rerr != nil {
 			return "", fmt.Errorf("读取运行时文档失败: %w", rerr)
 		}

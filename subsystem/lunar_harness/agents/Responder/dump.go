@@ -10,24 +10,27 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
+// exportContext 通用应答的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	_ = includeImages
+	pending := Pending()
+	return map[string]any{
+		"kind":           "responder-context",
+		"generated_at":   time.Now().Format(time.RFC3339),
+		"queue_pending":  pending,
+		"queue_capacity": queueCapacity,
+		"permitted":      Permitted(),
+		"busy":           Busy(),
+		"message_count":  pending,
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "responder",
 		Label:       "通用应答",
 		Group:       "Go 智能体",
 		Description: "通用应答的队列与运行状态（待处理数、特许运行、忙碌标记；不保留上下文）",
-		Export: func(includeImages bool) (any, error) {
-			_ = includeImages
-			pending := Pending()
-			return map[string]any{
-				"kind":           "responder-context",
-				"generated_at":   time.Now().Format(time.RFC3339),
-				"queue_pending":  pending,
-				"queue_capacity": queueCapacity,
-				"permitted":      Permitted(),
-				"busy":           Busy(),
-				"message_count":  pending,
-			}, nil
-		},
+		Export:      exportContext,
 	})
 }

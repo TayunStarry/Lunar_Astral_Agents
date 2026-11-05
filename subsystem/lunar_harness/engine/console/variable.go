@@ -4,19 +4,21 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/console/logbuf"
 )
 
 // ==== 管线容量常量 ====
 
 const (
-	// logStoreCap 每类日志环形缓冲最大条数
-	logStoreCap = 1000
-	// eventChanCap 流式事件通道容量（TUI 未消费时丢弃最旧事件由轮次缓冲兜底）
-	eventChanCap = 512
-	// turnTextCap 单轮思考/输出文本的最大保留字符数（超出保留尾部）
-	turnTextCap = 48 * 1024
-	// turnHistoryCap 历史轮次最大保留数
-	turnHistoryCap = 30
+	// logStoreCap 每类日志环形缓冲最大条数（实际存储位于 logbuf）
+	logStoreCap = logbuf.LogStoreCap
+	// eventChanCap 流式事件通道容量（实际存储位于 logbuf）
+	eventChanCap = logbuf.EventChanCap
+	// turnTextCap 单轮思考/输出文本的最大保留字符数（实际存储位于 logbuf）
+	turnTextCap = logbuf.TurnTextCap
+	// turnHistoryCap 历史轮次最大保留数（实际存储位于 logbuf）
+	turnHistoryCap = logbuf.TurnHistoryCap
 	// statsInterval 运行状态采样间隔
 	statsInterval = time.Second
 )
@@ -26,14 +28,6 @@ const (
 var (
 	// pipelineOnce 保证 Install 只执行一次
 	pipelineOnce sync.Once
-
-	// storeMu 保护全部日志环形缓冲
-	storeMu sync.RWMutex
-	// logStores 各来源日志缓冲（下标对应 LogSource）
-	logStores [sourceCount][]LogLine
-	// logStoreVersions 各来源日志追加版本号：环形缓冲满后长度恒为 logStoreCap，
-	// 不能再用 len(logs) 判断“有没有新内容”（否则视图缓存永远不刷新）。
-	logStoreVersions [sourceCount]uint64
 
 	// notifyCh 日志/事件到达通知（TUI 唤醒信号，缓冲 1 防阻塞）
 	notifyCh = make(chan struct{}, 1)
@@ -46,34 +40,6 @@ var (
 	intercepted bool
 )
 
-// ==== 智能体流式状态 ====
-
-var (
-	// streamMu 保护轮次缓冲
-	streamMu sync.Mutex
-	// currentTurn 进行中的轮次
-	currentTurn *AgentTurn
-	// turnHistory 历史轮次（旧 → 新）
-	turnHistory []*AgentTurn
-	// streamCh 流式事件通道（TUI 激活时消费；未激活时仅写入轮次缓冲）
-	streamCh chan StreamEvent
-	// streamChMu 保护 streamCh 的注册/读取
-	streamChMu sync.RWMutex
-	// turnCreated 进程启动以来累计完成（归档）的轮数
-	turnCreated int
-	// turnDropped 因 turnHistoryCap 上限被淘汰的轮数（导出时据此如实标注数据完整性）
-	turnDropped int
-)
-
-// ==== 模型调用计量 ====
-
-var (
-	// meterMu 保护计量数据
-	meterMu sync.Mutex
-	// meterStats 计量数据
-	meterStats ModelCallStats
-)
-
 // ==== 运行状态采样 ====
 
 var (
@@ -83,10 +49,6 @@ var (
 	statsMu sync.RWMutex
 	// latestStats 最新状态快照
 	latestStats Snapshot
-	// buildVersionMu 保护宿主注入的构建版本号
-	buildVersionMu sync.RWMutex
-	// buildVersion 宿主注入的构建版本号（显示于「运行状态」屏）
-	buildVersion string
 	// lastProcTimes 上次采样的进程 CPU 时间（用户态+内核态，100ns 单位）
 	lastProcTimes int64
 	// lastSampleAt 上次采样时刻

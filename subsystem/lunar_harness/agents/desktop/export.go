@@ -15,6 +15,10 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
+// 依赖口径：engine/* 内部包之间可互相依赖（engine/console 为总成页面，被依赖属正常），
+// 唯一硬边界是 engine 不得反向依赖 agents/chain、protocol 不得依赖 engine/agents/chain。
+// 桌面前台信息由编排层 chain/desktop 直接调用 engine/desktop，本包不再做转发壳。
+
 // EditorTask 编纂者输出的结构化任务（等价于内部 editorTask）。
 type EditorTask = editorTask
 
@@ -102,11 +106,6 @@ func OperationPhase(ctx context.Context, decision PlanDecision, handoff HandoffR
 // EnsureTargetForeground 每轮开始确认目标应用在前台。
 func EnsureTargetForeground(ctx context.Context, target string) error {
 	return ensureTargetForeground(ctx, target)
-}
-
-// ForegroundProcess 返回当前前台窗口进程名。
-func ForegroundProcess() string {
-	return dtForegroundProcess()
 }
 
 // AdvanceHandoff 由编排层确定性推进交接记录。

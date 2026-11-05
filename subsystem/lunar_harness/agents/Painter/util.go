@@ -99,14 +99,6 @@ func randomFloor(min, max int) int {
 	return rand.Intn(max-min+1) + min
 }
 
-// truncateRunes 按字符截断并追加省略号，统一使用基座实现。
-func truncateRunes(text string, limit int) string {
-	if limit <= 0 {
-		return text
-	}
-	return agentbase.TruncateRunes(text, limit)
-}
-
 func pick[T any](condition bool, whenTrue, whenFalse T) T {
 	if condition {
 		return whenTrue

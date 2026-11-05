@@ -9,5 +9,6 @@ import (
 func init() {
 	agentrepair.RegisterResettable(AgentID, "生活记忆整理者",
 		"生活记忆整理者按批执行、不保留跨批对话；reset 清空最近一次整理记录",
-		resetLastRun)
+		resetLastRun,
+		func(int) (any, error) { return exportContext(false) })
 }

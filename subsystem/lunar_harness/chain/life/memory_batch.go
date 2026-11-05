@@ -6,77 +6,100 @@ import (
 	"context"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
-	"LunarSubsystem/LunarHarness/agents/LifeMemorizer"
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/memory"
 )
 
-// listAllTextMemories 枚举全部文本记忆，排除哔哩观影记忆。
-func listAllTextMemories() []memoryItem {
+// listAllTextEntries 枚举全部文本记忆（含观影来源），供生活整理使用。
+func listAllTextEntries() []memory.Entry {
 	const pageSize = 200
-	out := make([]memoryItem, 0)
+	out := make([]memory.Entry, 0)
 	for offset := 0; ; offset += pageSize {
 		entries, total := memory.List("text", offset, pageSize)
-		for _, entry := range entries {
-			if entry.Source == "bilibili_viewer" {
-				continue
-			}
-			content := strings.TrimSpace(entry.Content)
-			if content == "" || strings.HasPrefix(content, "[B站视频]") {
-				continue
-			}
-			out = append(out, memoryItem{
-				ID:        entry.ID,
-				Content:   content,
-				Role:      entry.Role,
-				Timestamp: entry.Timestamp,
-			})
-		}
+		out = append(out, entries...)
 		if len(entries) == 0 || offset+pageSize >= total {
 			break
 		}
+	}
+	return out
+}
+
+// listAllTextMemories 枚举参与生活整理的文本记忆。
+func listAllTextMemories() []memoryItem {
+	return filterLifeMemories(listAllTextEntries())
+}
+
+// filterLifeMemories 只按 Source 排除观影记忆，正文前缀原样保留。
+// 观影链的旧记忆迁移由其自身负责，本链路不再做正文前缀清洗。
+func filterLifeMemories(entries []memory.Entry) []memoryItem {
+	out := make([]memoryItem, 0, len(entries))
+	for _, entry := range entries {
+		if isViewerSource(entry.Source) {
+			continue
+		}
+		content := strings.TrimSpace(entry.Content)
+		if content == "" {
+			continue
+		}
+		out = append(out, memoryItem{
+			ID:             entry.ID,
+			Content:        content,
+			Role:           entry.Role,
+			Timestamp:      entry.Timestamp,
+			Pending:        entry.Pending,
+			PendingPartner: entry.PendingPartner,
+		})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Timestamp < out[j].Timestamp })
 	return out
 }
 
-// buildMemoryBatches 按 1 万字符分批，单条记忆不跨批、不截断。
-func buildMemoryBatches(items []memoryItem) []memoryBatch {
-	batches := make([]memoryBatch, 0, len(items)/10+1)
-	current := memoryBatch{}
-	runes := 0
-	for _, item := range items {
-		n := utf8.RuneCountInString(item.Content)
-		if runes > 0 && runes+n > batchMaxRunes {
-			batches = append(batches, current)
-			current = memoryBatch{}
-			runes = 0
-		}
-		current.Items = append(current.Items, item)
-		runes += n
-		if n > batchMaxRunes {
-			logger.Warn(Module, "[记忆整理] 单条记忆 %s 超过 %d 字符，独占一批且不截断", item.ID, batchMaxRunes)
-			batches = append(batches, current)
-			current = memoryBatch{}
-			runes = 0
-		}
-	}
-	if len(current.Items) > 0 {
-		batches = append(batches, current)
-	}
-	return batches
+// isViewerSource 观影来源判断只认 Source 字段，不再看正文前缀。
+func isViewerSource(source string) bool {
+	return strings.TrimSpace(source) == viewerMemorySource
 }
 
-// consolidateBatch 调用生活记忆整理者处理一个批次。
-func consolidateBatch(ctx context.Context, batch memoryBatch) ([]string, error) {
+// mergeBatch 调用生活记忆整理者对相似簇做合并改写（可输出一条或多条事实条目）。
+func mergeBatch(ctx context.Context, batch memoryBatch) ([]string, error) {
 	if len(batch.Items) == 0 {
 		return nil, nil
 	}
+	return mergeHook(ctx, batchContents(batch))
+}
+
+// batchContents 取批次内各条目正文。
+func batchContents(batch memoryBatch) []string {
 	contents := make([]string, 0, len(batch.Items))
 	for _, item := range batch.Items {
 		contents = append(contents, item.Content)
 	}
-	return LifeMemorizer.Consolidate(ctx, contents)
+	return contents
+}
+
+// sameTextSet 判断整理结果是否与旧条目完全一致（仅顺序/空白差异）。
+// 一致说明没有可合并内容，调用方应跳过替换，保留原条目 ID。
+func sameTextSet(oldTexts, newTexts []string) bool {
+	oldSet := normalizedTextSet(oldTexts)
+	newSet := normalizedTextSet(newTexts)
+	if len(oldSet) != len(newSet) {
+		return false
+	}
+	for text, count := range oldSet {
+		if newSet[text] != count {
+			return false
+		}
+	}
+	return true
+}
+
+func normalizedTextSet(texts []string) map[string]int {
+	out := make(map[string]int, len(texts))
+	for _, text := range texts {
+		normalized := strings.Join(strings.Fields(text), " ")
+		if normalized == "" {
+			continue
+		}
+		out[normalized]++
+	}
+	return out
 }

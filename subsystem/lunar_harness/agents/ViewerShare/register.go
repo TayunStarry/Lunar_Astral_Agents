@@ -25,36 +25,40 @@ var (
 	lastShareItem *lastShareRecord
 )
 
+// exportContext 观影者-分享的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	_ = includeImages
+	lastShareMu.Lock()
+	record := lastShareItem
+	lastShareMu.Unlock()
+	if record == nil {
+		return map[string]any{
+			"kind":          "viewer-share-context",
+			"generated_at":  time.Now().Format(time.RFC3339),
+			"message_count": 0,
+			"note":          "本次进程内还没有生成过分享文案",
+		}, nil
+	}
+	return map[string]any{
+		"kind":          "viewer-share-context",
+		"generated_at":  time.Now().Format(time.RFC3339),
+		"message_count": 1,
+		"last_share":    record,
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          AgentID,
 		Label:       Role,
 		Group:       "Go 智能体",
 		Description: "观影者-分享最近一次对外文案（观影动态 / 分享评论）",
-		Export: func(includeImages bool) (any, error) {
-			_ = includeImages
-			lastShareMu.Lock()
-			record := lastShareItem
-			lastShareMu.Unlock()
-			if record == nil {
-				return map[string]any{
-					"kind":          "viewer-share-context",
-					"generated_at":  time.Now().Format(time.RFC3339),
-					"message_count": 0,
-					"note":          "本次进程内还没有生成过分享文案",
-				}, nil
-			}
-			return map[string]any{
-				"kind":          "viewer-share-context",
-				"generated_at":  time.Now().Format(time.RFC3339),
-				"message_count": 1,
-				"last_share":    record,
-			}, nil
-		},
+		Export:      exportContext,
 	})
 	agentrepair.RegisterResettable(AgentID, Role,
 		"观影者-分享的最近一次对外文案；reset 清空该记录",
-		resetShareState)
+		resetShareState,
+		func(int) (any, error) { return exportContext(false) })
 	toolreg.Register(AgentID,
 		toolreg.Schema{Name: "write_dynamic", Description: "生成一轮观影动态正文。"},
 		toolreg.Schema{Name: "write_share", Description: "生成一条 @分享评论。"},

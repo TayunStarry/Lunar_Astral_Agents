@@ -64,8 +64,10 @@
     max-width: 82%;
     min-width: 220px;
     padding: 12px 18px;
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-lg);
     position: relative;
+    border: 1px solid var(--bubble-border);
+    box-shadow: var(--bubble-shadow), inset 0 1px 0 var(--bubble-inset);
     backdrop-filter: blur(12px);
     transition: transform 0.2s ease, box-shadow 0.2s;
     animation: messageSlide 0.3s ease-out;
@@ -80,16 +82,18 @@
 .message.user-message {
     align-self: flex-end;
     background: var(--user-bubble);
-    border-bottom-right-radius: 10px;
-    border-left: 4px solid rgba(255, 255, 255, 0.5);
+    border-color: var(--bubble-border-user);
+    border-bottom-right-radius: 8px;
+    box-shadow: var(--bubble-shadow-user), inset 0 1px 0 var(--bubble-inset);
 }
 
 .message.assistant-message {
     align-self: flex-start;
-    background: var(--assistant-bubble);
+    background: linear-gradient(145deg, var(--assistant-bubble), var(--glass-bg));
     backdrop-filter: blur(14px);
-    border-bottom-left-radius: 10px;
-    border-right: 4px solid rgba(255, 255, 255, 0.5);
+    border-color: var(--bubble-border);
+    border-bottom-left-radius: 8px;
+    box-shadow: var(--bubble-shadow), inset 0 1px 0 var(--bubble-inset);
 }
 
 .message.file-message {

@@ -8,10 +8,7 @@ package desktop
 import (
 	"errors"
 	"sync"
-	"syscall"
 	"time"
-
-	uia "github.com/auuunya/go-element"
 )
 
 // ErrCanceled 桌面操纵任务被调用方中断（控制台手动中断 / 对话者开始应答时的自动终止）。
@@ -47,25 +44,6 @@ var (
 	autoObsMeter   func(prompt, completion, cached int64, generation time.Duration, estimated bool)
 )
 
-// dtBuiltinPrograms 常见系统程序的中文/口语别名 → 实际可执行文件名。
-// 未覆盖的程序仍走开始菜单/安装目录搜索。
-var dtBuiltinPrograms = map[string]string{
-	"记事本":      "notepad.exe",
-	"notepad":  "notepad.exe",
-	"计算器":      "calc.exe",
-	"calc":     "calc.exe",
-	"画图":       "mspaint.exe",
-	"写字板":      "wordpad.exe",
-	"cmd":      "cmd.exe",
-	"命令提示符":    "cmd.exe",
-	"资源管理器":    "explorer.exe",
-	"explorer": "explorer.exe",
-	"任务管理器":    "taskmgr.exe",
-	"控制面板":     "control.exe",
-	"截图工具":     "snippingtool.exe",
-	"mspaint":  "mspaint.exe",
-}
-
 // 运行状态（Start / Stop / Snapshot）已上移到 chain/desktop，由桌控链统一维护。
 
 const (
@@ -74,76 +52,6 @@ const (
 	// uiaDumpTimeout 读取 UIA 树的最长执行时间。
 	uiaDumpTimeout = 5 * time.Second
 )
-
-// uiaOnceDT UIA 客户端实例初始化一次
-var uiaOnceDT sync.Once
-
-// uiaClientDT UIA 客户端实例（单例初始化）。
-var uiaClientDT *uia.IUIAutomation
-
-// 加载 user32.dll 库
-var user32SW = syscall.NewLazyDLL("user32.dll")
-
-// 获取 EnumWindows 函数指针
-var procEnumWindowsSW = user32SW.NewProc("EnumWindows")
-
-// 获取 GetWindowTextW 函数指针
-var procGetWindowTextW_SW = user32SW.NewProc("GetWindowTextW")
-
-// 获取 GetWindowTextLengthW 函数指针
-var procGetWindowTextLenW_SW = user32SW.NewProc("GetWindowTextLengthW")
-
-// 获取 GetClassNameW 函数指针
-var procGetClassNameW_SW = user32SW.NewProc("GetClassNameW")
-
-// 获取 mouse_event 函数指针
-var procMouseEventSW = user32SW.NewProc("mouse_event")
-
-// 获取 keybd_event 函数指针
-var procKeybdEventSW = user32SW.NewProc("keybd_event")
-
-// 加载 kernel32.dll 库
-var kernel32SW = syscall.NewLazyDLL("kernel32.dll")
-
-// 获取 OpenProcess 函数指针
-var procOpenProcessSW = kernel32SW.NewProc("OpenProcess")
-
-// 获取 QueryFullProcessImageNameW 函数指针
-var procQueryFullProcessImageNameSW = kernel32SW.NewProc("QueryFullProcessImageNameW")
-
-// 获取 CloseHandle 函数指针
-var procCloseHandleSW = kernel32SW.NewProc("CloseHandle")
-
-// mouse_event 使用的按键动作标志。
-const (
-	mswLeftdown   = 0x0002 // 左键按下
-	mswLeftup     = 0x0004 // 左键松开
-	mswRightdown  = 0x0008 // 右键按下
-	mswRightup    = 0x0010 // 右键松开
-	mswMiddledown = 0x0020 // 中键按下
-	mswMiddleup   = 0x0040 // 中键松开
-	mswWheel      = 0x0800 // 滚轮轮按下
-	mswKeyup      = 0x0002 // 键松开
-)
-
-// dtKnownProtocols 常见需用协议（URL scheme）启动的 UWP/商店应用映射。
-var dtKnownProtocols = map[string]string{
-	"store": "ms-windows-store:",
-	"商店":    "ms-windows-store:",
-	"商城":    "ms-windows-store:",
-}
-
-// dtVkMap 常用键名到虚拟键码（VK）的映射表。
-var dtVkMap = map[string]uint16{
-	"enter": 0x0D, "return": 0x0D, "tab": 0x09, "esc": 0x1B, "escape": 0x1B,
-	"backspace": 0x08, "delete": 0x2E, "del": 0x2E, "space": 0x20,
-	"up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27,
-	"home": 0x24, "end": 0x23, "pageup": 0x21, "pagedown": 0x22,
-	"ctrl": 0x11, "control": 0x11, "shift": 0x10, "alt": 0x12, "menu": 0x12,
-	"win": 0x5B, "cmd": 0x5B, "meta": 0x5B,
-	"f1": 0x70, "f2": 0x71, "f3": 0x72, "f4": 0x73, "f5": 0x74, "f6": 0x75,
-	"f7": 0x76, "f8": 0x77, "f9": 0x78, "f10": 0x79, "f11": 0x7A, "f12": 0x7B,
-}
 
 // 各角色提示词统一存放在 prompts/ 下，运行期经 prompts.Read 加载（见 prompts.go）。
 var (

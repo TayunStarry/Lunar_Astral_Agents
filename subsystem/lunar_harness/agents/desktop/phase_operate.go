@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	desktopos "LunarSubsystem/LunarHarness/engine/desktop"
 )
 
 // operationPhase 执行操作者（键盘/鼠标/UIA）：按决策调用对应操作工具。
@@ -48,7 +50,7 @@ func operationPhase(ctx context.Context, dec planDecision, handoff HandoffRecord
 	userMsg := chatMessage{Role: "user", Content: "任务目标：" + dec.Action}
 	if dec.Decision == "mouse" {
 		parts := []contentPart{{Type: "text", Text: "任务目标：" + dec.Action + "\n\n下方是当前前台窗口截图（带窗口内像素坐标网格），请据此确定点击/拖拽坐标。"}}
-		if img, err := callDesktop(ctx, desktopCallTimeout, "截取前台窗口", DTCaptureAnnotated); err == nil {
+		if img, err := callDesktop(ctx, desktopCallTimeout, "截取前台窗口", desktopos.CaptureAnnotated); err == nil {
 			parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: "data:image/png;base64," + base64Encode(img)}})
 		}
 		userMsg.Content = parts
@@ -147,13 +149,13 @@ func ensureTargetForeground(ctx context.Context, target string) error {
 		if err := ctx.Err(); err != nil {
 			return ErrCanceled
 		}
-		if dtForegroundMatches(target) {
+		if desktopos.ForegroundMatches(target) {
 			return nil
 		}
 		activated, _ := callDesktop(ctx, 3*time.Second, "激活目标窗口", func() (string, error) {
-			return DTActivateLaunchByName(target), nil
+			return desktopos.ActivateLaunchByName(target), nil
 		})
-		if activated != "" && dtForegroundMatches(target) {
+		if activated != "" && desktopos.ForegroundMatches(target) {
 			traceAuto("【编排】目标窗口已置前: %s", activated)
 			return nil
 		}

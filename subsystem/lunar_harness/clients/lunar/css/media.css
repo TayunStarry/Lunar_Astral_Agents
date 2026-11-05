@@ -70,24 +70,46 @@
     border-radius: var(--radius-md);
 }
 
-/* 语音重播按钮 */
+/* 语音重播按钮：胶囊化，元信息收进胶囊，权重低于正文 */
 .audio-replay-btn {
-    background: rgba(157, 107, 255, 0.15);
-    border: 1px solid rgba(157, 107, 255, 0.3);
-    border-radius: 40px;
-    padding: 3px 10px;
-    color: var(--accent-color);
-    cursor: pointer;
-    font-size: 0.72rem;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    transition: 0.15s;
+    gap: 8px;
+    margin-top: 9px;
+    padding: 4px 12px 4px 4px;
+    border-radius: 40px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.audio-replay-btn i {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.6rem;
+    background: linear-gradient(135deg, var(--brand-color), var(--accent-color));
+    box-shadow: 0 3px 10px rgba(120, 100, 240, 0.28);
 }
 
 .audio-replay-btn:hover {
-    background: var(--accent-color);
-    color: white;
+    transform: translateY(-1px);
+    border-color: var(--accent-color);
+    color: var(--text-primary);
+    background: var(--panel-header-bg);
+}
+
+.audio-replay-btn:active {
+    transform: translateY(0) scale(0.99);
 }
 
 .audio-replay-btn.replaying {

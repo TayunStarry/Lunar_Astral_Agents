@@ -25,36 +25,40 @@ var (
 	lastCriticItem *lastCriticRecord
 )
 
+// exportContext 观影者-评论的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	_ = includeImages
+	lastCriticMu.Lock()
+	record := lastCriticItem
+	lastCriticMu.Unlock()
+	if record == nil {
+		return map[string]any{
+			"kind":          "viewer-critic-context",
+			"generated_at":  time.Now().Format(time.RFC3339),
+			"message_count": 0,
+			"note":          "本次进程内还没有生成过点评",
+		}, nil
+	}
+	return map[string]any{
+		"kind":          "viewer-critic-context",
+		"generated_at":  time.Now().Format(time.RFC3339),
+		"message_count": 1,
+		"last_comment":  record,
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          AgentID,
 		Label:       Role,
 		Group:       "Go 智能体",
 		Description: "观影者-评论最近一次点评输出（互动回应 / 观后回顾）",
-		Export: func(includeImages bool) (any, error) {
-			_ = includeImages
-			lastCriticMu.Lock()
-			record := lastCriticItem
-			lastCriticMu.Unlock()
-			if record == nil {
-				return map[string]any{
-					"kind":          "viewer-critic-context",
-					"generated_at":  time.Now().Format(time.RFC3339),
-					"message_count": 0,
-					"note":          "本次进程内还没有生成过点评",
-				}, nil
-			}
-			return map[string]any{
-				"kind":          "viewer-critic-context",
-				"generated_at":  time.Now().Format(time.RFC3339),
-				"message_count": 1,
-				"last_comment":  record,
-			}, nil
-		},
+		Export:      exportContext,
 	})
 	agentrepair.RegisterResettable(AgentID, Role,
 		"观影者-评论的最近一次点评输出；reset 清空该记录",
-		resetCriticState)
+		resetCriticState,
+		func(int) (any, error) { return exportContext(false) })
 	toolreg.Register(AgentID,
 		toolreg.Schema{Name: "reply_inbox", Description: "按场景生成一句自然回应（注入人设与长期记忆）。"},
 		toolreg.Schema{Name: "round_memory", Description: "把本轮观影体验写成人格化记忆。"},

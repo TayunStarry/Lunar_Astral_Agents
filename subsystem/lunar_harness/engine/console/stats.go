@@ -1,18 +1,14 @@
 package console
 
+import (
+	"LunarSubsystem/LunarHarness/engine/console/logbuf"
+)
+
 // SetBuildVersion 注入构建版本号（宿主启动时调用一次，显示在「运行状态」屏）
-func SetBuildVersion(version string) {
-	buildVersionMu.Lock()
-	buildVersion = version
-	buildVersionMu.Unlock()
-}
+func SetBuildVersion(version string) { logbuf.SetBuildVersion(version) }
 
 // BuildVersion 返回宿主注入的构建版本号（未注入时为空串）
-func BuildVersion() string {
-	buildVersionMu.RLock()
-	defer buildVersionMu.RUnlock()
-	return buildVersion
-}
+func BuildVersion() string { return logbuf.BuildVersion() }
 
 // GetSnapshot 返回最新运行状态快照
 func GetSnapshot() Snapshot {

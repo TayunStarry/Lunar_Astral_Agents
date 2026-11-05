@@ -6,11 +6,9 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -207,34 +205,22 @@ func ScanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 //
 // 内置包随二进制发布在 clients/crystal/<name>，URL 直接指向 /desktop/<name>/index.html；
 // Internal=true 供前端过滤，不把它们放进桌面网格（由常驻侧边栏按钮进入）。
+// 目录枚举与 metadata 读取统一经 clients.CrystalModules，与 AtoA 工具链扫描同源。
 func loadInternalPackages() []PackageInfo {
 	out := []PackageInfo{}
-	entries, err := fs.ReadDir(clients.EmbeddedFiles, "crystal")
-	if err != nil {
-		return out
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		dir := entry.Name()
-		metaPath := path.Join("crystal", dir, "metadata.json")
-		data, err := fs.ReadFile(clients.EmbeddedFiles, metaPath)
-		if err != nil {
-			continue
-		}
+	for _, mod := range clients.CrystalModules() {
 		var pkg PackageInfo
-		if err := json.Unmarshal(data, &pkg); err != nil {
-			logger.Warn("CrystalAstral", "解析内置包配置失败 %s: %v", metaPath, err)
+		if err := json.Unmarshal(mod.Metadata, &pkg); err != nil {
+			logger.Warn("CrystalAstral", "解析内置包配置失败 crystal/%s/metadata.json: %v", mod.Name, err)
 			continue
 		}
-		pkg.PackageName = dir
+		pkg.PackageName = mod.Name
 		pkg.Internal = true
 		if pkg.Icon != "" && !strings.HasPrefix(pkg.Icon, "http") && !strings.HasPrefix(pkg.Icon, "/") {
-			pkg.Icon = "/desktop/" + dir + "/" + pkg.Icon
+			pkg.Icon = "/desktop/" + mod.Name + "/" + pkg.Icon
 		}
 		if pkg.URL == "" && pkg.Path == "" {
-			pkg.URL = "/desktop/" + dir + "/index.html"
+			pkg.URL = "/desktop/" + mod.Name + "/index.html"
 		}
 		out = append(out, pkg)
 	}

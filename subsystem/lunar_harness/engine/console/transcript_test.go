@@ -5,16 +5,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/console/logbuf"
 )
 
 // resetTurnStore 清空轮次缓冲与计数（各子测试互不干扰；测试间不并发）
 func resetTurnStore() {
-	streamMu.Lock()
-	currentTurn = nil
-	turnHistory = nil
-	turnCreated = 0
-	turnDropped = 0
-	streamMu.Unlock()
+	logbuf.ResetTurns()
 }
 
 // 覆盖：实况导出的基本结构——每轮的角色 / 思考 / 输出 / 工具序列 / 时长都要在。

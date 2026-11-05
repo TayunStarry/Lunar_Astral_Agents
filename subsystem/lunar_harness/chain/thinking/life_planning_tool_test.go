@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/chain/life"
 	"LunarSubsystem/LunarHarness/internal/testenv"
 	"LunarSubsystem/LunarHarness/prompts"
@@ -29,12 +30,12 @@ func TestLifePlanningDetails(t *testing.T) {
 		kind string
 		want string
 	}{
-		{lifePlanningPlanManager, "计划管理"},
-		{lifePlanningRecentActivity, "最近活动"},
-		{lifePlanningRecordIntent, "创作意图"},
+		{Dialogue.LifePlanningPlanManager, "计划管理"},
+		{Dialogue.LifePlanningRecentActivity, "最近活动"},
+		{Dialogue.LifePlanningRecordIntent, "创作意图"},
 	}
 	for _, tc := range cases {
-		decoded := decodeLifePlanning(t, handleLifePlanning(map[string]any{
+		decoded := decodeLifePlanning(t, Dialogue.ExecuteLifePlanning(map[string]any{
 			"type": tc.kind, "details": true, "handle": []any{},
 		}))
 		if decoded.Error != "" || !strings.Contains(decoded.Result, tc.want) {
@@ -46,8 +47,8 @@ func TestLifePlanningDetails(t *testing.T) {
 // TestLifePlanningRecordIntent 记录意图会覆盖生活创作参考字符串。
 func TestLifePlanningRecordIntent(t *testing.T) {
 	testenv.Isolate(t)
-	decoded := decodeLifePlanning(t, handleLifePlanning(map[string]any{
-		"type": lifePlanningRecordIntent, "instruction": "下一轮写一首关于秋天的诗", "handle": []any{},
+	decoded := decodeLifePlanning(t, Dialogue.ExecuteLifePlanning(map[string]any{
+		"type": Dialogue.LifePlanningRecordIntent, "instruction": "下一轮写一首关于秋天的诗", "handle": []any{},
 	}))
 	if decoded.Error != "" || !strings.Contains(decoded.Result, "秋天的诗") {
 		t.Fatalf("记录创作意图失败: %+v", decoded)
@@ -61,8 +62,8 @@ func TestLifePlanningRecordIntent(t *testing.T) {
 // TestLifePlanningRecentActivity 最近活动按需读取，空状态有明确返回。
 func TestLifePlanningRecentActivity(t *testing.T) {
 	testenv.Isolate(t)
-	decoded := decodeLifePlanning(t, handleLifePlanning(map[string]any{
-		"type": lifePlanningRecentActivity, "handle": []any{},
+	decoded := decodeLifePlanning(t, Dialogue.ExecuteLifePlanning(map[string]any{
+		"type": Dialogue.LifePlanningRecentActivity, "handle": []any{},
 	}))
 	if decoded.Error != "" || decoded.Result == "" {
 		t.Fatalf("最近活动应有明确返回: %+v", decoded)
@@ -71,14 +72,14 @@ func TestLifePlanningRecentActivity(t *testing.T) {
 
 // TestLifePlanningRejectsBadInput 未知分支与缺失 instruction 必须返回标准错误。
 func TestLifePlanningRejectsBadInput(t *testing.T) {
-	badType := decodeLifePlanning(t, handleLifePlanning(map[string]any{
+	badType := decodeLifePlanning(t, Dialogue.ExecuteLifePlanning(map[string]any{
 		"type": "bad", "instruction": "x", "handle": []any{},
 	}))
 	if !strings.Contains(badType.Error, "type 只能取") {
 		t.Fatalf("未知分支应报错: %+v", badType)
 	}
-	missing := decodeLifePlanning(t, handleLifePlanning(map[string]any{
-		"type": lifePlanningPlanManager, "handle": []any{},
+	missing := decodeLifePlanning(t, Dialogue.ExecuteLifePlanning(map[string]any{
+		"type": Dialogue.LifePlanningPlanManager, "handle": []any{},
 	}))
 	if !strings.Contains(missing.Error, "instruction 不能为空") {
 		t.Fatalf("缺失 instruction 应报错: %+v", missing)
@@ -87,10 +88,10 @@ func TestLifePlanningRejectsBadInput(t *testing.T) {
 
 // TestFileOperationsBranchAndLegacyAlias 改名后的分支可用，旧值仍兼容。
 func TestFileOperationsBranchAndLegacyAlias(t *testing.T) {
-	for _, kind := range []string{techniqueFileOperations, techniqueCreatorLegacy, techniqueFileEditorLegacy} {
-		decoded := decodeLifePlanning(t, ToolResult{Text: handleDispatchTechnique(map[string]any{
+	for _, kind := range []string{Dialogue.TechniqueFileOperations, Dialogue.TechniqueCreatorLegacy, Dialogue.TechniqueFileEditorLegacy} {
+		decoded := decodeLifePlanning(t, Dialogue.ExecuteDispatchTechnique(map[string]any{
 			"type": kind, "details": true, "handle": []any{},
-		}).Text})
+		}))
 		if decoded.Error != "" || !strings.Contains(decoded.Result, "文件操作") {
 			t.Fatalf("分支 %s 的职能描述不正确: %+v", kind, decoded)
 		}
@@ -122,7 +123,7 @@ func TestDialogueCatalogUsesLifePlanning(t *testing.T) {
 	hasPlanning, hasOldSchedule := false, false
 	for _, name := range dialogueTools {
 		switch name {
-		case lifePlanningToolName:
+		case Dialogue.ToolLifePlanning:
 			hasPlanning = true
 		case "schedule":
 			hasOldSchedule = true

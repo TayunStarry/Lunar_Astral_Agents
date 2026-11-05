@@ -1,10 +1,9 @@
 package server
 
 import (
-	"LunarSubsystem/LunarHarness/chain/thinking"
+	"LunarSubsystem/LunarHarness/agents/ltpxhost"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/library"
-	"LunarSubsystem/LunarHarness/engine/ltpxhost"
 	media "LunarSubsystem/LunarHarness/engine/media/httpapi"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
@@ -22,7 +21,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/window/focus", Handler: WindowFocusHandler, Method: "POST", Description: "置前指定桌面窗口（id: lunar/crystal）"},
 
 	// ==================== 消息队列 ====================
-	{Path: "/write/message", Handler: thinking.MessageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
+	{Path: "/write/message", Handler: messageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
 
 	// ==================== 应用与资源 ====================
 	{Path: "/background", Handler: file.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
@@ -95,7 +94,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/vram/unload", Handler: llama.VRAMUnloadHandler, Method: "POST", Description: "定向卸载（卸载指定 ID 的已加载模型）"},
 
 	// ==================== 代理请求 ====================
-	{Path: "/proxy", Handler: thinking.ProxyHandler, Method: "POST", Description: "代理访问服务"},
+	{Path: "/proxy", Handler: proxyHandler, Method: "POST", Description: "代理访问服务"},
 
 	// ==================== 语音播报（Broadcaster 统一链路） ====================
 	{Path: "/broadcaster/synthesize", Handler: broadcaster.SynthesizeHandler, Method: "POST", Description: "语音合成统一入口（engine 参数选引擎 Qwen/Kokoro/OmniVoice，缺省 tts.engine 配置；引擎槽位单载自动切换）"},
@@ -117,3 +116,34 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/shared-input.js", Handler: ltpxhost.SharedInputHandler, Method: "GET", Description: "统一键鼠操作共享模块"},
 	{Path: "/self-ltp-agent.js", Handler: ltpxhost.SelfLTPAgentHandler, Method: "GET", Description: "自主页面操作智能体脚本（Self-LTP）"},
 }
+
+// ==== 跨层能力注入（app 装配时接线；server 不反向依赖 chain / agents） ====
+//
+// 与 engine/runtime.AgentSearchFunc 同一做法：server 只声明 handler 需要的函数变量，
+// 具体实现由装配层（app）注入。这样 HTTP 层不会 import 编排层与智能体实现。
+
+// AgentEnqueueFunc 外部推理入队实现（装配层注入 agents/Responder.Enqueue 的适配）
+var AgentEnqueueFunc func(req *AgentRequest) error
+
+// AgentPendingFunc 当前外部推理排队条数（装配层注入 agents/Responder.Pending）
+var AgentPendingFunc func() int
+
+// VisionReadFunc 视觉副本读取实现（装配层注入 chain/thinking.VisionReadBlob）
+var VisionReadFunc func(relPath, tag string, side int) ([]byte, string, error)
+
+// MessageBatchHandlerFunc 消息写入队列处理器（装配层注入 chain/thinking.MessageBatchHandler）
+var MessageBatchHandlerFunc http.HandlerFunc
+
+// ProxyHandlerFunc 代理访问处理器（装配层注入 chain/thinking.ProxyHandler）
+var ProxyHandlerFunc http.HandlerFunc
+
+// ==== 数据导出类型常量 ====
+
+const (
+	// DataDumpLogs 导出原始日志（JSON Lines）
+	DataDumpLogs DataDumpKind = "logs"
+	// DataDumpTranscript 导出核心智能实况轮次（JSON）
+	DataDumpTranscript DataDumpKind = "transcript"
+	// DataDumpContext 导出智能体上下文/状态（JSON）
+	DataDumpContext DataDumpKind = "context"
+)

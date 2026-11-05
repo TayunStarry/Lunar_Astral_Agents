@@ -56,7 +56,7 @@ type ModelConfig struct {
 		AppendSettings []string `json:"append_settings"`
 	} `json:"agent"`
 	// 网络搜索智能体（web_search）：检索词提炼、统一摘要与浏览器滚动策略。
-	// 仅由搜索链（chain/search → 执行体 executors/SearchCrawler）消费，与其余配置节统一在此解析，
+	// 仅由搜索链（chain/search → 抓取子包 chain/search/crawler）消费，与其余配置节统一在此解析，
 	// 智能体侧只读取解析后的全局值，不再自行读取 config/general.json。
 	WebSearch struct {
 		MaxPages        int   `json:"max_pages"`               // 页面条目总数：首页恒占 1 条，其余为同时打开的详情页

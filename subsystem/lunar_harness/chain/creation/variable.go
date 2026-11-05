@@ -158,6 +158,9 @@ var runnerTools = []string{
 }
 
 var (
+	// WebSearchHook 联网搜索实现，由装配层注入（避免创作链直接依赖检索链）
+	WebSearchHook func(query string) (string, error)
+
 	// runMu 串行化创作事件，避免同一管线并发运行
 	runMu sync.Mutex
 

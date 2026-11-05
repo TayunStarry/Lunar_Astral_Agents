@@ -20,8 +20,9 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/console"
+	"LunarSubsystem/LunarHarness/engine/console/logbuf"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
@@ -49,7 +50,7 @@ func HandleAlert(level, module, sub, msg string) {
 		Level:   level,
 		Module:  module,
 		Sub:     sub,
-		Message: truncateRunes(msg, maxMessageRunes),
+		Message: textutil.TruncateRunes(msg, maxMessageRunes),
 		At:      now,
 	}
 	snapshotWG.Add(1)
@@ -120,7 +121,7 @@ func writeSnapshot(alert Alert) (string, error) {
 		return "", err
 	}
 
-	version := strings.TrimSpace(console.BuildVersion())
+	version := strings.TrimSpace(logbuf.BuildVersion())
 	if version == "" {
 		version = "unknown"
 	}
@@ -175,13 +176,13 @@ func allocateSnapshotDir(at time.Time) (string, error) {
 
 // collectRawLogs 复用「原始日志」缓冲，按 JSON Lines 写出。
 func collectRawLogs() string {
-	content, _ := console.BuildRawLogsJSONL()
+	content, _ := logbuf.BuildRawLogsJSONL()
 	return content
 }
 
 // collectReasoning 复用核心智能实况的导出（轮次环形缓冲）。
 func collectReasoning() (string, error) {
-	return console.BuildTranscriptJSON()
+	return logbuf.BuildTranscriptJSON()
 }
 
 // collectAgentsContext 导出全部已注册智能体的上下文并合并为一个 JSON 文件。
@@ -240,16 +241,4 @@ func errorJSON(err error) string {
 		return "{\"error\":\"取数失败\"}\n"
 	}
 	return content
-}
-
-// truncateRunes 按字符（而非字节）截断，避免切出半个 UTF-8 字符
-func truncateRunes(s string, limit int) string {
-	if limit <= 0 {
-		return s
-	}
-	runes := []rune(s)
-	if len(runes) <= limit {
-		return s
-	}
-	return string(runes[:limit]) + "…"
 }

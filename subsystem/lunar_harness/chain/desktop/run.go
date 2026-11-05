@@ -15,6 +15,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/desktop"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	desktopos "LunarSubsystem/LunarHarness/engine/desktop"
 )
 
 // Run 运行桌面操纵，处理一条用户指令，返回结果文本。
@@ -65,8 +66,8 @@ func Run(ctx context.Context, instruction string) (resultText string, err error)
 			return "目标窗口未就绪，任务暂停：" + err.Error(), nil
 		}
 		handoff.Round = round
-		handoff.Foreground = desktop.DTForegroundTitle()
-		handoff.ForegroundProcess = desktop.ForegroundProcess()
+		handoff.Foreground = desktopos.ForegroundTitle()
+		handoff.ForegroundProcess = desktopos.ForegroundProcess()
 		handoff.VisualSummary = "" // 视觉摘要已移除：避免错误画面描述干扰规划
 
 		// 3.1 UIA 理解者（读 UI 树/定向查）

@@ -104,12 +104,46 @@ func (m appModel) updateTools(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// kindCounts 按身份类型统计条目：只有真实智能体计入「智能体数量」。
+func (s toolsState) kindCounts() (agents, chains, executors int) {
+	for _, item := range s.agents {
+		switch item.Kind {
+		case agentinfo.KindChain:
+			chains++
+		case agentinfo.KindExecutor:
+			executors++
+		default: // 空值等价于 agent
+			agents++
+		}
+	}
+	return agents, chains, executors
+}
+
 // toolsContextLine 标题栏右侧摘要
 func toolsContextLine(s toolsState) string {
 	if len(s.agents) == 0 {
 		return "未扫描到工具目录"
 	}
-	return fmt.Sprintf("%d 个智能体 · %d 个工具", len(s.agents), s.toolCount())
+	agents, chains, executors := s.kindCounts()
+	line := fmt.Sprintf("%d 个智能体 · %d 个工具", agents, s.toolCount())
+	if chains > 0 {
+		line += fmt.Sprintf(" · %d 条链", chains)
+	}
+	if executors > 0 {
+		line += fmt.Sprintf(" · %d 个执行体", executors)
+	}
+	return line
+}
+
+// kindLabel 身份类型的界面标注；智能体为默认身份，不额外标注。
+func kindLabel(kind string) string {
+	switch kind {
+	case agentinfo.KindChain:
+		return "链"
+	case agentinfo.KindExecutor:
+		return "执行体"
+	}
+	return ""
 }
 
 // viewTools 工具列表屏渲染
@@ -138,6 +172,9 @@ func (m appModel) viewTools() string {
 		var block []string
 		if entry.agentIndex != lastAgent {
 			title := agent.Name + " · " + agent.Source
+			if label := kindLabel(agent.Kind); label != "" {
+				title += " · " + label
+			}
 			block = append(block, sectionRule(title, rowW))
 			if agent.Note != "" {
 				for _, line := range wrapPlain(agent.Note, maxInt(8, rowW-6)) {

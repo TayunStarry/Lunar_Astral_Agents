@@ -74,6 +74,41 @@ func TestToolsScreenRendersCatalog(t *testing.T) {
 	}
 }
 
+func TestToolsScreenCountsOnlyRealAgents(t *testing.T) {
+	SetToolCatalogHook(func() []agentinfo.Agent {
+		return []agentinfo.Agent{
+			{
+				ID: "demo", Name: "演示智能体", Source: "agents/Demo", Kind: agentinfo.KindAgent,
+				Tools: []agentinfo.Tool{{Name: "demo_tool", Description: "演示工具。"}},
+			},
+			{
+				ID: "creative", Name: "自由创作", Source: "chain/creation", Kind: agentinfo.KindChain,
+				Tools: []agentinfo.Tool{{Name: "creator", Description: "创作链工具。"}},
+			},
+			{
+				ID: "archive_reader", Name: "归档解析", Source: "executors/ArchiveReader", Kind: agentinfo.KindExecutor,
+				Tools: []agentinfo.Tool{{Name: "archive_list", Description: "归档解析工具。"}},
+			},
+		}
+	})
+	defer SetToolCatalogHook(nil)
+
+	m := newAppModel()
+	m.width, m.height = 140, 40
+	m.screen = screenTools
+	m.toolsEnter()
+	out := m.View()
+	// 链与执行体不计入智能体数量，但仍完整展示
+	for _, want := range []string{"1 个智能体", "3 个工具", "1 条链", "1 个执行体", "自由创作", "归档解析"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("工具列表缺少 %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "3 个智能体") {
+		t.Fatalf("链与执行体不应计入智能体数量:\n%s", out)
+	}
+}
+
 func TestToolsScreenWithoutHook(t *testing.T) {
 	SetToolCatalogHook(nil)
 	m := newAppModel()

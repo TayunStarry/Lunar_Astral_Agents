@@ -17,11 +17,11 @@ package knowledge
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/dbopen"
 )
 
 // RegisterDomain 由各模块在初始化时登记自己的 SQLite 域库（name 为 ExecuteOn 的 db 参数）。
@@ -86,18 +86,18 @@ func (d *domainDB) open() (*sql.DB, error) {
 		d.handle = nil
 	}
 
-	if dir := filepath.Dir(want); dir != "." && dir != string(filepath.Separator) {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, fmt.Errorf("创建%s数据库目录失败: %w", d.label, err)
-		}
-	}
-	db, err := sql.Open("sqlite3", want+"?_busy_timeout=10000&_journal_mode=WAL")
+	db, err := dbopen.Open(want, dbopen.Options{
+		CreateDir:       true,
+		MaxOpenConns:    4,
+		MaxIdleConns:    2,
+		ConnMaxLifetime: 5 * time.Minute,
+	})
 	if err != nil {
+		if cause, isDir := dbopen.DirCause(err); isDir {
+			return nil, fmt.Errorf("创建%s数据库目录失败: %w", d.label, cause)
+		}
 		return nil, fmt.Errorf("连接%s数据库失败: %w", d.label, err)
 	}
-	db.SetMaxOpenConns(4)
-	db.SetMaxIdleConns(2)
-	db.SetConnMaxLifetime(5 * time.Minute)
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("测试%s数据库连接失败: %w", d.label, err)

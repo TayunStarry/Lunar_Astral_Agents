@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
@@ -25,7 +26,7 @@ func planScan(doc *docContext, handle, request string) scanPlan {
 		"{chars}", fmt.Sprintf("%d", doc.Profile.Runes),
 		"{lines}", fmt.Sprintf("%d", len(doc.Lines)),
 		"{chunks}", fmt.Sprintf("%d", len(doc.Chunks)),
-		"{summary}", firstNonEmpty(strings.TrimSpace(doc.Resource.Summary), "（暂无现成摘要）"),
+		"{summary}", textutil.FirstNonEmpty(strings.TrimSpace(doc.Resource.Summary), "（暂无现成摘要）"),
 		"{outline}", formatOutline(doc.Outline, 20),
 	)
 	text, err := agentbase.ChatWithRetry(roleLabel,
@@ -62,11 +63,11 @@ func parseScanPlan(raw, request string) scanPlan {
 		}
 		return scanPlan{
 			Mode:  mode,
-			Goal:  truncateRunes(goal, scanPlanMaxChars),
+			Goal:  textutil.TruncateRunes(goal, scanPlanMaxChars),
 			Focus: normalizeFocus(parsed.Focus),
 		}
 	}
-	goal := truncateRunes(strings.TrimSpace(cleaned), scanPlanMaxChars)
+	goal := textutil.TruncateRunes(strings.TrimSpace(cleaned), scanPlanMaxChars)
 	if goal == "" {
 		goal = request
 	}
@@ -128,7 +129,7 @@ func buildMergeBriefing(doc *docContext, handle, request string, plan scanPlan, 
 		"{lines}", fmt.Sprintf("%d", len(doc.Lines)),
 		"{profile}", formatProfileText(doc.Profile),
 		"{outline}", formatOutline(doc.Outline, 20),
-		"{summary}", firstNonEmpty(strings.TrimSpace(doc.Resource.Summary), "（暂无现成摘要）"),
+		"{summary}", textutil.FirstNonEmpty(strings.TrimSpace(doc.Resource.Summary), "（暂无现成摘要）"),
 		"{notes}", renderScanNotes(notes),
 	)
 }
@@ -140,7 +141,7 @@ func renderScanNotes(notes []scanNote) string {
 	for _, note := range notes {
 		block := fmt.Sprintf("◆ 片 #%d L%d-%d\n%s\n\n",
 			note.Span.Index, note.Span.StartLine, note.Span.EndLine,
-			truncateRunes(note.Text, scanNoteMaxChars))
+			textutil.TruncateRunes(note.Text, scanNoteMaxChars))
 		blockChars := len([]rune(block))
 		if chars+blockChars > scanMergeNotesChars {
 			break
@@ -152,14 +153,4 @@ func renderScanNotes(notes []scanNote) string {
 		return "（无扫描笔记）"
 	}
 	return strings.TrimSpace(builder.String())
-}
-
-// firstNonEmpty 返回第一个非空字符串
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }

@@ -12,14 +12,13 @@ package server
 //   - 原图 blob 永远不被修改：绘画者参考图等直读原图的场景不受叠印影响
 //
 // 变换与缓存逻辑与 base64 回退绑定（visionRead）共用同一实现（thinking.VisionReadBlob），
-// 本端点只做 HTTP 形态的包装。
+// 本端点只做 HTTP 形态的包装；实际实现在装配时经 VisionReadFunc 注入。
 
 import (
 	"net/http"
 	"strconv"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/chain/thinking"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -39,7 +38,11 @@ func VisionReadHandler(w http.ResponseWriter, r *http.Request) {
 			side = parsed
 		}
 	}
-	data, mime, err := thinking.VisionReadBlob(rel, tag, side)
+	if VisionReadFunc == nil {
+		http.Error(w, "视觉读取能力未装配", http.StatusServiceUnavailable)
+		return
+	}
+	data, mime, err := VisionReadFunc(rel, tag, side)
 	if err != nil {
 		logger.SubInfo("CoreServer", "VisionRead", "读取失败 %s: %v", rel, err)
 		http.Error(w, err.Error(), http.StatusNotFound)

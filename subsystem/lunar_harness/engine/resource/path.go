@@ -51,16 +51,6 @@ func stripBOM(s string) string {
 	return strings.TrimPrefix(s, "\ufeff")
 }
 
-// firstNonEmpty 返回首个非空字符串
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
 // resolveMIME 解析 MIME：优先调用方建议值，其次扩展名白名单（persistence 的预览白名单），
 // 最后按类型码兜底。
 func resolveMIME(hint, ext string) string {

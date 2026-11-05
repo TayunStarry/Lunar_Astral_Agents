@@ -15,7 +15,7 @@ func TestReadRuntimeDocFromEmbedded(t *testing.T) {
 	if len(docs) != 10 {
 		t.Fatalf("契约应按能力拆分为 10 份，实得 %d: %+v", len(docs), docs)
 	}
-	// 迁移到 prompts/runtimeAPI/ 后，工具按裸文件名仍须命中每一份。
+	// 契约已迁到 engine/runtime/contracts，工具按裸文件名仍须命中每一份。
 	for _, doc := range docs {
 		if !strings.HasSuffix(doc.Name, "API.d.ts") || doc.Size <= 0 {
 			t.Fatalf("契约命名或内容异常: %+v", docs)

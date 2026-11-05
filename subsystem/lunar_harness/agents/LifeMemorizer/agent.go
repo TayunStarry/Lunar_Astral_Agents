@@ -5,7 +5,7 @@ package LifeMemorizer
 // 整理目标是「条目化」而不是「压缩成梗概」：模型输出少于保留下限时先补一次纠正提示，
 // 仍然过少则退回按原条目做轻量整理（去重 + 截短），宁可条目多、每条短，也不把事实丢掉。
 //
-// 分片（chain/life 的 buildMemoryBatches）、批次计划与事务日志仍留在链路层；
+// 待合并组分批（chain/life 的 buildPendingBatches）、批次计划与事务日志仍留在链路层；
 // 本智能体只负责模型调用、提示词、输出解析与失败兜底。
 
 import (
@@ -68,10 +68,18 @@ func Consolidate(ctx context.Context, contents []string) ([]string, error) {
 				attempt+1, ModelRetry+1, len(texts), minKeep)
 			continue
 		}
+		if !retainEnough(contents, texts) {
+			lastErr = fmt.Errorf("输出正文 %d 字，少于输入的 %d%%（视为过度压缩）",
+				totalRunes(texts), MinRetainPercent)
+			recordLastRun(len(contents), attempt+1, lastErr)
+			logger.Warn("Life", "[记忆整理] 模型输出正文过短（%d/%d）：%d 字，低于输入 %d%% 下限",
+				attempt+1, ModelRetry+1, totalRunes(texts), MinRetainPercent)
+			continue
+		}
 		recordLastRun(len(contents), attempt+1, nil)
 		return texts, nil
 	}
-	logger.Warn("Life", "[记忆整理] 模型始终过度压缩（%v），改为保留原条目做轻量整理", lastErr)
+	logger.Warn("Life", "[记忆整理] 模型结果始终不可用（%v），改为保留原条目做轻量整理", lastErr)
 	recordLastRun(len(contents), ModelRetry+1, lastErr)
 	agentbase.ReportRun(AgentID, lastErr)
 	return fallbackTexts(contents), nil

@@ -25,36 +25,40 @@ var (
 	lastReviewItem *lastReviewRecord
 )
 
+// exportContext 观影者-审查的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
+func exportContext(includeImages bool) (any, error) {
+	_ = includeImages
+	lastReviewMu.Lock()
+	record := lastReviewItem
+	lastReviewMu.Unlock()
+	if record == nil {
+		return map[string]any{
+			"kind":          "viewer-censor-context",
+			"generated_at":  time.Now().Format(time.RFC3339),
+			"message_count": 0,
+			"note":          "本次进程内还没有执行过合规审查",
+		}, nil
+	}
+	return map[string]any{
+		"kind":          "viewer-censor-context",
+		"generated_at":  time.Now().Format(time.RFC3339),
+		"message_count": 1,
+		"last_review":   record,
+	}, nil
+}
+
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          AgentID,
 		Label:       Role,
 		Group:       "Go 智能体",
 		Description: "观影者-审查最近一次合规复核的模型原始输出",
-		Export: func(includeImages bool) (any, error) {
-			_ = includeImages
-			lastReviewMu.Lock()
-			record := lastReviewItem
-			lastReviewMu.Unlock()
-			if record == nil {
-				return map[string]any{
-					"kind":          "viewer-censor-context",
-					"generated_at":  time.Now().Format(time.RFC3339),
-					"message_count": 0,
-					"note":          "本次进程内还没有执行过合规审查",
-				}, nil
-			}
-			return map[string]any{
-				"kind":          "viewer-censor-context",
-				"generated_at":  time.Now().Format(time.RFC3339),
-				"message_count": 1,
-				"last_review":   record,
-			}, nil
-		},
+		Export:      exportContext,
 	})
 	agentrepair.RegisterResettable(AgentID, Role,
 		"观影者-审查的最近一次审核输出；reset 清空该记录",
-		resetReviewState)
+		resetReviewState,
+		func(int) (any, error) { return exportContext(false) })
 	toolreg.Register(AgentID, toolreg.Schema{
 		Name:        "review_video",
 		Description: "结合文字材料与封面复核合规性，输出 pass / reason / evaluation / slices。",
