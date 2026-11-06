@@ -3,7 +3,9 @@ package forum
 // forum.go 论坛链：互助论坛的多轮调度、上下文与状态推进。
 //
 // 分层职责：
-//   - 本链保留：串行化、整体超时、最近 40 条「需求 + 答复」上下文、上下文导出/修复；
+//   - 本链保留：整体超时、最近 40 条「需求 + 答复」上下文、上下文导出/修复；
+//   - 写路径串行化不在此层：发帖/回复/轮次/申领统一由 engine/forum 的唯一写锁保证，
+//     自动回应与工具链拿到的是同一把锁，因此本链不再持有额外的运行互斥锁；
 //   - 模型调用、工具声明与实现、实况上报留在 agents/MutualForum（RunRound）；
 //   - 本链不内嵌任何模型调用。
 
@@ -30,8 +32,6 @@ const (
 )
 
 var (
-	// runMu 串行化自然语言需求，避免同一身份并发发言导致轮次互相覆盖
-	runMu sync.Mutex
 	// historyMu 保护独立上下文
 	historyMu sync.Mutex
 	// history 最近若干轮「用户需求 + 最终答复」
@@ -46,15 +46,13 @@ func Ready() bool {
 	return MutualForum.Ready()
 }
 
-// Run 接收对话者的自然语言需求：串行执行一轮模型调用，并把问答写入上下文。
+// Run 接收对话者的自然语言需求：执行一轮模型调用，并把问答写入上下文。
+// 具体写操作由 agents/MutualForum 内的唯一写锁串行化，不在此处整轮持锁。
 func Run(instruction string) (string, error) {
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
 		return "", errors.New("请用自然语言说明要在论坛里做什么")
 	}
-
-	runMu.Lock()
-	defer runMu.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()

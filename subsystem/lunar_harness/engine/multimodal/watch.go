@@ -119,7 +119,10 @@ func VideoToWatchSlices(inputFile string, maxSlices, frameMax int) ([]WatchSlice
 	if err != nil {
 		return nil, err
 	}
-	defer cleanup()
+	// 本地原文件返回 nil cleanup，不能删；只有临时下载件才清理
+	if cleanup != nil {
+		defer cleanup()
+	}
 
 	duration, err := GetVideoDuration(localPath)
 	if err != nil {

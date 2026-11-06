@@ -107,6 +107,12 @@ func enrollAccount(ctx context.Context, c *Client, cfg Config, existing *Account
 // EnsureAccount 返回可用身份：优先使用配置里的 api_key，其次本地账号文件，
 // 都没有时自动申领；已有凭证按 TTL 复验，避免每次工具调用都请求 /me。
 func EnsureAccount(ctx context.Context, cfg Config, c *Client) (*Account, error) {
+	return ensureAccount(ctx, cfg, c, false)
+}
+
+// ensureAccount 是 EnsureAccount 的实现；writeLocked 表示调用方已持有论坛写锁，
+// 此时申领直接执行，不能再次获取同一把锁。
+func ensureAccount(ctx context.Context, cfg Config, c *Client, writeLocked bool) (*Account, error) {
 	acct, err := loadAccount(cfg)
 	if err != nil {
 		return nil, err
@@ -118,14 +124,7 @@ func EnsureAccount(ctx context.Context, cfg Config, c *Client) (*Account, error)
 		acct.APIKey = key
 	}
 	if acct == nil || strings.TrimSpace(acct.APIKey) == "" {
-		acct, err = enrollAccount(ctx, c, cfg, acct)
-		if err != nil {
-			return nil, err
-		}
-		if saveErr := saveAccount(cfg, acct); saveErr != nil {
-			return nil, saveErr
-		}
-		return acct, nil
+		return enrollWithWriteLock(ctx, cfg, c, acct, writeLocked)
 	}
 
 	c.SetAPIKey(acct.APIKey)
@@ -148,6 +147,40 @@ func EnsureAccount(ctx context.Context, cfg Config, c *Client) (*Account, error)
 		if saveErr := saveAccount(cfg, acct); saveErr != nil {
 			logger.Warn("LunarMatrix", "保存账号复验状态失败: %v", saveErr)
 		}
+	}
+	return acct, nil
+}
+
+// enrollWithWriteLock 负责申领并落盘。读路径触发申领时进入唯一写锁并重新读取账号，
+// 避免两个并发只读调用各自领取一个身份；写路径已持锁时直接执行。
+func enrollWithWriteLock(ctx context.Context, cfg Config, c *Client, existing *Account, writeLocked bool) (*Account, error) {
+	if writeLocked {
+		return enrollAndSave(ctx, cfg, c, existing)
+	}
+	return engineforum.WithWrite(ctx, func() (*Account, error) {
+		fresh, err := loadAccount(cfg)
+		if err != nil {
+			return nil, err
+		}
+		if fresh != nil && strings.TrimSpace(fresh.APIKey) != "" {
+			c.SetAPIKey(fresh.APIKey)
+			return fresh, nil
+		}
+		if fresh == nil {
+			fresh = existing
+		}
+		return enrollAndSave(ctx, cfg, c, fresh)
+	})
+}
+
+// enrollAndSave 申领身份并写入账号文件。
+func enrollAndSave(ctx context.Context, cfg Config, c *Client, existing *Account) (*Account, error) {
+	acct, err := enrollAccount(ctx, c, cfg, existing)
+	if err != nil {
+		return nil, err
+	}
+	if err := saveAccount(cfg, acct); err != nil {
+		return nil, err
 	}
 	return acct, nil
 }

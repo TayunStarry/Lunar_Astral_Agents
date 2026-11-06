@@ -70,14 +70,14 @@
     border-radius: var(--radius-md);
 }
 
-/* 语音重播按钮：胶囊化，元信息收进胶囊，权重低于正文 */
+/* 语音重播按钮：胶囊化（图标 + 波形 + 文案 + 时长），权重低于正文 */
 .audio-replay-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     margin-top: 9px;
-    padding: 4px 12px 4px 4px;
-    border-radius: 40px;
+    padding: 5px 12px 5px 10px;
+    border-radius: 999px;
     border: 1px solid var(--glass-border);
     background: var(--glass-bg);
     color: var(--text-secondary);
@@ -88,17 +88,60 @@
     transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.audio-replay-btn i {
+/* 图标：朴素的次级色小图标，不做徽标底色 */
+.audio-replay-btn .voice-icon {
     flex-shrink: 0;
-    width: 22px;
-    height: 22px;
-    display: inline-grid;
-    place-items: center;
-    border-radius: 50%;
-    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+    font-size: 0.62rem;
+    opacity: 0.85;
+}
+
+/* 装饰波形：极简单色细柱，固定分布，不依赖真实波形数据 */
+.audio-replay-btn .voice-wave {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 12px;
+}
+
+.audio-replay-btn .voice-wave i {
+    display: block;
+    width: 2px;
+    height: 7px;
+    border-radius: 2px;
+    background: currentColor;
+    opacity: 0.42;
+    transform-origin: center;
+}
+
+.audio-replay-btn .voice-wave i:nth-child(3n) {
+    height: 10px;
+}
+
+.audio-replay-btn .voice-wave i:nth-child(3n+1) {
+    height: 4px;
+}
+
+.audio-replay-btn .voice-wave i:nth-child(3n+2) {
+    height: 7px;
+}
+
+.audio-replay-btn .voice-label {
+    white-space: nowrap;
+}
+
+.audio-replay-btn .voice-dur {
+    font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
     font-size: 0.6rem;
-    background: linear-gradient(135deg, var(--brand-color), var(--accent-color));
-    box-shadow: 0 3px 10px rgba(120, 100, 240, 0.28);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.5;
+}
+
+.audio-replay-btn .voice-dur[hidden] {
+    display: none;
 }
 
 .audio-replay-btn:hover {
@@ -110,6 +153,25 @@
 
 .audio-replay-btn:active {
     transform: translateY(0) scale(0.99);
+}
+
+/* 播放中的轻动画：只让波形起伏，不改变点击后的重播链路 */
+.audio-replay-btn.replaying .voice-wave i {
+    animation: voiceBarPulse 0.7s ease-in-out infinite alternate;
+    opacity: 0.85;
+}
+
+.audio-replay-btn.replaying .voice-wave i:nth-child(2n) {
+    animation-delay: -0.25s;
+}
+
+.audio-replay-btn.replaying .voice-wave i:nth-child(3n) {
+    animation-delay: -0.45s;
+}
+
+@keyframes voiceBarPulse {
+    from { transform: scaleY(0.6); }
+    to { transform: scaleY(1.25); }
 }
 
 .audio-replay-btn.replaying {

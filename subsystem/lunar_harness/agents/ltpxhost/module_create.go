@@ -4,6 +4,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/netsource"
 	module "LunarSubsystem/LunarHarness/engine/persistence"
 	"archive/zip"
 	"encoding/base64"
@@ -606,8 +607,8 @@ func ModuleInspectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.HasPrefix(urlOrPath, "http://") || strings.HasPrefix(urlOrPath, "https://") {
-		// 外部链接：尝试抓取 HTML 提取 title
-		client := &http.Client{Timeout: 8 * time.Second}
+		// 外部链接：尝试抓取 HTML 提取 title（客户端构建与 netsource 对齐）
+		client := netsource.NewClientForURL(urlOrPath, 8*time.Second)
 		if resp, err := client.Get(urlOrPath); err == nil {
 			defer resp.Body.Close()
 			b, _ := io.ReadAll(io.LimitReader(resp.Body, 8000))

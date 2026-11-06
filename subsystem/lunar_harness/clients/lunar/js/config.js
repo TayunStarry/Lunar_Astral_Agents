@@ -90,7 +90,7 @@ let referencedFiles = [];     // 已加载到输入框的资源句柄（@D.003 �
 let quotedMessages = [];      // 待发送的引用消息（按选择顺序；支持多条同时引用）
 let isSending = false;        // 是否正在发送
 let autoPlayVoice = true;     // 收到语音消息时是否自动播放
-let characterRenderer = 'bedrock'; // 角色渲染器（bedrock=基岩版模型 / live2d=Live2D 引擎层），由 config/general.json 的 system.character_renderer 决定
+let characterRenderer = 'bedrock'; // 角色渲染器（bedrock=基岩版模型 / live2d=Live2D 引擎层 / gif=GIF 动图引擎），由 config/general.json 的 system.character_renderer 决定
 let backendUserName = DEFAULT_USER_NAME; // 用户气泡名与发送给月华的前缀共用的用户名（来自浏览器缓存）
 let captureFile = null;       // 当前截图的 File 对象
 let capturePreviewUrl = null; // 当前截图预览 blob URL

@@ -11,8 +11,6 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/modellease"
 )
 
-const lifeModelRole = "哔哩观影"
-
 // unloadModel 主动卸载指定模型释放显存；失败只告警（下次调用会按需重载）。
 func unloadModel(model string) {
 	if strings.TrimSpace(model) == "" {
@@ -25,5 +23,10 @@ func unloadModel(model string) {
 }
 
 func truncate(text string, limit int) string {
+	return agentbase.TruncateRunes(text, limit)
+}
+
+// hardTruncate 按字符数直接硬截断（不找句末标点）。
+func hardTruncate(text string, limit int) string {
 	return agentbase.TruncateRunes(text, limit)
 }

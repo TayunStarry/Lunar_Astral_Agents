@@ -147,6 +147,11 @@ func placeBlob(localPath, hash, ext, name, sourceKind string) (rel string, moved
 func removeTemporarySource(abs, sourceKind string) {
 	switch sourceKind {
 	case SourceKindURL, SourceKindData, SourceKindBytes:
+		// 已在 LocalDir 内的实体不是本进程创建的临时件（例如由本机 /file/read 地址
+		// 解析出来的上传件或扩展包资源），绝不能按下载中转文件删除。
+		if _, ok := relativeToLocalDir(abs); ok {
+			return
+		}
 		_ = os.Remove(abs)
 	}
 }

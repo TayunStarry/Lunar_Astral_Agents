@@ -17,17 +17,17 @@ func minKeepFor(count int) int {
 	return min(min(max(count*KeepPercent/100, KeepFloor), KeepCeiling), count)
 }
 
-// retainEnough 校验输出正文总量是否达到输入的下限比例。
+// retainEnoughWith 校验整批条目化输出正文总量是否达到下限比例。
 //
-// 只按条数下限还不够：模型可能交出足够多条、但每条只剩一句笼统概括。
-// 正文总量低于输入 MinRetainPercent 时视为过度压缩，交由调用方重试或走保底整理。
-func retainEnough(contents, texts []string) bool {
+// 只用于 Consolidate（整批条目化）通道；相似簇合并有独立的更宽判定，见 checkMerge。
+// 下限可被智能修复临时调整，因此判定与「报错文案里的百分比」必须来自同一个值。
+func retainEnoughWith(contents, texts []string, percent int) bool {
 	in := totalRunes(contents)
 	if in == 0 {
 		return len(texts) > 0
 	}
 	out := totalRunes(texts)
-	return out*100 >= in*MinRetainPercent
+	return out*100 >= in*percent
 }
 
 // totalRunes 统计非空白字符总量（忽略纯空白，避免格式化差异影响判断）。

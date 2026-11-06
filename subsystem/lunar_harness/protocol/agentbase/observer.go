@@ -88,29 +88,17 @@ func SetRepairHook(fn func(agent string, err error)) {
 	repairHook = fn
 }
 
+// SetRepairDetailHook 注入结构化故障上报回调（由装配层接到 Savior.ReportDetail）。
+// 注入后优先于 SetRepairHook 注入的旧回调。
+func SetRepairDetailHook(fn func(detail FailureDetail)) {
+	repairMu.Lock()
+	defer repairMu.Unlock()
+	repairDetailHook = fn
+}
+
 // Report 上报一次故障；同一智能体的故障由修复层去重。
 func Report(agent string, err error) {
-	if err == nil {
-		return
-	}
-	agent = strings.TrimSpace(agent)
-	if agent == "" {
-		agent = "unknown"
-	}
-	repairMu.Lock()
-	hook := repairHook
-	repairMu.Unlock()
-	if hook != nil {
-		hook(agent, err)
-		return
-	}
-	// 兼容旧注入：没有修复回调时退回观察者的 Report
-	observerMu.Lock()
-	fn := observer.Report
-	observerMu.Unlock()
-	if fn != nil {
-		fn(agent, err)
-	}
+	ReportDetail(FailureDetail{Agent: agent, Err: err})
 }
 
 // ReportRun 上报一次运行失败，忽略主动取消与循环输出截断。
@@ -118,7 +106,59 @@ func ReportRun(agent string, err error) {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, loopguard.ErrLoop) {
 		return
 	}
-	Report(agent, err)
+	ReportDetail(FailureDetail{Agent: agent, Err: err})
+}
+
+// ReportDetail 上报一次结构化故障。
+//
+// 主动取消不进入修复队列；循环输出默认视为已降级，只有显式标记为
+// tool_loop / context 时才作为故障证据保留。detail.Err 与 detail.ErrorText
+// 都没有时按「未知错误」降级。
+func ReportDetail(detail FailureDetail) {
+	if detail.Err != nil {
+		if errors.Is(detail.Err, context.Canceled) {
+			return
+		}
+		// 循环输出本身可能是「工具循环」故障的证据；显式标记为 tool_loop / context 时保留，
+		// 其余旧上报路径仍按原语义忽略。
+		if errors.Is(detail.Err, loopguard.ErrLoop) &&
+			detail.Kind != FailureKindToolLoop && detail.Kind != FailureKindContext {
+			return
+		}
+		if strings.TrimSpace(detail.ErrorText) == "" {
+			detail.ErrorText = detail.Err.Error()
+		}
+	}
+	detail.Agent = strings.TrimSpace(detail.Agent)
+	if detail.Agent == "" {
+		detail.Agent = "unknown"
+	}
+	detail.ErrorText = strings.TrimSpace(detail.ErrorText)
+	if detail.ErrorText == "" {
+		detail.ErrorText = "未知错误"
+	}
+	if strings.TrimSpace(detail.Kind) == "" {
+		detail.Kind = FailureKindUnknown
+	}
+	repairMu.Lock()
+	detailHook := repairDetailHook
+	hook := repairHook
+	repairMu.Unlock()
+	if detailHook != nil {
+		detailHook(detail)
+		return
+	}
+	if hook != nil {
+		hook(detail.Agent, errors.New(detail.ErrorText))
+		return
+	}
+	// 兼容更早的注入方式：没有修复回调时退回观察者的 Report
+	observerMu.Lock()
+	fn := observer.Report
+	observerMu.Unlock()
+	if fn != nil {
+		fn(detail.Agent, errors.New(detail.ErrorText))
+	}
 }
 
 // reportFailure 上报一次重试耗尽后的失败（由 app 层接到智能修复）。

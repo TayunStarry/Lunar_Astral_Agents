@@ -152,7 +152,7 @@ async function loadCharacterRenderer() {
         if (!res.ok) return;
         const config = await res.json();
         const renderer = config && config.system ? config.system.character_renderer : null;
-        if (renderer === 'live2d' || renderer === 'bedrock') {
+        if (renderer === 'live2d' || renderer === 'bedrock' || renderer === 'gif') {
             characterRenderer = renderer;
         }
     } catch (e) {

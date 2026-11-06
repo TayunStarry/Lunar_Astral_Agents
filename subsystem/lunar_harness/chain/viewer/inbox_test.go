@@ -22,7 +22,7 @@ func TestParseMsgFeedReply(t *testing.T) {
 			"source_content":"哈哈","target_reply_content":"我的动态评论",
 			"uri":"bilibili://dynamic/444"}}
 	]}}`
-	items, err := parseMsgFeed(raw, "reply")
+	items, _, err := parseMsgFeedPage(raw, "reply")
 	if err != nil {
 		t.Fatalf("解析失败: %v", err)
 	}
@@ -76,26 +76,6 @@ func TestReplyIDs(t *testing.T) {
 	}
 }
 
-// TestReplyPageURL 钉住页面地址：优先消息中心 web URI，opus 用 URI 里的页面 ID。
-func TestReplyPageURL(t *testing.T) {
-	opus := inboxItem{Type: 11, Oid: "413077136", SourceID: "317943121233",
-		URI: "https://www.bilibili.com/opus/1262374137649692673#reply317943121233"}
-	if got := replyPageURL(opus); got != opus.URI {
-		t.Fatalf("应直接使用消息中心的 web URI，实际 %q", got)
-	}
-	video := inboxItem{Type: 1, Oid: "111", SourceID: "333"}
-	if got := replyPageURL(video); got != "https://www.bilibili.com/video/av111?comment_on=1#reply333" {
-		t.Fatalf("视频页地址错误：%q", got)
-	}
-	dy := inboxItem{Type: 17, SourceID: "777", URI: "bilibili://dynamic/444"}
-	if got := replyPageURL(dy); got != "https://www.bilibili.com/opus/444#reply777" {
-		t.Fatalf("动态页地址应取 URI 中的页面 ID：%q", got)
-	}
-	if got := replyPageURL(inboxItem{Type: 12, Oid: "9"}); got != "" {
-		t.Fatalf("暂不支持的类型应返回空，实际 %q", got)
-	}
-}
-
 // TestParseMsgFeedOpusBusinessID 钉住 business_id=11 是评论区类型，不是对象 ID。
 func TestParseMsgFeedOpusBusinessID(t *testing.T) {
 	raw := `{"code":0,"data":{"items":[
@@ -105,7 +85,7 @@ func TestParseMsgFeedOpusBusinessID(t *testing.T) {
 			"source_content":"你为啥不看Qwen相关的视频呢？",
 			"uri":"https://www.bilibili.com/opus/1262374137649692673#reply317943121233"}}
 	]}}`
-	items, err := parseMsgFeed(raw, "reply")
+	items, _, err := parseMsgFeedPage(raw, "reply")
 	if err != nil {
 		t.Fatalf("解析失败: %v", err)
 	}
@@ -131,7 +111,7 @@ func TestParseMsgFeedAt(t *testing.T) {
 			"business":"comment","business_id":1,"subject_id":999,"source_id":888,
 			"source_content":"@月华 你觉得呢","uri":"bilibili://video/999"}}
 	]}}`
-	items, err := parseMsgFeed(raw, "at")
+	items, _, err := parseMsgFeedPage(raw, "at")
 	if err != nil {
 		t.Fatalf("解析失败: %v", err)
 	}
@@ -152,7 +132,7 @@ func TestParseMsgFeedAt(t *testing.T) {
 
 // TestParseMsgFeedError 钉住未登录/接口异常不会被静默吞掉。
 func TestParseMsgFeedError(t *testing.T) {
-	if _, err := parseMsgFeed(`{"code":-101,"message":"账号未登录"}`, "reply"); err == nil {
+	if _, _, err := parseMsgFeedPage(`{"code":-101,"message":"账号未登录"}`, "reply"); err == nil {
 		t.Fatal("code != 0 应返回错误")
 	}
 }

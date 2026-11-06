@@ -42,7 +42,12 @@ func Init() {
 	loadStateLocked()
 	ensureDateLocked()
 	registerBuiltinLocked()
-	registerStartupConsolidationLocked()
+	// 兼容旧状态：memory 已收敛为固定步骤，清掉历史遗留的强制事件，
+	// 避免升级后仍尝试走事件分发。
+	if state.PendingEvent == "memory" {
+		state.PendingEvent, state.PendingInstruction = "", ""
+		saveStateLocked()
+	}
 	used := state.Used
 	lastRecord := state.LastRecord
 	active := state.Active
@@ -53,11 +58,28 @@ func Init() {
 	}
 }
 
-// HasActiveRun 是否有未完成事件。
+// HasActiveRun 是否有未完成事件或未走完的回合。
 func HasActiveRun() bool {
 	mu.Lock()
 	defer mu.Unlock()
-	return state.Active != nil
+	return state.Active != nil || state.Round != nil
+}
+
+// RoundInProgress 是否有回合正在推进。
+func RoundInProgress() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	return state.Round != nil
+}
+
+// LastRoundSummary 最近一次完成的回合摘要，供外部观测。
+func LastRoundSummary() (RoundSummary, bool) {
+	mu.Lock()
+	defer mu.Unlock()
+	if state.LastRound == nil {
+		return RoundSummary{}, false
+	}
+	return *state.LastRound, true
 }
 
 // Snapshot 返回只读快照。

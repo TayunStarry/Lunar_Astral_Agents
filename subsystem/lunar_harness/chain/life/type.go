@@ -20,7 +20,54 @@ type State struct {
 	PendingEvent string `json:"pending_event,omitempty"`
 	// PendingInstruction 强制事件的自然语言要求，用于引导智能体流程
 	PendingInstruction string `json:"pending_instruction,omitempty"`
-	UpdatedAt          int64  `json:"updated_at"`
+	// Round 正在推进的生活回合；nil 表示没有回合。
+	Round *RoundState `json:"round,omitempty"`
+	// LastRound 最近一次完成的回合摘要，供外部观测。
+	LastRound *RoundSummary `json:"last_round,omitempty"`
+	// ForumPostedAt 上次允许自主发帖的时间（Unix 秒），用于避免每轮都刷帖。
+	ForumPostedAt int64 `json:"forum_posted_at,omitempty"`
+	UpdatedAt     int64 `json:"updated_at"`
+}
+
+// 回合阶段：顺序固定，一次 Tick 只推进一个阶段。
+const (
+	roundStageFixed      = "fixed"
+	roundStageWatchlist  = "watchlist"
+	roundStageBiliReply  = "bili_reply"
+	roundStageForumReply = "forum_reply"
+	roundStagePick       = "pick"
+)
+
+// 阶段状态。
+const (
+	roundStatusOK      = "ok"
+	roundStatusSkipped = "skipped"
+	roundStatusFailed  = "failed"
+)
+
+// RoundStep 一个回合阶段的执行结果。
+type RoundStep struct {
+	// Name 阶段名（fixed / watchlist / bili_reply / forum_reply / pick）
+	Name string `json:"name"`
+	// Status ok / skipped / failed
+	Status string `json:"status"`
+	// Detail 可读说明：条件未满足的原因、计数或错误
+	Detail string `json:"detail,omitempty"`
+}
+
+// RoundState 正在推进的生活回合断点。
+type RoundState struct {
+	Stage     string      `json:"stage"`
+	StartedAt int64       `json:"started_at"`
+	Steps     []RoundStep `json:"steps,omitempty"`
+}
+
+// RoundSummary 一个完整回合的结果摘要（五步是否执行、各自成败、最终分支）。
+type RoundSummary struct {
+	StartedAt  int64       `json:"started_at"`
+	FinishedAt int64       `json:"finished_at"`
+	Branch     string      `json:"branch,omitempty"`
+	Steps      []RoundStep `json:"steps"`
 }
 
 // ActiveRun 未完成的事件运行。
@@ -64,11 +111,16 @@ type EventRun interface {
 	Restore(json.RawMessage) error
 }
 
-// NoWorkRun 可选接口：事件启动后即可判定本次没有实际动作（如没有待合并组）。
-// 调度层据此回滚刚扣除的当日额度，保证「空跑不消耗额度」。
-type NoWorkRun interface {
-	NoWork() bool
+// ActivityRun 可选接口：分支内部已经写出更具体的「我刚刚在干的事情」文案。
+// 兜底写入点优先采用它，避免用笼统的 EventStep.Record 覆盖分支文案。
+type ActivityRun interface {
+	ActivityText() string
 }
+
+// skipError 条件不满足导致的早退（不是故障）：状态文案与失败区分。
+type skipError struct{ reason string }
+
+func (e *skipError) Error() string { return e.reason }
 
 // EventStep 一个原子步骤的结果。
 type EventStep struct {

@@ -167,6 +167,15 @@ function renderMessageElement(msg) {
 
     // 用户气泡名优先用缓存里的实际发送者（QQ 私聊昵称 / 前端配置名）；正文不带前缀
     const displayName = msg.role === 'user' ? (msg.sender || backendUserName) : ASSISTANT_NAME;
+    // 音乐消息：气泡只承载文字，音乐卡作为独立卡片挂在气泡下方
+    const hasMusic = Array.isArray(msg.categories) && msg.categories.includes('music');
+    const bubble = hasMusic ? document.createElement('div') : el;
+    if (hasMusic) {
+        bubble.className = 'message-bubble';
+        el.classList.add('message-with-music');
+    }
+    const host = bubble;
+
     const header = document.createElement('div');
     header.className = 'message-header';
     header.innerHTML = `
@@ -174,45 +183,47 @@ function renderMessageElement(msg) {
         ${buildCategoryBadges(msg.categories)}
         <span class="header-time">${msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : getTimeString()}</span>
     `;
-    el.appendChild(header);
+    host.appendChild(header);
 
     // 引用块（被引用消息快照，支持多条）
-    if (msg.quotes && msg.quotes.length) el.appendChild(buildQuoteBlock(msg.quotes));
+    if (msg.quotes && msg.quotes.length) host.appendChild(buildQuoteBlock(msg.quotes));
 
     // 图片块
-    if (msg.imageSrc) el.appendChild(buildImageBlock(msg));
+    if (msg.imageSrc) host.appendChild(buildImageBlock(msg));
 
     // 视频块
-    if (msg.videoSrc) el.appendChild(buildVideoBlock(msg));
+    if (msg.videoSrc) host.appendChild(buildVideoBlock(msg));
 
     // 音频文件块
-    if (msg.audioSrc) el.appendChild(buildAudioFileBlock(msg));
+    if (msg.audioSrc) host.appendChild(buildAudioFileBlock(msg));
 
     // 文本内容容器
     const contentDiv = document.createElement('div');
     contentDiv.className = 'markdown-content';
-    el.appendChild(contentDiv);
+    host.appendChild(contentDiv);
 
     // 资源收录引用图标（按钮）：点击把句柄载入输入框
-    if (msg.fileRef) el.appendChild(buildFileRefBlock(msg.fileRef, msg.fileLabel));
+    if (msg.fileRef) host.appendChild(buildFileRefBlock(msg.fileRef, msg.fileLabel));
 
     // 多附件（用户拖入的图片/视频/音频）
     if (msg.attachments && msg.attachments.length) {
         msg.attachments.forEach(att => {
             const block = buildAttachmentBlock(att);
-            if (block) el.appendChild(block);
+            if (block) host.appendChild(block);
         });
     }
 
-    // 音乐卡片（推送与历史消息均按分类 music 渲染）
-    if (Array.isArray(msg.categories) && msg.categories.includes('music')) el.appendChild(buildMusicCard(msg));
-
     // 语音重播按钮（音乐消息的 audio 是演奏音频地址，由音乐卡片自行播放）
-    const isMusic = Array.isArray(msg.categories) && msg.categories.includes('music');
-    if (msg.audio && !isMusic) el.appendChild(buildAudioReplay(msg));
+    if (msg.audio && !hasMusic) host.appendChild(buildAudioReplay(msg));
 
     // 操作按钮
-    el.appendChild(buildActionsPanel(msg));
+    host.appendChild(buildActionsPanel(msg));
+
+    // 音乐卡片挂在气泡下方，同属一个消息块但视觉独立
+    if (hasMusic) {
+        el.appendChild(bubble);
+        el.appendChild(buildMusicCard(msg));
+    }
 
     messageArea.appendChild(el);
 
@@ -220,5 +231,12 @@ function renderMessageElement(msg) {
     if (msg.role === 'user' && msg.content) return fillUserMessageContent(el, stripUserPrefix(msg.content));
     // 助手消息：正文已被服务端置换为句柄 + 文件名，连同收录图标一起展示
     if (msg.content) return fillMarkdownContent(el, msg.content);
+    // 音乐消息后端不带正文，补一行说明文字，保持气泡的普通消息形态
+    if (hasMusic) {
+        const line = document.createElement('div');
+        line.className = 'music-message-line';
+        line.textContent = `为你放一首《${msg.musicTitle || '月华演奏曲'}》`;
+        contentDiv.appendChild(line);
+    }
     return Promise.resolve(el);
 }

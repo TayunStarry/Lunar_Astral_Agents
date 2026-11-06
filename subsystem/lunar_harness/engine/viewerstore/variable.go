@@ -53,6 +53,30 @@ const (
 	StanceMarker = "评论倾向："
 )
 
+// ==== 待看视频列表 ====
+
+const (
+	// WatchStatusPending 已入队，等待审核
+	WatchStatusPending WatchStatus = "pending"
+	// WatchStatusApproved 审核通过，可以进入播放队列
+	WatchStatusApproved WatchStatus = "approved"
+	// WatchStatusRejected 审核未通过（原因写入 reject_reason）
+	WatchStatusRejected WatchStatus = "rejected"
+	// WatchSegmentMax 单个视频的片段数量上限（下限为 0，表示还没切）
+	WatchSegmentMax = 5
+	// WatchCommentsMax 单条视频保留的评论摘录数量上限
+	WatchCommentsMax = 20
+	// WatchIntroMaxRunes 视频简介入库长度上限
+	WatchIntroMaxRunes = 600
+	// WatchRejectReasonMaxRunes 审核未通过原因的长度上限
+	WatchRejectReasonMaxRunes = 200
+)
+
+// watchVideoColumns 待看视频表的固定列序（查询与 Scan 共用，避免两处漂移）。
+const watchVideoColumns = `bv, title, intro, author_uid, author_name, comments,
+		duration_sec, status, reject_reason, queue_seq, queued_at, reviewed_at,
+		completed, completed_at, archived, archived_at`
+
 // ==== 归档原因 ====
 
 const (

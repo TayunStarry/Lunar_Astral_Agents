@@ -1,6 +1,6 @@
 package life
 
-// memory_event.go 整理记忆事件：唯一的整理调度入口。
+// memory_event.go 记忆整理执行器：不属于权重事件，由固定步骤三直接调用。
 //
 // 每轮只做一件事：取当前全部待合并组（Pending + 伙伴），逐组处理。
 // 流程：pending → partner 连边 + 嵌入相似度聚类分组（只留含 Pending 且 ≥2 条的组）
@@ -14,10 +14,8 @@ package life
 // 引擎层 ReplaceTexts 负责写后校验（数量 + 内容指纹）与失败回滚，
 // 因此这里只保留计划/日志的编排，不做逐条删除与写入。
 //
-// 自动触发默认开启（config.MemoryAutoConsolidate=true，权重 20、额度 12 次/天）；
-// 关闭后权重归零，随机挑选跳过本事件，仍可手动/按需触发：
-//   - 启动参数 -memory-consolidate-once；
-//   - life.RequestMemoryConsolidation("...") 或 life.RequestEvent("memory", "...")。
+// 触发方式只有一种：生活链每轮固定步骤三（steps.go 的 mergePendingMemories）。
+// 它不进入 defaultEvents 权重表、没有每日额度，也不能通过 RequestEvent 排队。
 
 import (
 	"context"
@@ -25,7 +23,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,63 +32,15 @@ import (
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
 
-type memoryEvent struct{ params eventParams }
-
-func newMemoryEvent() Event { return &memoryEvent{params: paramsOf("memory")} }
-
-func (e *memoryEvent) ID() string { return "memory" }
-
-// Weight 自动触发权重：自动整理开启且存在待合并条目时才参与随机挑选。
-// 没有待合并组时返回 0——整理无事可做，不应空跑一次并占用当日额度；
-// 手动触发走 RequestEvent，不经过权重。
-func (e *memoryEvent) Weight() int {
-	if !config.MemoryAutoConsolidate {
-		return 0
-	}
-	if pendingCountHook() <= 0 {
-		return 0
-	}
-	return e.params.Weight
-}
-func (e *memoryEvent) DailyQuota() int  { return e.params.Quota }
-func (e *memoryEvent) NewRun() EventRun { return &memoryRun{} }
-
 type memoryRun struct {
 	data memoryRunData
 	plan *memoryPlan
+	// activity 本次步骤对应的状态文案（完成 / 进度），由兜底写入点读取。
+	activity string
 }
 
-// NoWork 本次整理没有产生任何动作（没有待合并组）：调度层据此回滚当日额度。
+// NoWork 本次整理没有产生任何动作（没有待合并组）：固定步骤据此直接返回。
 func (r *memoryRun) NoWork() bool { return r.data.Total == 0 }
-
-// 手动触发（不受自动整理开关影响）。
-const defaultMemoryInstruction = "手动触发一次记忆整理"
-
-// RequestMemoryConsolidation 手动登记一次记忆整理，下一空闲 Tick 执行。
-// 即使 config.MemoryAutoConsolidate 关闭，本入口仍然可用（按需整理）。
-func RequestMemoryConsolidation(instruction string) bool {
-	instruction = strings.TrimSpace(instruction)
-	if instruction == "" {
-		instruction = defaultMemoryInstruction
-	}
-	return RequestEvent("memory", instruction)
-}
-
-// registerStartupConsolidationLocked 处理启动参数 -memory-consolidate-once：
-// 登记一次手动整理；调用方需持有锁。
-func registerStartupConsolidationLocked() {
-	if !config.MemoryConsolidateOnce {
-		return
-	}
-	if strings.TrimSpace(state.PendingEvent) != "" {
-		logger.Warn(Module, "[记忆整理] 已存在待执行事件 %s，跳过启动一次性整理", state.PendingEvent)
-		return
-	}
-	state.PendingEvent = "memory"
-	state.PendingInstruction = defaultMemoryInstruction
-	saveStateLocked()
-	logger.Info(Module, "[记忆整理] 已登记启动后一次性整理（-memory-consolidate-once）")
-}
 
 func (r *memoryRun) Start(ctx context.Context, _ Env) error {
 	if err := ensureMemoryReady(); err != nil {
@@ -140,7 +89,31 @@ func (r *memoryRun) Start(ctx context.Context, _ Env) error {
 	return nil
 }
 
-func (r *memoryRun) Next(ctx context.Context, _ Env) (EventStep, error) {
+// Next 执行下一批整理，并按结果记录状态文案。
+func (r *memoryRun) Next(ctx context.Context, env Env) (EventStep, error) {
+	step, err := r.nextStep(ctx, env)
+	switch {
+	case err != nil:
+	case step.Done:
+		r.activity = r.finishActivity()
+	default:
+		r.activity = fmt.Sprintf("在整理记忆（已完成 %d/%d 批）", r.data.Index, r.data.Total)
+	}
+	return step, err
+}
+
+// ActivityText 返回本步骤对应的状态文案。
+func (r *memoryRun) ActivityText() string { return r.activity }
+
+// finishActivity 整理结束后的状态文案：没整理出内容与整理完成分开表述。
+func (r *memoryRun) finishActivity() string {
+	if r.data.Total == 0 {
+		return "翻了翻记忆，暂时没有要整理的"
+	}
+	return fmt.Sprintf("整理完记忆：%d 批都合并好了", r.data.Total)
+}
+
+func (r *memoryRun) nextStep(ctx context.Context, _ Env) (EventStep, error) {
 	if r.data.Total == 0 {
 		detail := r.data.Reason
 		if detail == "" {

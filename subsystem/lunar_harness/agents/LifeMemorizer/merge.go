@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
@@ -25,10 +26,36 @@ const mergeSystemPrompt = "你是记忆合并助手。下面几条记忆在语�
 // Merge 对一组相似记忆做合并改写，返回合并后的事实条目。
 // 返回错误表示模型结果不可用；调用方应保留原条目不动。
 func Merge(ctx context.Context, contents []string) ([]string, error) {
+	return mergeInternal(ctx, contents, true)
+}
+
+// mergeInternal 执行合并；report=false 用于修复后的复跑验证，不重复上报故障。
+//
+// 修复生效点：该簇被标记为「不可合并」时直接返回空结果，链路层保留原条目；
+// 正文判定固定按相似簇合并口径（MergeMinRetainPercent + MergeMinRunes），
+// 不受整批条目化的临时下限策略影响。
+func mergeInternal(ctx context.Context, contents []string, report bool) ([]string, error) {
 	if len(contents) == 0 {
 		return nil, nil
 	}
+	if isClusterSkipped(contents) {
+		logger.Info("Life", "[记忆整理] 该相似簇已标记为不可合并，保留原条目（%d 条）", len(contents))
+		if report {
+			recordLastRunWith(len(contents), 0, nil, map[string]any{
+				"skipped":                  true,
+				"input_items":              len(contents),
+				"input_runes":              totalRunes(contents),
+				"merge_min_retain_percent": MergeMinRetainPercent,
+				"merge_min_output_runes":   mergeRetainFloor(contents),
+			})
+		}
+		return nil, nil
+	}
+	recordInputs(contents)
+	inputRunes := totalRunes(contents)
+	minOutputRunes := mergeRetainFloor(contents)
 	user := joinContents(contents)
+	lastOutputRunes := 0
 	var lastErr error
 	for attempt := 0; attempt <= ModelRetry; attempt++ {
 		system := mergeSystemPrompt
@@ -45,48 +72,127 @@ func Merge(ctx context.Context, contents []string) ([]string, error) {
 		})
 		if err != nil {
 			lastErr = err
-			recordLastRun(len(contents), attempt+1, err)
-			continue
+		} else {
+			texts, outputRunes, checkErr := checkMerge(contents, reply.Text)
+			lastOutputRunes = outputRunes
+			if checkErr == nil {
+				if report {
+					recordLastRunWith(len(contents), attempt+1, nil, map[string]any{
+						"input_items":              len(contents),
+						"input_runes":              inputRunes,
+						"output_runes":             outputRunes,
+						"merge_min_retain_percent": MergeMinRetainPercent,
+						"merge_min_output_runes":   minOutputRunes,
+					})
+				}
+				return texts, nil
+			}
+			lastErr = checkErr
+			logger.Warn("Life", "[记忆整理] 合并结果不可用（%d/%d）：%v", attempt+1, ModelRetry+1, checkErr)
 		}
-		text := strings.TrimSpace(reply.Text)
-		if text == "" {
-			lastErr = fmt.Errorf("模型返回空内容")
+		if report {
 			recordLastRun(len(contents), attempt+1, lastErr)
-			continue
 		}
-		texts, err := parseArray(text)
-		if err != nil {
-			lastErr = err
-			recordLastRun(len(contents), attempt+1, err)
-			logger.Warn("Life", "[记忆整理] 合并输出解析失败（%d/%d）: %v", attempt+1, ModelRetry+1, err)
-			continue
-		}
-		if len(texts) == 0 {
-			lastErr = fmt.Errorf("合并结果为空")
-			recordLastRun(len(contents), attempt+1, lastErr)
-			continue
-		}
-		// 合并不允许扩张条目：输出多于输入说明模型在拆分/发挥，结果不可信。
-		if len(texts) > len(contents) {
-			lastErr = fmt.Errorf("合并结果条数 %d 多于输入 %d", len(texts), len(contents))
-			recordLastRun(len(contents), attempt+1, lastErr)
-			logger.Warn("Life", "[记忆整理] 合并结果条数异常（%d/%d）：%d > %d",
-				attempt+1, ModelRetry+1, len(texts), len(contents))
-			continue
-		}
-		// 保留事实粒度：输出正文总量不得低于输入的下限比例，
-		// 防止把多条不同事实压成一句笼统概括。
-		if !retainEnough(contents, texts) {
-			lastErr = fmt.Errorf("合并结果过度压缩（正文不足输入的 %d%%）", MinRetainPercent)
-			recordLastRun(len(contents), attempt+1, lastErr)
-			logger.Warn("Life", "[记忆整理] 合并结果过度压缩（%d/%d），保留原条目", attempt+1, ModelRetry+1)
-			continue
-		}
-		recordLastRun(len(contents), attempt+1, nil)
-		return texts, nil
 	}
 	logger.Warn("Life", "[记忆整理] 合并模型结果不可用（%v），保留原条目", lastErr)
-	recordLastRun(len(contents), ModelRetry+1, lastErr)
-	agentbase.ReportRun(AgentID, lastErr)
+	if report {
+		recordLastRunWith(len(contents), ModelRetry+1, lastErr, map[string]any{
+			"input_items":              len(contents),
+			"input_runes":              inputRunes,
+			"output_runes":             lastOutputRunes,
+			"merge_min_retain_percent": MergeMinRetainPercent,
+			"merge_min_output_runes":   minOutputRunes,
+		})
+		agentbase.ReportDetail(agentbase.FailureDetail{
+			Agent:           AgentID,
+			Kind:            agentbase.FailureKindOutput,
+			Criterion:       fmt.Sprintf("合并结果非空、有实质正文，且正文总量 ≥ max(输入的 %d%%, %d 字)", MergeMinRetainPercent, MergeMinRunes),
+			Entry:           "merge",
+			Err:             lastErr,
+			Tool:            "agentbase.Stream",
+			Retries:         ModelRetry,
+			ContextMessages: len(contents),
+			ContextRunes:    inputRunes,
+			Metrics: map[string]int64{
+				"input_items":              int64(len(contents)),
+				"input_runes":              int64(inputRunes),
+				"output_runes":             int64(lastOutputRunes),
+				"merge_min_retain_percent": int64(MergeMinRetainPercent),
+				"merge_min_output_runes":   int64(minOutputRunes),
+			},
+		})
+	}
 	return nil, lastErr
+}
+
+// checkMerge 校验一次合并输出，返回可用的条目、输出正文长度与不可用原因。
+//
+// 合并的输入本身就是高度重复的记忆（典型场景：8 条几乎相同的记忆合成 1~2 条），
+// 结果正文必然远短于输入总长，因此不沿用整批条目化的 20% 下限，只在下列情况判不可用：
+//  1. 结果为空：模型返回空内容、非 JSON 数组或空数组；
+//  2. 没有实质正文：去掉空白与标点后什么都不剩；
+//  3. 正文过短：低于 max(输入的 5%, 12 字) 且不超过最长单条输入，说明几乎没留下信息；
+//  4. 条数多于输入：模型在拆分或发挥，结果不可信。
+//
+// 返回的错误文本即命中的规则名，会原样出现在运行日志与失败上报里。
+func checkMerge(contents []string, raw string) ([]string, int, error) {
+	text := strings.TrimSpace(raw)
+	if text == "" {
+		return nil, 0, fmt.Errorf("规则[结果为空]：模型返回空内容")
+	}
+	texts, err := parseArray(text)
+	if err != nil {
+		return nil, 0, fmt.Errorf("规则[结果为空]：%w", err)
+	}
+	if len(texts) == 0 {
+		return nil, 0, fmt.Errorf("规则[结果为空]：合并结果为空数组")
+	}
+	outputRunes := totalRunes(texts)
+	// 合并不允许扩张条目：输出多于输入说明模型在拆分/发挥，结果不可信。
+	if len(texts) > len(contents) {
+		return nil, outputRunes, fmt.Errorf("规则[条数扩张]：合并结果条数 %d 多于输入 %d", len(texts), len(contents))
+	}
+	if !hasSubstantiveText(texts) {
+		return nil, outputRunes, fmt.Errorf("规则[无实质正文]：去掉空白与标点后没有可读内容")
+	}
+	floor := mergeRetainFloor(contents)
+	if outputRunes < floor {
+		inputRunes := totalRunes(contents)
+		percent := 0.0
+		if inputRunes > 0 {
+			percent = float64(outputRunes) * 100 / float64(inputRunes)
+		}
+		return nil, outputRunes, fmt.Errorf(
+			"规则[正文过短]：输出 %d 字 < 下限 %d 字（占输入 %.1f%%，要求 ≥%d%% 且 ≥%d 字，绝对下限不超过最长单条）",
+			outputRunes, floor, percent, MergeMinRetainPercent, MergeMinRunes)
+	}
+	return texts, outputRunes, nil
+}
+
+// mergeRetainFloor 相似簇合并结果的正文下限（非空白字符数）。
+//
+// 取「输入总量的 5%」与「最小绝对字数」的较大者，但绝对下限不超过最长单条输入：
+// 8 条完全相同的短记忆合成 1 条属于正常结果，固定下限不能把它误判成不可用。
+func mergeRetainFloor(contents []string) int {
+	inputRunes := totalRunes(contents)
+	percentFloor := inputRunes * MergeMinRetainPercent / 100
+	longest := 0
+	for _, content := range contents {
+		if runes := totalRunes([]string{content}); runes > longest {
+			longest = runes
+		}
+	}
+	return max(percentFloor, min(MergeMinRunes, longest))
+}
+
+// hasSubstantiveText 判断合并结果里是否还有实质正文（去掉空白、标点与符号后不为空）。
+func hasSubstantiveText(texts []string) bool {
+	for _, text := range texts {
+		for _, r := range text {
+			if !unicode.IsSpace(r) && !unicode.IsPunct(r) && !unicode.IsSymbol(r) {
+				return true
+			}
+		}
+	}
+	return false
 }

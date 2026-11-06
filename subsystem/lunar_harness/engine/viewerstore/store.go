@@ -124,6 +124,44 @@ func createTables(db *sql.DB) error {
 			key    TEXT PRIMARY KEY,
 			value  TEXT NOT NULL DEFAULT ''
 		)`,
+		// 待看视频列表：bv 主键保证入队幂等，queue_seq 固定入队顺序（不回收）；
+		// 时间字段一律 Unix 秒，archived 只做逻辑归档，统计仍包含历史行。
+		`CREATE TABLE IF NOT EXISTS watch_video (
+			bv            TEXT PRIMARY KEY,
+			title         TEXT NOT NULL DEFAULT '',
+			intro         TEXT NOT NULL DEFAULT '',
+			author_uid    TEXT NOT NULL DEFAULT '',
+			author_name   TEXT NOT NULL DEFAULT '',
+			comments      TEXT NOT NULL DEFAULT '[]',
+			duration_sec  INTEGER NOT NULL DEFAULT 0,
+			status        TEXT NOT NULL DEFAULT 'pending',
+			reject_reason TEXT NOT NULL DEFAULT '',
+			queue_seq     INTEGER NOT NULL DEFAULT 0,
+			queued_at     INTEGER NOT NULL DEFAULT 0,
+			reviewed_at   INTEGER NOT NULL DEFAULT 0,
+			completed     INTEGER NOT NULL DEFAULT 0,
+			completed_at  INTEGER NOT NULL DEFAULT 0,
+			archived      INTEGER NOT NULL DEFAULT 0,
+			archived_at   INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_watch_video_queue
+			ON watch_video(status, archived, completed, queue_seq)`,
+		// 片段表：(bv, seg_index) 唯一，重复切片段时整组覆盖；
+		// 播放顺序依赖联表后的 queue_seq + seg_index，索引覆盖「未看片段」筛选。
+		`CREATE TABLE IF NOT EXISTS watch_segment (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			bv          TEXT NOT NULL,
+			seg_index   INTEGER NOT NULL,
+			start_sec   INTEGER NOT NULL DEFAULT 0,
+			end_sec     INTEGER NOT NULL DEFAULT 0,
+			path        TEXT NOT NULL DEFAULT '',
+			downloaded  INTEGER NOT NULL DEFAULT 0,
+			watched     INTEGER NOT NULL DEFAULT 0,
+			watched_at  INTEGER NOT NULL DEFAULT 0,
+			UNIQUE(bv, seg_index)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_watch_segment_pending
+			ON watch_segment(watched, bv, seg_index)`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(statement); err != nil {

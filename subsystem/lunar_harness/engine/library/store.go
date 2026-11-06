@@ -1,14 +1,17 @@
 package library
 
-// store.go 编辑状态中心：记录 AI 操作、推断文件名配色、维护最近 10 次操作。
+// store.go 编辑状态中心：把 AI 文件操作写入变更库，并广播一条同步信号。
 //
 // 数据方向是单向的：文件编辑智能体每完成一次操作就上报一次，资源库只读取与广播，
-// 不接受任何正文修改。
+// 不接受任何正文修改。数据库（library.db）是变更记录的唯一存储，进程内不再保留
+// 用于展示的内存副本；前端收到同步信号后自行回库拉取最新状态。
 
 import (
-	"sort"
-	"strings"
+	"database/sql"
+	"strconv"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
 // SetBroadcast 注入 WebSocket 结构化广播（由装配层调用；nil 表示不广播）。
@@ -18,7 +21,7 @@ func SetBroadcast(fn func(msgType string, data any)) {
 	broadcastMu.Unlock()
 }
 
-// PublishEdit 上报一次文件操作（线程安全、幂等）。
+// PublishEdit 上报一次文件操作（线程安全、幂等）：落库后只广播同步信号。
 func PublishEdit(notice EditNotice) {
 	path := normalizeRel(notice.Path)
 	if path == "" || rootOf(path) == "" {
@@ -28,11 +31,42 @@ func PublishEdit(notice EditNotice) {
 	if at.IsZero() {
 		at = time.Now()
 	}
-	stateMu.Lock()
-	state := states[path]
+	conn, err := ensureDB()
+	if err != nil {
+		logger.Warn(Module, "变更库不可用，操作未记录: %v", err)
+		return
+	}
+	seq, err := persistEdit(conn, path, notice, at)
+	if err != nil {
+		logger.Warn(Module, "写入变更记录失败: %v", err)
+		return
+	}
+	if seq%cleanupEverySeq == 0 {
+		if err := cleanupStore(conn); err != nil {
+			logger.Warn(Module, "变更记录保留策略清理失败: %v", err)
+		}
+	}
+	broadcastSync(seq, path, notice.Op)
+}
+
+// persistEdit 在一个事务内写入记录、更新文件状态并按文件裁剪历史。
+func persistEdit(conn *sql.DB, path string, notice EditNotice, at time.Time) (uint64, error) {
+	tx, err := conn.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	seq, err := nextSeq(tx)
+	if err != nil {
+		return 0, err
+	}
+	state, err := loadState(tx, path)
+	if err != nil {
+		return 0, err
+	}
 	if state == nil {
 		state = &FileState{Path: path, Status: StatusNormal}
-		states[path] = state
 	}
 	// 运行失败状态只在「运行」操作里更新：一次失败保持红色，直到下次运行成功。
 	if notice.Op == "run" {
@@ -46,92 +80,139 @@ func PublishEdit(notice EditNotice) {
 	state.Op = notice.Op
 	state.At = at.Unix()
 	if notice.Op != "run" {
-		state.Records = append(state.Records, EditRecord{
-			Op:        notice.Op,
-			Added:     clipRunes(notice.Added, maxSnippetRunes),
-			Removed:   clipRunes(notice.Removed, maxSnippetRunes),
-			StartLine: notice.StartLine,
-			Lines:     notice.Lines,
-			At:        at.Unix(),
-		})
-		state.Records = trimHistory(state.Records)
+		merged, mergeErr := coalesceRecord(tx, path, notice, at, seq)
+		if mergeErr != nil {
+			return 0, mergeErr
+		}
+		if !merged {
+			if err := insertRecord(tx, path, notice, at, seq); err != nil {
+				return 0, err
+			}
+		}
+		if err := pruneRecords(tx, path); err != nil {
+			return 0, err
+		}
 	}
+	state.lastSeq = seq
 	state.Status = statusOf(state)
-	snapshot := cloneState(state)
-	version++
-	msgVersion := version
-	stateMu.Unlock()
-
-	if broadcast == nil {
-		return
+	if err := saveState(tx, state); err != nil {
+		return 0, err
 	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return seq, nil
+}
+
+// nextSeq 读取并递增全局序号（增量同步与版本号的唯一来源）。
+func nextSeq(tx *sql.Tx) (uint64, error) {
+	var raw string
+	err := tx.QueryRow(`SELECT value FROM `+metaTable+` WHERE key = ?`, metaSeqKey).Scan(&raw)
+	if err == sql.ErrNoRows {
+		raw = "0"
+	} else if err != nil {
+		return 0, err
+	}
+	current, _ := strconv.ParseUint(raw, 10, 64)
+	next := current + 1
+	_, err = tx.Exec(`INSERT INTO `+metaTable+` (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		metaSeqKey, strconv.FormatUint(next, 10))
+	return next, err
+}
+
+// loadState 读取单个文件的当前状态；不存在时返回 nil。
+func loadState(tx *sql.Tx, path string) (*FileState, error) {
+	var state FileState
+	var failed, hasRun, runOK int
+	var lastSeq int64
+	err := tx.QueryRow(`SELECT status, op, failed, handle, at, has_run, run_ok, last_seq
+		FROM `+fileStateTable+` WHERE path = ?`, path).Scan(
+		&state.Status, &state.Op, &failed, &state.Handle, &state.At, &hasRun, &runOK, &lastSeq)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	state.Path = path
+	state.Failed = failed != 0
+	state.hasRun = hasRun != 0
+	state.runOK = runOK != 0
+	state.lastSeq = uint64(lastSeq)
+	return &state, nil
+}
+
+// saveState 写入（或覆盖）单个文件的当前状态。
+func saveState(tx *sql.Tx, state *FileState) error {
+	_, err := tx.Exec(`INSERT INTO `+fileStateTable+` (
+		path, status, op, failed, handle, at, has_run, run_ok, last_seq
+	) VALUES (?,?,?,?,?,?,?,?,?)
+	ON CONFLICT(path) DO UPDATE SET
+		status = excluded.status,
+		op = excluded.op,
+		failed = excluded.failed,
+		handle = excluded.handle,
+		at = excluded.at,
+		has_run = excluded.has_run,
+		run_ok = excluded.run_ok,
+		last_seq = excluded.last_seq`,
+		state.Path, state.Status, state.Op, boolInt(state.Failed), state.Handle,
+		state.At, boolInt(state.hasRun), boolInt(state.runOK), int64(state.lastSeq))
+	return err
+}
+
+// insertRecord 写入一条内容级操作记录。
+func insertRecord(tx *sql.Tx, path string, notice EditNotice, at time.Time, seq uint64) error {
+	_, err := tx.Exec(`INSERT INTO `+editTable+` (
+		seq, path, op, added, removed, start_line, lines, handle, failed, at, created_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		int64(seq), path, notice.Op, clipRunes(notice.Added, maxSnippetRunes),
+		clipRunes(notice.Removed, maxSnippetRunes), notice.StartLine, notice.Lines,
+		notice.Handle, boolInt(notice.Failed), at.Unix(), at.Unix())
+	return err
+}
+
+// coalesceRecord 把窗口内无正文变化的同类操作合并到上一条记录，避免重复读取刷屏。
+func coalesceRecord(tx *sql.Tx, path string, notice EditNotice, at time.Time, seq uint64) (bool, error) {
+	if notice.Added != "" || notice.Removed != "" {
+		return false, nil
+	}
+	var id, lastAt int64
+	err := tx.QueryRow(`SELECT id, at FROM `+editTable+`
+		WHERE path = ? AND op = ? AND added = '' AND removed = ''
+			AND start_line = ? AND lines = ? AND failed = ?
+		ORDER BY seq DESC LIMIT 1`,
+		path, notice.Op, notice.StartLine, notice.Lines, boolInt(notice.Failed)).Scan(&id, &lastAt)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if at.Unix()-lastAt > coalesceWindowSec {
+		return false, nil
+	}
+	_, err = tx.Exec(`UPDATE `+editTable+` SET seq = ?, at = ?, handle = ? WHERE id = ?`,
+		int64(seq), at.Unix(), notice.Handle, id)
+	return err == nil, err
+}
+
+// pruneRecords 只保留单个文件最近 maxRecordsPerFile 条记录。
+func pruneRecords(tx *sql.Tx, path string) error {
+	_, err := tx.Exec(`DELETE FROM `+editTable+` WHERE path = ? AND id NOT IN (
+		SELECT id FROM `+editTable+` WHERE path = ? ORDER BY seq DESC LIMIT ?)`,
+		path, path, maxRecordsPerFile)
+	return err
+}
+
+// broadcastSync 广播同步信号：只携带版本与变更路径，前端据此回库拉取。
+func broadcastSync(seq uint64, path, op string) {
 	broadcastMu.RLock()
 	fn := broadcast
 	broadcastMu.RUnlock()
 	if fn == nil {
 		return
 	}
-	fn("library_edit", map[string]any{
-		"version": msgVersion,
-		"file":    snapshot,
-	})
-}
-
-// Snapshot 返回全部文件状态（按路径升序）。
-func Snapshot() EditSnapshot {
-	stateMu.RLock()
-	defer stateMu.RUnlock()
-	files := make([]FileState, 0, len(states))
-	for _, state := range states {
-		files = append(files, cloneState(state))
-	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
-	return EditSnapshot{Version: version, Files: files}
-}
-
-// Clear 清空状态（数据导出 / 测试用）。
-func Clear() {
-	stateMu.Lock()
-	states = map[string]*FileState{}
-	version++
-	stateMu.Unlock()
-}
-
-// statusOf 推断文件名配色：运行失败红 > 运行成功绿 > 有操作记录黄 > 默认。
-func statusOf(state *FileState) string {
-	switch {
-	case state.Failed:
-		return StatusError
-	case state.hasRun && state.runOK:
-		return StatusOK
-	case state.At > 0:
-		return StatusActive
-	default:
-		return StatusNormal
-	}
-}
-
-// trimHistory 只保留最近 maxEditHistory 次操作。
-func trimHistory(records []EditRecord) []EditRecord {
-	if len(records) <= maxEditHistory {
-		return records
-	}
-	return append([]EditRecord(nil), records[len(records)-maxEditHistory:]...)
-}
-
-// cloneState 复制状态（避免锁外共享可变切片）。
-func cloneState(state *FileState) FileState {
-	out := *state
-	out.Records = append([]EditRecord(nil), state.Records...)
-	return out
-}
-
-// clipRunes 按字符截断片段（超出时在尾部标注省略）。
-func clipRunes(text string, limit int) string {
-	text = strings.TrimSpace(text)
-	if limit <= 0 || len([]rune(text)) <= limit {
-		return text
-	}
-	runes := []rune(text)
-	return string(runes[:limit]) + "…"
+	fn("library_sync", map[string]any{"version": seq, "path": path, "op": op})
 }

@@ -44,7 +44,8 @@ var SystemEndpoints = []SystemEndpoint{
 
 	// ==================== 资源库（内嵌前端） ====================
 	{Path: "/library/api/tree", Handler: library.TreeHandler, Method: "GET", Description: "资源库递归清单（documents / audios / multimedia / unknown）"},
-	{Path: "/library/api/edits", Handler: library.EditsHandler, Method: "GET", Description: "资源库文件状态与最近 10 次 AI 操作"},
+	{Path: "/library/api/edits", Handler: library.EditsHandler, Method: "GET", Description: "资源库文件状态与最近 10 次操作（支持 since 增量、offset/limit 分页）"},
+	{Path: "/library/api/history", Handler: library.HistoryHandler, Method: "GET", Description: "资源库单文件历史操作分页（path / before / limit）"},
 	{Path: "/library/api/meta", Handler: library.MetaHandler, Method: "GET", Description: "资源库文件详情（入库时间 / 句柄 / 引用积分 / 描述状态）"},
 	{Path: "/library/api/rename", Handler: library.RenameHandler, Method: "POST", Description: "资源库重命名（限 4 个存储根）"},
 	{Path: "/library/api/move", Handler: library.MoveHandler, Method: "POST", Description: "资源库移动（限 4 个存储根）"},

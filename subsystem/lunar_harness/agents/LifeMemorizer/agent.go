@@ -25,6 +25,7 @@ func Consolidate(ctx context.Context, contents []string) ([]string, error) {
 		return nil, nil
 	}
 	minKeep := minKeepFor(len(contents))
+	threshold := effectiveMinRetain()
 	user := joinContents(contents)
 	var lastErr error
 	for attempt := 0; attempt <= ModelRetry; attempt++ {
@@ -68,20 +69,38 @@ func Consolidate(ctx context.Context, contents []string) ([]string, error) {
 				attempt+1, ModelRetry+1, len(texts), minKeep)
 			continue
 		}
-		if !retainEnough(contents, texts) {
+		if !retainEnoughWith(contents, texts, threshold) {
 			lastErr = fmt.Errorf("输出正文 %d 字，少于输入的 %d%%（视为过度压缩）",
-				totalRunes(texts), MinRetainPercent)
+				totalRunes(texts), threshold)
 			recordLastRun(len(contents), attempt+1, lastErr)
 			logger.Warn("Life", "[记忆整理] 模型输出正文过短（%d/%d）：%d 字，低于输入 %d%% 下限",
-				attempt+1, ModelRetry+1, totalRunes(texts), MinRetainPercent)
+				attempt+1, ModelRetry+1, totalRunes(texts), threshold)
 			continue
 		}
 		recordLastRun(len(contents), attempt+1, nil)
 		return texts, nil
 	}
 	logger.Warn("Life", "[记忆整理] 模型结果始终不可用（%v），改为保留原条目做轻量整理", lastErr)
-	recordLastRun(len(contents), ModelRetry+1, lastErr)
-	agentbase.ReportRun(AgentID, lastErr)
+	recordLastRunWith(len(contents), ModelRetry+1, lastErr, map[string]any{
+		"input_runes":        totalRunes(contents),
+		"min_retain_percent": threshold,
+	})
+	agentbase.ReportDetail(agentbase.FailureDetail{
+		Agent:           AgentID,
+		Kind:            agentbase.FailureKindOutput,
+		Criterion:       fmt.Sprintf("输出正文总量 ≥ 输入的 %d%%", threshold),
+		Entry:           "consolidate",
+		Err:             lastErr,
+		Retries:         ModelRetry,
+		ContextMessages: len(contents),
+		ContextRunes:    totalRunes(contents),
+		Metrics: map[string]int64{
+			"input_items":        int64(len(contents)),
+			"input_runes":        int64(totalRunes(contents)),
+			"min_retain_percent": int64(threshold),
+			"min_keep_items":     int64(minKeep),
+		},
+	})
 	return fallbackTexts(contents), nil
 }
 
@@ -95,15 +114,24 @@ func messagesOf(system, user string) []agentbase.Message {
 
 // recordLastRun 记录最近一次整理任务，供数据导出与修复复位。
 func recordLastRun(count, attempts int, err error) {
+	recordLastRunWith(count, attempts, err, nil)
+}
+
+// recordLastRunWith 记录最近一次整理任务，并追加有界的水位字段。
+func recordLastRunWith(count, attempts int, err error, extra map[string]any) {
 	lastRunMu.Lock()
 	defer lastRunMu.Unlock()
-	lastRun = map[string]any{
+	record := map[string]any{
 		"role":       RoleName,
 		"items":      count,
 		"attempts":   attempts,
 		"error":      errorText(err),
 		"updated_at": time.Now().Format(time.RFC3339),
 	}
+	for key, value := range extra {
+		record[key] = value
+	}
+	lastRun = record
 }
 
 // snapshotLastRun 返回最近一次整理记录副本。

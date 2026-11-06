@@ -3,8 +3,11 @@ package Vision
 // media_test.go 视觉理解智能体的单元测试：本地视频副本复用与工具边界。
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
@@ -50,6 +53,44 @@ func TestEnsureLocalVideoPathReusesLocalCopy(t *testing.T) {
 	}
 	if got != abs {
 		t.Fatalf("缺失本机路径应回退到同名副本，实际 %s", got)
+	}
+}
+
+// TestDownloadRemoteVideoBytesLimit 远程视频回源：正常小文件可读取，超限时明确报错且不返回半段视频。
+func TestDownloadRemoteVideoBytesLimit(t *testing.T) {
+	small := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("video-bytes"))
+	}))
+	defer small.Close()
+
+	data, err := downloadRemoteVideoBytes(small.URL, 1024)
+	if err != nil {
+		t.Fatalf("正常小视频应读取成功: %v", err)
+	}
+	if string(data) != "video-bytes" {
+		t.Fatalf("视频内容不正确: %q", data)
+	}
+
+	big := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", 4096)))
+	}))
+	defer big.Close()
+
+	data, err = downloadRemoteVideoBytes(big.URL, 64)
+	if err == nil || !strings.Contains(err.Error(), "资源过大") {
+		t.Fatalf("超限应返回明确的超限错误，实际 %v", err)
+	}
+	if data != nil {
+		t.Fatal("超限失败时不得返回半段视频")
+	}
+
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer broken.Close()
+
+	if _, err := downloadRemoteVideoBytes(broken.URL, 1024); err == nil || !strings.Contains(err.Error(), "HTTP 502") {
+		t.Fatalf("非 2xx 应返回明确状态错误，实际 %v", err)
 	}
 }
 

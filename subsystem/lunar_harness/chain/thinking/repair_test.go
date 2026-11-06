@@ -99,10 +99,10 @@ func TestTickErrorReportsThroughReportRun(t *testing.T) {
 		t.Fatalf("ReportRun 未过滤循环截断/空错误，实得 %d 条", len(got))
 	}
 
-	// Tick 体系映射仍然生效：viewing 归属到可修复的 bilibili 上下文。
-	reportTickError("viewing", errors.New("view boom"))
+	// Tick 体系映射仍然生效：非对话体系按自身 ID 上报。
+	reportTickError("life", errors.New("life boom"))
 	got = reports()
-	if len(got) != 2 || got[1].agent != "bilibili" {
-		t.Fatalf("viewing 应上报到 bilibili，实得 %#v", got)
+	if len(got) != 2 || got[1].agent != "life" {
+		t.Fatalf("life 应按自身 ID 上报，实得 %#v", got)
 	}
 }

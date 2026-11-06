@@ -1,18 +1,12 @@
 package viewer
 
-// desire.go 对话者本轮关键词：把 viewer 工具传来的 instruction 提炼成选片关键词。
+// desire.go 选片关键词的切分与清洗。
 //
-// 结合语义：提炼时同时看「用户这句话」与配置文件里的 preference_keywords，
-// 综合给出本轮使用的关键词（用户明确主题优先，默认偏好作补充/兜底）。
-// 结果写进 Config.DesireKeywords（json:"-"），本轮选片只按这些词打分与搜索；
-// 只在本次调用内生效，不写回 config/bilibili.json。
+// 待看列表补齐时，长期记忆里的主题词与配置偏好都走同一套切分规则，
+// 保证「记忆 → 检索词」的转换口径一致。
 
 import (
-	"context"
 	"strings"
-
-	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
 const (
@@ -22,61 +16,6 @@ const (
 	desireKeywordMinRunes = 2
 	desireKeywordMaxRunes = 12
 )
-
-// prepareDesireKeywords 提炼并写入本轮关键词（调用方须在 manager 锁之外调用）。
-//
-// 第五步要求同时参考「对话者需求 + 配置文件默认关键词 + 长期记忆」：
-// 即使本轮没有明确指令，也要让记忆与默认偏好共同决定选片方向。
-func (r *runner) prepareDesireKeywords() {
-	if r == nil {
-		return
-	}
-	words := extractDesireKeywords(r.instruction, r.cfg.PreferenceKeywords, r.mood)
-	if len(words) == 0 {
-		return
-	}
-	r.cfg.DesireKeywords = words
-	logger.Info("BilibiliViewer", "本轮选片关键词（结合指令、默认偏好与长期记忆，仅本次生效）: %s", formatKeywords(words))
-}
-
-// extractDesireKeywords 综合提炼本轮关键词：同时参考用户指令、配置默认偏好与长期记忆，
-// 优先让模型归纳，失败时按标点切分并与默认偏好合并兜底。
-// 返回空表示本次没有可用的欲求词，调用方会回退到配置默认偏好。
-func extractDesireKeywords(instruction string, defaults []string, moodLabel string) []string {
-	// 选片也要参考历史记忆：最近看过的主题、想接着看什么，都由记忆决定本轮关键词
-	text, err := ViewerScreening.Keywords(context.Background(), ViewerScreening.KeywordInput{
-		Instruction: instruction, Defaults: defaults, Mood: moodLabel,
-		Memory: memoryMaterial(10),
-	}, modelPrimary)
-	if err == nil {
-		if words := splitDesireWords(text); len(words) > 0 {
-			return words
-		}
-	} else {
-		logger.Warn("BilibiliViewer", "关键词提炼失败，改用指令原文兜底: %v", err)
-	}
-	return mergeDesireWords(splitDesireWords(instruction), defaults)
-}
-
-// mergeDesireWords 合并本轮词与配置默认偏好：本轮词优先，默认偏好补足剩余名额，去重。
-func mergeDesireWords(words, defaults []string) []string {
-	out := make([]string, 0, desireKeywordMax)
-	seen := make(map[string]bool, len(words)+len(defaults))
-	for _, list := range [][]string{words, defaults} {
-		for _, raw := range list {
-			word := strings.TrimSpace(raw)
-			if word == "" || seen[word] {
-				continue
-			}
-			seen[word] = true
-			out = append(out, word)
-			if len(out) >= desireKeywordMax {
-				return out
-			}
-		}
-	}
-	return out
-}
 
 // splitDesireWords 按顿号/逗号/空格/换行切分并过滤非法长度，去重后取前若干个
 func splitDesireWords(text string) []string {

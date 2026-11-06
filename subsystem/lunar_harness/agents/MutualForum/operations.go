@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	engineforum "LunarSubsystem/LunarHarness/engine/forum"
 )
 
 var topicIDPattern = regexp.MustCompile(`^t_[0-9a-f]{8,32}$`)
@@ -33,6 +35,11 @@ func clientWithConfig() (Config, *Client, error) {
 // signedIn 确保客户端带有可用身份。
 func signedIn(ctx context.Context, cfg Config, c *Client) (*Account, error) {
 	return EnsureAccount(ctx, cfg, c)
+}
+
+// signedInWriteLocked 在已持有论坛写锁时准备身份；申领也不会再次获取写锁，避免自锁。
+func signedInWriteLocked(ctx context.Context, cfg Config, c *Client) (*Account, error) {
+	return ensureAccount(ctx, cfg, c, true)
 }
 
 // CheckHealth 返回论坛健康状态（不需要身份）。
@@ -67,15 +74,18 @@ func Poll(ctx context.Context, sinceSeq int64, status string) (*PollResult, erro
 	if err != nil {
 		return nil, err
 	}
-	acct, err := signedIn(ctx, cfg, c)
-	if err != nil {
-		return nil, err
-	}
 	status, err = normalizeStatus(status, "all")
 	if err != nil {
 		return nil, err
 	}
-	return pollWithAccount(ctx, cfg, c, acct, sinceSeq, status)
+	// 领取轮次会改动服务端轮次与本地账号文件，必须进入唯一写锁。
+	return engineforum.WithWrite(ctx, func() (*PollResult, error) {
+		acct, err := signedInWriteLocked(ctx, cfg, c)
+		if err != nil {
+			return nil, err
+		}
+		return pollWithAccount(ctx, cfg, c, acct, sinceSeq, status)
+	})
 }
 
 // pollWithAccount 在已有账号状态上执行轮询：遵守最小间隔、处理 429、落盘新轮次。
@@ -158,8 +168,9 @@ func isPollRetryCode(code string) bool {
 	}
 }
 
-// EnsureRound 返回当前可用轮次；没有、已用过或临近过期时自动轮询续领。
-func EnsureRound(ctx context.Context, cfg Config, c *Client, acct *Account) (string, error) {
+// ensureRound 返回当前可用轮次；没有、已用过或临近过期时自动轮询续领。
+// 调用方必须已持有 engine/forum 的唯一写锁（目前只有 Reply 在此前提下调用）。
+func ensureRound(ctx context.Context, cfg Config, c *Client, acct *Account) (string, error) {
 	ttl := acct.RoundTTL
 	if ttl <= 0 {
 		ttl = cfg.RoundTTL()
@@ -265,9 +276,6 @@ func CreateTopic(ctx context.Context, title, body, requestID string) (*CreateTop
 	if err != nil {
 		return nil, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return nil, err
-	}
 	title = strings.TrimSpace(title)
 	body = strings.TrimSpace(body)
 	if err := validateTitle(title); err != nil {
@@ -282,7 +290,12 @@ func CreateTopic(ctx context.Context, title, body, requestID string) (*CreateTop
 	if requestID = strings.TrimSpace(requestID); requestID == "" {
 		requestID = newRequestID("lm-topic")
 	}
-	return c.CreateTopic(ctx, title, body, requestID)
+	return engineforum.WithWrite(ctx, func() (*CreateTopicResult, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return nil, err
+		}
+		return c.CreateTopic(ctx, title, body, requestID)
+	})
 }
 
 // Reply 在指定话题发言。
@@ -305,43 +318,46 @@ func Reply(ctx context.Context, topicID, body, requestID string) (*CreatePostRes
 	if err != nil {
 		return nil, err
 	}
-	acct, err := signedIn(ctx, cfg, c)
-	if err != nil {
-		return nil, err
-	}
-	roundID, err := EnsureRound(ctx, cfg, c, acct)
-	if err != nil {
-		return nil, err
-	}
-
-	result, err := c.CreatePost(ctx, strings.TrimSpace(topicID), body, roundID, requestID)
-	if err != nil {
-		var apiErr *APIError
-		if !errors.As(err, &apiErr) || !isRoundRetryCode(apiErr.Code) {
-			return nil, err
-		}
-		// 旧轮次已不可用：清空本地轮次后重新 /poll，再重试一次。
-		acct.RoundID = ""
-		acct.RoundIssuedAt = 0
-		acct.RoundUsed = false
-		freshRound, roundErr := EnsureRound(ctx, cfg, c, acct)
-		if roundErr != nil {
-			return nil, roundErr
-		}
-		result, err = c.CreatePost(ctx, strings.TrimSpace(topicID), body, freshRound, requestID)
+	// 「领轮 → 发帖 → 落盘」必须在同一写锁内完成，否则两条路径会看到同一轮次。
+	return engineforum.WithWrite(ctx, func() (*CreatePostResult, error) {
+		acct, err := signedInWriteLocked(ctx, cfg, c)
 		if err != nil {
 			return nil, err
 		}
-	}
+		roundID, err := ensureRound(ctx, cfg, c, acct)
+		if err != nil {
+			return nil, err
+		}
 
-	// 成功后本地轮次即视为已消耗，下一轮回复会重新 /poll。
-	acct.RoundID = ""
-	acct.RoundIssuedAt = 0
-	acct.RoundUsed = false
-	if err := saveAccount(cfg, acct); err != nil {
-		return nil, err
-	}
-	return result, nil
+		result, err := c.CreatePost(ctx, strings.TrimSpace(topicID), body, roundID, requestID)
+		if err != nil {
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) || !isRoundRetryCode(apiErr.Code) {
+				return nil, err
+			}
+			// 旧轮次已不可用：清空本地轮次后重新 /poll，再重试一次。
+			acct.RoundID = ""
+			acct.RoundIssuedAt = 0
+			acct.RoundUsed = false
+			freshRound, roundErr := ensureRound(ctx, cfg, c, acct)
+			if roundErr != nil {
+				return nil, roundErr
+			}
+			result, err = c.CreatePost(ctx, strings.TrimSpace(topicID), body, freshRound, requestID)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// 成功后本地轮次即视为已消耗，下一轮回复会重新 /poll。
+		acct.RoundID = ""
+		acct.RoundIssuedAt = 0
+		acct.RoundUsed = false
+		if err := saveAccount(cfg, acct); err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
 }
 
 // isRoundRetryCode 轮次类错误可安全地重新领轮后重试；already_posted 属于业务拒绝，不重试。
@@ -370,10 +386,12 @@ func ManageTopic(ctx context.Context, topicID, action string) (*ActionResult, er
 	if err != nil {
 		return nil, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return nil, err
-	}
-	return c.ManageTopic(ctx, strings.TrimSpace(topicID), action)
+	return engineforum.WithWrite(ctx, func() (*ActionResult, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return nil, err
+		}
+		return c.ManageTopic(ctx, strings.TrimSpace(topicID), action)
+	})
 }
 
 /* ---------------- 本地检索 ---------------- */

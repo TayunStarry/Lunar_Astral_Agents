@@ -29,6 +29,7 @@ func TestFrontendEntrypointsAreEmbedded(t *testing.T) {
 		{"共享依赖·Markdown", RelianceFS(), "/marked.min.js"},
 		{"共享依赖·渲染引擎入口", RelianceFS(), "/lunar.rendering_engine/index.html"},
 		{"共享依赖·Live2D 引擎入口", RelianceFS(), "/lunar.live2d_engine/index.html"},
+		{"共享依赖·GIF 引擎入口", RelianceFS(), "/lunar.gif_engine/index.html"},
 		{"共享依赖·通信桥", RelianceFS(), "/ws_bridge.js"},
 	}
 

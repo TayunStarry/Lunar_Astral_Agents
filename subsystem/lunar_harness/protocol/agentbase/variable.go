@@ -23,6 +23,19 @@ const (
 	defaultMaxRepeats = 3
 	// defaultMaxToolResultRunes 默认单条工具结果回填上限
 	defaultMaxToolResultRunes = 6000
+
+	// FailureKindUnknown 未分类故障
+	FailureKindUnknown = "unknown"
+	// FailureKindModel 模型调用失败（网络、HTTP 状态、超时）
+	FailureKindModel = "model_error"
+	// FailureKindContext 上下文超限或损坏
+	FailureKindContext = "context_overflow"
+	// FailureKindToolLoop 工具循环达到轮次上限或重复调用
+	FailureKindToolLoop = "tool_loop"
+	// FailureKindOutput 输出质量不达标（过短、解析失败、空内容）
+	FailureKindOutput = "output_quality"
+	// FailureKindTool 工具执行失败或参数非法
+	FailureKindTool = "tool_error"
 )
 
 var (
@@ -44,6 +57,8 @@ var (
 	repairMu sync.Mutex
 	// repairHook 智能修复上报回调（由装配层注入，避免 protocol 反向依赖 agents）
 	repairHook func(agent string, err error)
+	// repairDetailHook 结构化故障上报回调；注入后优先于 repairHook
+	repairDetailHook func(detail FailureDetail)
 
 	// logMu 保护日志钩子
 	logMu sync.Mutex

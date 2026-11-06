@@ -2,17 +2,9 @@ package viewer
 
 // type.go 哔哩观影的共享类型定义。
 //
-// 核心机制（Tick 驱动）：
-//   - 启动阶段一次性完成「关键词 → 采集 → 视频印象 → 排序 → 审核/评价/切片数」；
-//   - 第一个 Tick 发布观影动态与评论区，之后每秒 Tick 处理一个视频切片，全部切片完成后合并入库；
-//   - 动态与评论只依赖视频印象和审核评价，不依赖观看切片。
-//
-// 发言场景只有两处：自己的动态评论区、以及被动收到的 @/追评回复；
-// 不再主动去别人的视频评论区留言。
-
-import (
-	module "LunarSubsystem/LunarHarness/engine/multimodal"
-)
+// 观影流程由生活链的五步回合编排驱动（见 chain/life）：
+// 待看列表补齐 → 选片 → 切片理解 → 里程碑 → 被动回应。
+// 待看列表与记忆的持久化由 engine/viewerstore 负责。
 
 // MentionTarget 分享时 @ 的目标：来自当前账号的特别关注列表。
 type MentionTarget struct {
@@ -22,16 +14,19 @@ type MentionTarget struct {
 
 // Config 哔哩观影的长期配置（local_data/config/bilibili.json）。
 //
-// videos_per_round 已移除：候选数量固定为 4-8 个，由机制决定。
+// videos_per_round 已移除：候选数量由机制决定。
 type Config struct {
 	// PreferenceKeywords 更倾向看的主题词（标题/标签命中即加分）
 	PreferenceKeywords []string `json:"preference_keywords"`
-	// RepliesPerRound 一轮可回应几次被动消息（@ 与追评共享）
-	RepliesPerRound int `json:"replies_per_round"`
 
-	// DesireKeywords 本轮搜索关键词：由对话者指令结合 PreferenceKeywords 与长期记忆生成，
+	// DesireKeywords 本轮搜索关键词：由长期记忆与偏好生成，
 	// 只在本次运行内生效，不写回配置文件。
 	DesireKeywords []string `json:"-"`
+
+	// WatchlistBudgetSec 待看列表补齐整阶段的时间上限（秒）；<=0 用机制默认值。
+	WatchlistBudgetSec int `json:"watchlist_budget_sec,omitempty"`
+	// WatchlistCandidateBudgetSec 单个候选（采集+审核+下载）的子预算（秒）；<=0 用机制默认值。
+	WatchlistCandidateBudgetSec int `json:"watchlist_candidate_budget_sec,omitempty"`
 }
 
 // videoLink 列表页上的视频卡片。
@@ -44,11 +39,13 @@ type videoLink struct {
 
 // videoInfo 视频的基础信息（详情接口）。
 type videoInfo struct {
-	Bvid        string
-	Aid         int64
-	Cid         int64
-	Title       string
-	Owner       string
+	Bvid  string
+	Aid   int64
+	Cid   int64
+	Title string
+	Owner string
+	// OwnerMid 作者 UID（待看列表入库要求同时保留 UID 与昵称）
+	OwnerMid    int64
 	Duration    int
 	URL         string
 	Desc        string
@@ -83,36 +80,14 @@ type videoImpression struct {
 	RiskReason string `json:"risk_reason,omitempty"`
 }
 
-// videoRecord 本轮一个候选视频的完整采集与处理结果。
+// videoRecord 一个候选视频的采集结果（记忆注入与审核共用）。
 type videoRecord struct {
-	Link       videoLink
 	Info       videoInfo
 	Tags       []string        `json:"tags,omitempty"`
 	Impression videoImpression `json:"impression,omitempty"`
 
 	Comments []commentItem `json:"comments,omitempty"`
 	Danmaku  []string      `json:"danmaku,omitempty"`
-
-	// Score 与本轮观影意图的综合匹配度（嵌入相似度 + 热度加权）
-	Score float64 `json:"score,omitempty"`
-
-	// Slices 审核阶段按视频时长决定的期望观看切片数
-	Slices int `json:"slices,omitempty"`
-	// Evaluation 主模型生成的「视频评价」（发布到动态评论区）
-	Evaluation string `json:"evaluation,omitempty"`
-
-	Risky      bool   `json:"risky,omitempty"`
-	RiskReason string `json:"risk_reason,omitempty"`
-
-	// 切片观看阶段的临时资源
-	LocalPath string                `json:"local_path,omitempty"`
-	Segments  []module.MediaSegment `json:"segments,omitempty"`
-	Summaries []string              `json:"summaries,omitempty"`
-	// WatchSummary 全部切片合并后的整体观看感受
-	WatchSummary string `json:"watch_summary,omitempty"`
-
-	CommentText string `json:"comment_text,omitempty"` // 动态评论区里的评价条目
-	ShareText   string `json:"share_text,omitempty"`   // @分享评论正文
 }
 
 // videoReview 主模型审核 + 评价 + 切片数的一次性结构化输出。
@@ -121,16 +96,6 @@ type videoReview struct {
 	Reason     string `json:"reason"`
 	Evaluation string `json:"evaluation"`
 	Slices     int    `json:"slices"`
-}
-
-// lifeActivity 本轮互动记录：写长期记忆与动态时交给模型。
-type lifeActivity struct {
-	Kind    string `json:"kind"` // inbox / watch / dynamic / share
-	Where   string `json:"where,omitempty"`
-	Target  string `json:"target,omitempty"`
-	Content string `json:"content,omitempty"`
-	Reply   string `json:"reply,omitempty"`
-	Note    string `json:"note,omitempty"`
 }
 
 // notifyCategory 被动消息的分类（只处理 @ 与追评两类）。
@@ -180,65 +145,4 @@ type inboxItem struct {
 	Title     string         `json:"title,omitempty"`
 	URI       string         `json:"uri,omitempty"`
 	Time      int64          `json:"time,omitempty"`
-}
-
-// stepKind Tick 状态机的原子步骤。
-type stepKind int
-
-const (
-	// stepWatch 观看并理解一个视频切片
-	stepWatch stepKind = iota
-	// stepMerge 合并单个视频的全部切片理解并入库
-	stepMerge
-	// stepPublish 发布观影动态 + 评价条目 + @分享
-	stepPublish
-)
-
-// pipelineStep Tick 计划表中的一步。
-type pipelineStep struct {
-	Kind  stepKind
-	Video *videoRecord
-	Slice int
-}
-
-// viewerTraceRecord 单轮观看轨迹的一行。
-//
-// 轨迹只落本地 JSONL（单轮内可追溯切片 → 解读 → 结论），不写长期记忆。
-type viewerTraceRecord struct {
-	Time  int64  `json:"time"`
-	Kind  string `json:"kind"` // slice / merge
-	Bvid  string `json:"bvid,omitempty"`
-	Title string `json:"title,omitempty"`
-	Index int    `json:"index,omitempty"`
-	Total int    `json:"total,omitempty"`
-	Text  string `json:"text"`
-}
-
-// dynamicCommentTarget 一条动态真正的评论区（type + oid）。
-//
-// 动态 ID 不等于评论 oid：纯文字动态经 dynamic_svr 发布后常被归为图文动态
-// （comment_type=11），必须用详情接口返回的 comment_id_str/comment_type。
-type dynamicCommentTarget struct {
-	Type int
-	Oid  string
-}
-
-// ==== 模型调用消息类型 ====
-
-// chatMessage OpenAI 兼容消息。
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content any    `json:"content"`
-}
-
-// imageURL 图片地址。
-type imageURL struct {
-	URL string `json:"url"`
-}
-
-// contentPart 图文混排片段。
-type contentPart struct {
-	Type     string    `json:"type"`
-	Text     string    `json:"text,omitempty"`
-	ImageURL *imageURL `json:"image_url,omitempty"`
 }

@@ -146,9 +146,10 @@ func WireTUIEngineHooks() {
 		Tool:  streamTool,
 		Meter: meter,
 	})
-	// 重试仍失败时交给智能修复：智能体基座按故障归属 ID 上报。
-	agentbase.SetRepairHook(func(agent string, err error) {
-		Savior.ReportRun(agentIDByRole(agent), err)
+	// 重试仍失败时交给智能修复：优先走结构化简报，缺失字段由修复层降级。
+	agentbase.SetRepairDetailHook(func(detail agentbase.FailureDetail) {
+		detail.Agent = agentIDByRole(detail.Agent)
+		Savior.ReportDetail(detail)
 	})
 	// 桌面操纵的工具调用也进实况（工具名 + 参数），复盘时看得出它到底有没有真正去启动应用
 	desktop.SetToolObserver(func(role, name, args string) {

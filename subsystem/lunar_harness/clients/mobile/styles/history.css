@@ -1,0 +1,324 @@
+/* ========== 历史记录视图（双击输入框切换） ========== */
+
+/* 视图舞台：模型区与历史区叠放，切换时交叉淡入淡出 */
+.view-stage {
+	flex: 1 1 auto;
+	min-height: 0;
+	position: relative;
+	display: flex;
+}
+
+.view-stage > .renderer-wrapper {
+	position: absolute;
+	inset: 0;
+	transition: opacity 0.24s ease, transform 0.24s ease, visibility 0s linear 0s;
+}
+
+.main-container-panel.history-mode .view-stage > .renderer-wrapper {
+	opacity: 0;
+	visibility: hidden;
+	transform: scale(0.985);
+	pointer-events: none;
+	transition: opacity 0.24s ease, transform 0.24s ease, visibility 0s linear 0.24s;
+}
+
+/* ===== 历史视图容器 ===== */
+.history-view {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	padding: 8px 10px 0;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(10px);
+	pointer-events: none;
+	transition: opacity 0.28s ease, transform 0.28s ease, visibility 0s linear 0.28s;
+}
+
+.main-container-panel.history-mode .history-view {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0);
+	pointer-events: auto;
+	transition: opacity 0.28s ease, transform 0.28s ease, visibility 0s linear 0s;
+}
+
+.history-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding-bottom: 12px;
+}
+
+/* 顶部状态行：加载更多 / 已到最早一条 / 空记录 */
+.history-status {
+	flex-shrink: 0;
+	min-height: 22px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 12px;
+	letter-spacing: 0.02em;
+	color: rgba(255, 255, 255, 0.55);
+}
+
+.history-status:empty {
+	display: none;
+}
+
+.history-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+/* ===== 历史消息气泡 ===== */
+.history-item {
+	max-width: 92%;
+	padding: 9px 12px;
+	border-radius: var(--btn-glass-radius, 14px);
+	background: var(--btn-glass-bg);
+	border: 1px solid var(--glass-border);
+	box-shadow: var(--btn-glass-shadow);
+	backdrop-filter: var(--glass-blur);
+	-webkit-backdrop-filter: var(--glass-blur);
+	color: #f2f2f5;
+}
+
+.history-item.is-user {
+	align-self: flex-end;
+	background: rgba(157, 107, 255, 0.18);
+	border-color: rgba(157, 107, 255, 0.32);
+}
+
+.history-item.is-assistant {
+	align-self: flex-start;
+}
+
+.history-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 4px;
+	font-size: 11px;
+	line-height: 1.3;
+	color: rgba(255, 255, 255, 0.55);
+}
+
+.history-meta .history-sender {
+	font-weight: 600;
+	color: rgba(255, 255, 255, 0.78);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.history-meta .history-time {
+	margin-left: auto;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+/* ===== 正文（复用 marked 输出，仅做移动端排版） ===== */
+.history-text {
+	font-size: 14px;
+	line-height: 1.55;
+	word-break: break-word;
+}
+
+.history-text.is-plain {
+	white-space: pre-wrap;
+}
+
+.history-text p {
+	margin: 0 0 6px;
+}
+
+.history-text > *:last-child,
+.history-text p:last-child {
+	margin-bottom: 0;
+}
+
+.history-text h1,
+.history-text h2,
+.history-text h3,
+.history-text h4 {
+	margin: 10px 0 6px;
+	font-size: 15px;
+	line-height: 1.35;
+}
+
+.history-text ul,
+.history-text ol {
+	margin: 6px 0;
+	padding-left: 18px;
+}
+
+.history-text li {
+	margin: 2px 0;
+}
+
+.history-text a {
+	color: #9dc7ff;
+	text-decoration: underline;
+}
+
+.history-text blockquote {
+	margin: 6px 0;
+	padding-left: 8px;
+	border-left: 2px solid var(--glass-border);
+	opacity: 0.85;
+}
+
+.history-text code {
+	padding: 1px 4px;
+	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.35);
+	font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+	font-size: 12px;
+}
+
+.history-text pre {
+	margin: 6px 0;
+	padding: 8px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--glass-border);
+	background: rgba(0, 0, 0, 0.35);
+	overflow-x: auto;
+}
+
+.history-text pre code {
+	padding: 0;
+	background: none;
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.history-text table {
+	width: 100%;
+	margin: 6px 0;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.history-text th,
+.history-text td {
+	padding: 4px 8px;
+	border: 1px solid var(--glass-border);
+	text-align: left;
+}
+
+.history-text img {
+	max-width: 100%;
+	border-radius: 10px;
+}
+
+/* ===== 媒体块 ===== */
+.history-media {
+	margin-top: 6px;
+}
+
+.history-media img,
+.history-media video {
+	display: block;
+	max-width: 100%;
+	max-height: 260px;
+	border-radius: 10px;
+	border: 1px solid var(--glass-border);
+	object-fit: cover;
+}
+
+.history-media audio {
+	display: block;
+	width: 100%;
+	margin-top: 6px;
+}
+
+.history-voice {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	border: 1px solid var(--glass-border);
+	background: var(--btn-glass-bg);
+	color: rgba(255, 255, 255, 0.78);
+	font-size: 12px;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+	transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.history-voice:active {
+	border-color: var(--accent-color);
+	color: #ffffff;
+}
+
+.history-transcript {
+	margin-top: 6px;
+	padding: 6px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--glass-border);
+	font-size: 12px;
+	line-height: 1.5;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+/* 音乐卡在历史气泡内：收紧外边距，其余视觉沿用共享播放器 */
+.history-item .lunar-music-card {
+	margin: 6px 0 0;
+}
+
+/* ===== 一次性可发现性提示（非按钮，自动消失） ===== */
+.history-hint {
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 10px);
+	transform: translate(-50%, 6px);
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 14px;
+	border-radius: 999px;
+	border: 1px solid var(--glass-border);
+	background: var(--btn-glass-bg);
+	backdrop-filter: var(--glass-blur);
+	-webkit-backdrop-filter: var(--glass-blur);
+	box-shadow: var(--btn-glass-shadow);
+	color: rgba(255, 255, 255, 0.9);
+	font-size: 12px;
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.35s ease, transform 0.35s ease;
+	z-index: 20;
+}
+
+.history-hint.visible {
+	opacity: 1;
+	transform: translate(-50%, 0);
+}
+
+.history-hint i {
+	color: var(--accent-color);
+	font-size: 13px;
+}
+
+/* 提示期间的双击节奏暗示：图标轻点两下 */
+.history-hint.visible i {
+	animation: historyHintTap 1.6s ease-in-out 2;
+}
+
+@keyframes historyHintTap {
+	0%, 100% { transform: scale(1); }
+	30% { transform: scale(0.82); }
+	45% { transform: scale(1); }
+	75% { transform: scale(0.82); }
+}

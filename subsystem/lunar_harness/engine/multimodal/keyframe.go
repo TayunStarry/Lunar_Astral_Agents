@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,6 +16,8 @@ import (
 	"time"
 
 	ffmpeg "github.com/u2takey/ffmpeg-go"
+
+	"LunarSubsystem/LunarHarness/engine/netsource"
 )
 
 // DefaultFPS 默认关键帧提取频率（每秒5帧）
@@ -34,14 +34,16 @@ func IsSupportedVideoFormat(filename string) bool {
 // 通过 FFmpeg fps 滤镜一次性提取所有帧，再基于图像相似度筛选去重。
 // 处理1小时视频的关键帧提取时间不超过3分钟。
 func VideoKeyframeExtraction(inputFile string) ([]KeyFrame, error) {
-	// 如果输入是HTTP URL，先下载到本地临时文件
+	// 如果输入是HTTP URL，先本地化：本机服务地址直接复用原文件，远程地址才下载临时文件
 	if strings.HasPrefix(inputFile, "http://") || strings.HasPrefix(inputFile, "https://") {
-		tempFile, err := downloadToTempFile(inputFile)
+		localFile, cleanup, err := downloadToTempFile(inputFile)
 		if err != nil {
 			return nil, fmt.Errorf("下载视频文件失败: %w", err)
 		}
-		defer os.Remove(tempFile)
-		inputFile = tempFile
+		if cleanup != nil {
+			defer cleanup()
+		}
+		inputFile = localFile
 	}
 
 	// 获取视频时长
@@ -282,35 +284,42 @@ func CreateKeyFrame(frameFileName string, timestamp string, frameNum int, frameD
 	return KeyFrame{FilePath: frameFileName, Timestamp: timestamp, FrameNum: frameNum, Data: frameData}
 }
 
-// downloadToTempFile 下载HTTP URL的视频文件到本地临时文件
-func downloadToTempFile(url string) (string, error) {
-	resp, err := http.Get(url)
+// downloadToTempFile 本地化 HTTP URL 视频来源。
+//
+// 本机服务地址且文件存在时直接返回本地路径，cleanup 为 nil（不得删除用户原文件）；
+// 远程地址才回源下载到临时文件并返回非 nil cleanup。
+func downloadToTempFile(rawURL string) (string, func(), error) {
+	if local, ok := netsource.LocalPath(rawURL); ok {
+		return local, nil, nil
+	}
+
+	resp, err := netsource.Open(rawURL, videoAnalysisDownloadTimeout)
 	if err != nil {
-		return "", fmt.Errorf("HTTP请求失败: %w", err)
+		return "", nil, fmt.Errorf("HTTP请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HTTP请求返回状态码: %d", resp.StatusCode)
-	}
-
-	ext := filepath.Ext(url)
+	ext := filepath.Ext(rawURL)
 	if ext == "" || !slices.Contains(supportedVideoFormats, strings.ToLower(ext)) {
 		ext = ".mp4"
 	}
 
 	tempFile, err := os.CreateTemp("", "video_download_*"+ext)
 	if err != nil {
-		return "", fmt.Errorf("创建临时文件失败: %w", err)
+		return "", nil, fmt.Errorf("创建临时文件失败: %w", err)
 	}
 	tempFileName := tempFile.Name()
+	cleanup := func() { os.Remove(tempFileName) }
 
-	if _, err := io.Copy(tempFile, resp.Body); err != nil {
+	if err := netsource.CopyLimited(tempFile, resp.Body, maxVideoAnalysisDownloadBytes); err != nil {
 		tempFile.Close()
-		os.Remove(tempFileName)
-		return "", fmt.Errorf("写入临时文件失败: %w", err)
+		cleanup()
+		return "", nil, fmt.Errorf("写入临时文件失败: %w", err)
 	}
-	tempFile.Close()
+	if err := tempFile.Close(); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("关闭临时文件失败: %w", err)
+	}
 
-	return tempFileName, nil
+	return tempFileName, cleanup, nil
 }

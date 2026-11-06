@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
@@ -22,6 +23,15 @@ const lunarLoopRetries = 1
 
 // desktopActorStopHook 对话者开始推理前需终止的外部桌面智能体中断器（宿主注入，返回是否确有任务被中断）。
 var desktopActorStopHook atomic.Pointer[func() bool]
+
+// 远程图片回源：超时与大小上限（本机文件与同源地址不受此限制）
+const (
+	// remoteImageTimeout 远程图片回源超时
+	remoteImageTimeout = 30 * time.Second
+	// maxRemoteImageBytes 远程图片回源上限（32 MiB）：
+	// 网页原图与聊天图片通常远小于此值，留足余量同时避免无上限读入内存。
+	maxRemoteImageBytes = 32 * 1024 * 1024
+)
 
 // ==== 队列与思考状态 ====
 
@@ -130,6 +140,12 @@ const (
 	dialogueMaxRepeats = 3
 	// dialogueAgentID 对话者在智能修复侧的故障归属 ID（与 agentrepair 注册的 ID 一致）
 	dialogueAgentID = "dialogue"
+	// compactDefaultRunes 上下文按水位裁剪时的默认目标字数
+	compactDefaultRunes = 6000
+	// compactMinRunes 上下文裁剪的最小目标字数（低于此值会明显伤到近期上下文）
+	compactMinRunes = 1000
+	// compactMaxRunes 上下文裁剪的最大目标字数
+	compactMaxRunes = 20000
 
 	// visionReadPath 视觉读取端点路径
 	visionReadPath = "/file/miniature/"
@@ -158,18 +174,13 @@ const (
 
 	// 各体系启动时的空闲进度重置值（阈值为 life.IdleThreshold，默认 600）：
 	//   - 对话结束 → 600 剩余 = 10 分钟空闲后进入生活；
-	//   - 观影结束 → 600-300 = 5 分钟空闲后进入生活；
 	//   - 生活（休息）结束 → 600-(-300) = 15 分钟空闲后再次进入生活。
 	dialogueIdleReset = 0
-	viewingIdleReset  = 300
 	lifeIdleReset     = -300
 )
 
 // tickSchedulerInstance 全局 Tick 调度器（Start 时创建）
 var tickSchedulerInstance *tickScheduler
-
-// viewingPendingHook 观影待办探测；测试可替换，生产默认走 BilibiliViewer。
-var viewingPendingHook = viewer.HasPendingWork
 
 // readPageHook 指定网页的现场读取入口；测试可替换，生产默认走搜索链的 ReadURL。
 var readPageHook = search.ReadURL

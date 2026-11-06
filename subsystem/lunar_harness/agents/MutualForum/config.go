@@ -33,6 +33,7 @@ func DefaultConfig() Config {
 		PollMinIntervalSeconds: defaultPollMinInterval,
 		RoundTTLSeconds:        defaultRoundTTL,
 		SearchLimit:            defaultSearchLimit,
+		AutoReplyMaxRetries:    defaultAutoReplyMaxRetries,
 	}
 }
 
@@ -115,7 +116,24 @@ func (c Config) withDefaults() Config {
 	if c.SearchLimit > maxSearchLimit {
 		c.SearchLimit = maxSearchLimit
 	}
+	if c.AutoReplyMaxRetries <= 0 {
+		c.AutoReplyMaxRetries = defaultAutoReplyMaxRetries
+	}
+	if c.AutoReplyMaxRetries > maxAutoReplyMaxRetries {
+		c.AutoReplyMaxRetries = maxAutoReplyMaxRetries
+	}
 	return c
+}
+
+// AutoReplyRetries 返回自动回应的失败重试上限（至少 1 次）。
+func (c Config) AutoReplyRetries() int {
+	if c.AutoReplyMaxRetries <= 0 {
+		return defaultAutoReplyMaxRetries
+	}
+	if c.AutoReplyMaxRetries > maxAutoReplyMaxRetries {
+		return maxAutoReplyMaxRetries
+	}
+	return c.AutoReplyMaxRetries
 }
 
 // Validate 校验开关与地址；未通过时工具必须保持隐藏。

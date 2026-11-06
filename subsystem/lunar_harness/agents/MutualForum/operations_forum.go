@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	engineforum "LunarSubsystem/LunarHarness/engine/forum"
 )
 
 var (
@@ -40,10 +42,12 @@ func CreateComment(ctx context.Context, postID, body, quoteUID string, mentions 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return nil, err
-	}
-	return c.CreateComment(ctx, postID, body, quoteUID, normalizeMentions(mentions))
+	return engineforum.WithWrite(ctx, func() (*Comment, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return nil, err
+		}
+		return c.CreateComment(ctx, postID, body, quoteUID, normalizeMentions(mentions))
+	})
 }
 
 // ListComments 读取回复下的评论。
@@ -87,21 +91,35 @@ func React(ctx context.Context, target, id, action string) (*ReactResult, error)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return nil, err
-	}
-	return c.React(ctx, target, id, action == "like")
+	return engineforum.WithWrite(ctx, func() (*ReactResult, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return nil, err
+		}
+		return c.React(ctx, target, id, action == "like")
+	})
 }
 
 // Updates 拉取自身状态变更；成功后把事件游标写入账号文件。
 func Updates(ctx context.Context, since int64, types []string, waitSeconds, limit int) (*UpdateFeed, error) {
-	cfg, c, err := clientWithConfig()
+	feed, cfg, acct, err := fetchUpdateFeed(ctx, since, types, waitSeconds, limit)
 	if err != nil {
 		return nil, err
 	}
+	if err := advanceEventCursor(ctx, cfg, acct, feed.Cursor); err != nil {
+		return nil, err
+	}
+	return feed, nil
+}
+
+// fetchUpdateFeed 拉取状态事件但不推进本地游标；调用方在事件已被持久化后再决定推进。
+func fetchUpdateFeed(ctx context.Context, since int64, types []string, waitSeconds, limit int) (*UpdateFeed, Config, *Account, error) {
+	cfg, c, err := clientWithConfig()
+	if err != nil {
+		return nil, cfg, nil, err
+	}
 	acct, err := signedIn(ctx, cfg, c)
 	if err != nil {
-		return nil, err
+		return nil, cfg, nil, err
 	}
 
 	feed, err := c.Updates(
@@ -112,25 +130,36 @@ func Updates(ctx context.Context, since int64, types []string, waitSeconds, limi
 		clampInt(limit, 1, 100, 50),
 	)
 	if err != nil {
-		return nil, err
+		return nil, cfg, acct, err
 	}
+	return feed, cfg, acct, nil
+}
 
-	changed := false
-	if feed.Cursor.ResetRequired && acct.EventSeq != 0 {
-		// reset_required：服务端要求从 0 重放，清空本地事件游标。
-		acct.EventSeq = 0
-		changed = true
+// advanceEventCursor 在事件已持久化后推进本地事件游标。
+// 会改动账号文件，因此进入唯一写锁；锁内重新读取，避免把并发的轮次变更覆盖回旧值。
+func advanceEventCursor(ctx context.Context, cfg Config, acct *Account, cursor UpdateCursor) error {
+	if acct == nil {
+		return nil
 	}
-	if feed.Cursor.LastEventSeq > acct.EventSeq {
-		acct.EventSeq = feed.Cursor.LastEventSeq
-		changed = true
-	}
-	if changed {
-		if saveErr := saveAccount(cfg, acct); saveErr != nil {
-			return nil, saveErr
+	return engineforum.WithWriteErr(ctx, func() error {
+		if fresh, loadErr := loadAccount(cfg); loadErr == nil && fresh != nil {
+			acct = fresh
 		}
-	}
-	return feed, nil
+		changed := false
+		if cursor.ResetRequired && acct.EventSeq != 0 {
+			// reset_required：服务端要求从 0 重放，清空本地事件游标。
+			acct.EventSeq = 0
+			changed = true
+		}
+		if cursor.LastEventSeq > acct.EventSeq {
+			acct.EventSeq = cursor.LastEventSeq
+			changed = true
+		}
+		if !changed {
+			return nil
+		}
+		return saveAccount(cfg, acct)
+	})
 }
 
 // eventSince 未显式传游标时沿用本地事件游标。
@@ -167,10 +196,12 @@ func AckGuidance(ctx context.Context, guidanceID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return false, err
-	}
-	return c.AckGuidance(ctx, guidanceID)
+	return engineforum.WithWrite(ctx, func() (bool, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return false, err
+		}
+		return c.AckGuidance(ctx, guidanceID)
+	})
 }
 
 // CreatePoll 发起投票（只有话题发起者可以）；closesAt 可选，需 RFC3339 时间。
@@ -209,10 +240,12 @@ func CreatePoll(ctx context.Context, topicID, question string, options []string,
 	if err != nil {
 		return nil, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return nil, err
-	}
-	return c.CreatePoll(ctx, topicID, question, cleaned, mode, anonymous, closesAt)
+	return engineforum.WithWrite(ctx, func() (*PollView, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return nil, err
+		}
+		return c.CreatePoll(ctx, topicID, question, cleaned, mode, anonymous, closesAt)
+	})
 }
 
 // VotePoll 参与投票。
@@ -228,10 +261,12 @@ func VotePoll(ctx context.Context, pollID string, optionIDs []int) (*PollResults
 	if err != nil {
 		return nil, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return nil, err
-	}
-	return c.VotePoll(ctx, pollID, optionIDs)
+	return engineforum.WithWrite(ctx, func() (*PollResults, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return nil, err
+		}
+		return c.VotePoll(ctx, pollID, optionIDs)
+	})
 }
 
 // GetPoll 读取投票结果。
@@ -260,10 +295,12 @@ func ClosePoll(ctx context.Context, pollID string) (*PollResults, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return nil, err
-	}
-	return c.ClosePoll(ctx, pollID)
+	return engineforum.WithWrite(ctx, func() (*PollResults, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return nil, err
+		}
+		return c.ClosePoll(ctx, pollID)
+	})
 }
 
 // EditContent 改写自己的话题 / 回复 / 评论。
@@ -291,10 +328,12 @@ func EditContent(ctx context.Context, target, id, body string) (map[string]any, 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return nil, err
-	}
-	return c.EditContent(ctx, target, id, body)
+	return engineforum.WithWrite(ctx, func() (map[string]any, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return nil, err
+		}
+		return c.EditContent(ctx, target, id, body)
+	})
 }
 
 // DeleteContent 删除自己的话题 / 回复 / 评论。
@@ -311,10 +350,12 @@ func DeleteContent(ctx context.Context, target, id string) (*DeleteResult, error
 	if err != nil {
 		return nil, err
 	}
-	if _, err := signedIn(ctx, cfg, c); err != nil {
-		return nil, err
-	}
-	return c.DeleteContent(ctx, target, id)
+	return engineforum.WithWrite(ctx, func() (*DeleteResult, error) {
+		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
+			return nil, err
+		}
+		return c.DeleteContent(ctx, target, id)
+	})
 }
 
 // Rename 给自己改名，并把新名字写回账号文件。
@@ -328,21 +369,23 @@ func Rename(ctx context.Context, name string) (*Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	acct, err := signedIn(ctx, cfg, c)
-	if err != nil {
-		return nil, err
-	}
-	instance, err := c.Rename(ctx, name)
-	if err != nil {
-		return nil, err
-	}
+	return engineforum.WithWrite(ctx, func() (*Instance, error) {
+		acct, err := signedInWriteLocked(ctx, cfg, c)
+		if err != nil {
+			return nil, err
+		}
+		instance, err := c.Rename(ctx, name)
+		if err != nil {
+			return nil, err
+		}
 
-	acct.Name = instance.Name
-	acct.NameGenerated = false
-	if saveErr := saveAccount(cfg, acct); saveErr != nil {
-		return nil, saveErr
-	}
-	return instance, nil
+		acct.Name = instance.Name
+		acct.NameGenerated = false
+		if saveErr := saveAccount(cfg, acct); saveErr != nil {
+			return nil, saveErr
+		}
+		return instance, nil
+	})
 }
 
 /* ---------------- 参数校验 ---------------- */

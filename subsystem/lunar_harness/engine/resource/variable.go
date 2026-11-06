@@ -136,6 +136,16 @@ const (
 // workspaceMaxBytes 单个工作区文件收录的体积上限
 const workspaceMaxBytes = 100 * 1024 * 1024
 
+// 远程资源回源：超时与大小上限（本机文件与同源地址不受此限制）
+const (
+	// remoteResourceTimeout 远程资源回源超时
+	remoteResourceTimeout = 60 * time.Second
+	// maxRemoteResourceBytes 远程资源回源上限（2 GiB）：
+	// 资源入库可能收到 QQ 渠道视频或大体积文档，需要留足空间；
+	// 同时设硬上限，避免异常大流把临时盘写满。
+	maxRemoteResourceBytes = int64(2 << 30)
+)
+
 // 内容仓库根目录（相对 LocalDir）
 const (
 	StorageRootDocuments  = "documents"

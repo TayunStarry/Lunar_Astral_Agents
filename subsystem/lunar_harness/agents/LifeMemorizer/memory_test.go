@@ -88,14 +88,95 @@ func TestParseArrayWithFence(t *testing.T) {
 	}
 }
 
-// TestRetainEnough 正文总量下限：过度压缩视为不合格，正常合并通过
+// TestRetainEnough 整批条目化的正文下限：过度压缩视为不合格，正常输出通过
 func TestRetainEnough(t *testing.T) {
 	contents := []string{strings.Repeat("甲", 100), strings.Repeat("乙", 100)}
-	if retainEnough(contents, []string{strings.Repeat("丙", 10)}) {
+	if retainEnoughWith(contents, []string{strings.Repeat("丙", 10)}, MinRetainPercent) {
 		t.Fatal("输出正文仅占输入 5%%，应判定为过度压缩")
 	}
-	if !retainEnough(contents, []string{strings.Repeat("丙", 45)}) {
+	if !retainEnoughWith(contents, []string{strings.Repeat("丙", 45)}, MinRetainPercent) {
 		t.Fatal("输出正文占输入 22.5%%，应判定为合格")
+	}
+}
+
+// heavyDuplicateInputs 构造日志里的典型场景：8 条高度重复的心智记忆。
+func heavyDuplicateInputs() []string {
+	base := "今天下午和小想讨论了记忆库的分簇方案，最后决定总库为主、攒够 16 条高相似记忆才升级成正式簇"
+	contents := make([]string, 0, 8)
+	for i := 0; i < 8; i++ {
+		contents = append(contents, base+"（第 "+string(rune('一'+i))+" 次提到）")
+	}
+	return contents
+}
+
+// TestMergeAcceptsHeavyDedup 8 条高度重复记忆合并成 1 条（正文远低于输入 20%）必须通过
+func TestMergeAcceptsHeavyDedup(t *testing.T) {
+	contents := heavyDuplicateInputs()
+	want := "今天下午和小想讨论了记忆库的分簇方案，决定总库为主、攒够 16 条高相似记忆才升级成正式簇"
+	if ratio := totalRunes([]string{want}) * 100 / totalRunes(contents); ratio >= MinRetainPercent {
+		t.Fatalf("用例前提不成立：合并结果已占输入的 %d%%，起不到复现作用", ratio)
+	}
+	withFakeModel(t, `["`+want+`"]`)
+
+	got, err := Merge(context.Background(), contents)
+	if err != nil {
+		t.Fatalf("高度重复的正常合并不应判为不可用: %v", err)
+	}
+	assertSameTexts(t, []string{want}, got)
+}
+
+// TestMergeAcceptsCollapseToTwo 8 条重复记忆合并成 2 条（保留一条独立事实）同样通过
+func TestMergeAcceptsCollapseToTwo(t *testing.T) {
+	contents := append(heavyDuplicateInputs(), "小想明确说过他喜欢无糖乌龙茶，不喜欢加糖的")
+	withFakeModel(t, `["今天下午和小想讨论了记忆库分簇方案，决定总库为主、攒够 16 条高相似才升级成正式簇", "小想喜欢无糖乌龙茶，不喜欢加糖的"]`)
+
+	got, err := Merge(context.Background(), contents)
+	if err != nil {
+		t.Fatalf("保留独立事实的合并不应判为不可用: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("应保留 2 条合并结果，实得 %d 条: %v", len(got), got)
+	}
+}
+
+// TestMergeRejectsBadOutput 四条拒绝规则分别命中，且失败时返回错误让链路层保留原条目
+func TestMergeRejectsBadOutput(t *testing.T) {
+	cases := []struct {
+		name  string
+		reply string
+		want  string
+	}{
+		{"空内容", "", "结果为空"},
+		{"非 JSON", "抱歉，我无法合并这些记忆", "结果为空"},
+		{"空数组", "[]", "结果为空"},
+		{"无实质正文", `["……", "——"]`, "无实质正文"},
+		{"正文过短", `["聊了聊"]`, "正文过短"},
+		{"条数扩张", `["一","二","三","四","五","六","七","八","九"]`, "条数扩张"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			withFakeModel(t, c.reply)
+			_, err := Merge(context.Background(), heavyDuplicateInputs())
+			if err == nil {
+				t.Fatalf("应判为不可用，实际通过")
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("错误应写明命中的规则 %q，实得 %q", c.want, err.Error())
+			}
+		})
+	}
+}
+
+// TestMergeRetainFloorCapsAtLongestItem 短条目簇合并成 1 条时不因固定下限被误杀
+func TestMergeRetainFloorCapsAtLongestItem(t *testing.T) {
+	contents := []string{"喜欢无糖乌龙茶", "喜欢无糖乌龙茶", "喜欢无糖乌龙茶", "喜欢无糖乌龙茶",
+		"喜欢无糖乌龙茶", "喜欢无糖乌龙茶", "喜欢无糖乌龙茶", "喜欢无糖乌龙茶"}
+	if floor := mergeRetainFloor(contents); floor > totalRunes([]string{contents[0]}) {
+		t.Fatalf("下限 %d 不应超过最长单条输入 %d", floor, totalRunes([]string{contents[0]}))
+	}
+	withFakeModel(t, `["喜欢无糖乌龙茶"]`)
+	if _, err := Merge(context.Background(), contents); err != nil {
+		t.Fatalf("完全相同的短记忆合成 1 条应通过: %v", err)
 	}
 }
 

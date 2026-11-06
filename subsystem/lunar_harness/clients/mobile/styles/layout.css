@@ -151,20 +151,11 @@
 	display: none;
 }
 
+/* 悬浮卡片：沿用移动端玻璃令牌，不额外叠加色相 */
 .music-dock .lunar-music-card {
-	--lunar-music-ink: #f5f0ff;
-	--lunar-music-muted: rgba(245, 240, 255, 0.68);
-	background:
-		linear-gradient(135deg, rgba(157, 107, 255, 0.2), transparent 68%),
-		rgba(17, 12, 32, 0.62);
-	border-color: rgba(157, 107, 255, 0.28);
-	backdrop-filter: blur(16px) saturate(140%);
-	-webkit-backdrop-filter: blur(16px) saturate(140%);
-	box-shadow:
-		0 10px 30px rgba(0, 0, 0, 0.35),
-		inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.music-dock .lunar-music-title {
-	color: var(--lunar-music-ink);
+	background: var(--glass-bg);
+	border-color: var(--glass-border);
+	backdrop-filter: var(--glass-blur);
+	-webkit-backdrop-filter: var(--glass-blur);
+	box-shadow: var(--btn-glass-shadow);
 }

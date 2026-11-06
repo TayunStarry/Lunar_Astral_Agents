@@ -1,6 +1,21 @@
 package multimodal
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
+
+// 远程音频回源：超时与大小上限（本地文件与 data URI 不受此限制）
+const (
+	audioDownloadTimeout  = 120 * time.Second
+	maxAudioDownloadBytes = 100 * 1024 * 1024
+)
+
+// 视频分析回源（watch / keyframe）：超时与大小上限
+const (
+	videoAnalysisDownloadTimeout  = 300 * time.Second
+	maxVideoAnalysisDownloadBytes = int64(2 << 30)
+)
 
 // 支持的视频格式列表
 var supportedVideoFormats = []string{".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv", ".webm", ".m4v"}

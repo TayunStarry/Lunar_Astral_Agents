@@ -180,6 +180,39 @@ type RetryOptions struct {
 	OnRetry func(attempt int, err error)
 }
 
+// FailureDetail 一次结构化故障简报。
+//
+// 上报方只填自己确知的字段，缺失字段由修复层按「未知」降级处理；
+// 所有文本字段都由修复层再次截断，保证进入提示词的内容有界。
+type FailureDetail struct {
+	// Agent 故障归属 ID
+	Agent string
+	// Kind 故障类型（见 FailureKind* 常量）
+	Kind string
+	// Criterion 触发判据的原文（如「正文不足输入的 20%」）
+	Criterion string
+	// Entry 触发入口（步骤名 / 角色名，如 merge、自由创作.执行者）
+	Entry string
+	// Err 原始错误
+	Err error
+	// ErrorText 错误文本；Err 为空时也可单独提供
+	ErrorText string
+	// Tool 失败或可疑的工具名
+	Tool string
+	// ToolArgs 该次工具调用的参数原文
+	ToolArgs string
+	// ToolResult 该次工具调用的返回内容
+	ToolResult string
+	// Retries 上报前已自行重试的次数
+	Retries int
+	// ContextMessages 出错时的上下文消息条数
+	ContextMessages int
+	// ContextRunes 出错时的上下文正文长度
+	ContextRunes int
+	// Metrics 其它有界的数值水位（输入/输出长度、轮次、重复次数等）
+	Metrics map[string]int64
+}
+
 // AgentConfig 标准智能体基座的元数据。
 type AgentConfig struct {
 	// ID 故障归属 ID（智能修复按此去重）

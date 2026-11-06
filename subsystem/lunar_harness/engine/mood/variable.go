@@ -17,10 +17,12 @@ const (
 	stateFile = "database/life/mood_state.json"
 	// defaultLabel 未初始化时的兜底标签
 	defaultLabel = "开心"
-	// alpha 当前心情在加权平均中的权重（越大越稳定）
-	alpha = 0.7
-	// temperature 情绪分布 softmax 温度（越小越集中）
-	temperature = 0.15
+	// alpha 当前心情在加权平均中的权重（越大越稳定）。
+	// 0.35 表示每次更新有 65% 向当前发言的目标情绪靠拢，明显放大单轮情绪起伏。
+	alpha = 0.35
+	// temperature 情绪分布 softmax 温度（越小越集中）。
+	// 0.10 让目标情绪更集中到主导标签，使情绪切换更果断。
+	temperature = 0.10
 	// initTimeout 初始化嵌入的总超时
 	initTimeoutSeconds = 20
 )

@@ -46,31 +46,52 @@ func replyIDs(item inboxItem) (root, parent string, ok bool) {
 
 // replyByAPI 用消息中心的评论 ID 发布回复，并回读确认可见。
 func (w *webSession) replyByAPI(item inboxItem, message string) error {
-	message = strings.TrimSpace(message)
-	if message == "" {
-		return fmt.Errorf("回应内容为空")
-	}
 	root, parent, ok := replyIDs(item)
 	if !ok {
 		return fmt.Errorf("消息缺少对象或评论 ID，无法接口回复")
 	}
+	if err := w.postReplyAPI(item.Type, item.Oid, message, root, parent, nil); err != nil {
+		return err
+	}
+
+	// 只有挂在根评论下才需要回读子评论；根评论发布以接口 code=0 为准
+	if root != "" {
+		w.wait(3 * time.Second)
+		if !w.replyVisible(item, root, message) {
+			return fmt.Errorf("接口已受理但回读未见（可能仍在审核）")
+		}
+	}
+	return nil
+}
+
+// postReplyAPI 调 x/v2/reply/add 发布评论/回复，是全模块唯一的接口发布实现。
+//
+// root/parent 同时为空表示发布根评论；targets 非空时写入 at_name/at_mid 产生真实 @。
+func (w *webSession) postReplyAPI(typ int, oid, message, root, parent string, targets []MentionTarget) error {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return fmt.Errorf("评论内容为空")
+	}
 	csrf := w.csrf()
 	if csrf == "" {
-		return fmt.Errorf("页面里读不到 bili_jct，无法回复")
+		return fmt.Errorf("页面里读不到 bili_jct，无法发布评论")
 	}
 
 	form := url.Values{}
-	form.Set("type", strconv.Itoa(item.Type))
-	form.Set("oid", item.Oid)
+	form.Set("type", strconv.Itoa(typ))
+	form.Set("oid", oid)
 	form.Set("message", message)
 	form.Set("plat", "1")
 	form.Set("csrf", csrf)
-	// 有 root/parent 时挂到对方评论下；两者为空表示发布一条新的根评论
 	if root != "" {
 		form.Set("root", root)
 	}
 	if parent != "" {
 		form.Set("parent", parent)
+	}
+	if names, mids := mentionAtFields(targets); names != "" {
+		form.Set("at_name", names)
+		form.Set("at_mid", mids)
 	}
 
 	raw, err := w.pageFetchText("POST", "https://api.bilibili.com/x/v2/reply/add",
@@ -86,15 +107,7 @@ func (w *webSession) replyByAPI(item inboxItem, message string) error {
 		return err
 	}
 	if resp.Code != 0 {
-		return fmt.Errorf("B站拒绝回复: code=%d %s", resp.Code, resp.Msg)
-	}
-
-	// 只有挂在根评论下才需要回读子评论；根评论发布以接口 code=0 为准
-	if root != "" {
-		w.wait(3 * time.Second)
-		if !w.replyVisible(item, root, message) {
-			return fmt.Errorf("接口已受理但回读未见（可能仍在审核）")
-		}
+		return fmt.Errorf("B站拒绝发布: code=%d %s", resp.Code, resp.Msg)
 	}
 	return nil
 }

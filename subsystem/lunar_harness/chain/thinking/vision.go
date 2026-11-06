@@ -10,18 +10,16 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/netsource"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
@@ -142,19 +140,14 @@ func resolveImageBytes(source string) ([]byte, error) {
 	if cut := strings.IndexAny(rel, "?#"); cut >= 0 {
 		rel = rel[:cut]
 	}
+	// 本机服务地址可能来自回环，也可能来自手机端使用的局域网地址（经自签 HTTPS 代理访问）。
+	// 文件已在本机 local_data 下时直接读盘，避免回源时因证书校验失败而丢掉整张图。
+	if local, ok := resource.LocalPathURL(rel); ok {
+		return os.ReadFile(local)
+	}
 	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
 		// 腾讯图床只接受 https：以 http 直链 GET 会被边缘节点直接拒绝（400）。
-		source = resource.UpgradeCDNScheme(source)
-		client := &http.Client{Timeout: 30 * time.Second}
-		resp, err := client.Get(source)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("图片地址返回 %s", resp.Status)
-		}
-		return io.ReadAll(resp.Body)
+		return readRemoteImage(resource.UpgradeCDNScheme(source), maxRemoteImageBytes)
 	}
 	path := rel
 	if !filepath.IsAbs(path) {
@@ -165,4 +158,19 @@ func resolveImageBytes(source string) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+// readRemoteImage 回源读取远程图片；超过上限时明确报错，不返回半张图。
+func readRemoteImage(rawURL string, maxBytes int64) ([]byte, error) {
+	resp, err := netsource.Open(rawURL, remoteImageTimeout)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	buf := &bytes.Buffer{}
+	if err := netsource.CopyLimited(buf, resp.Body, maxBytes); err != nil {
+		return nil, fmt.Errorf("图片下载失败: %w", err)
+	}
+	return buf.Bytes(), nil
 }

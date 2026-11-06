@@ -42,6 +42,15 @@ const (
 	FileReadChunkLimit = 8000
 	// MaxChangeQuery 单次 change_query 返回的文件变更次数上限（工具 schema 上限）。
 	MaxChangeQuery = 10
+
+	// denyDefaultTTL 工具禁用默认有效期。
+	denyDefaultTTL = 30 * time.Minute
+	// denyMaxTTL 工具禁用最长有效期。
+	denyMaxTTL = 2 * time.Hour
+	// maxDeniedTools 同时禁用的工具上限。
+	maxDeniedTools = 8
+	// maxRecordedToolCalls 单次循环记录的工具调用条数上限。
+	maxRecordedToolCalls = 16
 )
 
 // ==== 提示词文件 ====
@@ -66,4 +75,13 @@ var (
 	lastRunMu sync.Mutex
 	// lastRun 最近一次推理循环的摘要（供数据导出与修复复位）。
 	lastRun = map[string]any{}
+
+	// policyMu 保护工具禁用表与本次循环的调用记录。
+	policyMu sync.Mutex
+	// deniedTools 工具名 → 禁用信息。
+	deniedTools = map[string]deniedTool{}
+	// toolCalls 本次（或最近一次）循环的工具调用序列。
+	toolCalls []toolCallRecord
+	// toolCallCounts 工具名 → 调用次数。
+	toolCallCounts = map[string]int{}
 )

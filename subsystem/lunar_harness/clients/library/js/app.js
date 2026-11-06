@@ -118,7 +118,7 @@ function bindEvents() {
 // ===== 数据加载 =====
 async function refreshAll(notify = false) {
     try {
-        const [tree, edits] = await Promise.all([fetchTree(), fetchEdits()]);
+        const [tree, edits] = await Promise.all([fetchTree(), loadAllEdits(0)]);
         state.roots = tree.roots || [];
         state.entries = tree.entries || [];
         state.truncated = Boolean(tree.truncated);
@@ -136,6 +136,66 @@ async function refreshAll(notify = false) {
         if (notify) toast('已刷新', 'success');
     } catch (err) {
         toast(`加载失败：${err.message}`, 'error');
+    }
+}
+
+// loadAllEdits 按页拉取变更状态：since 为 0 时全量，大于 0 时增量。
+// 返回 reset=true 表示库已重建或游标失效，调用方应重新做一次全量加载。
+async function loadAllEdits(since = 0) {
+    const pageSize = 200;
+    let offset = 0;
+    let version = 0;
+    let files = [];
+    for (;;) {
+        const page = await fetchEdits({ since, offset, limit: pageSize });
+        if (page.reset) return { version: page.version || 0, files: [], reset: true };
+        const batch = page.files || [];
+        // 只锁定第一页的版本：分页期间若有新变更，下一轮同步会从该版本继续补齐。
+        if (offset === 0) version = page.version || 0;
+        files = files.concat(batch);
+        if (!page.has_more || batch.length === 0) break;
+        offset += page.limit || pageSize;
+    }
+    return { version, files, reset: false };
+}
+
+// syncEdits 收到同步信号后回库拉取增量；结构变化再补一次清单刷新。
+async function syncEdits() {
+    if (syncRunning) {
+        scheduleSync(100);
+        return;
+    }
+    syncRunning = true;
+    try {
+        const result = await loadAllEdits(state.version);
+        if (result.reset) {
+            await refreshAll();
+            return;
+        }
+        if (result.files.length === 0) {
+            state.version = Math.max(state.version, result.version);
+            return;
+        }
+        let structureChanged = false;
+        result.files.forEach((file) => {
+            state.edits.set(file.path, file);
+            if (needsTreeRefresh(file)) structureChanged = true;
+        });
+        state.version = Math.max(state.version, result.version);
+        if (structureChanged) {
+            await refreshAll();
+            return;
+        }
+        renderGrid();
+        renderSummary();
+        if (state.selectedPath) {
+            renderContent();
+            renderDetailsPane();
+        }
+    } catch (err) {
+        toast(`同步变更失败：${err.message}`, 'error');
+    } finally {
+        syncRunning = false;
     }
 }
 
@@ -588,8 +648,8 @@ function showHelp() {
 // ===== WebSocket =====
 let socket = null;
 let attempts = 0;
-let reloadTimer = null;
-let structureTimer = null;
+let syncTimer = null;
+let syncRunning = false;
 
 // 结构类操作会改变目录内容，必须重新拉取清单；内容类操作只更新状态与预览。
 const STRUCTURE_OPS = new Set(['create', 'delete', 'move', 'rename', 'copy']);
@@ -599,6 +659,8 @@ function connectSocket() {
     socket = new WebSocket(`${scheme}://${location.host}/ws?channel=library`);
     socket.addEventListener('open', () => {
         attempts = 0;
+        // 首次连接与断线重连都回库同步一次，补上断开期间漏掉的变更。
+        scheduleSync(0);
     });
     socket.addEventListener('message', onSocketMessage);
     socket.addEventListener('close', () => {
@@ -616,32 +678,13 @@ function onSocketMessage(event) {
         return;
     }
     if (!payload || !payload.type) return;
-    if (payload.type === 'library_edit' && payload.data && payload.data.file) {
-        const file = payload.data.file;
-        state.edits.set(file.path, file);
-        state.version = payload.data.version || state.version;
-        // 新增 / 删除 / 移动 / 重命名 / 复制没有单独的清单事件，必须由这里补一次全量刷新，
-        // 否则新文件不会出现在树与列表中（内容修改仍走下面的局部刷新）。
-        if (needsTreeRefresh(file)) {
-            scheduleStructureRefresh();
-            return;
-        }
-        if (state.selectedPath === file.path) {
-            scheduleReload();
-            renderDetailsPane();
-        } else if (!state.selectedPath) {
-            renderGrid();
-            renderSummary();
-        }
-        return;
-    }
-    if (payload.type === 'library_changed') {
-        clearTimeout(reloadTimer);
-        reloadTimer = setTimeout(() => refreshAll(), 250);
+    // 后端只发同步信号，完整状态由前端回库拉取。
+    if (payload.type === 'library_sync') {
+        scheduleSync(150);
     }
 }
 
-// needsTreeRefresh 判断一次 AI 操作是否可能改变目录结构。
+// needsTreeRefresh 判断一次操作是否可能改变目录结构。
 // 结构类操作必然改变清单；write 目标不在当前清单中时同样意味着新建了文件（或其父目录）。
 function needsTreeRefresh(file) {
     if (STRUCTURE_OPS.has(file.op)) return true;
@@ -649,15 +692,14 @@ function needsTreeRefresh(file) {
     return !state.entries.some((entry) => entry.path === file.path);
 }
 
-// scheduleStructureRefresh 合并短时间内的多次结构事件，只重新拉取一次清单。
-function scheduleStructureRefresh() {
-    clearTimeout(structureTimer);
-    structureTimer = setTimeout(() => refreshAll(), 250);
-}
-
-function scheduleReload() {
-    clearTimeout(reloadTimer);
-    reloadTimer = setTimeout(() => renderContent(), 200);
+// scheduleSync 合并短时间内的多次同步信号，只回库拉取一次。
+// 采用节流而不是防抖：持续的操作流不会把刷新无限推迟。
+function scheduleSync(delay = 150) {
+    if (syncTimer) return;
+    syncTimer = setTimeout(() => {
+        syncTimer = null;
+        void syncEdits();
+    }, delay);
 }
 
 // ===== 主题与工具 =====

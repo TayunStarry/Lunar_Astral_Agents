@@ -71,7 +71,26 @@ const (
 	commentBodyMaxRunes = 2000
 	// payloadMaxBytes 请求体上限（文档 64KB）。
 	payloadMaxBytes = 64 << 10
+
+	// unreadFetchLimit 单批拉取的未读回应事件上限。
+	unreadFetchLimit = 50
+
+	// defaultAutoReplyMaxRetries 自动回应提交失败的默认重试上限。
+	defaultAutoReplyMaxRetries = 3
+	// maxAutoReplyMaxRetries 自动回应重试上限的配置上限。
+	maxAutoReplyMaxRetries = 10
+	// maxReplyErrorRunes 待回应条目里保存的错误摘要长度。
+	maxReplyErrorRunes = 300
+
+	// autoReplyStateVersion 未读回应重试状态的磁盘格式版本。
+	autoReplyStateVersion = 1
+	// pendingStoreSuffix 未读回应重试状态文件的后缀（与账号文件同目录）。
+	pendingStoreSuffix = ".pending.json"
 )
+
+// unreadReplyTypes 只处理真正需要回应的「回应类」事件：新评论、新发言、被 @、被引用。
+// 点赞、投票等只读事件不触发自动回复。
+var unreadReplyTypes = []string{"comment_created", "post_created", "mention", "quote"}
 
 var (
 	// ErrConfigMissing 配置文件不存在
@@ -84,6 +103,9 @@ var (
 	ErrCredentialsLost = errors.New("互助论坛凭证丢失，且服务端未下发新的 api_key")
 	// ErrQQInvalid 配置里的 qq 不符合 5–12 位纯数字且首位非 0
 	ErrQQInvalid = errors.New("互助论坛配置的 qq 格式不正确（需 5–12 位数字且首位不为 0）")
+	// ErrForumPageUnavailable 论坛页面无法打开（配置无效、健康检查失败或论坛未开放）；
+	// 与「页面可用但没有待回应」区分：后者不返回错误且 Summary.Pending == 0。
+	ErrForumPageUnavailable = errors.New("互助论坛页面无法打开")
 
 	// configMu 保护配置缓存
 	configMu sync.Mutex

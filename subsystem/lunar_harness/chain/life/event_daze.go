@@ -27,3 +27,6 @@ func (r *dazeRun) Next(context.Context, Env) (EventStep, error) {
 func (r *dazeRun) Snapshot() json.RawMessage { return json.RawMessage("{}") }
 
 func (r *dazeRun) Restore(json.RawMessage) error { return nil }
+
+// ActivityText 兜底事件没有细节可写，明确指出「什么都没做」，与失败区分。
+func (r *dazeRun) ActivityText() string { return "发了会儿呆，什么也没做" }

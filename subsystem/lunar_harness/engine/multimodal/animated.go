@@ -7,7 +7,6 @@ package multimodal
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"image/gif"
@@ -16,6 +15,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/netsource"
 )
 
 // maxAnimatedBytes 动态图最大输入字节数（与静态图处理保持一致的上限）
@@ -99,10 +100,7 @@ func ImageSourceToBytes(source string) ([]byte, error) {
 // imageSourceClient 图片下载客户端
 //   - 60 秒超时：远端无响应时不得阻塞智能体主循环（图片体积远小于模型/媒体文件）
 //   - 跳过 TLS 校验：与 lunar_goja 的 fetch 默认策略一致，兼容自签名图床
-var imageSourceClient = &http.Client{
-	Timeout:   60 * time.Second,
-	Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-}
+var imageSourceClient = netsource.NewHTTPClient(60*time.Second, true)
 
 // downloadImageBytes 下载图片到内存，超过 maxAnimatedBytes 时中止
 func downloadImageBytes(url string) ([]byte, error) {

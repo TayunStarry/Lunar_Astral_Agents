@@ -6,14 +6,12 @@ package resource
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/netsource"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
 
@@ -30,6 +28,14 @@ func normalizeAdmitSource(in AdmitInput) (string, func(), error) {
 		}
 		return local, nil, nil
 	case SourceKindURL:
+		// 本机服务地址（含手机端经局域网 IP / 自签 HTTPS 访问的 origin）直接落到本地文件，
+		// 不回源 HTTP：回源会因证书校验失败而丢弃已经落盘的资源。
+		if local, err := resolveLocalSource(in.Source); err == nil {
+			if in.Name == "" {
+				in.Name = filepath.Base(local)
+			}
+			return local, nil, nil
+		}
 		return downloadToTemp(in.Source, in.Name)
 	case SourceKindData:
 		data, err := decodeDataURI(in.Source)
@@ -111,9 +117,9 @@ func resolveLocalSource(source string) (string, error) {
 	if rest, ok := strings.CutPrefix(source, "file://"); ok {
 		source = rest
 	}
-	// 本机服务地址：前端上传后的图片以 http(s)://127.0.0.1/... 形式进入
+	// 本机服务地址：前端上传后的图片以 http(s)://本机地址/... 形式进入
 	if strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
-		if rel, ok := localPathFromServiceURL(source); ok {
+		if rel, ok := netsource.FileReadRel(source); ok {
 			source = rel
 		} else {
 			return "", fmt.Errorf("非本机地址请使用 url 来源: %s", source)
@@ -122,11 +128,8 @@ func resolveLocalSource(source string) (string, error) {
 	// 本机服务路由的裸路径：历史对话缓存里存的是 `/file/read/multimedia/...`，
 	// 它不是 LocalDir 下的真实子目录。必须先剥掉路由前缀，否则会被拼成
 	// `local_data/file/read/multimedia/...`，导致明明存在的文件被判为「本地来源不存在」。
-	for _, prefix := range []string{"/file/read/", "file/read/", "/file/miniature/", "file/miniature/"} {
-		if strings.HasPrefix(source, prefix) {
-			source = strings.TrimPrefix(source, prefix)
-			break
-		}
+	if rel, ok := netsource.FileReadRel(source); ok {
+		source = rel
 	}
 	abs, err := resolveUnderLocalDir(source)
 	if err != nil {
@@ -141,43 +144,15 @@ func resolveLocalSource(source string) (string, error) {
 // localPathFromServiceURL 从本机服务地址中提取相对 LocalDir 的路径
 //
 // 前端上传后返回 `${origin}/file/read/<relative>`，其中 relative 即 LocalDir 下的路径。
+// origin 可能是回环地址，也可能是手机端的局域网访问地址（自签 HTTPS 代理）；
+// 两者指向的都是本机服务，必须直接映射到本地文件。
 func localPathFromServiceURL(raw string) (string, bool) {
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "", false
-	}
-	host := parsed.Hostname()
-	if host != "127.0.0.1" && host != "localhost" && host != "::1" {
-		return "", false
-	}
-	p := strings.TrimPrefix(parsed.Path, "/file/read/")
-	if p == parsed.Path || p == "" {
-		return "", false
-	}
-	decoded, err := url.PathUnescape(p)
-	if err != nil {
-		return "", false
-	}
-	return decoded, true
+	return netsource.FileReadRel(raw)
 }
 
 // resolveUnderLocalDir 解析相对 LocalDir 的路径并做穿越校验
 func resolveUnderLocalDir(rel string) (string, error) {
-	rel = strings.ReplaceAll(rel, "\\", "/")
-	rel = strings.TrimPrefix(rel, "/")
-	localDir := filepath.Clean(config.LocalDir)
-	if filepath.IsAbs(rel) {
-		abs := filepath.Clean(rel)
-		if !strings.HasPrefix(abs, localDir+string(os.PathSeparator)) && abs != localDir {
-			return "", fmt.Errorf("路径超出本地目录范围: %s", rel)
-		}
-		return abs, nil
-	}
-	abs := filepath.Clean(filepath.Join(localDir, filepath.FromSlash(rel)))
-	if !strings.HasPrefix(abs, localDir+string(os.PathSeparator)) {
-		return "", fmt.Errorf("路径穿越: %s", rel)
-	}
-	return abs, nil
+	return netsource.UnderLocalDir(rel)
 }
 
 // sniffFileImageFormat 读取文件头识别图片真实格式；无法识别时返回空串。
@@ -218,17 +193,19 @@ func writeTemp(data []byte, name string) (string, func(), error) {
 
 // downloadToTemp 下载远程地址到临时文件，返回路径与清理函数
 func downloadToTemp(raw string, name string) (string, func(), error) {
+	return downloadToTempLimited(raw, name, maxRemoteResourceBytes)
+}
+
+// downloadToTempLimited 按指定大小上限回源下载（上限抽参便于测试）
+func downloadToTempLimited(raw string, name string, maxBytes int64) (string, func(), error) {
 	// 腾讯图床只接受 https：http 直链会被边缘节点直接拒绝（400）。
 	raw = UpgradeCDNScheme(raw)
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Get(raw)
+	resp, err := netsource.Open(raw, remoteResourceTimeout)
 	if err != nil {
 		return "", nil, fmt.Errorf("下载资源失败: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", nil, fmt.Errorf("下载资源失败: HTTP %d", resp.StatusCode)
-	}
+
 	ext := filepath.Ext(name)
 	if ext == "" {
 		ext = filepath.Ext(parseURLPath(raw))
@@ -237,16 +214,17 @@ func downloadToTemp(raw string, name string) (string, func(), error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("创建临时文件失败: %v", err)
 	}
-	if _, err := io.Copy(tmp, resp.Body); err != nil {
+	cleanup := func() { os.Remove(tmp.Name()) }
+	if err := netsource.CopyLimited(tmp, resp.Body, maxBytes); err != nil {
 		tmp.Close()
-		os.Remove(tmp.Name())
+		cleanup()
 		return "", nil, fmt.Errorf("下载写入失败: %v", err)
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
+		cleanup()
 		return "", nil, fmt.Errorf("关闭临时文件失败: %v", err)
 	}
-	return tmp.Name(), func() { os.Remove(tmp.Name()) }, nil
+	return tmp.Name(), cleanup, nil
 }
 
 // parseURLPath 提取 URL 的路径部分（失败时返回空串）

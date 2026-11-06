@@ -69,17 +69,11 @@ func TestArchiveMemoryBatchWritesJSONL(t *testing.T) {
 	}
 }
 
-func TestMemoryConsolidationHasSingleTriggerEntry(t *testing.T) {
+func TestMemoryIsFixedStepNotWeightEvent(t *testing.T) {
 	oldDir := config.LocalDir
-	oldAuto := config.MemoryAutoConsolidate
-	oldOnce := config.MemoryConsolidateOnce
 	config.LocalDir = t.TempDir()
-	config.MemoryAutoConsolidate = false
-	config.MemoryConsolidateOnce = false
 	t.Cleanup(func() {
 		config.LocalDir = oldDir
-		config.MemoryAutoConsolidate = oldAuto
-		config.MemoryConsolidateOnce = oldOnce
 		mu.Lock()
 		registry = nil
 		state = State{Version: 1, Used: map[string]int{}}
@@ -96,30 +90,23 @@ func TestMemoryConsolidationHasSingleTriggerEntry(t *testing.T) {
 	}
 	event := eventByIDLocked("memory")
 	mu.Unlock()
-	if memoryEvents != 1 {
-		t.Fatalf("整理入口应唯一，实际注册了 %d 个 memory 事件", memoryEvents)
+	if memoryEvents != 0 || event != nil {
+		t.Fatalf("记忆整理不应注册为事件，实际注册 %d 个", memoryEvents)
 	}
-	if event == nil || event.Weight() != 0 {
-		t.Fatal("自动整理默认关闭时 memory 事件权重应为 0")
+	if _, ok := defaultEvents["memory"]; ok {
+		t.Fatal("记忆整理不应出现在权重事件表中")
 	}
-	// 手动触发与未来重新开启共用同一个事件入口
-	if !RequestMemoryConsolidation("") {
-		t.Fatal("手动整理应登记到 memory 事件")
+	if RequestEvent("memory", "整理一下") {
+		t.Fatal("记忆整理不能再通过事件队列触发")
 	}
-	mu.Lock()
-	pending := state.PendingEvent
-	mu.Unlock()
-	if pending != "memory" {
-		t.Fatalf("手动整理应走 memory 入口，实际 PendingEvent=%q", pending)
-	}
-	if !RequestEvent("memory", "整理一下") {
-		t.Fatal("显式请求 memory 事件应成功")
-	}
-	mu.Lock()
-	pending = state.PendingEvent
-	mu.Unlock()
-	if pending != "memory" {
-		t.Fatalf("显式请求也应落到同一个 memory 入口，实际 PendingEvent=%q", pending)
+
+	oldRand := pickRandHook
+	t.Cleanup(func() { pickRandHook = oldRand })
+	for r := 0; r < 100; r++ {
+		pickRandHook = func(int) int { return r }
+		if picked := pickLocked(); picked != nil && picked.ID() == "memory" {
+			t.Fatalf("事件挑选不应命中 memory（r=%d）", r)
+		}
 	}
 }
 

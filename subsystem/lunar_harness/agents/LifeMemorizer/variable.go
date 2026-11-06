@@ -4,6 +4,7 @@ package LifeMemorizer
 
 import (
 	"sync"
+	"time"
 )
 
 const (
@@ -19,8 +20,17 @@ const (
 	KeepPercent = 50
 	// KeepFloor 保留下限的最小条数（小批次也要至少保留几条）。
 	KeepFloor = 8
-	// MinRetainPercent 输出正文总字数占输入总字数的下限（低于此值视为过度压缩）。
+	// MinRetainPercent 整批条目化（Consolidate）输出正文总字数占输入总字数的下限。
+	// 只用于「把一批旧记忆重新条目化」这条通道，不用于相似簇合并（见 MergeMinRetainPercent）。
 	MinRetainPercent = 20
+	// MergeMinRetainPercent 相似簇合并结果正文总字数占输入总字数的下限。
+	// 合并的输入本身就是高度重复的记忆，正常结果必然远短于输入总长，
+	// 因此这里只拦「几乎什么都没留下」的情况，取值远低于 MinRetainPercent。
+	MergeMinRetainPercent = 5
+	// MergeMinRunes 相似簇合并结果正文总量的最小绝对字数（非空白字符）。
+	// 小簇合并时不按比例，只要求留下这么多个字；实际使用时不超过最长单条输入，
+	// 避免 8 条完全相同的短记忆合成 1 条时被固定下限误判。
+	MergeMinRunes = 12
 	// KeepCeiling 保留下限的最大条数（大批次不要求输出过多条目）。
 	KeepCeiling = 48
 	// ModelRetry 模型输出解析失败后的额外重试次数。
@@ -30,6 +40,19 @@ const (
 	promptRole = "lifeRole.md"
 	// promptTask 记忆条目化整理任务模板（含 {item-count} / {min-keep} 占位）。
 	promptTask = "lifeMemoryTask.md"
+
+	// policyDefaultTTL 修复策略的默认有效期。
+	policyDefaultTTL = 30 * time.Minute
+	// policyMaxTTL 修复策略的最长有效期。
+	policyMaxTTL = 2 * time.Hour
+	// retainPercentFloor 修复时可下调的正文保留下限（再低就会明显丢事实）。
+	retainPercentFloor = 5
+	// maxSkippedClusters 同时记住的「不可合并簇」上限。
+	maxSkippedClusters = 32
+	// maxRecordedInputs 复跑验证时保留的上次输入条数。
+	maxRecordedInputs = 12
+	// maxRecordedInputRunes 复跑验证保留的输入总字数上限。
+	maxRecordedInputRunes = 8000
 )
 
 var (
@@ -37,4 +60,18 @@ var (
 	lastRunMu sync.Mutex
 	// lastRun 最近一次整理任务的摘要（供数据导出与修复复位）。
 	lastRun = map[string]any{}
+
+	// policyMu 保护修复策略（临时阈值与不可合并簇）。
+	policyMu sync.Mutex
+	// retainOverride 临时下调的正文保留下限；0 表示使用默认值。
+	retainOverride int
+	// retainUntil 临时阈值的到期时间。
+	retainUntil time.Time
+	// skippedClusters 内容指纹 → 跳过合并的截止时间。
+	skippedClusters = map[string]time.Time{}
+
+	// inputsMu 保护最近一次合并的输入（仅用于修复后复跑验证）。
+	inputsMu sync.Mutex
+	// lastInputs 最近一次合并的输入条目（有界副本）。
+	lastInputs []string
 )

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.310.0043",
+    "version": "2026.310.2337",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -788,10 +788,23 @@
     },
     "/library/api/edits": {
       "get": {
-        "summary": "资源库文件状态与最近 10 次 AI 操作",
-        "description": "资源库文件状态与最近 10 次 AI 操作",
+        "summary": "资源库文件状态与最近 10 次操作（支持 since 增量、offset/limit 分页）",
+        "description": "资源库文件状态与最近 10 次操作（支持 since 增量、offset/limit 分页）",
         "operationId": "library.EditsHandler",
         "x-handler": "library.EditsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/library/api/history": {
+      "get": {
+        "summary": "资源库单文件历史操作分页（path / before / limit）",
+        "description": "资源库单文件历史操作分页（path / before / limit）",
+        "operationId": "library.HistoryHandler",
+        "x-handler": "library.HistoryHandler",
         "responses": {
           "200": {
             "description": "成功"

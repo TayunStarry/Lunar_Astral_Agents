@@ -121,11 +121,53 @@ function buildMusicCard(msg) {
     return card;
 }
 
+/** 读取语音音频的真实时长（秒）；拿不到返回 0，界面据此隐藏时长 */
+function probeVoiceDuration(src) {
+    return new Promise(resolve => {
+        if (!src) return resolve(0);
+        const url = src.startsWith('data:') ? src : 'data:audio/wav;base64,' + src;
+        const probe = new Audio();
+        let settled = false;
+        const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            probe.onloadedmetadata = null;
+            probe.onerror = null;
+            probe.src = '';
+            resolve(value);
+        };
+        probe.preload = 'metadata';
+        probe.onloadedmetadata = () => finish(Number.isFinite(probe.duration) ? probe.duration : 0);
+        probe.onerror = () => finish(0);
+        probe.src = url;
+    });
+}
+
+function formatVoiceDuration(seconds) {
+    const total = Math.max(0, Math.round(seconds));
+    const minutes = Math.floor(total / 60);
+    const rest = total % 60;
+    return `${minutes}:${String(rest).padStart(2, '0')}`;
+}
+
+/** 语音重播胶囊：播放图标 + 装饰波形 + 文案 + 真实时长，点击逻辑沿用 AudioQueue */
 function buildAudioReplay(msg) {
     const btn = document.createElement('button');
     btn.className = 'audio-replay-btn';
     btn.title = '重播语音';
-    btn.innerHTML = '<i class="fas fa-volume-up"></i> 重播语音';
+    btn.innerHTML = `
+        <span class="voice-icon"><i class="fas fa-play"></i></span>
+        <span class="voice-wave" aria-hidden="true">${'<i></i>'.repeat(12)}</span>
+        <span class="voice-label">重播语音</span>
+        <span class="voice-dur" hidden></span>
+    `;
+    const durText = btn.querySelector('.voice-dur');
+    probeVoiceDuration(msg.audio).then(seconds => {
+        if (seconds > 0) {
+            durText.textContent = formatVoiceDuration(seconds);
+            durText.hidden = false;
+        }
+    });
     btn.addEventListener('click', () => {
         AudioQueue.enqueue(msg.audio);
         btn.classList.add('replaying');

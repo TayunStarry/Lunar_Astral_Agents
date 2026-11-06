@@ -1,20 +1,19 @@
 package viewer
 
-// variable.go 哔哩观影的常量与全局状态集中管理。
+// variable.go 哔哩观影的常量集中管理。
 //
 // 数量类机制（候选几个、切片几段、记忆多长）都在这里定标；
 // 个人偏好放在 local_data/config/bilibili.json，不在代码里硬编码。
 
 import (
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
 
 // ==== 候选与采集参数 ====
 
 const (
-	// candidateMin / candidateMax 本轮候选视频数量的固定范围（含边界）
-	candidateMin = 4
-	candidateMax = 8
 	// collectCommentLimit 每个候选采集的评论条数上限
 	collectCommentLimit = 30
 	// collectCommentMaxRunes 单条评论超过该长度直接硬截断
@@ -30,20 +29,12 @@ const (
 // ==== 观看切片参数 ====
 
 const (
-	// watchSliceMin / watchSliceMax 单个视频切片数的硬边界
-	watchSliceMin = 2
-	watchSliceMax = 8
+	// watchSliceMin / watchSliceMax 单个视频切片数的硬边界。
+	// 需求只要求 1~5 段，上限直接复用存储层的 WatchSegmentMax，避免审核与下载两套口径。
+	watchSliceMin = 1
+	watchSliceMax = viewerstore.WatchSegmentMax
 	// watchSliceDefault 模型未给出可用切片数时的默认值
 	watchSliceDefault = 5
-	// sliceRetryLimit 单个切片失败后在下一个 Tick 的重试次数
-	sliceRetryLimit = 1
-	// mentionMinCount / mentionMaxCount 从特别关注里随机 @ 的人数范围
-	mentionMinCount = 1
-	mentionMaxCount = 3
-	// replyPause 两次被动回应之间的间隔，避免触发 B 站频率限制
-	replyPause = 1500 * time.Millisecond
-	// embeddingTimeout 候选向量匹配的总超时；超时退回关键词打分
-	embeddingTimeout = 25 * time.Second
 	// inboxMaxAge 只处理最近 7 天的未读，避免首次启用时把陈年消息全回一遍
 	inboxMaxAge = 7 * 24 * time.Hour
 	// coverMaxDim 封面送给多模态模型前的长边上限
@@ -61,16 +52,23 @@ const (
 const (
 	// dynamicCommentMaxRunes 单条动态评论里评价正文的长度上限
 	dynamicCommentMaxRunes = 512
-	// dynamicCommentReadyWait 发布动态后等待评论区可用的最长时间（动态可能仍在审核/索引）
-	dynamicCommentReadyWait = 120 * time.Second
-	// dynamicCommentReadyPoll 等待评论区可用时的轮询间隔
-	dynamicCommentReadyPoll = 3 * time.Second
-	// dynamicCommentGap 动态评论区逐条评论之间的间隔，避免频率限制与审核叠加
-	dynamicCommentGap = 4 * time.Second
-	// dynamicCommentAttempts 评论接口报错时的最多尝试次数
-	dynamicCommentAttempts = 3
-	// dynamicCommentReadbackWait 发出评论后回读评论区的等待时间
-	dynamicCommentReadbackWait = 5 * time.Second
+)
+
+// ==== 待看列表补齐的时间预算 ====
+//
+// 24 个候选串行：每个都要开页、翻评论、跑印象与审核模型，再下载 1~5 段。
+// 首次无缓存时一轮可能拖很久，与对话回合争抢资源，因此整阶段必须有上限。
+
+const (
+	// watchlistBudgetDefault 整阶段默认预算：常见一轮约 8~12 分钟，
+	// 给到 30 分钟留 2~4 倍余量，保证首次无缓存的正常抓取能在预算内跑完。
+	watchlistBudgetDefault = 30 * time.Minute
+	// watchlistCandidateBudgetDefault 单个候选的子预算：避免一次卡死的开页或模型调用吃掉整轮预算。
+	watchlistCandidateBudgetDefault = 2 * time.Minute
+	// watchlistCollectShareNum / Den 采集阶段最多用掉总预算的 2/3，
+	// 把余下 1/3 留给审核、入队与下载，避免「只采集不落库」导致下一轮从零重来。
+	watchlistCollectShareNum = 2
+	watchlistCollectShareDen = 3
 )
 
 // ==== 模型名称 ====
@@ -83,17 +81,3 @@ const (
 )
 
 // 观影记忆的存储、上限与迁移规则见 engine/viewerstore（viewer.db 全部由该包负责）。
-
-const (
-	// traceKeepFiles 单轮观看轨迹最多保留的轮次数（超出按最旧清理）
-	traceKeepFiles = 50
-	// traceDirName 观看轨迹目录名（相对 local_data/database/bilibili）
-	traceDirName = "trace"
-)
-
-// ==== 全局状态 ====
-
-var (
-	// manager 进程内唯一的观影管理器（同一时刻只允许一个 Tick 任务）
-	manager = &lifeManager{}
-)

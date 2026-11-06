@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"LunarSubsystem/LunarHarness/agents/MutualForum"
+	"LunarSubsystem/LunarHarness/chain/viewer"
 	"LunarSubsystem/LunarHarness/engine/config"
 )
 
@@ -42,6 +44,18 @@ func resetLifeForTest(t *testing.T) {
 	t.Helper()
 	oldDir := config.LocalDir
 	config.LocalDir = t.TempDir()
+	// 回合第 2~4 步与看视频分支默认换成桩：单元测试不打开浏览器、不访问网络、不调真实模型。
+	ensureWatchlistHook = func(context.Context) (viewer.WatchlistResult, error) { return viewer.WatchlistResult{}, nil }
+	biliAutoRespondHook = func(context.Context) (viewer.AutoRespondResult, error) { return viewer.AutoRespondResult{}, nil }
+	forumAutoRespondHook = func(context.Context) (MutualForum.Summary, error) {
+		return MutualForum.Summary{PageOpen: true}, nil
+	}
+	pauseHook = func() bool { return false }
+	watchStepHook = func(context.Context, string) (viewer.WatchOutcome, error) {
+		return viewer.WatchOutcome{Reason: "测试桩：没有待看片段"}, nil
+	}
+	setActivityHook = func(string) {}
+	pendingCountHook = func() int { return 0 }
 	t.Cleanup(func() {
 		config.LocalDir = oldDir
 		mu.Lock()
@@ -85,7 +99,7 @@ func TestStepPrefersForcedEventOverWeights(t *testing.T) {
 	if !RequestEvent("forced_test", "写一段关于星空的诗") {
 		t.Fatal("强制事件登记失败")
 	}
-	if err := Step(context.Background()); err != nil {
+	if err := stepWholeRound(t); err != nil {
 		t.Fatal(err)
 	}
 	if event.lastInstruction != "写一段关于星空的诗" {

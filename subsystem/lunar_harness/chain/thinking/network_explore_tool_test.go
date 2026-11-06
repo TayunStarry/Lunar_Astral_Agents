@@ -24,29 +24,42 @@ func TestNetworkExploreExposesLifeCategories(t *testing.T) {
 func TestNetworkExploreLifeTriggersFixedReply(t *testing.T) {
 	prepareExploreLifeDir(t)
 
-	cases := []struct {
-		kind  string
-		reply string
-	}{
-		{Dialogue.NetworkBilibiliTool, Dialogue.BilibiliFixedReply},
-		{Dialogue.NetworkMutualForumTool, Dialogue.ForumFixedReply},
+	result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(map[string]any{
+		"type":        Dialogue.NetworkMutualForumTool,
+		"instruction": "想看看大家在聊什么",
+		"handle":      []any{},
+		"details":     false,
+	}))
+	if result.Error != "" {
+		t.Fatalf("互助论坛不应报错: %s", result.Error)
 	}
-	for _, tc := range cases {
-		result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(map[string]any{
-			"type":        tc.kind,
-			"instruction": "想看点猫咪视频",
-			"handle":      []any{},
-			"details":     false,
-		}))
-		if result.Error != "" {
-			t.Fatalf("%s 不应报错: %s", tc.kind, result.Error)
-		}
-		if result.Result != tc.reply {
-			t.Fatalf("%s 应返回固定响应 %q，实际 %q", tc.kind, tc.reply, result.Result)
-		}
-		if !life.HasPendingEvent() {
-			t.Fatalf("%s 触发后应登记强制生活事件", tc.kind)
-		}
+	if result.Result != Dialogue.ForumFixedReply {
+		t.Fatalf("互助论坛应返回固定响应 %q，实际 %q", Dialogue.ForumFixedReply, result.Result)
+	}
+	if !life.HasPendingEvent() {
+		t.Fatal("互助论坛触发后应登记强制生活事件")
+	}
+}
+
+// TestNetworkExploreBilibiliTriggersLifeEvent 观影回到生活链：
+// 工具只登记 watch 强制事件，真正流程由生活链事件调用 viewer.WatchNextSegment 执行。
+func TestNetworkExploreBilibiliTriggersLifeEvent(t *testing.T) {
+	prepareExploreLifeDir(t)
+
+	result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(map[string]any{
+		"type":        Dialogue.NetworkBilibiliTool,
+		"instruction": "想看点猫咪视频",
+		"handle":      []any{},
+		"details":     false,
+	}))
+	if result.Error != "" {
+		t.Fatalf("观影分支不应报错: %s", result.Error)
+	}
+	if result.Result != Dialogue.WatchFixedReply {
+		t.Fatalf("观影分支应返回固定响应 %q，实际 %q", Dialogue.WatchFixedReply, result.Result)
+	}
+	if !life.HasPendingEvent() {
+		t.Fatal("观影触发后应登记 watch 强制生活事件")
 	}
 }
 

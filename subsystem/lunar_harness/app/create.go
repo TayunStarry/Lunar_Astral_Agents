@@ -82,9 +82,12 @@ func Assemble() {
 	websocket.OnStructuredMessage = DialogueBridging.BridgeStructuredMessage
 
 	// ==== 跨层注入：资源库编辑状态实时推送 ====
-	// 文件编辑智能体每次操作都会写入资源库状态中心，这里把状态只推给资源库前端。
-	// 必须按频道定向投递：library_edit 是编辑器状态事件，不是聊天消息；
+	// 文件编辑智能体每次操作都会写入资源库变更库，这里把同步信号只推给资源库前端。
+	// 必须按频道定向投递：library_sync 是编辑器状态事件，不是聊天消息；
 	// 若走全量广播，消息终端会把无法识别的结构体当成内容渲染到聊天记录里。
+	if err := library.Init(); err != nil {
+		logger.Warn("LunarHarness", "资源库变更库初始化失败: %v", err)
+	}
 	library.SetBroadcast(func(msgType string, data any) {
 		websocket.Instance.BroadcastMessageToChannel(libraryTerminalChannel, msgType, data)
 	})
@@ -243,6 +246,10 @@ func GracefulShutdown(reason string) {
 		// 知识库与领域库（media / web / text / character）一并释放
 		if err := knowledge.Close(); err != nil {
 			logger.Warn("LunarHarness", "关闭知识库与领域数据库失败: %v", err)
+		}
+		// 资源库变更库（library.db）
+		if err := library.Close(); err != nil {
+			logger.Warn("LunarHarness", "关闭资源库变更库失败: %v", err)
 		}
 		if websocket.Instance != nil {
 			websocket.Instance.CloseAll()

@@ -33,6 +33,9 @@
     <link rel="stylesheet" href="styles/layout.css">
     <link rel="stylesheet" href="styles/input-area.css">
     <link rel="stylesheet" href="styles/toast.css">
+    <link rel="stylesheet" href="styles/history.css">
+    <!-- Markdown 渲染（与桌面端共用同一份依赖） -->
+    <script src="/reliance/marked.min.js"></script>
     <!-- 项目私有脚本 -->
 	<script src="./scripts/app.js" type="module"></script>
 </head>
@@ -42,18 +45,34 @@
 	<div class="glass-effect"></div>
 	<!-- 主容器 -->
 	<div class="container">
-		<div class="main-container-panel" id="mainContainerPanel">
-			<!-- 3D渲染器展示区 -->
-			<div class="renderer-wrapper" id="rendererWrapper">
-				<div class="renderer-container" id="rendererContainer">
-					<iframe id="rendererFrame"
-						data-src="/reliance/lunar.rendering_engine/index.html?channel=lunar-astral-renderer&bus=0"
-						data-src-live2d="/reliance/lunar.live2d_engine/index.html?channel=lunar-astral-renderer&bus=0"
-						allow="autoplay" title="月岩引擎"></iframe>
+		<div class="main-container-panel" id="mainContainerPanel" data-view="stage">
+			<!-- 视图舞台：模型区与历史区叠放，双击输入框在两者间切换 -->
+			<div class="view-stage">
+				<!-- 3D渲染器展示区（视图 A） -->
+				<div class="renderer-wrapper" id="rendererWrapper">
+					<div class="renderer-container" id="rendererContainer">
+						<iframe id="rendererFrame"
+							data-src="/reliance/lunar.rendering_engine/index.html?channel=lunar-astral-renderer&bus=0"
+							data-src-live2d="/reliance/lunar.live2d_engine/index.html?channel=lunar-astral-renderer&bus=0"
+							data-src-gif="/reliance/lunar.gif_engine/index.html?channel=lunar-astral-renderer&bus=0"
+							allow="autoplay" title="月岩引擎"></iframe>
+					</div>
 				</div>
+				<!-- 历史记录（视图 B）：与输入区共用底部输入栏 -->
+				<section class="history-view" id="historyView" aria-label="历史记录" aria-hidden="true">
+					<div class="history-scroll" id="historyScroll">
+						<div class="history-status" id="historyStatus"></div>
+						<div class="history-list" id="historyList"></div>
+					</div>
+				</section>
 			</div>
 			<!-- 底部输入区 -->
 			<div class="input-container" id="inputContainer">
+				<!-- 首次进入的一次性可发现性提示（非按钮，自动消失） -->
+				<div class="history-hint" id="historyHint" role="status">
+					<i class="fas fa-hand-pointer"></i>
+					<span>双击输入框查看历史</span>
+				</div>
 				<!-- 待发送附件悬浮气泡 -->
 				<div class="file-preview-area" id="filePreviewArea"></div>
 				<div class="input-wrapper">

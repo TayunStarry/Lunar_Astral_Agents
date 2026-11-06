@@ -27,7 +27,6 @@ func newTickScheduler() *tickScheduler {
 				Now:            time.Now(),
 				IdleTicks:      idleTicks,
 				Unread:         UnreadCount(),
-				ViewingPending: viewingPendingHook(),
 				SalvagePending: Savior.Pending(),
 			}
 		},
@@ -54,12 +53,8 @@ func reportTickError(systemID string, err error) {
 
 // repairTargetOf 把 Tick 体系映射到拯救者可修复的上下文目标。
 func repairTargetOf(systemID string) string {
-	switch systemID {
-	case "dialogue":
+	if systemID == "dialogue" {
 		return "dialogue"
-	case "viewing":
-		return "bilibili"
-	default:
-		return systemID
 	}
+	return systemID
 }

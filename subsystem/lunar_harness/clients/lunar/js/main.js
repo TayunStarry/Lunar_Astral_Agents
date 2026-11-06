@@ -29,12 +29,17 @@ function cleanup() {
 }
 
 // ---------- 初始化 ----------
-/** 渲染引擎 iframe：按配置选择基岩版模型引擎（lunar.rendering_engine）或 Live2D 引擎层（lunar.live2d_engine）；
+/** 渲染引擎 iframe：按配置选择月岩引擎（lunar.rendering_engine）、Live2D 引擎层
+ *  （lunar.live2d_engine）或 GIF 动图引擎（lunar.gif_engine）；缺省回退月岩。
  *  WsBridge 未传 ws 参数时默认连接同源 /ws，代理场景下自动走代理隧道 */
 function setupRendererFrame() {
     const frame = document.getElementById('rendererFrame');
     if (!frame) return;
-    const src = characterRenderer === 'live2d' ? frame.dataset.srcLive2d : frame.dataset.src;
+    const sources = {
+        live2d: frame.dataset.srcLive2d,
+        gif: frame.dataset.srcGif,
+    };
+    const src = sources[characterRenderer] || frame.dataset.src;
     if (!src) return;
     frame.src = `${src}&ws=${window.location.host}`;
 }

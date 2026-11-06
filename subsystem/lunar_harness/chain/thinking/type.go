@@ -338,7 +338,6 @@ type TickSnapshot struct {
 	Now            time.Time
 	IdleTicks      int
 	Unread         int
-	ViewingPending bool
 	SalvagePending int
 }
 

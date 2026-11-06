@@ -17,14 +17,16 @@ func init() {
 		func(int) (any, error) { return exportContext(false) })
 }
 
-// resetFailures 清空故障队列与静默表。
+// resetFailures 清空故障队列、历史计数、升级记录与静默表。
 func resetFailures() string {
 	mu.Lock()
 	count := len(pending)
 	pending = map[string]*Failure{}
 	order = nil
 	cooldown = map[string]time.Time{}
+	history = map[string]*faultHistory{}
+	escalated = map[string]*escalation{}
 	mu.Unlock()
-	logger.Warn(roleLabel, "[拯救] 故障队列已清空（%d 条），全部静默解除", count)
-	return fmt.Sprintf("已清空 %d 条待修复故障并解除静默", count)
+	logger.Warn(roleLabel, "[拯救] 故障队列已清空（%d 条），全部静默与升级记录解除", count)
+	return fmt.Sprintf("已清空 %d 条待修复故障并解除静默与升级记录", count)
 }

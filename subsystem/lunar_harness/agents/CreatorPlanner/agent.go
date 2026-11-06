@@ -17,6 +17,7 @@ import (
 // 同一输出/工具调用重复到上限即返回循环错误。
 func RunToolLoop(ctx context.Context, req Request) (string, error) {
 	lastSummary := ""
+	beginToolRun()
 	limit := MaxExecutorRounds
 	if req.Role == PlannerRole {
 		limit = MaxPlannerRounds
@@ -71,12 +72,23 @@ func RunToolLoop(ctx context.Context, req Request) (string, error) {
 		},
 		// 工具自身的业务错误写入回填内容并继续循环（与迁移前一致）。
 		Execute: func(_ context.Context, call agentbase.ToolCall) (string, bool, error) {
+			if reason, denied := toolDeniedReason(call.Function.Name); denied {
+				outcome := Outcome{
+					JSON:    fmt.Sprintf(`{"error":%q}`, "工具 "+call.Function.Name+" 已被智能修复临时禁用："+reason+"；请改用其他工具，或直接结束本轮"),
+					Summary: call.Function.Name + " 已被禁用",
+				}
+				recordToolCall(call.Function.Name, call.Function.Arguments, "已禁用")
+				lastSummary += outcome.Summary + "；"
+				return toolResultContent(outcome), false, nil
+			}
 			args, parseErr := agentbase.ParseToolArgs(call.Function.Arguments)
 			if parseErr != nil {
+				recordToolCall(call.Function.Name, call.Function.Arguments, "参数解析失败")
 				outcome := Outcome{JSON: `{"error":"参数不是合法 JSON"}`, Summary: "参数解析失败"}
 				lastSummary += outcome.Summary + "；"
 				return toolResultContent(outcome), false, nil
 			}
+			recordToolCall(call.Function.Name, call.Function.Arguments, "")
 			outcome, done, execErr := req.Handler(call.Function.Name, args)
 			if execErr != nil {
 				outcome = Outcome{
@@ -94,28 +106,80 @@ func RunToolLoop(ctx context.Context, req Request) (string, error) {
 		DisableReport: true,
 	})
 	if err != nil {
-		recordLastRun(req.Role, result.Rounds, err)
-		agentbase.ReportRun(AgentID, err)
+		name, args, count := dominantTool()
+		recordLastRunWith(req.Role, result.Rounds, err, map[string]any{
+			"tool_calls":    toolRunRecords(),
+			"dominant_tool": name,
+			"repeat_count":  count,
+			"max_rounds":    limit,
+		})
+		reportLoopFailure(req, err, name, args, count, limit)
 		if errors.Is(err, agentbase.ErrMaxRounds) {
 			return "", fmt.Errorf("%s 在 %d 轮内没有完成，已执行的步骤：%s", req.Role, limit, strings.TrimSuffix(lastSummary, "；"))
 		}
 		return "", err
 	}
-	recordLastRun(req.Role, result.Rounds, nil)
+	name, _, count := dominantTool()
+	recordLastRunWith(req.Role, result.Rounds, nil, map[string]any{
+		"tool_calls":    toolRunRecords(),
+		"dominant_tool": name,
+		"repeat_count":  count,
+		"max_rounds":    limit,
+	})
 	return strings.TrimSpace(result.Reply.Text), nil
+}
+
+// reportLoopFailure 把工具循环失败结构化上报给智能修复。
+func reportLoopFailure(req Request, err error, tool, args string, repeat, limit int) {
+	kind := agentbase.FailureKindModel
+	criterion := "模型调用成功"
+	switch {
+	case errors.Is(err, agentbase.ErrMaxRounds):
+		kind = agentbase.FailureKindToolLoop
+		criterion = fmt.Sprintf("工具循环轮次 ≤ %d", limit)
+	case errors.Is(err, agentbase.ErrLoop):
+		kind = agentbase.FailureKindToolLoop
+		criterion = fmt.Sprintf("同一工具调用重复次数 < %d", MaxRepeats)
+	case isContextOverflow(err):
+		kind = agentbase.FailureKindContext
+		criterion = "单次请求不超过模型上下文"
+	}
+	agentbase.ReportDetail(agentbase.FailureDetail{
+		Agent:     AgentID,
+		Kind:      kind,
+		Criterion: criterion,
+		Entry:     req.Role,
+		Err:       err,
+		Tool:      tool,
+		ToolArgs:  args,
+		Metrics: map[string]int64{
+			"rounds":       int64(limit),
+			"repeat_count": int64(repeat),
+			"tool_calls":   int64(len(toolRunRecords())),
+		},
+	})
 }
 
 // recordLastRun 记录最近一次推理循环，供数据导出与修复复位。
 func recordLastRun(role string, rounds int, err error) {
+	recordLastRunWith(role, rounds, err, nil)
+}
+
+// recordLastRunWith 记录最近一次推理循环，并追加工具序列等有界字段。
+func recordLastRunWith(role string, rounds int, err error, extra map[string]any) {
 	lastRunMu.Lock()
 	defer lastRunMu.Unlock()
-	lastRun = map[string]any{
+	record := map[string]any{
 		"agent":      AgentID,
 		"role":       role,
 		"rounds":     rounds,
 		"error":      errorText(err),
 		"updated_at": time.Now().Format(time.RFC3339),
 	}
+	for key, value := range extra {
+		record[key] = value
+	}
+	lastRun = record
 }
 
 // snapshotLastRun 返回最近一次推理循环的副本。

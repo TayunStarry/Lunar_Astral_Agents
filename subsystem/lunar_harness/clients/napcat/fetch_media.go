@@ -3,13 +3,14 @@ package napcat
 // fetch_media.go 媒体/文件字节获取与成员列表接口。
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/engine/netsource"
 )
 
 // GetVideoSource 通过 get_file 接口获取视频的可访问地址（URL 或本地文件路径）。
@@ -141,16 +142,25 @@ func decodeBase64Payload(raw string) ([]byte, error) {
 
 // downloadBytes 下载 http(s) 资源并返回字节
 func downloadBytes(rawURL string) ([]byte, error) {
+	return downloadBytesLimited(rawURL, maxMediaDownloadBytes)
+}
+
+// downloadBytesLimited 按指定大小上限下载（上限抽参便于测试）
+func downloadBytesLimited(rawURL string, maxBytes int64) ([]byte, error) {
 	if rawURL == "" {
 		return nil, fmt.Errorf("下载地址为空")
 	}
-	resp, err := Default().httpClient.Get(rawURL)
+	// QQ 媒体是带签名的公开 CDN 直链，原实现也未附带登录态 / 业务 header，
+	// 因此这里按地址构建客户端不会改变既有行为，只补上统一的重定向与证书策略。
+	resp, err := netsource.Open(rawURL, defaultHTTPTimeout)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("下载失败: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("下载失败，状态码 %d", resp.StatusCode)
+
+	buf := &bytes.Buffer{}
+	if err := netsource.CopyLimited(buf, resp.Body, maxBytes); err != nil {
+		return nil, fmt.Errorf("下载失败: %w", err)
 	}
-	return io.ReadAll(resp.Body)
+	return buf.Bytes(), nil
 }

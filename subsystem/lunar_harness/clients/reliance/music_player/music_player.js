@@ -109,13 +109,28 @@
 
         const head = document.createElement('div');
         head.className = 'lunar-music-head';
+
+        // 封面：渐变底圆角方形，与标题区垂直居中
+        const cover = document.createElement('span');
+        cover.className = 'lunar-music-cover';
+        cover.innerHTML = '<i class="fas fa-music"></i>';
+        head.appendChild(cover);
+
+        const main = document.createElement('div');
+        main.className = 'lunar-music-main';
         const title = document.createElement('div');
         title.className = 'lunar-music-title';
-        title.innerHTML = '<i class="fas fa-music"></i>';
         const titleText = document.createElement('span');
         titleText.textContent = opts.title || '月华演奏曲';
         title.appendChild(titleText);
-        head.appendChild(title);
+        main.appendChild(title);
+        if (opts.summary) {
+            const summary = document.createElement('div');
+            summary.className = 'lunar-music-summary';
+            summary.textContent = opts.summary;
+            main.appendChild(summary);
+        }
+        head.appendChild(main);
 
         // 收起按钮：优先交给调用方处理（如折叠为迷你条），未提供时直接移除卡片
         const collapse = document.createElement('button');
@@ -126,13 +141,6 @@
         collapse.innerHTML = '<i class="fas fa-chevron-down"></i>';
         head.appendChild(collapse);
         card.appendChild(head);
-
-        if (opts.summary) {
-            const summary = document.createElement('div');
-            summary.className = 'lunar-music-summary';
-            summary.textContent = opts.summary;
-            card.appendChild(summary);
-        }
 
         const player = document.createElement('div');
         player.className = 'lunar-music-player';
@@ -213,20 +221,17 @@
             const barWidth = Math.max(1.5, step * 0.62);
             const middle = cssHeight / 2;
             const playedUntil = Math.max(0, Math.min(1, progress || 0));
+            // 单色波形的取色：已播用主题色，未播用次级文字色，均通过透明度压存在感
+            const computed = global.getComputedStyle(card);
+            const accentColor = (computed.getPropertyValue('--accent-color') || '').trim() || '#9d6bff';
+            const mutedColor = (computed.getPropertyValue('--text-secondary') || '').trim() || 'rgba(238, 241, 255, 0.68)';
             for (let index = 0; index < PEAK_COUNT; index++) {
                 const ratio = Math.max(0.04, peaks[index]);
                 const height = Math.max(2, ratio * (cssHeight - 4));
                 const x = index * step + (step - barWidth) / 2;
                 const isPlayed = (index + 0.5) / PEAK_COUNT <= playedUntil;
-                const gradient = ctx.createLinearGradient(0, middle - height / 2, 0, middle + height / 2);
-                if (isPlayed) {
-                    gradient.addColorStop(0, 'rgba(157, 107, 255, 0.95)');
-                    gradient.addColorStop(1, 'rgba(108, 155, 207, 0.95)');
-                } else {
-                    gradient.addColorStop(0, 'rgba(157, 107, 255, 0.28)');
-                    gradient.addColorStop(1, 'rgba(108, 155, 207, 0.24)');
-                }
-                ctx.fillStyle = gradient;
+                ctx.globalAlpha = isPlayed ? 0.85 : 0.28;
+                ctx.fillStyle = isPlayed ? accentColor : mutedColor;
                 if (typeof ctx.roundRect === 'function') {
                     ctx.beginPath();
                     ctx.roundRect(x, middle - height / 2, barWidth, height, barWidth / 2);
@@ -237,8 +242,10 @@
             }
             // 已播进度游标
             const cursorX = playedUntil * cssWidth;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.globalAlpha = 0.55;
+            ctx.fillStyle = accentColor;
             ctx.fillRect(Math.max(0, Math.min(cssWidth - 1, cursorX)), 0, 1, cssHeight);
+            ctx.globalAlpha = 1;
         }
 
         function renderProgress() {

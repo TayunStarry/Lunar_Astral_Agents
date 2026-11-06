@@ -10,7 +10,6 @@ package viewer
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,17 +20,11 @@ import (
 
 // ==== 一轮生活的固定机制参数 ====
 //
-// 以下取值是「机制」而非「偏好」，因此不做成配置项：
-// 每个视频读固定条数的热门评论、固定只写 1 条评论。
-// 观看切片数由审核模型按视频时长决定（2-8），不再有配置项。
-const (
-	// defaultRepliesPerRound 默认一轮回应 5 次被动消息（@ 与追评共用这一份额度）
-	defaultRepliesPerRound = 5
-)
+// 以下取值是「机制」而非「偏好」，因此不做成配置项。
+// 观看切片数由审核模型按视频时长决定（1-5），不再有配置项。
 
 func defaultConfig() Config {
 	return Config{
-		RepliesPerRound:    defaultRepliesPerRound,
 		PreferenceKeywords: []string{"AI", "人工智能", "Qwen", "DeepSeek", "GLM", "Kimi", "Gemma", "肥鱼", "本地部署"},
 	}
 }
@@ -75,8 +68,11 @@ func LoadConfig() Config {
 	if len(saved.PreferenceKeywords) > 0 {
 		cfg.PreferenceKeywords = saved.PreferenceKeywords
 	}
-	if saved.RepliesPerRound > 0 {
-		cfg.RepliesPerRound = saved.RepliesPerRound
+	if saved.WatchlistBudgetSec > 0 {
+		cfg.WatchlistBudgetSec = saved.WatchlistBudgetSec
+	}
+	if saved.WatchlistCandidateBudgetSec > 0 {
+		cfg.WatchlistCandidateBudgetSec = saved.WatchlistCandidateBudgetSec
 	}
 	return cfg
 }
@@ -92,11 +88,4 @@ func scoreOf(text string, keywords []string) int {
 		}
 	}
 	return score
-}
-
-func formatKeywords(words []string) string {
-	if len(words) == 0 {
-		return "（空）"
-	}
-	return fmt.Sprintf("%v", words)
 }

@@ -257,7 +257,7 @@ func TestMemoryRunProcessesBatchesInOrder(t *testing.T) {
 }
 
 // TestDefaultEventWeightsSumTo100 生活事件权重总和固定为 100，
-// 记忆整理（现在只在有待合并组时工作）权重与额度显著提升。
+// 且记忆整理不再是权重事件。
 func TestDefaultEventWeightsSumTo100(t *testing.T) {
 	total := 0
 	maxID := ""
@@ -281,13 +281,8 @@ func TestDefaultEventWeightsSumTo100(t *testing.T) {
 	if maxID != "daze" {
 		t.Fatalf("兜底事件 daze 应保持最高权重，实际最高为 %s=%d", maxID, maxWeight)
 	}
-	memoryParams := defaultEvents["memory"]
-	// 旧值 4 权重 / 2 次/天；现在只在有待合并组时工作，需要更高配比及时排空队列。
-	if memoryParams.Weight < 15 {
-		t.Fatalf("记忆整理权重应显著提升（≥15），实得 %d", memoryParams.Weight)
-	}
-	if memoryParams.Quota < 6 {
-		t.Fatalf("记忆整理每日额度应显著提升（≥6），实得 %d", memoryParams.Quota)
+	if _, ok := defaultEvents["memory"]; ok {
+		t.Fatal("记忆整理已收敛为固定步骤，不应再占事件权重")
 	}
 }
 

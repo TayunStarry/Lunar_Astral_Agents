@@ -65,6 +65,18 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 	runCtx, cancel := context.WithTimeout(ctx, runTimeout)
 	defer cancel()
 
+	// 自由创作的事项来源改为自主决定：心情极性决定续做未完成事项还是换新，
+	// 具体事项由预设列表随机组合；选题失败时退回调用方原始指令。
+	var planned *PlanItem
+	if mode == fileflow.ModeCreator {
+		if item, planErr := PlanNext(runCtx); planErr != nil {
+			logger.Warn(Module, "[自由创作] 自主选题失败，按原指令继续: %v", planErr)
+		} else {
+			planned = &item
+			instruction = withPlanInstruction(instruction, item)
+		}
+	}
+
 	flowLabel := "文件操作"
 	if mode == fileflow.ModeCreator {
 		flowLabel = "自由创作"
@@ -126,6 +138,10 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 	}
 	saveRoundJournal(callID, mode, next)
 	runSession.writeTrace(instruction, plan, results, summary)
+	// 本轮创作完成：标记事项结束，并立即刷新「我刚刚在干的事情」。
+	if planned != nil {
+		finishPlan(*planned)
+	}
 	logger.Info(Module, "[%s] 本轮完成：%d 步规划，%d 条操作记录，%d 个错误",
 		flowLabel, len(plan.Steps), len(runSession.flowRecords()), len(runSession.errs))
 	return runSession.taskResult(summary), nil

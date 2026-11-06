@@ -32,6 +32,7 @@ func resetMood(t *testing.T) {
 	config.LocalDir = t.TempDir()
 	oldHook := embedDocumentsHook
 	oldAlpha := currentAlpha
+	oldTemperature := currentTemperature
 	embedDocumentsHook = fakeEmbedDocuments
 	mu.Lock()
 	state = State{}
@@ -41,6 +42,7 @@ func resetMood(t *testing.T) {
 		config.LocalDir = oldDir
 		embedDocumentsHook = oldHook
 		currentAlpha = oldAlpha
+		currentTemperature = oldTemperature
 		mu.Lock()
 		state = State{}
 		initialized = false
@@ -122,7 +124,7 @@ func TestInitRepairsLegacyLabel(t *testing.T) {
 }
 
 // TestLabelFollowsTopWeightWithInertia 钉住标签与权重的一致性：
-// 即使心情向量因 alpha=0.7 的惯性仍偏向旧心情，标签也必须取当前权重最高者。
+// 即使心情向量仍带有旧心情的惯性，标签也必须取当前权重最高者。
 func TestLabelFollowsTopWeightWithInertia(t *testing.T) {
 	resetMood(t)
 	if err := Init(context.Background()); err != nil {
@@ -158,6 +160,73 @@ func TestUpdateSupportsExpandedLabels(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestMoodAmplitudeBounded 校验放大后的默认幅度：
+// 单次更新至少把情绪向量与目标情绪的余弦推进 0.25，且连续切换后仍是单位向量（不越界、不发散）。
+func TestMoodAmplitudeBounded(t *testing.T) {
+	resetMood(t)
+	if err := Init(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if currentAlpha > 0.35 || currentTemperature > 0.10 {
+		t.Fatalf("默认幅度未放大：alpha=%v temperature=%v", currentAlpha, currentTemperature)
+	}
+	before := Snapshot()
+	if err := UpdateFromText(context.Background(), "愤怒"); err != nil {
+		t.Fatal(err)
+	}
+	after := Snapshot()
+	mu.RLock()
+	target := append([]float32(nil), state.Base["愤怒"]...)
+	base := copyBase(state.Base)
+	mu.RUnlock()
+
+	progress := cosine(after.Vector, target) - cosine(before.Vector, target)
+	if progress < 0.25 || progress > 1.0 {
+		t.Fatalf("单次情绪推进幅度应落在 [0.25, 1.0]，实际 %.3f", progress)
+	}
+	assertUnitVector(t, after.Vector)
+	if sum := weightsSum(after.Weights); sum < 1-1e-9 || sum > 1+1e-9 {
+		t.Fatalf("情绪权重总和应恒为 1，实际 %.12f", sum)
+	}
+
+	// 连续在两种极端情绪间切换，验证值域始终有界。
+	for i := 0; i < 20; i++ {
+		text := "愤怒"
+		if i%2 == 0 {
+			text = "元气"
+		}
+		if err := UpdateFromText(context.Background(), text); err != nil {
+			t.Fatal(err)
+		}
+		snapshot := Snapshot()
+		assertUnitVector(t, snapshot.Vector)
+		for label, vec := range base {
+			if sim := cosine(snapshot.Vector, vec); sim < -1-1e-6 || sim > 1+1e-6 {
+				t.Fatalf("余弦越界：%s=%.6f", label, sim)
+			}
+		}
+	}
+}
+
+func assertUnitVector(t *testing.T, vec []float32) {
+	t.Helper()
+	var sum float64
+	for _, v := range vec {
+		sum += float64(v) * float64(v)
+	}
+	if sum < 1-1e-3 || sum > 1+1e-3 {
+		t.Fatalf("情绪向量应为单位向量，模长平方=%.6f", sum)
+	}
+}
+
+func weightsSum(weights map[string]float64) float64 {
+	var sum float64
+	for _, v := range weights {
+		sum += v
+	}
+	return sum
 }
 
 func TestUpdateKeepsMoodOnEmbeddingFailure(t *testing.T) {

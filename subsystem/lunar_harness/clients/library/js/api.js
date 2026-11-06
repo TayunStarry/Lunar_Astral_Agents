@@ -39,9 +39,22 @@ export function fetchTree() {
     return getJSON(`${BASE}/tree`);
 }
 
-// fetchEdits AI 操作状态。
-export function fetchEdits() {
-    return getJSON(`${BASE}/edits`);
+// fetchEdits 文件状态（支持增量游标与分页）。
+// options: { since, offset, limit }；不传 limit 时后端返回全部。
+export function fetchEdits(options = {}) {
+    const query = new URLSearchParams();
+    if (options.since) query.set('since', String(options.since));
+    if (options.offset) query.set('offset', String(options.offset));
+    if (options.limit) query.set('limit', String(options.limit));
+    const suffix = query.toString();
+    return getJSON(`${BASE}/edits${suffix ? `?${suffix}` : ''}`);
+}
+
+// fetchHistory 单文件历史记录分页（before 为上一页返回的游标）。
+export function fetchHistory(path, before = 0, limit = 50) {
+    const query = new URLSearchParams({ path, limit: String(limit) });
+    if (before) query.set('before', String(before));
+    return getJSON(`${BASE}/history?${query.toString()}`);
 }
 
 // fetchMeta 单文件详情。

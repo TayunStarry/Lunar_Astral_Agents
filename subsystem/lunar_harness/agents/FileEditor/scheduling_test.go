@@ -12,6 +12,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/library"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
 )
@@ -20,11 +21,13 @@ import (
 func prepareScheduleDir(t *testing.T) {
 	t.Helper()
 	origLocal, origArchive := config.LocalDir, config.ArchiveDBPath
+	_ = library.Close()
 	config.LocalDir = t.TempDir()
 	config.ArchiveDBPath = filepath.Join(config.LocalDir, "database", "handles.db")
 	_ = resource.Close()
 	t.Cleanup(func() {
 		_ = resource.Close()
+		_ = library.Close()
 		config.LocalDir, config.ArchiveDBPath = origLocal, origArchive
 	})
 	if err := resource.Init(config.ArchiveDBPath); err != nil {

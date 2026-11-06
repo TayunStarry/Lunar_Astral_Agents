@@ -143,7 +143,7 @@ func sliceLimitForDuration(duration int) int {
 	return clampInt(available, 1, watchSliceMax)
 }
 
-// clampReviewSlices 把模型给的切片数收敛到「2-8 且不超过视频可用片段数」
+// clampReviewSlices 把模型给的切片数收敛到「1-5 且不超过视频可用片段数」
 func clampReviewSlices(duration, want int) int {
 	limit := sliceLimitForDuration(duration)
 	if want <= 0 {

@@ -151,8 +151,11 @@ export class FilePreviewManager {
         }
 
         const saveResult = await saveFile(preview.file, true);
+        // 读取地址以服务端实际落点为准：rel_path 含 multimedia/ 等存储根，
+        // filename 只是裸文件名（历史版本曾用它拼地址，导致 /file/read/ 404）。
+        const rel = String(saveResult.rel_path || saveResult.filename || '');
         return {
-            fileUrl: `${window.location.origin}/file/read/${saveResult.filename}`,
+            fileUrl: `${window.location.origin}/file/read/${rel}`,
             category,
             fileName: preview.name,
             fileSize: preview.file.size,

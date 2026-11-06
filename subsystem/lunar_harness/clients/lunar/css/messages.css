@@ -100,6 +100,41 @@
     border: 2px solid var(--accent-color);
 }
 
+/* 音乐消息：气泡只包文字，音乐卡独立挂在气泡下方（同属一个消息块） */
+.message.message-with-music {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 320px;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.message-bubble {
+    position: relative;
+    padding: 12px 18px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--bubble-border);
+    border-bottom-left-radius: 8px;
+    background: linear-gradient(145deg, var(--assistant-bubble), var(--glass-bg));
+    box-shadow: var(--bubble-shadow), inset 0 1px 0 var(--bubble-inset);
+    backdrop-filter: blur(14px);
+}
+
+.message.message-with-music .lunar-music-card {
+    margin: 0;
+}
+
+/* 正文兜底的一行说明：保持单行，避免撑高气泡 */
+.music-message-line {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
 .message-header {
     display: flex;
     align-items: center;
@@ -182,6 +217,15 @@
 /* ========== 消息引用（QQ 风格） ========== */
 .message.quote-selected {
     box-shadow: 0 0 0 2px var(--accent-color), 0 0 18px rgba(157, 107, 255, 0.28);
+}
+
+/* 音乐消息的引用高亮落在气泡上，不把整块消息（含卡片）圈起来 */
+.message-with-music.quote-selected {
+    box-shadow: none;
+}
+
+.message-with-music.quote-selected .message-bubble {
+    box-shadow: 0 0 0 2px var(--accent-color), 0 0 18px rgba(157, 107, 255, 0.28), var(--bubble-shadow);
 }
 
 .message-quote {

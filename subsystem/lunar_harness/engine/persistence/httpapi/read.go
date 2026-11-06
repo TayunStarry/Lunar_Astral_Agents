@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/resource"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,8 +19,21 @@ func ReadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// 从请求 URL 路径中去除 "/file/read/" 前缀，获取实际的文件路径
 	filePath := strings.TrimPrefix(r.URL.Path, "/file/read/")
+	// 拒绝 .. 段：兼容兜底只在存储根内追加前缀，绝不放宽为任意路径
+	if hasParentSegment(filePath) {
+		http.Error(w, "Read请求[ERROR] -> 访问被拒绝", http.StatusForbidden)
+		return
+	}
 	// 调用 execute 模块读取文件
 	file, size, mimeType, err := persistence.ReadFile(filePath)
+	// 历史消息可能只存了裸文件名（如 hash.png），仅在 /file/read/ 读取侧按 multimedia/ 兜底一次
+	if err != nil && err.Error() == "文件未找到" {
+		if legacy, ok := legacyMediaRel(filePath); ok {
+			if legacyFile, legacySize, legacyMime, legacyErr := persistence.ReadFile(legacy); legacyErr == nil {
+				file, size, mimeType, err = legacyFile, legacySize, legacyMime, nil
+			}
+		}
+	}
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {
@@ -72,6 +86,28 @@ func ReadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 	// 将文件内容复制到响应中返回给客户端
 	io.Copy(w, file)
+}
+
+// hasParentSegment 判断路径是否包含 ".." 段（兼容正反斜杠）
+func hasParentSegment(p string) bool {
+	for _, seg := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if seg == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// legacyMediaRel 把历史裸文件名兜底到 multimedia/ 存储根。
+// 仅接受不含任何路径分隔符的纯文件名，且只在 /file/read/ 读取侧使用。
+func legacyMediaRel(filePath string) (string, bool) {
+	if filePath == "" || strings.ContainsAny(filePath, `/\`) {
+		return "", false
+	}
+	if filePath == "." || filePath == ".." {
+		return "", false
+	}
+	return resource.StorageRootMultimedia + "/" + filePath, true
 }
 
 // parseRange 解析 HTTP Range 请求头（仅支持单范围），返回起止偏移

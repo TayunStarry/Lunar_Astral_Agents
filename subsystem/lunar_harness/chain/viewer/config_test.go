@@ -37,7 +37,7 @@ func TestSampleImages(t *testing.T) {
 }
 
 // TestFilterAndScorePreferences 钉住选片打分：
-// 本轮关键词权重更高，但默认偏好仍然参与，不再硬过滤（预选要凑够 4-8 个候选）。
+// 本轮关键词权重更高，但默认偏好仍然参与，不再硬过滤（待看列表要凑够候选数）。
 func TestFilterAndScorePreferences(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.DesireKeywords = []string{"猫咪"}
@@ -59,30 +59,15 @@ func TestFilterAndScorePreferences(t *testing.T) {
 }
 
 // TestDefaultLifeMechanism 钉住新机制默认值：
-// 候选固定 4-8 个；切片 2-8 默认 5；评论 30 条、单条 512 字硬截断；弹幕 30 条。
+// 切片 1-5 默认 5；评论 30 条、单条 512 字硬截断；弹幕 30 条。
 func TestDefaultLifeMechanism(t *testing.T) {
-	if candidateMin != 4 || candidateMax != 8 {
-		t.Fatalf("候选数量应为 4-8，实际 %d-%d", candidateMin, candidateMax)
-	}
-	if watchSliceMin != 2 || watchSliceMax != 8 || watchSliceDefault != 5 {
-		t.Fatalf("切片数边界应为 2-8、默认 5，实际 %d-%d/%d",
+	if watchSliceMin != 1 || watchSliceMax != 5 || watchSliceDefault != 5 {
+		t.Fatalf("切片数边界应为 1-5、默认 5，实际 %d-%d/%d",
 			watchSliceMin, watchSliceMax, watchSliceDefault)
 	}
 	if collectCommentLimit != 30 || collectCommentMaxRunes != 512 || collectDanmakuLimit != 30 {
 		t.Fatalf("采集机制被改动: 评论 %d 条 / 单条 %d 字 / 弹幕 %d 条",
 			collectCommentLimit, collectCommentMaxRunes, collectDanmakuLimit)
-	}
-	cfg := defaultConfig()
-	if cfg.RepliesPerRound != defaultRepliesPerRound {
-		t.Fatalf("默认回应额度应为 %d，实际 %d", defaultRepliesPerRound, cfg.RepliesPerRound)
-	}
-}
-
-// TestNewRunnerDefaults 钉住 runner 侧零值兜底。
-func TestNewRunnerDefaults(t *testing.T) {
-	r := newRunner(Config{RepliesPerRound: 0}, "")
-	if r.cfg.RepliesPerRound != defaultRepliesPerRound {
-		t.Fatalf("零值应回落到默认回应额度 %d，实际 %d", defaultRepliesPerRound, r.cfg.RepliesPerRound)
 	}
 }
 
@@ -97,63 +82,5 @@ func TestMemoryTextHuman(t *testing.T) {
 	}
 	if viewerstore.LooksMechanical("这段音乐听着很舒服，我循环了好几遍。") {
 		t.Fatal("人格化感受不应被误判")
-	}
-}
-
-// TestBuildSteps 钉住 Tick 计划表：第一步发动态，之后每个视频 N 个切片 + 1 个合并。
-func TestBuildSteps(t *testing.T) {
-	a := &videoRecord{Info: videoInfo{Title: "A", Duration: 600}, Slices: 3}
-	b := &videoRecord{Info: videoInfo{Title: "B", Duration: 600}, Slices: 2}
-	r := &runner{approved: []*videoRecord{a, b}}
-	r.buildSteps()
-	if len(r.steps) != 1+3+1+2+1 {
-		t.Fatalf("计划表步数不符，实际 %d", len(r.steps))
-	}
-	if r.steps[0].Kind != stepPublish {
-		t.Fatalf("第一步应先发布动态与评论")
-	}
-	merges := 0
-	for _, step := range r.steps {
-		if step.Kind == stepMerge {
-			merges++
-		}
-	}
-	if merges != 2 {
-		t.Fatalf("应为每个视频各一个合并步骤，实际 %d", merges)
-	}
-}
-
-// TestParseDynamicCommentTarget 钉住动态评论目标：短视频动态的评论区可能是 type=11。
-func TestParseDynamicCommentTarget(t *testing.T) {
-	raw := `{"code":0,"data":{"item":{"basic":{"comment_id_str":"413545034","comment_type":11,"rid_str":"413545034"}}}}`
-	got, err := parseDynamicCommentTarget(raw, "1263926802716295175")
-	if err != nil {
-		t.Fatalf("解析失败: %v", err)
-	}
-	if got.Type != 11 || got.Oid != "413545034" {
-		t.Fatalf("应使用详情里的 comment_type/comment_id_str，实得 %+v", got)
-	}
-
-	fallback, err := parseDynamicCommentTarget(`{"code":0,"data":{"item":{"basic":{}}}}`, "123")
-	if err != nil || fallback.Type != 17 || fallback.Oid != "123" {
-		t.Fatalf("缺字段时应回退为 type=17 + 动态 ID，实得 %+v err=%v", fallback, err)
-	}
-	if _, err := parseDynamicCommentTarget(`{"code":-404,"message":"啥都木有"}`, "123"); err == nil {
-		t.Fatal("详情接口报错应返回错误")
-	}
-}
-
-// TestBuildVideoComment 钉住动态评论区格式：一个视频一条，URL 一行、评价一行。
-func TestBuildVideoComment(t *testing.T) {
-	video := &videoRecord{
-		Info:       videoInfo{URL: "https://www.bilibili.com/video/BV1"},
-		Evaluation: "这段运镜太顶了",
-	}
-	want := "https://www.bilibili.com/video/BV1\n这段运镜太顶了"
-	if got := buildVideoComment(video); got != want {
-		t.Fatalf("评价条目格式不符：\n%q", got)
-	}
-	if got := buildVideoComment(&videoRecord{}); got != "" {
-		t.Fatalf("没有 URL 的视频不应产生评论，实际 %q", got)
 	}
 }

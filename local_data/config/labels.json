@@ -73,7 +73,7 @@
 	"summary_max_chars": "单页摘要字符上限",
 	"max_run_seconds": "单次运行时长上限(秒)",
 
-	"character_renderer": "角色渲染器(bedrock/live2d)",
+	"character_renderer": "角色渲染器(bedrock/live2d/gif)",
 	"live2d_model": "Live2D 模型基址",
 
 	"gitee_owner": "Gitee 仓库属主",

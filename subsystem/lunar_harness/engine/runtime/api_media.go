@@ -11,13 +11,12 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/netsource"
 
 	"github.com/chai2010/webp"
 	"github.com/disintegration/imaging"
@@ -111,6 +110,11 @@ func engineVideoFrames(p *plugin, source string, opts map[string]any) map[string
 func videoSourceToLocal(p *plugin, source string) (string, func(), error) {
 	switch {
 	case strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://"):
+		// 本机服务地址（含手机端局域网 IP / 自签 HTTPS origin）直接复用本地文件，
+		// 不回源；此时不产生临时文件，cleanup 为 nil。
+		if local, ok := netsource.LocalPath(source); ok {
+			return local, nil, nil
+		}
 		tmp, err := downloadVideoToTemp(source)
 		if err != nil {
 			return "", nil, err
@@ -165,16 +169,14 @@ func videoSamplingPlan(duration float64, opts map[string]any) []float64 {
 	return ts
 }
 
-// downloadVideoToTemp 下载 HTTP 视频到临时文件。
+// downloadVideoToTemp 回源下载 HTTP 视频到临时文件，带超时与大小上限。
 func downloadVideoToTemp(url string) (string, error) {
-	resp, err := http.Get(url)
+	resp, err := netsource.Open(url, videoDownloadTimeout)
 	if err != nil {
 		return "", fmt.Errorf("下载视频失败: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("下载视频失败: HTTP %d", resp.StatusCode)
-	}
+
 	ext := "mp4"
 	if pathPart, _, _ := strings.Cut(url, "?"); pathPart != "" {
 		if i := strings.LastIndex(pathPart, "."); i >= 0 && i < len(pathPart)-1 {
@@ -188,12 +190,17 @@ func downloadVideoToTemp(url string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("创建临时文件失败: %v", err)
 	}
-	defer tmp.Close()
-	if _, err := io.Copy(tmp, resp.Body); err != nil {
-		os.Remove(tmp.Name())
+	name := tmp.Name()
+	if err := netsource.CopyLimited(tmp, resp.Body, maxVideoDownloadBytes); err != nil {
+		tmp.Close()
+		os.Remove(name)
 		return "", fmt.Errorf("写入临时视频失败: %v", err)
 	}
-	return tmp.Name(), nil
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+		return "", fmt.Errorf("关闭临时视频失败: %v", err)
+	}
+	return name, nil
 }
 
 // dataVideoToTemp 把 data:video/...;base64 URI 解码为临时文件。

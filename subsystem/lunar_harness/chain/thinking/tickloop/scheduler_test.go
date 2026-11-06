@@ -243,6 +243,41 @@ func TestSchedulerForcedEventOnlyRunsLife(t *testing.T) {
 	}
 }
 
+// TestSchedulerDialoguePreemptsViewingAcrossTicks 用户消息到达后，下一个 Tick 由对话抢占，
+// 回应结束后观影才继续（观影步骤在安全边界让出，任务保留）。
+func TestSchedulerDialoguePreemptsViewingAcrossTicks(t *testing.T) {
+	s := newTestScheduler(t, nil)
+	dialogue := &fakeSystem{id: "dialogue", priority: 300, ready: false, reason: "unread"}
+	viewing := &fakeSystem{id: "viewing", priority: 200, ready: true, reason: "slices"}
+	s.Register(viewing)
+	s.Register(dialogue)
+
+	s.Tick()
+	s.wg.Wait()
+	if s.state.LastSystem != "viewing" {
+		t.Fatalf("没有用户消息时应继续观影，实际 %s", s.state.LastSystem)
+	}
+
+	// 用户消息到达：对话就绪，观影虽然仍有待办，但这一 Tick 必须先回应消息。
+	dialogue.ready = true
+	s.Tick()
+	s.wg.Wait()
+	if s.state.LastSystem != "dialogue" {
+		t.Fatalf("用户消息到达后应优先对话，实际 %s", s.state.LastSystem)
+	}
+	if dialogue.runCount() != 1 || viewing.runCount() != 1 {
+		t.Fatalf("同一 Tick 只运行对话，实际 dialogue=%d viewing=%d", dialogue.runCount(), viewing.runCount())
+	}
+
+	// 回应完毕：观影从让出点继续。
+	dialogue.ready = false
+	s.Tick()
+	s.wg.Wait()
+	if s.state.LastSystem != "viewing" || viewing.runCount() != 2 {
+		t.Fatalf("回应结束后观影应继续，实际 %s（%d 次）", s.state.LastSystem, viewing.runCount())
+	}
+}
+
 // TestSchedulerKeepIdleAdvancesCounter 接管空闲的体系（KeepIdle）运行后冷却 +1 而非重置。
 func TestSchedulerKeepIdleAdvancesCounter(t *testing.T) {
 	s := newTestScheduler(t, nil)

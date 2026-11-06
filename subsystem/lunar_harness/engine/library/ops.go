@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
@@ -38,7 +39,7 @@ func Rename(rel, newName string) (string, error) {
 	}
 	persistence.NotifyMove(rel, targetRel)
 	logger.Info(Module, "[资源库] 重命名: %s → %s", rel, targetRel)
-	notifyChanged("rename", rel, targetRel)
+	PublishEdit(EditNotice{Path: targetRel, Op: "rename", At: time.Now()})
 	return targetRel, nil
 }
 
@@ -71,7 +72,7 @@ func Move(rel, targetDir string) (string, error) {
 	}
 	persistence.NotifyMove(rel, targetRel)
 	logger.Info(Module, "[资源库] 移动: %s → %s", rel, targetRel)
-	notifyChanged("move", rel, targetRel)
+	PublishEdit(EditNotice{Path: targetRel, Op: "move", At: time.Now()})
 	return targetRel, nil
 }
 
@@ -96,17 +97,6 @@ func Delete(rel string) (string, error) {
 	}
 	persistence.NotifyDelete(rel)
 	logger.Info(Module, "[资源库] 删除: %s", rel)
-	notifyChanged("delete", rel, "")
+	PublishEdit(EditNotice{Path: rel, Op: "delete", At: time.Now()})
 	return rel, nil
-}
-
-// notifyChanged 广播一次结构变化，供当前打开的资源库页面实时刷新。
-func notifyChanged(op, from, to string) {
-	broadcastMu.RLock()
-	fn := broadcast
-	broadcastMu.RUnlock()
-	if fn == nil {
-		return
-	}
-	fn("library_changed", map[string]any{"op": op, "path": from, "target": to})
 }

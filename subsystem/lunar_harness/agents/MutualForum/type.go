@@ -124,6 +124,8 @@ type Config struct {
 	PollMinIntervalSeconds int `json:"poll_min_interval_seconds"` // 兜底最小轮询间隔（服务端返回后以其为准）
 	RoundTTLSeconds        int `json:"round_ttl_seconds"`         // 兜底轮次有效期（服务端返回后以其为准）
 	SearchLimit            int `json:"search_limit"`              // 本地搜索默认条数（默认 10，最大 50）
+
+	AutoReplyMaxRetries int `json:"auto_reply_max_retries"` // 自动回应提交失败后的最大重试次数（默认 3，最大 10）
 }
 
 // Account 本地保存的凭证与轮次状态（api_key 不对外展示）。
@@ -167,6 +169,18 @@ type SearchHit struct {
 	Score     int      `json:"score"`
 	MatchedIn []string `json:"matched_in"`
 	Posts     []Post   `json:"posts,omitempty"`
+}
+
+// Summary 自动回应未读回应的结果。
+//
+// PageOpen=true 且 Pending=0 表示「论坛页面能打开，但没有待回应」；
+// 页面打不开时不会返回 Summary，而是返回包装了 ErrForumPageUnavailable 的错误。
+type Summary struct {
+	PageOpen  bool `json:"page_open"`
+	Pending   int  `json:"pending"`   // 本轮尝试的待回应数（含上一轮失败的重试条目）
+	Responded int  `json:"responded"` // 本轮成功提交数
+	Failed    int  `json:"failed"`    // 本轮失败次数（含达到重试上限而放弃的条目）
+	Dropped   int  `json:"dropped"`   // 达到重试上限、已从待回应队列移除的条目数
 }
 
 // readinessProbe 就绪探测缓存（package 内部使用）

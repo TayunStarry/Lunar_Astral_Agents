@@ -1,16 +1,16 @@
 package life
 
 // memory_pending_test.go 待合并（待合并组）队列的链侧回归测试：
-// 组识别、孤儿回收、批次规划顺序、无组时不动作、按权重可被选中。
+// 组识别、孤儿回收、批次规划顺序、无组时不动作。
 //
-// 整理不再有基于条数/时间的强制兜底，因此本文件不再覆盖「超限排空」相关行为。
+// 整理不再有基于条数/时间的强制兜底，也不再是权重事件，因此本文件不再覆盖
+// 「超限排空」「按权重选中」相关行为。
 
 import (
 	"context"
 	"fmt"
 	"testing"
 
-	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/memory"
 )
 
@@ -200,44 +200,5 @@ func TestClearOrphanPendingReturnsToVisible(t *testing.T) {
 	kept = clearOrphanPending(context.Background(), pending, nil)
 	if len(kept) != 1 || kept[0].ID != "p1" {
 		t.Fatalf("清除失败应保留待处理条目，实得 %+v", kept)
-	}
-}
-
-// TestMemoryEventAutoWeightSelectable 自动整理开启且存在待合并条目时，
-// memory 事件按新权重参与挑选；没有待合并条目时权重归零。
-func TestMemoryEventAutoWeightSelectable(t *testing.T) {
-	resetLifeForTest(t)
-	oldAuto := config.MemoryAutoConsolidate
-	oldCount := pendingCountHook
-	oldRand := pickRandHook
-	t.Cleanup(func() {
-		config.MemoryAutoConsolidate = oldAuto
-		pendingCountHook = oldCount
-		pickRandHook = oldRand
-	})
-
-	config.MemoryAutoConsolidate = true
-	pendingCountHook = func() int { return 1 }
-	if got := registeredMemoryEvent(t).Weight(); got != defaultEvents["memory"].Weight {
-		t.Fatalf("有待合并条目时权重应为 %d，实得 %d", defaultEvents["memory"].Weight, got)
-	}
-
-	// 其它事件额度用尽后，memory 必须能被调度器选中
-	mu.Lock()
-	for _, event := range registry {
-		if event.ID() != "memory" {
-			state.Used[event.ID()] = event.DailyQuota()
-		}
-	}
-	pickRandHook = func(int) int { return 0 }
-	picked := pickLocked()
-	mu.Unlock()
-	if picked == nil || picked.ID() != "memory" {
-		t.Fatalf("有待合并条目时 memory 事件应可被选中，实际 %v", picked)
-	}
-
-	pendingCountHook = func() int { return 0 }
-	if got := registeredMemoryEvent(t).Weight(); got != 0 {
-		t.Fatalf("没有待合并条目时权重应为 0，实得 %d", got)
 	}
 }

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIF 动图引擎</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            overscroll-behavior: none;
+        }
+
+        /* 舞台：固定铺满，只作为交互与裁剪容器，本身不参与变换 */
+        #gif-stage {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            cursor: grab;
+            touch-action: none;
+        }
+
+        /* 拖拽中切换光标（与 Live2D 引擎一致） */
+        #gif-stage.dragging {
+            cursor: grabbing;
+        }
+
+        /* 显示层：拖拽 / 缩放只作用于这一层，不影响动画名提示与加载遮罩 */
+        #gif-layer {
+            position: absolute;
+            inset: 0;
+            transform-origin: 50% 50%;
+            will-change: transform;
+        }
+
+        #gif-frame,
+        #gif-video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+            -webkit-user-drag: none;
+        }
+
+        /* 视频模式由引擎切换显示；预取元素只用于提前拉取元数据 */
+        #gif-video,
+        #gif-prefetch {
+            display: none;
+            background: transparent;
+        }
+
+        /* 加载遮罩：与 Live2D 引擎层同款 */
+        #loading-mask {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(244, 244, 245, 0.85);
+            font-size: 14px;
+            text-align: center;
+            padding: 12px;
+            background: rgba(15, 17, 24, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 5;
+            transition: opacity 0.4s ease;
+        }
+
+        #loading-mask.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #loading-mask .spinner {
+            margin-right: 10px;
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #9d6bff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 动图舞台：拖拽移动 / 滚轮与双指缩放 / 双击或中键复位 -->
+    <div id="gif-stage">
+        <div id="gif-layer">
+            <img id="gif-frame" alt="" draggable="false">
+            <video id="gif-video" muted playsinline preload="auto" disablepictureinpicture></video>
+            <video id="gif-prefetch" muted playsinline preload="metadata" disablepictureinpicture></video>
+        </div>
+    </div>
+
+    <!-- 加载遮罩 -->
+    <div id="loading-mask">
+        <span class="spinner"></span>
+        <span class="mask-text">正在加载动画资源…</span>
+    </div>
+
+    <!-- 统一通信客户端与前端动作匹配（与另两套引擎同款） -->
+    <script src="/reliance/ws_bridge.js"></script>
+    <script src="/reliance/action_matcher.js"></script>
+    <!-- 引擎入口（ES Module） -->
+    <script type="module" src="./engine.js"></script>
+</body>
+</html>

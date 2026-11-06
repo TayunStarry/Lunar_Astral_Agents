@@ -49,6 +49,8 @@ func (s *session) executeTool(ctx context.Context, name string, args map[string]
 		return sendGroupText(args)
 	case toolSendGroupFile:
 		return sendGroupFile(args)
+	case toolSendPrivateText:
+		return sendPrivateText(args)
 	case toolRunScript:
 		return runScriptTool(args)
 	case toolScriptStatus:

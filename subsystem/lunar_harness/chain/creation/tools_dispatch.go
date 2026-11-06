@@ -52,6 +52,26 @@ func sendGroupFile(args map[string]any) toolOutcome {
 	}
 }
 
+// sendPrivateText 内容调度：向指定 QQ 用户发送文本（用户以 QQ 号定位）。
+func sendPrivateText(args map[string]any) toolOutcome {
+	raw := strings.TrimSpace(argString(args, "user"))
+	userID, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || userID <= 0 {
+		return failure(toolSendPrivateText, fmt.Errorf("user 必须是有效的 QQ 号"))
+	}
+	text := argString(args, "text")
+	if strings.TrimSpace(text) == "" {
+		return failure(toolSendPrivateText, fmt.Errorf("text 不能为空"))
+	}
+	if err := napcat.SendPrivateTextMessage(userID, text); err != nil {
+		return failure(toolSendPrivateText, err)
+	}
+	return toolOutcome{
+		JSON:    jsonText(map[string]any{"user_id": userID, "sent": true}),
+		Summary: "已发送给 QQ 用户 " + raw,
+	}
+}
+
 // resolveGroup 把群号或群名解析为群 ID。
 func resolveGroup(target string) (int64, string, error) {
 	target = strings.TrimSpace(target)

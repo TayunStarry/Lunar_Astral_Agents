@@ -17,18 +17,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/netsource"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/engine/resourcehub"
@@ -151,18 +149,12 @@ func ensureLocalVideoPath(rawURL string, fallbackNames ...string) (string, error
 	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
 		return "", fmt.Errorf("不是可读取的视频地址: %s", rawURL)
 	}
-	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Get(rawURL)
+	data, err := downloadRemoteVideoBytes(rawURL, maxRemoteVideoBytes)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrVideoExpired, err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("%w: 下载状态码 %d", ErrVideoExpired, resp.StatusCode)
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil || len(data) == 0 {
-		return "", fmt.Errorf("%w: 读取视频字节失败 %v", ErrVideoExpired, err)
+	if len(data) == 0 {
+		return "", fmt.Errorf("%w: 读取视频字节为空", ErrVideoExpired)
 	}
 	ext := strings.ToLower(filepath.Ext(pathPartOfURL(rawURL)))
 	if resource.KindOfExt(ext) != resource.KindVideo {
@@ -174,6 +166,21 @@ func ensureLocalVideoPath(rawURL string, fallbackNames ...string) (string, error
 		return "", fmt.Errorf("视频落盘失败: %w", err)
 	}
 	return filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(rel)), nil
+}
+
+// downloadRemoteVideoBytes 回源读取远程视频；超过上限时明确报错，不返回半段视频。
+func downloadRemoteVideoBytes(rawURL string, maxBytes int64) ([]byte, error) {
+	resp, err := netsource.Open(rawURL, remoteVideoDownloadTimeout)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	buf := &bytes.Buffer{}
+	if err := netsource.CopyLimited(buf, resp.Body, maxBytes); err != nil {
+		return nil, fmt.Errorf("视频下载失败: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 func pathPartOfURL(raw string) string {

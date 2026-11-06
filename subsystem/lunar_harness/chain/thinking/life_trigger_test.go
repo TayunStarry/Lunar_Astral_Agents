@@ -28,14 +28,11 @@ func (s *recordingDialogueSystem) Run(context.Context) error {
 func TestForcedLifeEventPreemptsDialogue(t *testing.T) {
 	oldDir := config.LocalDir
 	config.LocalDir = t.TempDir()
-	oldHook := viewingPendingHook
-	viewingPendingHook = func() bool { return false }
 	t.Cleanup(func() {
 		// 即使用例中途失败也要清空待执行事件，避免污染其他 Tick 用例。
 		config.LocalDir = t.TempDir()
 		life.Init()
 		config.LocalDir = oldDir
-		viewingPendingHook = oldHook
 	})
 
 	life.Init()

@@ -13,28 +13,33 @@ import (
 )
 
 // localizeVideoSource 将视频来源本地化为可读路径：
-// HTTP(S) URL 下载到临时文件、data:video URI 解码到临时文件、其余按本地路径直接使用。
-// 返回的 cleanup 供调用方 defer 调用（本地路径时为空操作）；文件不存在或本地化失败时返回错误。
+// HTTP(S) URL 本机地址直接复用原文件、远程地址下载到临时文件；
+// data:video URI 解码到临时文件；其余按本地路径直接使用。
+//
+// cleanup 约定：临时文件返回非 nil 清理函数，原文件与本地路径返回 nil。
+// 调用方必须先判空再 defer，避免删除用户原视频。
 func localizeVideoSource(inputFile string) (string, func(), error) {
 	localPath := inputFile
-	cleanup := func() {}
+	var cleanup func()
 	if strings.HasPrefix(inputFile, "http://") || strings.HasPrefix(inputFile, "https://") {
-		tempFile, err := downloadToTempFile(inputFile)
+		local, tempCleanup, err := downloadToTempFile(inputFile)
 		if err != nil {
-			return "", cleanup, fmt.Errorf("下载视频文件失败: %w", err)
+			return "", nil, fmt.Errorf("下载视频文件失败: %w", err)
 		}
-		localPath, cleanup = tempFile, func() { os.Remove(tempFile) }
+		localPath, cleanup = local, tempCleanup
 	} else if strings.HasPrefix(inputFile, "data:video/") {
 		tempFile, err := dataURIToTempFile(inputFile)
 		if err != nil {
-			return "", cleanup, fmt.Errorf("解码视频数据失败: %w", err)
+			return "", nil, fmt.Errorf("解码视频数据失败: %w", err)
 		}
 		localPath, cleanup = tempFile, func() { os.Remove(tempFile) }
 	}
 	// 校验本地文件存在（临时文件此时已产生，失败时一并清理）
 	if _, err := os.Stat(localPath); err != nil {
-		cleanup()
-		return "", func() {}, fmt.Errorf("视频文件不存在: %s", localPath)
+		if cleanup != nil {
+			cleanup()
+		}
+		return "", nil, fmt.Errorf("视频文件不存在: %s", localPath)
 	}
 	return localPath, cleanup, nil
 }

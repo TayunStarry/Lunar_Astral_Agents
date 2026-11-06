@@ -21,6 +21,7 @@ func exportContext(includeImages bool) (any, error) {
 		"kind":         "creator-planner-run",
 		"generated_at": time.Now().Format(time.RFC3339),
 		"last_run":     snapshotLastRun(),
+		"tool_policy":  toolPolicySnapshot(),
 		"tools":        tools,
 	}, nil
 }

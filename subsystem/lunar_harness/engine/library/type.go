@@ -74,12 +74,43 @@ type FileState struct {
 	// 直到下一次运行失败转红。
 	hasRun bool
 	runOK  bool
+	// lastSeq 该文件最后一次写入对应的全局序号（增量同步游标）。
+	lastSeq uint64
 }
 
 // EditSnapshot 一次取回的状态集合。
+// Total / Offset / Limit / HasMore 支持分页；Reset 表示增量游标已失效，需要全量重读。
 type EditSnapshot struct {
 	Version uint64      `json:"version"`
 	Files   []FileState `json:"files"`
+	Total   int         `json:"total,omitempty"`
+	Offset  int         `json:"offset,omitempty"`
+	Limit   int         `json:"limit,omitempty"`
+	HasMore bool        `json:"has_more,omitempty"`
+	Reset   bool        `json:"reset,omitempty"`
+}
+
+// EditQuery 状态查询条件：Since 为增量游标（0 表示全量），Offset/Limit 为分页。
+type EditQuery struct {
+	Since  uint64
+	Offset int
+	Limit  int
+}
+
+// HistoryQuery 单文件历史记录分页条件（Before 为上一页返回的游标，0 表示最新）。
+type HistoryQuery struct {
+	Path   string
+	Before uint64
+	Limit  int
+}
+
+// HistoryPage 单文件历史记录的一页（按时间倒序，最新在前）。
+type HistoryPage struct {
+	Path       string       `json:"path"`
+	Records    []EditRecord `json:"records"`
+	Total      int          `json:"total"`
+	NextBefore uint64       `json:"next_before,omitempty"`
+	HasMore    bool         `json:"has_more"`
 }
 
 // EditNotice 文件编辑智能体的一次上报。

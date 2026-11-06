@@ -15,6 +15,10 @@ const (
 	uploadHTTPTimeout = 120 * time.Second
 	// qqDirectoryTTL 群/好友目录缓存有效期，避免每轮都打两次接口
 	qqDirectoryTTL = 30 * time.Second
+	// maxMediaDownloadBytes 渠道媒体回源上限（256 MiB）：
+	// QQ 图片 / 语音 / 短视频通常远小于此值；超大视频由 get_file 返回本地路径，
+	// 不应整段读进内存。
+	maxMediaDownloadBytes = 256 * 1024 * 1024
 )
 
 // mentionPattern 出站文本中的提及标记：[对 xxx 说]（与入站 @ 的渲染格式对称）

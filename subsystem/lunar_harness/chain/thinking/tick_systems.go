@@ -1,7 +1,8 @@
 package thinking
 
-// tick_systems.go 内建 Tick 体系适配器（对话 / 后勤 / 观影 / 生活）。
+// tick_systems.go 内建 Tick 体系适配器（对话 / 后勤 / 生活）。
 // 外部推理请求由响应者独立 Tick 处理（见 responder_loop.go），不在本调度器内。
+// 观影由生活链的五步回合编排驱动，不再单独占用 Tick 体系。
 
 import (
 	"context"
@@ -9,7 +10,6 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/chain/life"
-	"LunarSubsystem/LunarHarness/chain/viewer"
 )
 
 type dialogueSystem struct{}
@@ -53,23 +53,6 @@ func (logisticsSystem) Ready(snapshot TickSnapshot) (bool, string) {
 func (logisticsSystem) Run(ctx context.Context) error {
 	Savior.Process(ctx)
 	return nil
-}
-
-type viewingSystem struct{}
-
-func (viewingSystem) ID() string     { return "viewing" }
-func (viewingSystem) Priority() int  { return 200 }
-func (viewingSystem) IdleReset() int { return viewingIdleReset }
-
-func (viewingSystem) Ready(snapshot TickSnapshot) (bool, string) {
-	if snapshot.ViewingPending {
-		return true, "待处理视频切片"
-	}
-	return false, ""
-}
-
-func (viewingSystem) Run(ctx context.Context) error {
-	return viewer.RunOneStep(ctx)
 }
 
 type lifeSystem struct{}

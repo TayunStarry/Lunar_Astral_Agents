@@ -1,13 +1,13 @@
 package viewer
 
-// risk.go 视频风险筛查规则：内置风险词、评论区规则扫描与复核材料。
+// risk.go 视频风险筛查规则：内置风险词与复核材料。
 //
 // 三层判据，宁可错杀不可放过：
 //  1) 内置风险词（涉政、对立、违法低俗、引流等）命中即判定有风险；
 //  2) 评论区出现风险词或引流/联系方式模式，同样判定有风险；
 //  3) 交给多模态模型结合封面与文字材料复核（结构化审核见 review.go）。
 //
-// 命中风险的视频不评论、不分享、不进日记动态；选片阶段命中则直接换一条。
+// 命中风险的视频不评论、不分享、不进日记动态；待看列表补齐阶段命中则直接换一条。
 
 import (
 	"fmt"
@@ -22,9 +22,6 @@ type riskVerdict struct {
 }
 
 const (
-	// riskRejectQuotaFactor 单轮允许的风险拒选次数相对观看额度的倍数：
-	// 避免风险筛查与推荐池互相拉扯造成无限选片循环。
-	riskRejectQuotaFactor = 3
 	// riskCommentSample 交给复核模型的评论条数
 	riskCommentSample = 10
 )
@@ -58,23 +55,6 @@ var riskPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(加\s*(微信|vx|v信|qq)|扫码|进群|私聊|电报|telegram|whatsapp)`),
 	regexp.MustCompile(`(?i)q{2}\s*[:：]?\s*\d{5,}`),
 	regexp.MustCompile(`1[3-9]\d{9}`),
-}
-
-// riskRejectLimit 本轮允许的风险拒选次数（候选数 × 倍数）
-func riskRejectLimit(candidates int) int {
-	if candidates < candidateMin {
-		candidates = candidateMin
-	}
-	return candidates * riskRejectQuotaFactor
-}
-
-// screenCommentsRisk 读完评论区后的复查：只做规则扫描，命中即不再留言
-func screenCommentsRisk(comments []commentItem) riskVerdict {
-	verdict, hit := ruleRiskComments(comments)
-	if !hit {
-		return riskVerdict{}
-	}
-	return verdict
 }
 
 // ruleRisk 风险词与模式扫描

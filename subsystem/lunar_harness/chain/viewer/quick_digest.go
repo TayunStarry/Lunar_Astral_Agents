@@ -1,10 +1,10 @@
 package viewer
 
-// quick_digest.go 指定视频的快速内容速览。
+// quick_digest.go 指定视频的 URL 直驱印象。
 //
 // 只聚合公开元数据（标题 / UP主 / 时长 / 发布时间 / 标签 / 评论 / 弹幕）并让轻量模型写一段摘要，
 // 不打开播放器、不下载视频、不写解析文本：
-// 这里回答的是“这条视频讲了什么”，是否真的看过仍由正式观影流程决定，
+// 这里回答的是“这条视频讲了什么”，是否真的看过仍由生活链的看视频分支决定，
 // 避免月华把页面速览说成自己看过视频。
 
 import (
@@ -19,14 +19,6 @@ import (
 )
 
 const (
-	// quickDigestMaxRunes 速览摘要的最大字数（要直接进对话上下文，不能太长）
-	quickDigestMaxRunes = 512
-	// quickDigestCommentMax 速览采集的高赞评论条数
-	quickDigestCommentMax = 32
-	// quickDigestDanmakuMax 速览采集的弹幕条数
-	quickDigestDanmakuMax = 32
-	// quickDigestMaterialCommentRows 速览材料里展示的评论条数
-	quickDigestMaterialCommentRows = 8
 	// directImpressionCommentMax 直驱印象采集的评论条数（翻页聚合后去重）
 	directImpressionCommentMax = 60
 	// directImpressionDanmakuMax 直驱印象采集的弹幕条数（已去重）
@@ -36,49 +28,6 @@ const (
 	// quickCommentMaxPages 评论最多翻几页（高赞榜前三页足够覆盖）
 	quickCommentMaxPages = 3
 )
-
-// QuickDigest 指定 B 站视频的快速速览：返回标题与摘要。
-//
-// 只使用公开接口，不依赖浏览器登录态；评论或弹幕取不到时用其余材料继续，
-// 素材不足时退化为“标题 + UP主 + 时长 + 标签 + 简介”的可读摘要。
-func QuickDigest(rawURL, instruction string) (title, summary string, err error) {
-	bvid := viewerstore.ExtractBVID(rawURL)
-	if bvid == "" {
-		return "", "", fmt.Errorf("不是有效的 B 站视频地址")
-	}
-	info, err := fetchVideoInfo(bvid)
-	if err != nil {
-		return "", "", fmt.Errorf("读取视频信息失败: %w", err)
-	}
-	title = strings.TrimSpace(info.Title)
-	if title == "" {
-		title = bvid
-	}
-
-	// 标签 / 评论 / 弹幕都属“能取到就补充”的材料，单项失败不影响速览。
-	tags, tagErr := fetchVideoTags(bvid)
-	if tagErr != nil {
-		logger.Warn("BilibiliViewer", "速览读取标签失败（继续）: %v", tagErr)
-	}
-	comments := fetchQuickComments(info.Aid, quickDigestCommentMax)
-	danmaku := fetchDanmaku(info.Cid, quickDigestDanmakuMax)
-
-	material := quickDigestMaterial(info, tags, comments, danmaku, quickDigestMaterialCommentRows)
-
-	// 与观影流程同一套模型生命周期：先让出主模型，用轻量模型写速览，写完卸掉。
-	unloadModel(modelPrimary)
-	text, modelErr := ViewerScreening.QuickSummary(context.Background(), material, instruction, modelLight)
-	unloadModel(modelLight)
-	if modelErr != nil {
-		logger.Warn("BilibiliViewer", "速览摘要生成失败，改用材料兜底: %v", modelErr)
-		return title, fallbackQuickDigest(info, tags), nil
-	}
-	summary = strings.TrimSpace(text)
-	if summary == "" {
-		summary = fallbackQuickDigest(info, tags)
-	}
-	return title, truncate(summary, quickDigestMaxRunes), nil
-}
 
 // DirectImpression 指定视频的 URL 直驱印象（规范三的 BilibiliSearch 直驱模式）。
 //

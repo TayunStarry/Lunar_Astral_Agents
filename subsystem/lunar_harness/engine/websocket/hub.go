@@ -138,9 +138,9 @@ func (h *Hub) BroadcastMessage(msgType string, data any) {
 //   - **不触发 OnStructuredMessage 旁路**：这类消息只服务单一前端，
 //     不应进入 QQ 桥接或其它频道的消息记录。
 //
-// 为什么需要它：资源库的 library_edit 是编辑器状态事件，不是聊天消息。
+// 为什么需要它：资源库的 library_sync 是编辑器同步信号，不是聊天消息。
 // 若走全量 BroadcastMessage，消息终端会把无法识别的结构体当成内容渲染，
-// 聊天记录里就会出现一串 library_edit JSON。
+// 聊天记录里就会出现一串 library_sync JSON。
 func (h *Hub) BroadcastMessageToChannel(channel, msgType string, data any) {
 	if channel == "" {
 		channel = DefaultBusChannel

@@ -94,27 +94,28 @@ var agentLabels = map[string]string{
 // ==== 工具名 ====
 
 const (
-	toolWebSearch      = "web_search"
-	toolFetchResources = "fetch_resources"
-	toolFileList       = "file_list"
-	toolFileRead       = "file_read"
-	toolFileCreate     = "file_create"
-	toolFileRewrite    = "file_rewrite"
-	toolFileRemove     = "file_remove"
-	toolFileDelete     = "file_delete"
-	toolFileMove       = "file_move"
-	toolFileReplace    = "file_replace"
-	toolFileDeleteText = "file_delete_content"
-	toolArchiveRead    = "archive_read"
-	toolArchiveWrite   = "archive_write"
-	toolCodeIndex      = "code_index"
-	toolReadDTS        = "read_dts"
-	toolSendGroupText  = "send_group_text"
-	toolSendGroupFile  = "send_group_file"
-	toolRunScript      = "run_script"
-	toolScriptStatus   = "script_status"
-	toolChangeQuery    = "change_query"
-	toolSubmitPlan     = "submit_plan"
+	toolWebSearch       = "web_search"
+	toolFetchResources  = "fetch_resources"
+	toolFileList        = "file_list"
+	toolFileRead        = "file_read"
+	toolFileCreate      = "file_create"
+	toolFileRewrite     = "file_rewrite"
+	toolFileRemove      = "file_remove"
+	toolFileDelete      = "file_delete"
+	toolFileMove        = "file_move"
+	toolFileReplace     = "file_replace"
+	toolFileDeleteText  = "file_delete_content"
+	toolArchiveRead     = "archive_read"
+	toolArchiveWrite    = "archive_write"
+	toolCodeIndex       = "code_index"
+	toolReadDTS         = "read_dts"
+	toolSendGroupText   = "send_group_text"
+	toolSendGroupFile   = "send_group_file"
+	toolSendPrivateText = "send_private_text"
+	toolRunScript       = "run_script"
+	toolScriptStatus    = "script_status"
+	toolChangeQuery     = "change_query"
+	toolSubmitPlan      = "submit_plan"
 )
 
 // plannerTools 调度者只做节点编排：可读取证 + 提交计划，不直接写文件、不运行脚本。
@@ -131,7 +132,7 @@ var writerTools = []string{
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
 	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText,
 	toolArchiveRead, toolArchiveWrite,
-	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
+	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile, toolSendPrivateText,
 }
 
 // engineerTools 工程创作者：JS 项目与文件、脚本、开发文档。
@@ -154,7 +155,7 @@ var researcherTools = []string{
 var runnerTools = []string{
 	toolWebSearch, toolFetchResources, toolFileList, toolFileRead,
 	toolFileCreate, toolFileRewrite, toolArchiveRead, toolArchiveWrite, toolReadDTS, toolRunScript,
-	toolScriptStatus, toolSendGroupText,
+	toolScriptStatus, toolSendGroupText, toolSendPrivateText,
 }
 
 var (

@@ -5,6 +5,8 @@ import { Toast } from './toast.js';
 import { sendMessages } from './fetch.js';
 import { initUserName, getUserNamePrefix } from './username.js';
 import { FilePreviewManager } from './file-manager.js';
+import { HistoryView } from './history-view.js';
+import { createViewSwitcher, maybeShowHistoryHint } from './view-switch.js';
 
 class LunarCoreApp {
 	wsClient = null;
@@ -16,6 +18,8 @@ class LunarCoreApp {
 	fileImportBtn = null;
 	fileInput = null;
 	fileManager = null;
+	historyView = null;
+	viewSwitcher = null;
 
 	constructor() {
 		// 确保称呼可用：优先读取浏览器缓存，缺失时显示覆盖层
@@ -23,6 +27,7 @@ class LunarCoreApp {
 		this.initElements();
 		this.initVoiceChat();
 		this.initEventListeners();
+		this.initHistoryView();
 		this.initWebSocket();
 		this.setupRendererFrame();
 		this.restoreLatestMusic();
@@ -42,6 +47,28 @@ class LunarCoreApp {
 			(msg) => this.showError(msg),
 			() => this.updateActionButton()
 		);
+	}
+
+	// ==== 历史记录视图（双击输入框切换，数据与桌面端同源） ====
+	initHistoryView() {
+		const panel = document.getElementById('mainContainerPanel');
+		const historyView = document.getElementById('historyView');
+		this.historyView = new HistoryView({
+			scrollEl: document.getElementById('historyScroll'),
+			listEl: document.getElementById('historyList'),
+			statusEl: document.getElementById('historyStatus')
+		});
+		this.viewSwitcher = createViewSwitcher({
+			panel,
+			input: this.messageInput,
+			onShow: () => {
+				historyView?.setAttribute('aria-hidden', 'false');
+				this.historyView.open();
+			},
+			onHide: () => historyView?.setAttribute('aria-hidden', 'true')
+		});
+		// 首次进入的一次性提示（localStorage 记忆，非按钮）
+		maybeShowHistoryHint(document.getElementById('historyHint'));
 	}
 
 	// ==== 连续语音对话（AEC + VAD 自动录音发送） ====
@@ -151,7 +178,8 @@ class LunarCoreApp {
 
 	/**
 	 * 渲染引擎 iframe：按 config/general.json 的 system.character_renderer 选择
-	 * 基岩版模型引擎（lunar.rendering_engine）或 Live2D 引擎层（lunar.live2d_engine）。
+	 * 月岩引擎（lunar.rendering_engine）、Live2D 引擎层（lunar.live2d_engine）
+	 * 或 GIF 动图引擎（lunar.gif_engine）。
 	 * WsBridge 连接同源 /ws，与主 WebSocket 连接保持一致（与电脑端 main.js 一致）；
 	 * 配置读取失败或取值非法时回退 bedrock。
 	 */
@@ -164,12 +192,16 @@ class LunarCoreApp {
 			if (res.ok) {
 				const config = await res.json();
 				const value = config && config.system ? config.system.character_renderer : null;
-				if (value === 'live2d' || value === 'bedrock') renderer = value;
+				if (value === 'live2d' || value === 'bedrock' || value === 'gif') renderer = value;
 			}
 		} catch (e) {
 			// 配置读取失败：回退 bedrock
 		}
-		const src = renderer === 'live2d' ? frame.dataset.srcLive2d : frame.dataset.src;
+		const sources = {
+			live2d: frame.dataset.srcLive2d,
+			gif: frame.dataset.srcGif,
+		};
+		const src = sources[renderer] || frame.dataset.src;
 		if (!src) return;
 		frame.src = `${src}&ws=${window.location.host}`;
 	}
@@ -198,6 +230,11 @@ class LunarCoreApp {
 					const imageUrl = (image.startsWith('data:') || image.startsWith('http') || image.startsWith('/'))
 						? image
 						: '/file/read/' + image.replace(/^\.?\//, '');
+					// 先进入历史列表，再弹预览
+					this.historyView?.appendLive({
+						role: 'assistant', categories: ['image'], content: '',
+						imageSrc: imageUrl, imageLabel: label, timestamp: Date.now()
+					});
 					if (window.previewImage) {
 						window.previewImage(imageUrl, label);
 					}
@@ -216,18 +253,36 @@ class LunarCoreApp {
 		}
 	}
 
-	/** 处理 context 类型消息：不显示文本内容，仅处理语音播报与音乐 */
+	/**
+	 * 处理 context 类型消息：先渲染文本，再异步播报。
+	 * 文字渲染不依赖任何音频事件（decode/start/ended），音频失败也不影响已显示的文本。
+	 */
 	async handleContextMessage(data) {
 		const subType = data.type || 'text';
+		const content = data.content || '';
 		const audio = data.audio || '';
 
 		// 音乐创作消息：后端已渲染音频，统一交给共享播放器展示（播放器 + 波形）
 		if (subType === 'music') {
 			this.showMusic(data);
+			this.historyView?.appendLive({
+				role: 'assistant', categories: ['music'], content: '', audio,
+				musicTitle: data.title || '', musicSummary: data.summary || '',
+				musicDuration: Number(data.duration) || 0, timestamp: Date.now()
+			});
 			this.setLoadingState(false);
 			return;
 		}
-		// 文本响应不显示，仅播报携带的 TTS 语音
+		// 文本先落到历史视图（与桌面端 addMessage 同序），再做播报
+		if (content) {
+			this.historyView?.appendLive({
+				role: 'assistant',
+				categories: audio ? ['text', 'voice'] : ['text'],
+				content,
+				audio,
+				timestamp: Date.now()
+			});
+		}
 		if (audio) {
 			AudioQueue.enqueue(audio);
 			VoiceChat.onAudioPlaybackChange();

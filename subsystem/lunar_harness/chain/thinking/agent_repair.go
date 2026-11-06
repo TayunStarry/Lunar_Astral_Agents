@@ -3,10 +3,11 @@ package thinking
 // agent_repair.go 把对话者的上下文交给拯救者修复。
 //
 // 拯救者只通过 protocol/agentrepair 注册表访问具体智能体：这里注册 ID 为 dialogue 的
-// 处理器，提供读取、裁剪、剔除图片、清空四类能力。修复直接作用在对话者角色的
-// 内存上下文与 messages.json 副本上，下一次 Tick 不会再带着坏上下文启动。
+// 处理器，提供读取、裁剪、按条剔除、按水位压缩、剔除图片、清空六类能力。修复直接作用在
+// 对话者角色的内存上下文与 messages.json 副本上，下一次 Tick 不会再带着坏上下文启动。
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -19,10 +20,37 @@ func init() {
 		ID:          "dialogue",
 		Label:       "对话者",
 		Description: "对话者与月华主上下文",
-		Actions:     []string{"trim", "drop_images", "clear"},
+		Actions:     []string{"trim", "drop_messages", "compact", "drop_images", "clear"},
 		Inspect:     inspectCoreContext,
+		Verify:      verifyCoreContext,
 		Repair:      repairCoreContext,
 	})
+}
+
+// verifyCoreContext 读回对话者上下文状态，确认修复后仍可正常读取。
+func verifyCoreContext(_ context.Context, params map[string]any) (any, error) {
+	_ = params
+	if !IsReady() {
+		return map[string]any{"verified": false, "mode": "state_readback", "reason": "月华智能体尚未就绪"}, nil
+	}
+	unreadMu.Lock()
+	unreadCount := len(unreadContext)
+	unreadRunes := messageRunes(unreadContext)
+	unreadMu.Unlock()
+	dialogueCount, dialogueRunes := 0, 0
+	for _, role := range coreRoleSnapshots() {
+		dialogueCount += len(role.Builder.Messages)
+		dialogueRunes += messageRunes(role.Builder.Messages)
+	}
+	return map[string]any{
+		"verified":          true,
+		"mode":              "state_readback",
+		"unread_messages":   unreadCount,
+		"unread_runes":      unreadRunes,
+		"dialogue_messages": dialogueCount,
+		"dialogue_runes":    dialogueRunes,
+		"reason":            "已读回对话者上下文，模型上下文可正常加载",
+	}, nil
 }
 
 // inspectCoreContext 读取对话者上下文；limit<=0 表示全部。
@@ -55,6 +83,10 @@ func repairCoreContext(action string, params map[string]any) (string, error) {
 	switch action {
 	case "trim":
 		return trimCoreContext(keepLastFrom(params))
+	case "drop_messages":
+		return dropCoreMessages(agentrepair.StringParam(params, "contains"))
+	case "compact":
+		return compactCoreContext(compactTargetFrom(params), keepLastFrom(params))
 	case "drop_images":
 		return dropCoreImages()
 	case "clear":
@@ -124,10 +156,7 @@ func coreRoleSnapshots() []coreRoleSnapshot {
 
 // keepLastFrom 读取 keep_last，缺省 8。
 func keepLastFrom(params map[string]any) int {
-	if value, ok := params["keep_last"].(int); ok && value > 0 {
-		return value
-	}
-	return 8
+	return agentrepair.IntParam(params, "keep_last", 8, 1, 200)
 }
 
 // stripImages 把消息里的图片内容项替换为文本占位，返回被替换的处数。

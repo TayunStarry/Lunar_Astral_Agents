@@ -1,7 +1,9 @@
 package life
 
-// event_watch.go 刷视频：生活事件只负责启动一轮哔哩观影，
-// 待处理切片交给观影体系按中优先级逐片执行。
+// event_watch.go 看视频分支：取一个已下载未看的片段，理解画面、留观感评论、更新状态。
+//
+// 生活链权重分支与对话者工具触发都落到这一个事件，事件内部调用
+// viewer.WatchNextSegment，不复制第二份实现。
 
 import (
 	"context"
@@ -22,39 +24,39 @@ func (e *watchEvent) DailyQuota() int  { return e.params.Quota }
 func (e *watchEvent) NewRun() EventRun { return &watchRun{} }
 
 type watchRunData struct {
-	Mood        string `json:"mood"`
-	Instruction string `json:"instruction,omitempty"`
+	Instruction string `json:"instruction"`
 }
 
-type watchRun struct{ data watchRunData }
+type watchRun struct {
+	data    watchRunData
+	outcome viewer.WatchOutcome
+}
 
 func (r *watchRun) Start(_ context.Context, env Env) error {
-	r.data.Mood = emptyAs(env.MoodLabel, "平静")
 	r.data.Instruction = strings.TrimSpace(env.Instruction)
 	return nil
 }
 
-func (r *watchRun) Next(_ context.Context, _ Env) (EventStep, error) {
-	var text string
-	var err error
-	if r.data.Instruction != "" {
-		// 工具触发：用对话者的自然语言要求引导选片关键词与观影流程。
-		text, err = viewer.RunInstruction(r.data.Instruction)
-	} else {
-		text, err = viewer.StartLifeRound(r.data.Mood)
-	}
+func (r *watchRun) Next(ctx context.Context, _ Env) (EventStep, error) {
+	outcome, err := watchStepHook(ctx, r.data.Instruction)
 	if err != nil {
-		return EventStep{}, fmt.Errorf("启动哔哩观影失败: %w", err)
+		return EventStep{}, err
 	}
-	text = strings.TrimSpace(text)
-	if text == "" {
-		text = "挑了几个视频，准备慢慢看"
-	}
+	r.outcome = outcome
 	return EventStep{
 		Done:   true,
-		Record: "刷了会视频：" + truncateAtSentence(text, 512),
-		Detail: text,
+		Record: outcome.RecordText(),
+		Detail: watchDetail(outcome),
 	}, nil
+}
+
+// ActivityText 看视频分支已在 viewer 内部写过具体文案：有片段时原样保留，
+// 没看成时补一句「想看点视频」的早退说明，避免兜底文案只剩一句原因。
+func (r *watchRun) ActivityText() string {
+	if r.outcome.Triggered {
+		return r.outcome.Activity
+	}
+	return "想看点视频，" + emptyAs(r.outcome.Reason, "但没有可看的片段")
 }
 
 func (r *watchRun) Snapshot() json.RawMessage {
@@ -67,4 +69,30 @@ func (r *watchRun) Restore(raw json.RawMessage) error {
 		return nil
 	}
 	return json.Unmarshal(raw, &r.data)
+}
+
+// watchDetail 把一次观看的关键结果压成一行，便于观测。
+func watchDetail(outcome viewer.WatchOutcome) string {
+	if !outcome.Triggered {
+		return emptyAs(outcome.Reason, "没有看片段")
+	}
+	parts := []string{
+		fmt.Sprintf("%s 第 %d/%d 段", outcome.BV, outcome.SegmentIndex, outcome.SegmentTotal),
+		"画面=" + outcome.VisualSource,
+	}
+	if outcome.CommentPosted {
+		parts = append(parts, "评论已发")
+	} else {
+		parts = append(parts, "评论未发")
+	}
+	if outcome.Mentioned {
+		parts = append(parts, "已@作者")
+	}
+	if outcome.DynamicPosted {
+		parts = append(parts, "阶段动态已发")
+	}
+	if outcome.Note != "" {
+		parts = append(parts, outcome.Note)
+	}
+	return strings.Join(parts, "，")
 }

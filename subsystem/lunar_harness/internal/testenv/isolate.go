@@ -8,6 +8,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
+	"LunarSubsystem/LunarHarness/engine/library"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
@@ -57,6 +58,7 @@ func Isolate(t testing.TB) string {
 	original := snapshot()
 	_ = resource.Close()
 	_ = knowledge.Close()
+	_ = library.Close()
 
 	dir := t.TempDir()
 	config.LocalDir = dir
@@ -75,6 +77,7 @@ func Isolate(t testing.TB) string {
 	t.Cleanup(func() {
 		_ = resource.Close()
 		_ = knowledge.Close()
+		_ = library.Close()
 		apply(original)
 	})
 	return dir

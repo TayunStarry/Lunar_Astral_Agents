@@ -113,6 +113,12 @@ func init() {
 				"path":  strProp("相对 /document 的文件路径"),
 				"name":  strProp("发送时显示的文件名（可空）"),
 			}, []string{"group", "path"}),
+		toolDef("send_private_text",
+			"内容调度：把文本发送到指定 QQ 用户（私聊）。user 填 QQ 号。",
+			map[string]any{
+				"user": strProp("QQ 号"),
+				"text": strProp("要发送的文本内容"),
+			}, []string{"user", "text"}),
 		toolDef("run_script",
 			"代码运行：依次运行 /document 下的脚本文件；文件头含「//Engine: Lunar Harness」走月华私有 js 运行时，其余 js/html 自动弹出「资源库」前端并在其 iframe 沙箱中运行。默认运行时长上限 120 秒，可用 timeout_sec 或文件首行 `timeout=120s` 覆盖。",
 			map[string]any{

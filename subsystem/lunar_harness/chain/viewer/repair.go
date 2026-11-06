@@ -1,30 +1,20 @@
 package viewer
 
-// repair.go 向拯救者注册哔哩观影的修复能力。
+// repair.go 哔哩观影的智能修复登记。
 //
-// 观影是跨 Tick 推进的多步轮次：某一步反复报错时，reset 直接丢弃本轮进度，
-// 让下一次观影从选片重新开始（已看记录与偏好配置不受影响）。
+// 新流程不保留跨轮运行期状态：待看列表、片段进度与待回应队列都在 viewer.db，
+// 失败由生活回合按持久化状态续跑，因此 reset 只需说明没有可清理的内存状态。
+// 与 dump.go 共用同一个 ID，保证「能导出就能修复」的约束成立。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 func init() {
-	agentrepair.RegisterResettable("bilibili", "哔哩观影",
-		"哔哩观影进行中的轮次（候选、步骤进度）；reset 丢弃本轮进度，已看记录与偏好不变",
-		resetViewingState)
-}
-
-// resetViewingState 丢弃等待 Tick 的观影轮次。
-func resetViewingState() string {
-	manager.mu.Lock()
-	had := manager.job != nil
-	manager.job = nil
-	manager.mu.Unlock()
-	if had {
-		logger.Warn("BilibiliViewer", "[拯救] 已丢弃哔哩观影进行中的轮次")
-		return "已丢弃哔哩观影进行中的轮次"
-	}
-	return "哔哩观影当前没有进行中的轮次"
+	agentrepair.RegisterResettable(
+		"bilibili",
+		"哔哩观影",
+		"无跨轮运行期状态：待看列表与待回应队列由生活回合按 viewer.db 续跑",
+		func() string { return "观影由生活回合驱动，无内存运行期状态需要清理" },
+	)
 }

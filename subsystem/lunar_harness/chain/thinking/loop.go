@@ -10,6 +10,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/Painter"
 	"LunarSubsystem/LunarHarness/chain/life"
+	"LunarSubsystem/LunarHarness/chain/viewer"
 	"LunarSubsystem/LunarHarness/engine/affection"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/mood"
@@ -50,6 +51,9 @@ func Start() error {
 	}()
 
 	tickSchedulerInstance = buildTickScheduler()
+	// 观影是后台活动：用户消息到达时有更高的优先级，观影在安全边界让出，
+	// 先把消息回应完，再由后续 Tick 接着看（见 chain/viewer/interrupt.go）。
+	viewer.SetPauseHook(func() bool { return UnreadCount() > 0 })
 
 	agentReady.Store(true)
 	stopCh = make(chan struct{})
@@ -93,7 +97,6 @@ func buildTickScheduler() *tickScheduler {
 	scheduler := newTickScheduler()
 	scheduler.Register(dialogueSystem{})
 	scheduler.Register(logisticsSystem{})
-	scheduler.Register(viewingSystem{})
 	scheduler.Register(lifeSystem{})
 	return scheduler
 }
@@ -137,7 +140,12 @@ func runDialogueTurn(incoming []PostMessage) {
 	stateMu.Lock()
 	fastAckSent = false
 	stateMu.Unlock()
-	defer persistConversation()
+	defer func() {
+		persistConversation()
+		// 本轮已回应完毕：立即推进 QQ 桥接队列，不必等空闲 Tick。
+		// 观影一轮尚未结束时 Tick 几乎不会空闲，排队消息会一直等到整轮结束。
+		notifyIdleHook()
+	}()
 
 	for _, message := range incoming {
 		writeMessage(message.Role, message.Source, message.Content)

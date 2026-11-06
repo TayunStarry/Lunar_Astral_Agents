@@ -24,7 +24,7 @@ type SystemSettings struct {
 	ChatVRAMGuard         *bool `json:"chat_vram_guard,omitempty"`          // 守卫开关
 	ChatVRAMGuardMiB      *int  `json:"chat_vram_guard_mib,omitempty"`      // 触发阈值（MiB）
 	ChatVRAMGuardInterval *int  `json:"chat_vram_guard_interval,omitempty"` // 每 N 次应答检查一次
-	// 月华客户端显示：控制桌面端/移动端角色的渲染方式（bedrock 默认 / live2d）
+	// 月华客户端显示：控制桌面端/移动端角色的渲染方式（bedrock 默认 / live2d / gif）
 	CharacterRenderer string `json:"character_renderer"`
 	Live2DModel       string `json:"live2d_model,omitempty"` // Live2D 模型基址（空则用引擎层默认）
 	// 模型重复输出检测（loopguard）：节点字数 / 片段字数 / 平均相似度阈值。
@@ -246,14 +246,14 @@ func applyConfig(parameter *ModelConfig) {
 		TTSIdleUnloadMinutes = *parameter.TTS.IdleUnloadMinutes
 	}
 	// ==== 月华客户端显示配置（system.character_renderer） ====
-	// 渲染器枚举：仅接受 bedrock / live2d，未配置保持默认 bedrock，非法取值告警并保留默认
+	// 渲染器枚举：仅接受 bedrock / live2d / gif，未配置保持默认 bedrock，非法取值告警并保留默认
 	switch parameter.System.CharacterRenderer {
-	case "bedrock", "live2d":
+	case "bedrock", "live2d", "gif":
 		CharacterRenderer = parameter.System.CharacterRenderer
 	case "":
 		// 未配置时保持默认渲染器
 	default:
-		log.Printf("[Config][WARN] -> system.character_renderer 取值非法: %q（允许 bedrock/live2d），保持默认 %s", parameter.System.CharacterRenderer, CharacterRenderer)
+		log.Printf("[Config][WARN] -> system.character_renderer 取值非法: %q（允许 bedrock/live2d/gif），保持默认 %s", parameter.System.CharacterRenderer, CharacterRenderer)
 	}
 	if parameter.System.Live2DModel != "" {
 		Live2DModel = parameter.System.Live2DModel

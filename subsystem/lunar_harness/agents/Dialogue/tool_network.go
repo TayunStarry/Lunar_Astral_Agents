@@ -4,8 +4,7 @@ package Dialogue
 //
 // 输入输出严格使用统一原语：{type, instruction, handle, details} → {result, handle, error}。
 // 网页检索与通讯桥接直接执行；哔哩观影与互助论坛属生活链职责：
-// 工具只登记强制事件，下一 Tick 由调度器跳过其他体系直接进入生活流程，
-// instruction 会交给对应智能体引导关键词生成与运行流程。
+// 工具只登记强制事件，下一 Tick 由调度器跳过其他体系直接进入生活流程。
 
 import (
 	"fmt"
@@ -19,17 +18,17 @@ import (
 const (
 	// NetworkWebSearchTool 网页检索子工具
 	NetworkWebSearchTool = "web_search"
-	// NetworkBilibiliTool 哔哩观影子工具（触发生活链观影事件）
+	// NetworkBilibiliTool 哔哩观影子工具（触发生活链看视频事件）
 	NetworkBilibiliTool = "bilibili_viewer"
 	// NetworkMutualForumTool 互助论坛子工具（触发生活链论坛事件）
 	NetworkMutualForumTool = "mutual_forum"
 	// NetworkQQSendTool 通讯桥接子工具（仅在桥接器就绪时暴露）
 	NetworkQQSendTool = "qq_send"
 
-	// BilibiliFixedReply 哔哩观影触发后的固定响应
-	BilibiliFixedReply = "月华等下就去B站逛逛"
 	// ForumFixedReply 互助论坛触发后的固定响应
 	ForumFixedReply = "月华等下就去论坛逛逛"
+	// WatchFixedReply 看视频触发后的固定响应
+	WatchFixedReply = "月华这就去看会儿视频"
 )
 
 // ExecuteNetworkExplore 执行联网探索：按 type 分派给对应智能体。
@@ -67,8 +66,9 @@ func ExecuteNetworkExplore(args map[string]any) (result ToolResult) {
 		text, runErr := WebSearch(call.Instruction)
 		return toolJSON(networkExploreResult("网页检索", text, runErr, nil))
 	case NetworkBilibiliTool:
+		// 与生活链权重分支共用同一条看视频流程：登记强制事件，下一 Tick 由生活链执行。
 		scheduleLifeEvent("watch", call.Instruction)
-		return toolJSON(agentdispatch.Success(BilibiliFixedReply, nil))
+		return toolJSON(agentdispatch.Success(WatchFixedReply, nil))
 	case NetworkMutualForumTool:
 		scheduleLifeEvent("forum", call.Instruction)
 		return toolJSON(agentdispatch.Success(ForumFixedReply, nil))
@@ -115,7 +115,7 @@ func networkScope(kind string) (string, bool) {
 	case NetworkWebSearchTool:
 		return "网页检索子智能体：联网搜索并用自然语言返回摘要与来源。", true
 	case NetworkBilibiliTool:
-		return "哔哩观影子智能体：登记观影事件，由生活链进入 B 站观影流程。", true
+		return "哔哩观影子智能体：登记看视频事件，由生活链播放一个待看片段、理解画面并在原视频评论区留下观感。", true
 	case NetworkMutualForumTool:
 		return "互助论坛子智能体：登记论坛事件，由生活链进入互助论坛流程。", true
 	case NetworkQQSendTool:
