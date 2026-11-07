@@ -38,8 +38,9 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Save请求[ERROR] -> 无效的文件名", http.StatusForbidden)
 		return
 	}
-	// 存储根归位：二进制（压缩包/可执行/未知扩展名）统一改投 unknown/，documents/ 只留文本
-	fileName = resource.RouteStorageRel(fileName)
+	// 存储根归位：先由分类器按扩展名 / 预读文件头得到真实类型，再决定目录；
+	// 无扩展名的图片 / 视频 / 音频不会先落进 documents/ 或 unknown/
+	fileName, body := resource.RouteStorageReader(fileName, r.Body)
 	// 初始化覆盖标志，默认为不覆盖
 	overwrite := false
 	// 从请求头中获取覆盖标志
@@ -58,7 +59,7 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// 调用 persistence 保存文件（自动维护句柄映射）
-	result, err := persistence.SaveFileEx(fileName, persistence.SaveOptions{Overwrite: overwrite, MustStore: mustStore}, r.Body)
+	result, err := persistence.SaveFileEx(fileName, persistence.SaveOptions{Overwrite: overwrite, MustStore: mustStore}, body)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {

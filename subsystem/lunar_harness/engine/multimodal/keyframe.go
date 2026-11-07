@@ -125,7 +125,7 @@ func extractAllFramesAtFPS(inputFile string, fps float64) ([]image.Image, error)
 		"qscale:v": "2",
 	}
 
-	stream := ffmpeg.Input(inputFile).Output("pipe:1", kwargs)
+	stream := ffmpeg.Input(inputFile, ffmpegDecodeArgs(nil)).Output("pipe:1", kwargs)
 	if config.FfmpegPath != "" {
 		stream = stream.SetFfmpegPath(config.FfmpegPath)
 	}

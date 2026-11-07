@@ -15,7 +15,7 @@ func ToolCatalog() []agentinfo.Agent {
 		{Name: ToolWatch, Description: "解读本机视频地址：按时间切片抽帧，逐片观看后合成整体感受。"},
 	}
 	return []agentinfo.Agent{{
-		ID: "vision", Name: "视觉理解", Source: "agents/Vision",
+		ID: "vision", Name: roleLabel,
 		Note:  "视觉理解智能体：完整持有图片 / 动图 / 视频的视觉副本、切片观看与描述回写管线。",
 		Tools: tools,
 	}}

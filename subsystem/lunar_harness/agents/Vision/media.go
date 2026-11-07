@@ -74,8 +74,9 @@ func DescribeMedia(input, question string) (string, error) {
 	if res.Kind != resource.KindImage && res.Kind != resource.KindAnimated {
 		return "", fmt.Errorf("%s 不是图片或动图", handle)
 	}
-	// 已有解析文本且无定向问题：直接命中
-	if cached := strings.TrimSpace(res.ParseText); cached != "" && question == "" {
+	// 已有未过期的解析文本且无定向问题：直接命中（本地图片按本地档，不设 TTL）
+	if cached := strings.TrimSpace(res.ParseText); cached != "" && question == "" &&
+		resource.ParseTextFresh(res, resource.ParseCategoryOf(res)) {
 		return cached, nil
 	}
 

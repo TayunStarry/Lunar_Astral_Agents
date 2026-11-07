@@ -2,11 +2,13 @@ package ViewerShare
 
 // variable.go 观影者-分享的常量集中管理。
 
+import "LunarSubsystem/LunarHarness/protocol/agentinfo"
+
 const (
 	// AgentID 故障归属 ID
 	AgentID = "viewer_share"
 	// Role 推理实况角色标签
-	Role = "观影者-分享"
+	Role = agentinfo.NameViewerShare
 	// promptDynamic 观影动态提示词
 	promptDynamic = "viewerShareDynamic.md"
 	// promptShare 分享评论提示词

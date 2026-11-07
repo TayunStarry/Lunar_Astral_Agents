@@ -47,6 +47,16 @@ const (
 	dynamicMaxRunes = 512
 )
 
+// ==== 评论触发参数 ====
+
+const (
+	// segmentRemarkChance 普通片段的评论触发概率。
+	//
+	// 每片都发太密集；取 1/4 后，一个 4 段视频平均只有 1 条过程评论，
+	// 加上每支视频必发的收束评论，密度接近「真人边看边偶尔说两句」。
+	segmentRemarkChance = 0.25
+)
+
 // ==== 动态评论区参数 ====
 
 const (
@@ -69,6 +79,17 @@ const (
 	// 把余下 1/3 留给审核、入队与下载，避免「只采集不落库」导致下一轮从零重来。
 	watchlistCollectShareNum = 2
 	watchlistCollectShareDen = 3
+)
+
+// ==== 选片关键词 ====
+
+const (
+	// preferenceKeywordLimit 配置里的静态偏好词参与打分的数量上限
+	preferenceKeywordLimit = 8
+	// watchDynamicKeywordLimit 观影历史动态主题词参与打分的数量上限
+	watchDynamicKeywordLimit = 6
+	// watchSearchKeywordLimit 搜索关键词池的数量上限（动态词优先）
+	watchSearchKeywordLimit = 12
 )
 
 // ==== 模型名称 ====

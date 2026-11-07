@@ -31,24 +31,10 @@ func Merge(ctx context.Context, contents []string) ([]string, error) {
 
 // mergeInternal 执行合并；report=false 用于修复后的复跑验证，不重复上报故障。
 //
-// 修复生效点：该簇被标记为「不可合并」时直接返回空结果，链路层保留原条目；
 // 正文判定固定按相似簇合并口径（MergeMinRetainPercent + MergeMinRunes），
-// 不受整批条目化的临时下限策略影响。
+// 不受整批条目化的保留阈值影响。
 func mergeInternal(ctx context.Context, contents []string, report bool) ([]string, error) {
 	if len(contents) == 0 {
-		return nil, nil
-	}
-	if isClusterSkipped(contents) {
-		logger.Info("Life", "[记忆整理] 该相似簇已标记为不可合并，保留原条目（%d 条）", len(contents))
-		if report {
-			recordLastRunWith(len(contents), 0, nil, map[string]any{
-				"skipped":                  true,
-				"input_items":              len(contents),
-				"input_runes":              totalRunes(contents),
-				"merge_min_retain_percent": MergeMinRetainPercent,
-				"merge_min_output_runes":   mergeRetainFloor(contents),
-			})
-		}
 		return nil, nil
 	}
 	recordInputs(contents)
@@ -57,18 +43,24 @@ func mergeInternal(ctx context.Context, contents []string, report bool) ([]strin
 	user := joinContents(contents)
 	lastOutputRunes := 0
 	var lastErr error
+
+	// 合并是一次独立的模型调用：自己开一段实况，成功后由 defer 收尾。
+	// 重试留在同一轮里，多组合并则是同一智能体的多轮记录，不与调用方（对话者等）合流。
+	agentbase.BeginLive(RoleName)
+	defer agentbase.EndLive(RoleName)
+
 	for attempt := 0; attempt <= ModelRetry; attempt++ {
 		system := mergeSystemPrompt
 		if persona := agentbase.PromptText(promptRole); persona != "" {
 			system = persona + "\n\n## 本次任务\n\n" + system
 		}
 		reply, err := agentbase.Stream(ctx, agentbase.StreamRequest{
-			Agent:     AgentID,
-			Role:      RoleName,
-			Messages:  messagesOf(system, user),
-			Model:     config.AgentMultimodalModel,
-			NonStream: true,
-			Silent:    true,
+			Agent:      AgentID,
+			Role:       RoleName,
+			Messages:   messagesOf(system, user),
+			Model:      config.AgentMultimodalModel,
+			NonStream:  true,
+			ManageLive: true,
 		})
 		if err != nil {
 			lastErr = err

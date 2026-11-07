@@ -54,7 +54,7 @@ func TestMenuGroupsAndKeysSequential(t *testing.T) {
 func TestToolsScreenRendersCatalog(t *testing.T) {
 	SetToolCatalogHook(func() []agentinfo.Agent {
 		return []agentinfo.Agent{{
-			ID: "demo", Name: "演示智能体", Source: "agents/Demo",
+			ID: "demo", Name: "演示智能体",
 			Tools: []agentinfo.Tool{
 				{Name: "demo_tool", Description: "这是一个用于验证工具列表展示的演示工具。"},
 			},
@@ -78,15 +78,15 @@ func TestToolsScreenCountsOnlyRealAgents(t *testing.T) {
 	SetToolCatalogHook(func() []agentinfo.Agent {
 		return []agentinfo.Agent{
 			{
-				ID: "demo", Name: "演示智能体", Source: "agents/Demo", Kind: agentinfo.KindAgent,
+				ID: "demo", Name: "演示智能体", Kind: agentinfo.KindAgent,
 				Tools: []agentinfo.Tool{{Name: "demo_tool", Description: "演示工具。"}},
 			},
 			{
-				ID: "creative", Name: "自由创作", Source: "chain/creation", Kind: agentinfo.KindChain,
+				ID: "creative", Name: "自由创作", Kind: agentinfo.KindChain,
 				Tools: []agentinfo.Tool{{Name: "creator", Description: "创作链工具。"}},
 			},
 			{
-				ID: "archive_reader", Name: "归档解析", Source: "executors/ArchiveReader", Kind: agentinfo.KindExecutor,
+				ID: "archive_reader", Name: "归档解析", Kind: agentinfo.KindExecutor,
 				Tools: []agentinfo.Tool{{Name: "archive_list", Description: "归档解析工具。"}},
 			},
 		}

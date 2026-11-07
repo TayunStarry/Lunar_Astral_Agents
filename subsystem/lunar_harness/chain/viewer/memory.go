@@ -7,40 +7,8 @@ package viewer
 import (
 	"strings"
 
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
-
-// recentMemoryText 把近期观感与两个单槽渲染成提示词材料（最多 limit 条）。
-func recentMemoryText(limit int) string {
-	lines := make([]string, 0, viewerstore.ObservationMax+2)
-	observations, err := viewerstore.LoadObservations()
-	if err != nil {
-		logger.Warn("BilibiliViewer", "读取观影记忆失败: %v", err)
-	}
-	for _, obs := range observations {
-		lines = append(lines, "[印象]"+observationText(obs))
-	}
-	if value, _, ok, _ := viewerstore.LoadProfile(); ok && strings.TrimSpace(value) != "" {
-		lines = append(lines, "[习惯]"+viewerstore.SelectionMarker+value)
-	}
-	if value, _, ok, _ := viewerstore.LoadStance(); ok && strings.TrimSpace(value) != "" {
-		lines = append(lines, "[评价]"+viewerstore.StanceMarker+value)
-	}
-	if limit <= 0 || limit > len(lines) {
-		limit = len(lines)
-	}
-	return strings.Join(lines[len(lines)-limit:], "\n")
-}
-
-// memoryMaterial 记忆注入的统一格式（无记忆时返回空串）。
-func memoryMaterial(limit int) string {
-	text := recentMemoryText(limit)
-	if text == "" {
-		return ""
-	}
-	return "## 我的观影记忆\n\n" + text + "\n\n（以上是我之前的观影记忆，可作为写作背景；不要照抄。）"
-}
 
 // cleanMemoryText 去掉机械过程行，只保留人格化的正文。
 func cleanMemoryText(text string) string {
@@ -65,27 +33,6 @@ func cleanMemoryText(text string) string {
 		return ""
 	}
 	return out
-}
-
-// observationText 把一条观感渲染成提示词中的一行。
-func observationText(obs viewerstore.Observation) string {
-	parts := make([]string, 0, 6)
-	if obs.Title != "" {
-		parts = append(parts, "《"+obs.Title+"》")
-	}
-	if obs.URL != "" {
-		parts = append(parts, obs.URL)
-	}
-	if obs.Topics != "" {
-		parts = append(parts, "主题："+obs.Topics)
-	}
-	if obs.Tone != "" {
-		parts = append(parts, "氛围："+obs.Tone)
-	}
-	if obs.Conclusion != "" {
-		parts = append(parts, obs.Conclusion)
-	}
-	return truncate(strings.Join(parts, "｜"), viewerstore.TextMaxRunes)
 }
 
 // normalizeDynamic 清理动态正文：去掉代码块/列表符号与多余空行，控制长度。

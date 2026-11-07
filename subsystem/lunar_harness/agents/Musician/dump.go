@@ -98,17 +98,17 @@ func resetRun() string {
 	lastRun = nil
 	lastRunMu.Unlock()
 	if had {
-		return "已清空演奏者的最近一次演奏记录"
+		return "已清空" + roleLabel + "的最近一次演奏记录"
 	}
-	return "演奏者当前没有演奏记录"
+	return roleLabel + "当前没有演奏记录"
 }
 
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          agentID,
-		Label:       "演奏者",
+		Label:       roleLabel,
 		Group:       "Go 智能体",
-		Description: "演奏者最近一次创作描述、曲目与错误",
+		Description: roleLabel + "最近一次创作描述、曲目与错误",
 		Export:      exportContext,
 	})
 }

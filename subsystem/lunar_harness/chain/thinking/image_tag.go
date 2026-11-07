@@ -4,35 +4,35 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
+	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
-// 支持的视频文件扩展名
-var videoFormatsExtensions = []string{".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv"}
+// 视觉读取 URL 的句柄参数
+var tagParamRegex = regexp.MustCompile(`[?&]tag=([^&]+)`)
 
-var (
-	tagParamRegex = regexp.MustCompile(`[?&]tag=([^&]+)`)
-	imageExtRegex = regexp.MustCompile(`^\.[a-z0-9]{2,5}$`)
-	dataMimeRegex = regexp.MustCompile(`^data:image/(\w+)[;,]`)
-)
-
-// guessImageExt 按来源推断图片扩展名
-func guessImageExt(source string) string {
-	lower := strings.ToLower(source)
-	if match := dataMimeRegex.FindStringSubmatch(lower); match != nil {
-		if match[1] == "jpeg" {
-			return ".jpg"
-		}
-		return "." + match[1]
+// imageNameFor 由统一分类入口给出图片文件名：类型与扩展名都不在消费侧按来源猜。
+//
+// 来源声明了 MIME 时交给分类层用 MIME 归一（data URI 头部或调用方传入）；
+// 否则用调用方声明的图片类型配合来源扩展名。扩展名缺失时保持为空，
+// 由入库阶段的分类器按文件头补齐。
+func imageNameFor(source, kindHint, mimeType string) string {
+	mimeType = strings.TrimSpace(mimeType)
+	if mimeType == "" {
+		mimeType = mediaobject.MIMETypeOfDataURI(source)
 	}
-	path := lower
-	if cut := strings.IndexAny(path, "?#"); cut >= 0 {
-		path = path[:cut]
+	in := resource.ClassifyInput{
+		SourceKind: classifySourceKind(source),
+		Source:     source,
 	}
-	ext := path[strings.LastIndex(path, "."):]
-	if imageExtRegex.MatchString(ext) {
-		return ext
+	if mimeType != "" {
+		in.MIME = mimeType
+	} else {
+		in.KindHint = kindHint
 	}
-	return ".png"
+	classified := resource.Classify(in)
+	return "image" + classified.Ext
 }
 
 // handleFromVisionURL 从视觉读取 URL 的 tag 参数解析句柄
@@ -49,47 +49,4 @@ func handleFromVisionURL(source string) string {
 		return ""
 	}
 	return tag
-}
-
-func hasVideoExt(source string) bool {
-	for _, ext := range videoFormatsExtensions {
-		if strings.HasSuffix(source, ext) {
-			return true
-		}
-	}
-	return false
-}
-
-// sanitizeImageDesc 规整图片描述，保证可安全嵌入占位
-func sanitizeImageDesc(raw string, maxChars int) string {
-	text := strings.Join(strings.Fields(raw), " ")
-	if text == "" {
-		return ""
-	}
-	text = strings.TrimLeft(text, "「『\"'“”‘’")
-	text = strings.TrimRight(text, "」』\"'“”‘’")
-	text = strings.TrimSpace(text)
-	replacer := strings.NewReplacer("[", "", "]", "", "【", "", "】", "", "〔", "", "〕", "", "（", "", "）", "", "(", "", ")", "")
-	text = replacer.Replace(text)
-	text = strings.TrimSpace(text)
-	text = strings.TrimLeft(text, "，。、；：,.!?！？~～…-")
-	text = strings.TrimRight(text, "，。、；：,.!?！？~～…-")
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return ""
-	}
-	runes := []rune(text)
-	if len(runes) > maxChars {
-		return strings.TrimSpace(string(runes[:maxChars])) + "…"
-	}
-	return text
-}
-
-// composeImagePlaceholder 组装降级占位文本
-func composeImagePlaceholder(tag, desc string) string {
-	clean := sanitizeImageDesc(desc, 40)
-	if clean == "" {
-		return "[" + tag + "]"
-	}
-	return "[" + tag + "]（" + clean + "）"
 }

@@ -12,6 +12,7 @@ import (
 	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
 	"LunarSubsystem/LunarHarness/protocol/modellease"
@@ -98,10 +99,10 @@ func initNapcatBridge() {
 		}
 	}
 
-	// 语音/音频地址包装为媒体URL内容项，按到达顺序写入统一未读队列
-	DialogueBridging.SendAudioToAgent = func(urls []string) {
-		for _, url := range urls {
-			thinking.EnqueueAudioURL(url, "qq")
+	// 音频多模态对象按到达顺序写入统一未读队列
+	DialogueBridging.SendAudioToAgent = func(objects []mediaobject.Object) {
+		for _, object := range objects {
+			thinking.EnqueueAudioObject(object, "qq")
 		}
 	}
 

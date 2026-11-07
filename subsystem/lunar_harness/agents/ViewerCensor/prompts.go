@@ -14,7 +14,7 @@ import (
 func loadPrompt(name string) string {
 	data, err := prompts.Read(name)
 	if err != nil {
-		logger.Error("CrystalAstral", "观影者-审查读取提示词 %s 失败: %v", name, err)
+		logger.Error("CrystalAstral", Role+"读取提示词 %s 失败: %v", name, err)
 		return ""
 	}
 	return strings.TrimSpace(string(data))

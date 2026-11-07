@@ -115,7 +115,6 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 	if err != nil {
 		runSession.addError(err)
 		saveRoundFailure(callID, mode, runSession.errs)
-		runSession.writeTrace(instruction, planResult{}, nil, "规划失败："+err.Error())
 		logger.Warn(Module, "[%s] 规划失败: %v", flowLabel, err)
 		// 失败上报由创作规划者智能体内部完成（归属 ID：creator）
 		return TaskResult{}, err
@@ -137,7 +136,6 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 		LastSummary: summary,
 	}
 	saveRoundJournal(callID, mode, next)
-	runSession.writeTrace(instruction, plan, results, summary)
 	// 本轮创作完成：标记事项结束，并立即刷新「我刚刚在干的事情」。
 	if planned != nil {
 		finishPlan(*planned)
@@ -185,24 +183,4 @@ func rollbackErrorCount(records []fileflow.Record) int {
 		}
 	}
 	return count
-}
-
-// writeTrace 把完整流程记录写入快照目录（两种模式都写，供追溯；不参与下一轮上下文）。
-func (s *session) writeTrace(instruction string, plan planResult, results []stepResult, summary string) {
-	if s.flow == nil {
-		return
-	}
-	trace := map[string]any{
-		"mode":        s.flow.Mode,
-		"flow_id":     s.flow.FlowID,
-		"instruction": instruction,
-		"plan":        plan,
-		"results":     results,
-		"operations":  s.flow.Records,
-		"errors":      s.flow.Errors,
-		"summary":     summary,
-	}
-	if err := fileflow.WriteTrace(s.flow.FlowID, trace); err != nil {
-		logger.Warn(Module, "[自由创作] 流程追踪写入失败: %v", err)
-	}
 }

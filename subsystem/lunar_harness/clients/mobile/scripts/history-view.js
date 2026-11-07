@@ -3,13 +3,23 @@
  *
  * 数据来源与桌面端一致：思维链写入的 database/messages.json（桌面端 loadPersistedMessages 读取同一文件）。
  * 渲染只做移动端必要的展示层，媒体与播放能力复用共享组件：
+ * - 内容块：/shared/core/message-view.js（图片 / 视频 / 音频 / 语音 / 文件 / 音乐卡）
  * - 音乐卡：window.LunarMusicPlayer（/reliance/music_player）
  * - 图片预览：window.previewImage（multimedia_preview）
  * - 语音重播：AudioQueue（./tts.js）
- * - Markdown：window.marked（/reliance/marked.min.js）
  */
 
 import { AudioQueue } from './tts.js';
+import {
+	buildTextBlock,
+	buildImageBlock,
+	buildVideoBlock,
+	buildAudioBlock,
+	buildVoiceTranscriptBlock,
+	buildAudioReplay,
+	buildMusicCard,
+	buildFileAttachmentBlock
+} from '/shared/core/message-view.js';
 
 // 历史记录接口（与桌面端 MESSAGE_FILE_PATH 保持一致）
 const HISTORY_ENDPOINT = '/file/read/database/messages.json';
@@ -104,9 +114,11 @@ export class HistoryView {
 	/**
 	 * 实时消息到达：先进入列表，再交给调用方播报。
 	 * 这里不依赖任何音频事件；历史视图未打开时只留在内存，打开时随首屏渲染。
+	 * 用户消息可携带 status（sending / failed / sent），用于乐观渲染的发送状态标记。
 	 */
 	appendLive(record) {
 		if (!record) return;
+		if (!record.id) record.id = `live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 		this.live.push(record);
 		// 长驻页面兜底：实时记录只保留最近 50 条，避免 base64 音频长期驻留内存
 		if (this.live.length > 50) this.live.splice(0, this.live.length - 50);
@@ -119,6 +131,41 @@ export class HistoryView {
 		const stickToBottom = this.isNearBottom();
 		this.listEl.appendChild(this.buildItem(record));
 		if (stickToBottom) this.scrollEl.scrollTop = this.scrollEl.scrollHeight;
+	}
+
+	/**
+	 * 更新实时消息的发送状态（乐观渲染：发送中 → 已发送 / 失败）
+	 *
+	 * 只改状态行，不整条重绘：失败时保留用户已输入的内容与附件预览，
+	 * 输入框内容也由调用方保留，用户可直接重试。
+	 *
+	 * @param {string} id - appendLive 返回记录上的 id
+	 * @param {'sending'|'failed'|'sent'} status - 目标状态
+	 */
+	updateLiveStatus(id, status) {
+		if (!id) return;
+		const record = this.live.find(item => item && item.id === id);
+		if (!record) return;
+		record.status = status;
+		const item = this.listEl?.querySelector(`.history-item[data-id="${id}"]`);
+		if (!item) return;
+		let line = item.querySelector('.history-send-status');
+		if (status === 'sent') {
+			line?.remove();
+			item.classList.remove('is-send-failed');
+			return;
+		}
+		if (!line) {
+			line = document.createElement('div');
+			line.className = 'history-send-status';
+			item.appendChild(line);
+		}
+		line.textContent = status === 'failed' ? '发送失败' : '发送中…';
+		item.classList.toggle('is-send-failed', status === 'failed');
+		if (status === 'failed') {
+			// 失败状态尽量让用户一眼看到（用户消息气泡在列表底部）
+			this.scrollEl && (this.scrollEl.scrollTop = this.scrollEl.scrollHeight);
+		}
 	}
 
 	/** 渲染最新一页，并滚到底部 */
@@ -193,6 +240,11 @@ export class HistoryView {
 		const role = msg.role === 'user' ? 'user' : 'assistant';
 		const item = document.createElement('div');
 		item.className = `history-item is-${role}`;
+		if (msg.id) item.dataset.id = msg.id;
+		if (msg.status === 'sending' || msg.status === 'failed') {
+			item.classList.add('is-send-pending');
+			if (msg.status === 'failed') item.classList.add('is-send-failed');
+		}
 
 		const meta = document.createElement('div');
 		meta.className = 'history-meta';
@@ -216,102 +268,53 @@ export class HistoryView {
 		if (media) item.appendChild(media);
 
 		if (hasMusic && window.LunarMusicPlayer) {
-			item.appendChild(window.LunarMusicPlayer.createCard({
-				title: msg.musicTitle || '月华演奏曲',
-				summary: msg.musicSummary || '',
-				duration: Number(msg.musicDuration) || 0,
-				audio: String(msg.musicAudio || msg.audio || '')
-			}));
+			const card = buildMusicCard(msg);
+			if (card) item.appendChild(card);
 		}
 
 		// 语音重播：音乐消息的 audio 属于演奏音频，已由音乐卡承载
-		if (msg.audio && !hasMusic) item.appendChild(this.buildVoice(msg.audio));
+		if (msg.audio && !hasMusic) {
+			item.appendChild(buildAudioReplay({
+				audio: msg.audio,
+				onReplay: (audio) => AudioQueue.enqueue(audio)
+			}));
+		}
+
+		// 乐观渲染的发送状态（发送中 / 发送失败）
+		if (msg.status === 'sending' || msg.status === 'failed') {
+			const status = document.createElement('div');
+			status.className = 'history-send-status';
+			status.textContent = msg.status === 'failed' ? '发送失败' : '发送中…';
+			item.appendChild(status);
+		}
 		return item;
 	}
 
 	buildText(raw, role) {
-		const div = document.createElement('div');
-		div.className = 'history-text';
-		// 用户原文按纯文本展示；助手正文复用桌面端同一份 marked 渲染
-		if (role === 'user' || !window.marked) {
-			div.classList.add('is-plain');
-			div.textContent = raw;
-			return div;
-		}
-		try {
-			const html = window.marked.parse(raw);
-			if (typeof html === 'string') div.innerHTML = html;
-			else {
-				div.classList.add('is-plain');
-				div.textContent = raw;
-			}
-		} catch (error) {
-			div.classList.add('is-plain');
-			div.textContent = raw;
-		}
-		return div;
+		// 用户原文按纯文本展示；助手正文复用共享 Markdown 渲染
+		return buildTextBlock(raw, {
+			className: 'history-text',
+			isPlain: role === 'user',
+			processThink: false
+		});
 	}
 
-	/** 图片 / 视频 / 附件块 */
+	/** 图片 / 视频 / 附件块（内容块由共享层构建，这里只保留移动端媒体容器） */
 	buildMedia(msg) {
 		const wrap = document.createElement('div');
 		wrap.className = 'history-media';
-		if (msg.imageSrc) wrap.appendChild(this.buildImage(msg.imageSrc, msg.imageLabel || '图片'));
-		if (msg.videoSrc) wrap.appendChild(this.buildVideo(msg.videoSrc));
+		if (msg.imageSrc) wrap.appendChild(buildImageBlock({ src: msg.imageSrc, label: msg.imageLabel || '图片' }));
+		if (msg.videoSrc) wrap.appendChild(buildVideoBlock({ src: msg.videoSrc }));
 		(msg.attachments || []).forEach(att => {
 			if (!att) return;
-			if (att.type === 'image') wrap.appendChild(this.buildImage(att.src, att.label || '图片'));
-			else if (att.type === 'video') wrap.appendChild(this.buildVideo(att.src));
+			if (att.type === 'image') wrap.appendChild(buildImageBlock({ src: att.src, label: att.label || '图片' }));
+			else if (att.type === 'video') wrap.appendChild(buildVideoBlock({ src: att.src }));
 			else if (att.type === 'audio') {
-				if (att.src) wrap.appendChild(this.buildAudio(att.src));
-				else wrap.appendChild(this.buildTranscript(att));
+				if (att.src) wrap.appendChild(buildAudioBlock({ src: att.src, preload: 'metadata' }));
+				else wrap.appendChild(buildVoiceTranscriptBlock(att));
 			}
+			else if (att.type === 'file') wrap.appendChild(buildFileAttachmentBlock(att));
 		});
 		return wrap.childElementCount ? wrap : null;
-	}
-
-	buildImage(src, label) {
-		const img = document.createElement('img');
-		img.src = src;
-		img.alt = label || '图片';
-		img.loading = 'lazy';
-		img.addEventListener('click', () => {
-			if (typeof window.previewImage === 'function') window.previewImage(src, label || '图片');
-		});
-		return img;
-	}
-
-	buildVideo(src) {
-		const video = document.createElement('video');
-		video.src = src;
-		video.controls = true;
-		video.playsInline = true;
-		video.preload = 'metadata';
-		return video;
-	}
-
-	buildAudio(src) {
-		const audio = document.createElement('audio');
-		audio.src = src;
-		audio.controls = true;
-		audio.preload = 'metadata';
-		return audio;
-	}
-
-	buildTranscript(att) {
-		const box = document.createElement('div');
-		box.className = 'history-transcript';
-		box.textContent = att.text || '（这段语音没有可用的转写文本）';
-		return box;
-	}
-
-	buildVoice(audio) {
-		const btn = document.createElement('button');
-		btn.type = 'button';
-		btn.className = 'history-voice';
-		btn.title = '重播语音';
-		btn.innerHTML = '<i class="fas fa-play"></i><span>重播语音</span>';
-		btn.addEventListener('click', () => AudioQueue.enqueue(audio));
-		return btn;
 	}
 }

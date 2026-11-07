@@ -1,6 +1,6 @@
 package Musician
 
-// dump_test.go 演奏者的导出与修复登记：Inspect 必须读自己的上下文。
+// dump_test.go 演奏者的导出与诊断登记：Inspect 必须读自己的上下文。
 
 import (
 	"strings"
@@ -31,16 +31,5 @@ func TestRepairInspectUsesOwnContext(t *testing.T) {
 	}
 	if strings.Contains(out, `"lunar"`) {
 		t.Fatalf("Inspect 不应回落到对话者上下文: %s", out)
-	}
-
-	if msg, rerr := agentrepair.Repair(agentID, "reset", nil); rerr != nil || !strings.Contains(msg, "已清空") {
-		t.Fatalf("reset 失败: msg=%q err=%v", msg, rerr)
-	}
-	after, err := agentrepair.Inspect(agentID, 0)
-	if err != nil {
-		t.Fatalf("reset 后 Inspect 仍应可用: %v", err)
-	}
-	if strings.Contains(after, "last_run") {
-		t.Fatalf("reset 后不应再带执行记录: %s", after)
 	}
 }

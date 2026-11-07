@@ -274,30 +274,3 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-
-/* 语音转写块（音频不再落盘，历史消息以描述呈现） */
-.voice-transcript {
-    margin-top: 6px;
-    padding: 8px 10px;
-    background: rgba(0, 0, 0, 0.12);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--glass-border);
-}
-
-.voice-transcript-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.76rem;
-    font-weight: 600;
-    color: var(--accent-color);
-    margin-bottom: 4px;
-}
-
-.voice-transcript-text {
-    font-size: 0.82rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-word;
-}

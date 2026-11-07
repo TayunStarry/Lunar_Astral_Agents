@@ -42,7 +42,7 @@ func (s *session) paint(params GenerateImageParams, label string) string {
 		params.Steps, params.Strength, params.CfgScale, params.Seed, params.InitImg, params.SuperResolution,
 	)
 	if err != nil {
-		logger.Error(module, "[绘制者] %s失败: %v", label, err)
+		logger.Error(module, "["+roleLabel+"] %s失败: %v", label, err)
 		return label + "失败: " + err.Error()
 	}
 	base64Data, _ := result["base64"].(string)
@@ -179,15 +179,18 @@ func (s *session) portraitPreset(args map[string]any) PortraitPreset {
 		defaultRatioValue = "2:3"
 	}
 	templates := s.prompts.Templates
-	if raw == "月华" {
-		return PortraitPreset{Kind: raw, Chibi: chibi, Label: "月华" + map[bool]string{true: "Q版", false: "全尺寸"}[chibi] + "自画像", Template: pick(chibi, templates["chibiSelf"], templates["fullSelf"]), Base: s.prompts.Builtin["月华"].Appearance, Outfit: pick(chibi, templates["defaultOutfitChibi"], templates["defaultOutfitFull"]), Gender: "女孩", DefaultRatio: defaultRatioValue}
-	}
-	if raw == "琉璃" {
-		return PortraitPreset{Kind: raw, Chibi: chibi, Label: "琉璃" + map[bool]string{true: "Q版", false: "全尺寸"}[chibi] + "立绘", Template: pick(chibi, templates["crystalChibi"], templates["crystalFull"]), Base: s.prompts.Builtin["琉璃"].Appearance, Outfit: pick(chibi, templates["crystalOutfitChibi"], templates["crystalOutfitFull"]), Gender: "女孩", DefaultRatio: defaultRatioValue}
+	if profile, ok := s.prompts.Builtin[raw]; ok {
+		template := pick(chibi, templates["crystalChibi"], templates["crystalFull"])
+		label := raw + map[bool]string{true: "Q版", false: "全尺寸"}[chibi] + "立绘"
+		if raw == "月华" {
+			template = pick(chibi, templates["chibiSelf"], templates["fullSelf"])
+			label = "月华" + map[bool]string{true: "Q版", false: "全尺寸"}[chibi] + "自画像"
+		}
+		return PortraitPreset{Kind: raw, Chibi: chibi, Label: label, Template: template, Base: profile.Appearance, Outfit: characterOutfit(profile.CustomCharacterProfile, chibi), Gender: "女孩", DefaultRatio: defaultRatioValue}
 	}
 	if custom, ok := s.custom[raw]; ok {
 		profile := CharacterProfile{CustomCharacterProfile: custom, Builtin: false}
-		return PortraitPreset{Kind: raw, Chibi: chibi, Label: raw + map[bool]string{true: "Q版", false: "全尺寸"}[chibi] + "立绘", Template: pick(chibi, templates["genericChibi"], templates["genericFull"]), Base: profile.Appearance, Outfit: characterOutfit(profile, chibi), Gender: map[bool]string{true: "男孩", false: "女孩"}[profile.Gender == "男"], DefaultRatio: defaultRatioValue}
+		return PortraitPreset{Kind: raw, Chibi: chibi, Label: raw + map[bool]string{true: "Q版", false: "全尺寸"}[chibi] + "立绘", Template: pick(chibi, templates["genericChibi"], templates["genericFull"]), Base: profile.Appearance, Outfit: characterOutfit(custom, chibi), Gender: map[bool]string{true: "男孩", false: "女孩"}[profile.Gender == "男"], DefaultRatio: defaultRatioValue}
 	}
 	male := raw == "通用-男"
 	named := ""
@@ -486,11 +489,10 @@ func groupMemberAppearance(profiles map[string]CharacterProfile, role string, ch
 	if !ok {
 		return role
 	}
-	outfit := ""
 	if withOutfit {
-		outfit = "，" + characterOutfit(profile, chibi)
+		return profile.Name + "，" + profile.Look(chibi)
 	}
-	return profile.Name + "，" + profile.Appearance + outfit
+	return profile.Name + "，" + profile.Appearance
 }
 
 func defaultGroupPlanning(roles []string, chibi bool, profiles map[string]CharacterProfile, library *PromptLibrary) string {
@@ -500,7 +502,7 @@ func defaultGroupPlanning(roles []string, chibi bool, profiles map[string]Charac
 		if !ok {
 			continue
 		}
-		entries = append(entries, profile.Name+"："+library.randomExpression()+"，"+library.randomPosture()+"，"+characterOutfit(profile, chibi))
+		entries = append(entries, profile.Name+"："+library.randomExpression()+"，"+library.randomPosture()+"，"+characterOutfit(profile.CustomCharacterProfile, chibi))
 	}
 	return strings.Join(entries, "；")
 }

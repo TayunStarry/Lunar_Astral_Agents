@@ -171,7 +171,7 @@ func (m appModel) viewTools() string {
 		agent := m.tools.agents[entry.agentIndex]
 		var block []string
 		if entry.agentIndex != lastAgent {
-			title := agent.Name + " · " + agent.Source
+			title := agent.Name
 			if label := kindLabel(agent.Kind); label != "" {
 				title += " · " + label
 			}

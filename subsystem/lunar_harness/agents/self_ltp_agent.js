@@ -118,6 +118,26 @@
     }
 
 
+    /**
+     * 截图信封：截图恒为 PNG，按 data URI 声明的 MIME 落到 image_static；
+     * 若截图产出 gif/apng，自动改发 image_animated。
+     */
+    function screenshotEnvelope(shot) {
+        var url = String((shot && shot.dataUrl) || '');
+        var match = /^data:([^;,]+)/i.exec(url);
+        var mime = match ? match[1].toLowerCase() : 'image/png';
+        var type = (mime === 'image/gif' || mime === 'image/apng') ? 'image_animated' : 'image_static';
+        var envelope = { type: type };
+        envelope[type] = { source: 'client_upload', url: url, mime: mime, name: 'viewport.' + (mime.split('/')[1] || 'png') };
+        return envelope;
+    }
+
+    /** 是否为图片信封（静态图 / 动图） */
+    function isImageEnvelopePart(part) {
+        return !!part && (part.type === 'image_static' || part.type === 'image_animated');
+    }
+
+
     /* ---------------- 工具定义（OpenAI function calling 格式） ----------------
        每个工具 = 一个具体原子操作。set_plan 用于计划，confirm_step 用于验证标记。 */
 
@@ -528,7 +548,7 @@
         var imageMsgIdx = [];
         messages.forEach(function (m, i) {
             if (m && m.role === 'user' && Array.isArray(m.content)) {
-                var hasImg = m.content.some(function (p) { return p && p.type === 'image_url'; });
+                var hasImg = m.content.some(function (p) { return isImageEnvelopePart(p); });
                 if (hasImg) imageMsgIdx.push(i);
             }
         });
@@ -537,7 +557,7 @@
         imageMsgIdx.forEach(function (i) {
             if (i === keep) return;
             messages[i].content = messages[i].content.map(function (p) {
-                if (p && p.type === 'image_url') {
+                if (isImageEnvelopePart(p)) {
                     return { type: 'text', text: '（较早的视口截图已省略，以最新截图为准）' };
                 }
                 if (p && p.type === 'text' && typeof p.text === 'string') {
@@ -588,7 +608,7 @@
             const shot = await captureScreenshotBounded(elems);
 
             const stepParts = [{ type: 'text', text: buildContextText(step, elems, shot) }];
-            if (shot && shot.dataUrl) stepParts.push({ type: 'image_url', image_url: { url: shot.dataUrl } });
+            if (shot && shot.dataUrl) stepParts.push(screenshotEnvelope(shot));
             messages.push({ role: 'user', content: stepParts });
             trimOldScreenshots(messages);
 

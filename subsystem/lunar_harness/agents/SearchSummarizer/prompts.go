@@ -17,7 +17,7 @@ import (
 func loadPromptPair(name string) (string, string) {
 	data, err := prompts.Read(name)
 	if err != nil {
-		logger.Error("CrystalAstral", "搜索者-摘要读取提示词 %s 失败: %v", name, err)
+		logger.Error("CrystalAstral", modelRole+"读取提示词 %s 失败: %v", name, err)
 		return "", ""
 	}
 	raw := strings.TrimSpace(string(data))

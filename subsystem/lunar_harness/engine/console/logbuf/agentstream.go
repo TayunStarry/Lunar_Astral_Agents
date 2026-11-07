@@ -58,18 +58,34 @@ func StreamTool(role, name, args string) {
 	emitStream(StreamEvent{Role: role, Kind: KindTool, Text: entry})
 }
 
-// attachTurnLocked 把增量/工具挂到合适的轮次上（需持有 streamMu）：
-// 有进行中的轮次就挂它；否则挂到最近归档的一轮；都没有时返回 nil（只发事件，不造轮）。
+// attachTurnLocked 把增量/工具挂到**本角色自己的**轮次上（需持有 streamMu）：
+// 优先进行中且角色相同的轮次；其次最近归档的同角色轮次（迟到事件）；
+// 角色为空时按旧的「当前轮 → 最近一轮」兜底；没有匹配时返回 nil（只发事件，不造轮）。
+//
+// 为什么必须按角色匹配：记忆合并整理等调用在别的智能体轮次结束之后才发起，
+// 过去一律挂到「当前/最近一轮」，于是整段文本被拼进对话者的条目里，实况屏上看不出
+// 这是另一次独立的模型调用。按角色隔离后，各智能体只会写自己的条目。
 //
 // 为什么不在 currentTurn 为空时新建轮次：历史上这样造出来的「幽灵轮次」没有结束事件，
 // 实况屏会把它当成永远进行中的一轮（界面上就是一条工具调用挂着"进行中"不下来），
 // 而当轮的思考/正文却留在了上一轮里，导出（transcript）也会多出若干只有工具的空轮次。
-func attachTurnLocked(_ string) *AgentTurn {
-	if currentTurn != nil {
+func attachTurnLocked(role string) *AgentTurn {
+	if role == "" {
+		if currentTurn != nil {
+			return currentTurn
+		}
+		if n := len(turnHistory); n > 0 {
+			return turnHistory[n-1]
+		}
+		return nil
+	}
+	if currentTurn != nil && currentTurn.Role == role {
 		return currentTurn
 	}
-	if n := len(turnHistory); n > 0 {
-		return turnHistory[n-1]
+	for i := len(turnHistory) - 1; i >= 0; i-- {
+		if turnHistory[i].Role == role {
+			return turnHistory[i]
+		}
 	}
 	return nil
 }
@@ -79,11 +95,14 @@ func StreamToolResult(role, summary string) {
 	emitStream(StreamEvent{Role: role, Kind: KindToolResult, Text: summary})
 }
 
-// StreamEnd 标记模型调用结束（落历史轮次）
+// StreamEnd 标记模型调用结束（落历史轮次）。
+//
+// 只结束本角色自己的进行中轮次：角色不匹配时不动缓冲（仍发结束事件），
+// 避免一个智能体的收尾把另一个智能体还在写的轮次提前归档。
 func StreamEnd(role string) {
 	streamMu.Lock()
 	defer streamMu.Unlock()
-	if currentTurn != nil {
+	if currentTurn != nil && (role == "" || currentTurn.Role == role) {
 		currentTurn.Active = false
 		currentTurn.FinishedAt = time.Now()
 		archiveTurnLocked()

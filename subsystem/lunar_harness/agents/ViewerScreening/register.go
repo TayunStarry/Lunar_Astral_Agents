@@ -53,12 +53,11 @@ func init() {
 		ID:          AgentID,
 		Label:       Role,
 		Group:       "Go 智能体",
-		Description: "观影者-阅片最近一次视频印象（摘要 / 主题 / 情绪）",
+		Description: Role + "最近一次视频印象（摘要 / 主题 / 情绪）",
 		Export:      exportContext,
 	})
-	agentrepair.RegisterResettable(AgentID, Role,
-		"观影者-阅片的最近一次视频印象；reset 清空该记录",
-		resetScreeningState,
+	agentrepair.RegisterReadonly(AgentID, Role,
+		Role+"的最近一次视频印象（只读）",
 		func(int) (any, error) { return exportContext(false) })
 	toolreg.Register(AgentID,
 		toolreg.Schema{Name: "pick_keywords", Description: "综合指令、偏好、心情与记忆决定本轮选片关键词。"},
@@ -71,7 +70,7 @@ func init() {
 // ToolCatalog 返回阅片的阶段能力（阅片不使用 function calling）。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
-		ID: AgentID, Name: Role, Source: "agents/ViewerScreening",
+		ID: AgentID, Name: Role,
 		Note:  "观影者之一：只看画面与公开信息，产出视频印象、切片理解与观后感受。",
 		Tools: agentinfo.ToolsFromRegistry(AgentID),
 	}}
@@ -96,8 +95,8 @@ func resetScreeningState() string {
 	lastScreeningItem = nil
 	lastScreeningMu.Unlock()
 	if had {
-		logger.Info("CrystalAstral", "观影者-阅片最近印象记录已清空")
-		return "已清空观影者-阅片的最近印象记录"
+		logger.Info("CrystalAstral", Role+"最近印象记录已清空")
+		return "已清空" + Role + "的最近印象记录"
 	}
-	return "观影者-阅片当前没有印象记录"
+	return Role + "当前没有印象记录"
 }

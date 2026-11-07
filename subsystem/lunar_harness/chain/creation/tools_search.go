@@ -39,7 +39,9 @@ func (s *session) fetchResources(ctx context.Context, args map[string]any) toolO
 		return failure(toolFetchResources, errors.New(result.Error))
 	}
 	return toolOutcome{
-		JSON:      jsonText(map[string]any{"result": result.Text, "handle": result.Handle, "error": result.Error}),
+		// 直接回填资源正文：JSON 包装会把换行转义并可能在单条上限处被截成半截 JSON，
+		// 模型会误判为「没取到内容」而反复重取。正文头部已带句柄、行区间与总数。
+		JSON:      result.Text,
 		Summary:   previewRunes(result.Text, 512),
 		Reference: result.Text,
 	}

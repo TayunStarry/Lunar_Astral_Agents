@@ -14,7 +14,7 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
-// TestDialogueRegisteredAsRepairTarget 证明对话者的修复目标已进入拯救者可见清单。
+// TestDialogueRegisteredAsRepairTarget 证明对话者的诊断目标已进入拯救者可见清单。
 func TestDialogueRegisteredAsRepairTarget(t *testing.T) {
 	registered := false
 	for _, target := range agentrepair.List() {
@@ -23,26 +23,11 @@ func TestDialogueRegisteredAsRepairTarget(t *testing.T) {
 		}
 		registered = true
 		if target.Label == "" || target.Description == "" {
-			t.Fatalf("对话者修复目标缺少名称或描述: %#v", target)
-		}
-		actions := map[string]bool{"trim": false, "drop_images": false, "clear": false}
-		for _, action := range target.Actions {
-			if _, ok := actions[action]; ok {
-				actions[action] = true
-			}
-		}
-		for action, found := range actions {
-			if !found {
-				t.Fatalf("对话者修复目标缺少动作 %s（实得 %v）", action, target.Actions)
-			}
+			t.Fatalf("对话者诊断目标缺少名称或描述: %#v", target)
 		}
 	}
 	if !registered {
-		t.Fatal("agentrepair.List 中缺少 dialogue（误导者无法定位到对话者上下文）")
-	}
-	// 按 ID 能命中处理器：非法动作由处理器自身拒绝，说明 lookup 成功且不会产生副作用。
-	if _, err := agentrepair.Repair(dialogueAgentID, "no_such_action", nil); err == nil || !strings.Contains(err.Error(), "不支持动作") {
-		t.Fatalf("dialogue 修复入口不可用: %v", err)
+		t.Fatal("agentrepair.List 中缺少 dialogue（拯救者无法定位到对话者上下文）")
 	}
 }
 

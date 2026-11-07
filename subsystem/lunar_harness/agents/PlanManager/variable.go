@@ -2,17 +2,19 @@ package PlanManager
 
 // variable.go 计划管理智能体的常量与工具名（业务逻辑不得写在本文件）。
 
-import "time"
+import (
+	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
+)
 
 const (
 	// Module 日志模块名
-	Module = "计划管理"
+	Module = agentinfo.NamePlanManager
 	// roleLabel TUI 实况屏显示的角色标签
-	roleLabel = "计划管理"
+	roleLabel = agentinfo.NamePlanManager
 	// maxRounds 单条指令的工具循环上限
 	maxRounds = 5
-	// maxRepeats 同一工具调用重复上限
-	maxRepeats = 2
 	// maxToolResultRunes 单条工具结果回填上限
 	maxToolResultRunes = 3000
 	// modelTimeout 单次模型调用超时

@@ -187,7 +187,7 @@ func (s *session) persistShot(frame map[string]any, index int) string {
 	name := fmt.Sprintf("multimedia/screenshot_%d_%d.%s", time.Now().UnixMilli(), index, ext)
 	url, err := s.env.SaveImage(name, data)
 	if err != nil {
-		logger.Warn(module, "[截图者] 落盘失败: %v", err)
+		logger.Warn(module, "["+roleLabel+"] 落盘失败: %v", err)
 		return ""
 	}
 	return url

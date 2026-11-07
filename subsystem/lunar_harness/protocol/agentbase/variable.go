@@ -19,8 +19,6 @@ const (
 	maxResponseBodyBytes = 8 << 20
 	// defaultMaxRounds 默认工具循环上限
 	defaultMaxRounds = 10
-	// defaultMaxRepeats 默认工具调用重复上限
-	defaultMaxRepeats = 3
 	// defaultMaxToolResultRunes 默认单条工具结果回填上限
 	defaultMaxToolResultRunes = 6000
 
@@ -30,7 +28,7 @@ const (
 	FailureKindModel = "model_error"
 	// FailureKindContext 上下文超限或损坏
 	FailureKindContext = "context_overflow"
-	// FailureKindToolLoop 工具循环达到轮次上限或重复调用
+	// FailureKindToolLoop 工具循环达到轮次上限
 	FailureKindToolLoop = "tool_loop"
 	// FailureKindOutput 输出质量不达标（过短、解析失败、空内容）
 	FailureKindOutput = "output_quality"

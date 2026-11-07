@@ -6,7 +6,6 @@ package ViewerShare
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/viewbase"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
@@ -20,9 +19,6 @@ func Dynamic(ctx context.Context, in DynamicInput) (text string, err error) {
 		return "", fmt.Errorf("读取动态提示词失败")
 	}
 	system := withPersona(in.Persona, task)
-	if block := strings.TrimSpace(in.Memory); block != "" {
-		system += "\n\n" + block
-	}
 	text, err = viewbase.Chat(ctx, viewbase.ChatRequest{
 		Agent: AgentID, Role: Role, Model: in.Model, System: system, User: in.Material, Attempts: attempts,
 	})

@@ -19,7 +19,7 @@ func TestStatsScreenMergesFrontendSection(t *testing.T) {
 	out := m.View()
 	for _, want := range []string{
 		"运行状态", "前端窗口", "[1] 月华前端", "[2] 琉璃前端", "[3] 资源库",
-		"● 在线", "○ 离线", "桌面操纵智能体", "总上下文", "输入", "输出",
+		"● 在线", "○ 离线", "桌面操作智能体", "总上下文", "输入", "输出",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("运行状态屏缺少 %q:\n%s", want, out)

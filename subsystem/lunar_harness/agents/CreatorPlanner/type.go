@@ -3,8 +3,6 @@ package CreatorPlanner
 // type.go 创作规划者的对外类型：工具结果、工具处理函数与一次推理循环的请求。
 
 import (
-	"time"
-
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
@@ -32,12 +30,6 @@ type Request struct {
 	Handler Handler
 	// OnReference 把工具产生的参考资料写回链侧记录。
 	OnReference func(reference string)
-}
-
-// deniedTool 被智能修复临时禁用的工具。
-type deniedTool struct {
-	Reason string
-	Until  time.Time
 }
 
 // toolCallRecord 一次工具调用的有界记录。

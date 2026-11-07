@@ -75,18 +75,6 @@ func FinishRound(callID string, mode Mode, status, summary string, steps []Round
 	return nil
 }
 
-// ResetRounds 清空指定模式的调用轮次与步骤 / 错误 / 参考 / 备忘（change 与流式增量保留）。
-func ResetRounds(mode Mode) error {
-	db, err := deltaConn()
-	if err != nil {
-		return err
-	}
-	if _, err := db.Exec(`DELETE FROM `+callTable+` WHERE mode = ?`, string(mode)); err != nil {
-		return fmt.Errorf("清空调用轮次失败: %w", err)
-	}
-	return nil
-}
-
 // CleanupRounds 每种模式只保留最近 keep 轮调用；keep <= 0 时使用默认值。
 // 清理只影响调用轮次及其步骤 / 错误 / 参考 / 备忘，文件变更窗口与回退记录不受影响。
 func CleanupRounds(keep int) error {

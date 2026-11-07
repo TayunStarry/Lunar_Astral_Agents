@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	multimodal "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	persistence "LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
@@ -199,15 +199,24 @@ func buildUserRecord(content any) *CachedMessage {
 					pushAttachment("image", item.ImageURL.URL, "")
 					hasImage = true
 				}
-			case ContentVideoURL:
-				if item.VideoURL != nil {
-					pushAttachment("video", item.VideoURL.URL, "")
+			case ContentImageStatic:
+				if item.ImageStatic != nil {
+					pushAttachment("image", item.ImageStatic.Reference(), "")
 					hasImage = true
 				}
-			case ContentInputAudio:
-				// 音频不再落盘：正常情况下接入阶段已替换为 audio_handle；
-				// 兜底路径只记录语音分类，不写入任何音频实体。
-				if item.InputAudio != nil {
+			case ContentImageAnimated:
+				if item.ImageAnimated != nil {
+					pushAttachment("image", item.ImageAnimated.Reference(), "")
+					hasImage = true
+				}
+			case ContentVideo:
+				if item.Video != nil {
+					pushAttachment("video", item.Video.Reference(), "")
+					hasImage = true
+				}
+			case ContentAudio:
+				// 音频实体在接入阶段落盘并转写，缓存只记录语音分类
+				if item.Audio != nil {
 					attachments = append(attachments, CachedAttachment{Type: "audio", Label: "语音"})
 					hasVoice = true
 				}
@@ -219,11 +228,6 @@ func buildUserRecord(content any) *CachedMessage {
 						Handle: item.AudioHandle.Handle,
 						Text:   item.AudioHandle.Text,
 					})
-					hasVoice = true
-				}
-			case ContentAudioURL:
-				if item.AudioURL != nil {
-					pushAttachment("audio", item.AudioURL.URL, "语音")
 					hasVoice = true
 				}
 			case ContentQuote:
@@ -533,10 +537,23 @@ func cachedToContext(record CachedMessage) *PostMessage {
 		for _, attachment := range record.Attachments {
 			switch attachment.Type {
 			case "image":
-				// 历史重放只做句柄化，不现场提炼链接（提炼只发生在消息首次进入上下文时）
-				items = append(items, convertImageResource(attachment.Src, channelOrigin))
+				items = append(items, ContentItem{Type: ContentImageURL, ImageURL: &URLPayload{Type: mediaobject.TypeImageStatic, URL: attachment.Src}})
 			case "video":
-				items = append(items, ContentItem{Type: ContentText, Text: urlHandleText(attachment.Src, ".mp4", channelOrigin)})
+				// 历史缓存重放：视频只登记远程句柄，不重新下载落盘
+				if handleText := videoHandleText(attachment.Src, channelOrigin, true); handleText != "" {
+					items = append(items, ContentItem{Type: ContentText, Text: handleText})
+				}
+			case "audio":
+				if attachment.Handle != "" || attachment.Text != "" {
+					items = append(items, ContentItem{
+						Type:        ContentAudioHandle,
+						AudioHandle: &AudioHandlePayload{Handle: attachment.Handle, Text: attachment.Text},
+					})
+				} else if attachment.Src != "" {
+					if handleText := audioHandleText(attachment.Src, mediaName(attachment.Src, ".wav"), channelOrigin); handleText != "" {
+						items = append(items, ContentItem{Type: ContentText, Text: handleText})
+					}
+				}
 			}
 		}
 		if len(items) == 0 {
@@ -545,10 +562,12 @@ func cachedToContext(record CachedMessage) *PostMessage {
 			}
 			return nil
 		}
-		if len(items) == 1 && items[0].Type == ContentText {
-			return &PostMessage{Role: RoleUser, Content: items[0].Text}
+		// 历史重放与首次进入共用同一清洗入口；重放模式只登记视频句柄，不重新下载落盘
+		converted := convertMessageResources(PostMessage{Role: RoleUser, Content: items}, true)
+		if convertedItems := asItems(converted.Content); len(convertedItems) == 1 && convertedItems[0].Type == ContentText {
+			return &PostMessage{Role: RoleUser, Content: convertedItems[0].Text}
 		}
-		return &PostMessage{Role: RoleUser, Content: items}
+		return &PostMessage{Role: RoleUser, Content: converted.Content}
 	}
 	for _, category := range record.Categories {
 		if category == "image" || category == "action" || category == "music" {
@@ -560,25 +579,6 @@ func cachedToContext(record CachedMessage) *PostMessage {
 		return nil
 	}
 	return &PostMessage{Role: RoleAssistant, Content: text}
-}
-
-// isAnimatedImageSource 判定来源是否为动态图
-func isAnimatedImageSource(source string) (bool, error) {
-	cacheMu.Lock()
-	if value, ok := animatedHistoryCache[source]; ok {
-		cacheMu.Unlock()
-		return value, nil
-	}
-	cacheMu.Unlock()
-	data, err := resolveImageBytes(source)
-	if err != nil {
-		return false, err
-	}
-	animated := multimodal.IsAnimatedImage(data)
-	cacheMu.Lock()
-	animatedHistoryCache[source] = animated
-	cacheMu.Unlock()
-	return animated, nil
 }
 
 // initConversationCache 读取缓存文件并载入对话者上下文

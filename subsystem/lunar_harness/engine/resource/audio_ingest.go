@@ -1,13 +1,12 @@
 package resource
 
-// audio_ingest.go 音频接入：转码 → ASR 转写 → 登记悬空句柄。
+// audio_ingest.go 音频接入：落盘 audios → 强制类型校验 → 转码 → ASR 转写。
 //
-// 与图片 / 视频的 Admit 同级：音频在接入阶段完成理解（转写），
-// 句柄只保留「有描述、无实体」的记录；渲染侧只读取句柄的 ParseText。
+// 音频与其他模态共用同一套文件管理系统与句柄体系：实体按内容哈希去重落盘，
+// 转写结果写回同一句柄的 ParseText，渲染侧只读取句柄文本。
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -23,21 +22,50 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/modellease"
 )
 
-// IngestAudio 音频接入：转码 → ASR 转写 → 登记悬空句柄。
-// 返回规范句柄与包含转写的描述文本；音频本体在转码临时文件中使用后即销毁。
-func IngestAudio(source, name, origin string) (string, string, error) {
+// AdmitAudio 音频接入：落盘到 audios → 强制类型校验 → 转写 → 句柄携带转写文本。
+//
+// 音频与其他模态一样走统一文件管理系统（按内容哈希去重），转写结果写回同一句柄，
+// 不再创建「有描述、无实体」的第二套悬空句柄。
+func AdmitAudio(source, name, origin, declaredMIME, sourceKind string) (AdmitResult, string, error) {
 	source = strings.TrimSpace(source)
 	if source == "" {
-		return "", "", fmt.Errorf("音频来源为空")
+		return AdmitResult{}, "", fmt.Errorf("音频来源为空")
 	}
-	// 本机只读路由补全为服务地址，交给多模态转码器直接读取
-	if strings.HasPrefix(source, FileReadPrefix) {
-		source = config.LocalBaseURL() + source
+	admitted, err := Admit(AdmitInput{
+		SourceKind: sourceKind,
+		Source:     source,
+		Name:       name,
+		KindHint:   KindAudio,
+		MIME:       declaredMIME,
+		Origin:     origin,
+		Dedup:      true,
+	})
+	if err != nil {
+		return AdmitResult{}, "", err
 	}
-	wav, err := multimodal.AudioToWavBase64(source)
+	if admitted.BlobPath != "" {
+		if verifyErr := VerifyStored(KindAudio, AbsPathOfBlob(admitted.BlobPath), declaredMIME); verifyErr != nil {
+			if !admitted.Deduped {
+				_ = Delete(admitted.Handle)
+			}
+			return AdmitResult{}, "", verifyErr
+		}
+	}
+	// 内容哈希命中说明这颗音频之前已经接入并完成过转写：
+	// 直接复用既有转写文本，避免历史消息每轮重放都重跑一次 ASR。
+	if admitted.Deduped {
+		if text := ParseTextOfResource(admitted.Handle); text != "" {
+			return admitted, text, nil
+		}
+	}
+	local := AbsPathOfBlob(admitted.BlobPath)
+	if local == "" {
+		local = source
+	}
+	wav, err := multimodal.AudioToWavBase64(local)
 	if err != nil || wav == "" {
 		logger.Warn(audioModule, "[语音] 音频转码失败: %v", err)
-		return "", "", err
+		return admitted, ASRFallbackText, nil
 	}
 	transcript, err := transcribeAudio(wav)
 	if err != nil {
@@ -48,20 +76,35 @@ func IngestAudio(source, name, origin string) (string, string, error) {
 	if strings.TrimSpace(transcript) == "" {
 		text = ASRFallbackText
 	}
-	hash := sha256.Sum256([]byte(source))
-	hashText := fmt.Sprintf("%x", hash)[:16]
-	result, err := AdmitAudioTranscript(AudioTranscriptInput{
-		Name:        name,
-		Transcript:  text,
-		ContentHash: hashText,
-		Origin:      origin,
-	})
-	if err != nil {
-		logger.Warn(audioModule, "[语音] 悬空句柄登记失败: %v", err)
+	if admitted.URL != "" {
+		if err := archiveDB.setURLParseText(admitted.URL, text); err != nil {
+			logger.Warn(audioModule, "[语音] 转写写回句柄失败: %v", err)
+		}
+	}
+	logger.Info(audioModule, "[语音] 已落盘并转写音频句柄 %s（%s）", admitted.Handle, textutil.TruncateRunes(text, 512))
+	return admitted, text, nil
+}
+
+// IngestAudio 兼容旧入口：按来源自动判定 SourceKind，走同一套落盘与转写流程。
+func IngestAudio(source, name, origin string) (string, string, error) {
+	admitted, text, err := AdmitAudio(source, name, origin, "", classifySourceKind(source))
+	if err != nil || admitted.Handle == "" {
 		return "", text, err
 	}
-	logger.Info(audioModule, "[语音] 已转写并登记音频句柄 %s（%s）", result.Handle, textutil.TruncateRunes(text, 512))
-	return result.Handle, text, nil
+	return admitted.Handle, text, nil
+}
+
+// classifySourceKind 按来源形态给出 Admit 需要的 SourceKind
+func classifySourceKind(source string) string {
+	lower := strings.ToLower(strings.TrimSpace(source))
+	switch {
+	case strings.HasPrefix(lower, "data:"):
+		return SourceKindData
+	case strings.HasPrefix(lower, "http://"), strings.HasPrefix(lower, "https://"):
+		return SourceKindURL
+	default:
+		return SourceKindPath
+	}
 }
 
 // UnloadASRModel 卸载语音识别模型（幂等：未加载时为空操作）。

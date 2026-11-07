@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.310.2337",
+    "version": "2026.311.2352",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -929,6 +929,19 @@
         }
       }
     },
+    "/media/video-platform-hosts": {
+      "get": {
+        "summary": "共享视频平台域名表（前端抽取 webpage 信封时声明 web_video 的唯一来源）",
+        "description": "共享视频平台域名表（前端抽取 webpage 信封时声明 web_video 的唯一来源）",
+        "operationId": "mediaPlatformHostsHandler",
+        "x-handler": "mediaPlatformHostsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
     "/memory/": {
       "delete": {
         "summary": "记忆库（全局类型化读写/条目列举/分组集合管理/重建）",
@@ -1143,8 +1156,8 @@
     },
     "/write/message": {
       "post": {
-        "summary": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
-        "description": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
+        "summary": "消息写入队列（文本/六类内容信封数组）",
+        "description": "消息写入队列（文本/六类内容信封数组）",
         "operationId": "messageBatchHandler",
         "x-handler": "messageBatchHandler",
         "responses": {

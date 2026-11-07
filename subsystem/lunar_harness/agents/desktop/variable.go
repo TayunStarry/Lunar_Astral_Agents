@@ -9,10 +9,15 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
+// DisplayName 导出、维修与工具目录展示用的显示名。
+const DisplayName = agentinfo.NameDesktopOperator
+
 // ErrCanceled 桌面操纵任务被调用方中断（控制台手动中断 / 对话者开始应答时的自动终止）。
-var ErrCanceled = errors.New("桌面操纵已中断")
+var ErrCanceled = errors.New(DisplayName + "已中断")
 
 // autoLoopMaxRetries 模型输出命中重复后，单次模型调用的额外重试次数。
 const autoLoopMaxRetries = 2

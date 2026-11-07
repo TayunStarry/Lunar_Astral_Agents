@@ -49,6 +49,24 @@ const (
 	ParseFailed = "failed"
 )
 
+// 解析文本有效期分档（统一判定见 parse_fresh.go）
+const (
+	// WebParseTTL 网页 / 搜索结果：7 天
+	WebParseTTL = 7 * 24 * time.Hour
+	// BilibiliParseTTL B 站视频直驱印象：30 天
+	BilibiliParseTTL = 30 * 24 * time.Hour
+)
+
+// 解析文本内容类别（决定 TTL 分档；本地资源不设 TTL）
+const (
+	// ParseCategoryWeb 网页 / 搜索结果
+	ParseCategoryWeb ParseCategory = iota
+	// ParseCategoryBilibili B 站视频直驱印象
+	ParseCategoryBilibili
+	// ParseCategoryLocal 本地文件 / 本地视频
+	ParseCategoryLocal
+)
+
 // 保留等级（决定 GC 顺序，等级相同再按最久未用）
 const (
 	// RetainNormal A 级：用户主动提供，永久保留
@@ -238,6 +256,20 @@ var workspaceTextExtensions = map[string]bool{
 
 // qqCDNHosts 腾讯图床 / 媒体域名（只接受 https）
 var qqCDNHosts = []string{"gchat.qpic.cn", "multimedia.nt.qq.com.cn"}
+
+// 分类依据（ClassifyResult.Basis）
+const (
+	ClassifyBasisDeclared  = "declared"  // 显式 Kind / 声明 MIME
+	ClassifyBasisMagic     = "magic"     // 文件头魔数（仅存储层归位）
+	ClassifyBasisExtension = "extension" // 扩展名（仅存储层归位）
+	ClassifyBasisFallback  = "fallback"  // 兜底（存储层：远程链接按网页，本地实体按文件）
+)
+
+// 分类探测参数
+const (
+	// classifyHeadBytes 本地文件头嗅探读取的字节数
+	classifyHeadBytes = 4096
+)
 
 // urlTrackingParams 入库规范化时要剔除的跟踪参数
 var urlTrackingParams = []string{

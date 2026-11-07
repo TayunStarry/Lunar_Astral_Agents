@@ -37,6 +37,8 @@ const (
 	handleInvalidNotice = "句柄无效,文件不存在"
 	// documentReadBytes 文档整篇取回的字节上限
 	documentReadBytes = 12000
+	// documentChunkLines 截断续读时建议的单页行数
+	documentChunkLines = 200
 	// previewRunesLimit 结果预览的最大字符数
 	previewRunesLimit = 512
 	// listSummaryRunes 列表摘要的最大字符数

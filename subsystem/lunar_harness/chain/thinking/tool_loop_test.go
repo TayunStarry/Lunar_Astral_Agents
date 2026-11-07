@@ -80,7 +80,6 @@ func newLoopTestRole() *DialogueRole {
 			SystemPrompt:      "系统提示",
 			ContextLimit:      20,
 		},
-		ImageWindow: imageWindowSize,
 	}
 	return role
 }
@@ -261,7 +260,7 @@ func TestToolLoopStopsAtRoundLimit(t *testing.T) {
 		if len(tools) == 0 {
 			return stubResponse("收尾完成"), nil
 		}
-		// 参数随轮次变化，避免命中重复调用检测。
+		// 参数随轮次变化，便于在日志与回填里区分每一轮。
 		return stubResponse("", stubToolCall(fmt.Sprintf("call-%d", modelCalls), "dialogue_test_ping", fmt.Sprintf(`{"n":%d}`, modelCalls))), nil
 	})
 
@@ -284,8 +283,9 @@ func TestToolLoopStopsAtRoundLimit(t *testing.T) {
 	}
 }
 
-// 重复调用：同一响应签名第 3 次出现即拦截，并向上报。
-func TestToolLoopBlocksRepeatedToolCall(t *testing.T) {
+// 重复调用：工具循环不按重复次数拦截，轮次额度内同一调用持续执行，
+// 只在轮次额度耗尽后正常收尾，且不上报故障。
+func TestToolLoopAllowsRepeatedToolCall(t *testing.T) {
 	resetDialogueGlobals(t)
 	role := newLoopTestRole()
 	reports := captureReports(t)
@@ -295,27 +295,28 @@ func TestToolLoopBlocksRepeatedToolCall(t *testing.T) {
 		atomic.AddInt32(&executions, 1)
 		return ToolResult{Text: "ok"}
 	})
-	useDialogueModel(t, func(_ *ModelBuilder, _ []PostMessage, _ []ToolCall) (*ModelResponse, error) {
+	useDialogueModel(t, func(_ *ModelBuilder, _ []PostMessage, tools []ToolCall) (*ModelResponse, error) {
+		if len(tools) == 0 {
+			return stubResponse("收尾完成"), nil
+		}
 		return stubResponse("", stubToolCall("same-call", "dialogue_test_repeat", `{"q":"同样的查询"}`)), nil
 	})
 
 	role.runToolLoop(&ChatCache{})
 
-	if got := atomic.LoadInt32(&executions); got != dialogueMaxRepeats-1 {
-		t.Fatalf("重复签名前应执行 %d 轮，实得 %d 轮", dialogueMaxRepeats-1, got)
+	if got := atomic.LoadInt32(&executions); got != maxToolRounds {
+		t.Fatalf("重复调用应执行满 %d 轮，实得 %d 轮", maxToolRounds, got)
 	}
-	failure := failureText()
-	if !strings.Contains(failure, "工具循环重复") {
-		t.Fatalf("重复调用应记为循环失败，实得 %q", failure)
+	if got := finalText(); got != "收尾完成" {
+		t.Fatalf("轮次额度耗尽后应正常收尾，实得 %q", got)
 	}
-	covered := false
+	if failure := failureText(); failure != "" {
+		t.Fatalf("重复调用不应记为失败，实得 %q", failure)
+	}
 	for _, record := range reports() {
 		if record.agent == dialogueAgentID && strings.Contains(record.err.Error(), "重复") {
-			covered = true
+			t.Fatalf("重复调用不应上报故障，实得 %v", record.err)
 		}
-	}
-	if !covered {
-		t.Fatal("循环重复应上报给拯救者")
 	}
 }
 

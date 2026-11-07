@@ -1,6 +1,9 @@
 package server
 
 import (
+	"encoding/json"
+	"net/http"
+
 	"LunarSubsystem/LunarHarness/agents/ltpxhost"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/library"
@@ -8,7 +11,6 @@ import (
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
 	file "LunarSubsystem/LunarHarness/engine/persistence/httpapi"
-	"net/http"
 )
 
 // httpMux HTTP 路由复用器实例（Start 中创建）
@@ -21,7 +23,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/window/focus", Handler: WindowFocusHandler, Method: "POST", Description: "置前指定桌面窗口（id: lunar/crystal）"},
 
 	// ==================== 消息队列 ====================
-	{Path: "/write/message", Handler: messageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
+	{Path: "/write/message", Handler: messageBatchHandler, Method: "POST", Description: "消息写入队列（文本/六类内容信封数组）"},
+	{Path: "/media/video-platform-hosts", Handler: mediaPlatformHostsHandler, Method: "GET", Description: "共享视频平台域名表（前端抽取 webpage 信封时声明 web_video 的唯一来源）"},
 
 	// ==================== 应用与资源 ====================
 	{Path: "/background", Handler: file.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
@@ -128,6 +131,10 @@ var AgentEnqueueFunc func(req *AgentRequest) error
 
 // AgentPendingFunc 当前外部推理排队条数（装配层注入 agents/Responder.Pending）
 var AgentPendingFunc func() int
+
+// AgentPrepareMessagesFunc 外部推理消息的入站信封预处理（装配层注入 chain/thinking）。
+// 含多模态内容时把 messages 走一遍「声明校验 → 落盘 → 清洗」，避免该端点成为绕过信封协议的后门。
+var AgentPrepareMessagesFunc func(messages json.RawMessage) (json.RawMessage, error)
 
 // VisionReadFunc 视觉副本读取实现（装配层注入 chain/thinking.VisionReadBlob）
 var VisionReadFunc func(relPath, tag string, side int) ([]byte, string, error)

@@ -5,6 +5,7 @@ package DialogueBridging
 import (
 	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"encoding/base64"
 	"os"
@@ -68,6 +69,59 @@ func imageDataURI(data []byte) string {
 	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
 }
 
+// sniffImageReference 嗅探引用指向的真实图片类型。
+//
+// data URI 直接解码；本地路径读盘；远程直链按需下载一次，成功时把引用改写为
+// data URI，保证信封声明的 MIME 与后端校验用的字节完全一致。
+// 返回 (MIME, 是否动图, 可用引用, 是否嗅探成功)。
+func sniffImageReference(ref string) (string, bool, string, bool) {
+	ref = strings.TrimSpace(ref)
+	if data := decodeDataURIBytes(ref); len(data) > 0 {
+		mimeType, animated := sniffImageBytes(data)
+		if mimeType == "" {
+			return "", false, ref, false
+		}
+		// 引用头里的 MIME 可能与真实字节不符（QQ 常把 GIF 标成 image/jpeg），
+		// 嗅探成功后按真实格式重建 data URI。
+		if !strings.EqualFold(mimeType, mediaobject.MIMETypeOfDataURI(ref)) {
+			ref = imageDataURI(data)
+		}
+		return mimeType, animated, ref, true
+	}
+	if isHTTPLink(ref) {
+		data, err := napcat.FetchFileBytes(ref)
+		if err != nil || len(data) == 0 {
+			return "", false, ref, false
+		}
+		mimeType, animated := sniffImageBytes(data)
+		if mimeType == "" {
+			return "", false, ref, false
+		}
+		return mimeType, animated, imageDataURI(data), true
+	}
+	data, err := os.ReadFile(napcat.FileURLPath(ref))
+	if err != nil || len(data) == 0 {
+		return "", false, ref, false
+	}
+	mimeType, animated := sniffImageBytes(data)
+	if mimeType == "" {
+		return "", false, ref, false
+	}
+	return mimeType, animated, imageDataURI(data), true
+}
+
+// sniffImageCandidates 在可读候选里嗅探真实图片类型（只解码 data URI，不额外下载直链）
+func sniffImageCandidates(candidates []string) (string, bool, bool) {
+	for _, source := range candidates {
+		if data := decodeDataURIBytes(source); len(data) > 0 {
+			if mimeType, animated := sniffImageBytes(data); mimeType != "" {
+				return mimeType, animated, true
+			}
+		}
+	}
+	return "", false, false
+}
+
 // localImageDataURI 读取本地路径并包装为图片 data URI（非图片或读不到返回空串）
 func localImageDataURI(path string) string {
 	path = strings.TrimSpace(path)
@@ -106,17 +160,25 @@ func admitInboundImage(imageData napcat.ImageData) (string, bool) {
 		}
 	}
 
+	// 有可解码的候选时先按字节判定真实类型：动图入库为动图资源，
+	// 静态图仍按图片资源；name 保持来源方原始文件名，不做改名。
+	mimeType, animated, sniffed := sniffImageCandidates(candidates)
 	for _, source := range candidates {
 		sourceKind := admitSourceKind(source)
-		// 归档层按「建议文件名」的扩展名推断类型：data URI 与无扩展名的 QQ CDN
-		// 直链都必须补一个图片扩展名，否则会被当成文档（或直接失败退化成 [图片]）。
-		name := forwardImageName(source)
+		kindHint := resource.KindImage
+		if sniffed && animated {
+			kindHint = resource.KindAnimated
+		}
+		// image 段本身就是来源方声明的图片类型；扩展名不做改写。
+		name := mediaDisplayName("forward", imageData.File)
 		// 转发图只为还原对话记录服务：ephemeral 保留等级，配额吃紧时优先回收本体，
 		// 句柄降级为描述后依然可引用；同图重复转发按内容去重，不重复占句柄。
 		res, err := resource.Admit(resource.AdmitInput{
 			SourceKind: sourceKind,
 			Source:     source,
 			Name:       name,
+			KindHint:   kindHint,
+			MIME:       mimeType,
 			Origin:     "channel",
 			Retain:     resource.RetainEphemeral,
 			Dedup:      true,
@@ -146,10 +208,9 @@ func admitSourceKind(source string) string {
 
 // mediaDisplayName 推断入站媒体的展示文件名
 //
-// 取值顺序：显式文件名 → 文件引用 → 直链；扩展名缺失或与媒体类型不符时按
-// fallbackName 的扩展名补正（QQ 语音常以 .silk 或无扩展名的引用下发，
-// 但 NapCat 转码后是 mp3）。全部取不到时返回 fallbackName。
-func mediaDisplayName(kindHint, fallbackName string, candidates ...string) string {
+// 取值顺序：显式文件名 → 文件引用 → 直链；只使用来源方声明的名字，
+// 不按扩展名改写、不补造扩展名（类型判定统一交给分类层）。
+func mediaDisplayName(fallbackName string, candidates ...string) string {
 	for _, candidate := range candidates {
 		name := strings.TrimSpace(candidate)
 		if name == "" || strings.HasPrefix(name, "data:") || strings.HasPrefix(name, "base64://") {
@@ -161,10 +222,6 @@ func mediaDisplayName(kindHint, fallbackName string, candidates ...string) strin
 		name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
 		if name == "" || name == "." || name == "/" {
 			continue
-		}
-		ext := strings.ToLower(filepath.Ext(name))
-		if kindHint != "" && resource.KindOfExt(ext) != kindHint {
-			name = strings.TrimSuffix(name, ext) + filepath.Ext(fallbackName)
 		}
 		return name
 	}
@@ -221,8 +278,29 @@ func resolveAudioSource(recordData napcat.RecordData) string {
 	return ""
 }
 
-// processFileSegment 处理文件消息段，返回 (文本描述, 是否图片, 图片dataURI)
+// classifySegmentBytes 把入站字节交给分类层判定类型、MIME 与扩展名
 //
-// QQ 的文件通道可以承载图片：用户以「文件」方式发送 .png/.jpg，或把动图当文件发送。
-// NapCat 的文件段字段组合不固定（file / path / url / file_id 任意组合），
-// 因此读取字节按 path → file_id/file → url 依次兜底。
+// 分类层需要本地文件才能读文件头，这里只做一次临时落盘；写入侧不保留任何
+// 按扩展名的类型判定，也不自行补造扩展名。
+func classifySegmentBytes(name string, data []byte) resource.ClassifyResult {
+	declared := resource.ClassifyInput{Name: name}
+	if len(data) == 0 {
+		return resource.Classify(declared)
+	}
+	tmp, err := os.CreateTemp("", "lunar-segment-*")
+	if err != nil {
+		return resource.Classify(declared)
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return resource.Classify(declared)
+	}
+	tmp.Close()
+	return resource.Classify(resource.ClassifyInput{
+		SourceKind: resource.SourceKindPath,
+		Source:     tmp.Name(),
+		LocalPath:  tmp.Name(),
+		Name:       name,
+	})
+}

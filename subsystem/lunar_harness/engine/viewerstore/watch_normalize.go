@@ -31,6 +31,7 @@ func normalizeCandidates(items []WatchCandidate) ([]WatchCandidate, error) {
 		item.AuthorUID = strings.TrimSpace(item.AuthorUID)
 		item.AuthorName = strings.TrimSpace(item.AuthorName)
 		item.Comments = normalizeComments(item.Comments)
+		item.Topics = normalizeTopics(item.Topics)
 		if item.DurationSec < 0 {
 			item.DurationSec = 0
 		}
@@ -56,6 +57,28 @@ func normalizeComments(comments []string) []string {
 		seen[comment] = true
 		out = append(out, comment)
 		if len(out) >= WatchCommentsMax {
+			break
+		}
+	}
+	return out
+}
+
+// normalizeTopics 清洗主题词：去空白、按大小写不敏感去重、截断超长，保留前 WatchTopicsMax 个。
+func normalizeTopics(topics []string) []string {
+	out := make([]string, 0, len(topics))
+	seen := make(map[string]bool, len(topics))
+	for _, topic := range topics {
+		topic = cutRunes(strings.TrimSpace(topic), WatchTopicMaxRunes)
+		if topic == "" {
+			continue
+		}
+		key := strings.ToLower(topic)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, topic)
+		if len(out) >= WatchTopicsMax {
 			break
 		}
 	}

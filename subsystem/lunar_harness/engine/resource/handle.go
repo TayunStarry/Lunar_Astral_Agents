@@ -110,6 +110,11 @@ func KindOfExt(ext string) string {
 		return KindAudio
 	case "csv", "tsv", "xlsx", "xls":
 		return KindDocument
+	case "pdf", "doc", "docx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub", "mobi",
+		"zip", "rar", "7z", "tar", "gz", "bz2", "xz", "zst", "exe", "msi", "apk",
+		"dmg", "iso", "bin", "db", "sqlite", "psd", "ai", "ttf", "otf", "woff",
+		"woff2", "srt", "ass", "vtt":
+		return KindDocument
 	case "txt", "md", "markdown", "json", "xml", "yaml", "yml", "toml", "ini", "cfg",
 		"log", "go", "ts", "tsx", "js", "jsx", "py", "rs", "java", "c", "h", "cpp", "cxx",
 		"hpp", "cs", "rb", "sh", "ps1", "bat", "sql", "html", "htm", "css", "vue", "kt",

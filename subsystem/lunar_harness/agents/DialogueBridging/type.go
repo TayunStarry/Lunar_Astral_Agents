@@ -5,6 +5,8 @@ package DialogueBridging
 
 import (
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 )
 
 // ==================== 智能体投递计划类型 ====================
@@ -120,19 +122,19 @@ type BridgeTarget struct {
 
 // BridgeRequest 一条待推送给月华的请求（群聊可能包含多条历史消息）
 type BridgeRequest struct {
-	Target    BridgeTarget
-	Messages  []map[string]any // OpenAI 格式消息列表
-	AudioURLs []string         // 语音/音频地址列表，包装为媒体内容项写入智能体统一未读队列
-	Trigger   TriggerKind      // 本批次的触发原因
+	Target       BridgeTarget
+	Messages     []map[string]any     // OpenAI 格式消息列表
+	AudioObjects []mediaobject.Object // 音频多模态对象，写入智能体统一未读队列
+	Trigger      TriggerKind          // 本批次的触发原因
 }
 
 // GroupPoolEntry 群聊 / 私聊缓存池中的单条消息
 type GroupPoolEntry struct {
-	Nickname  string   // 发言用户昵称（群名片优先）
-	Content   any      // string 或 []map[string]any（OpenAI 多模态格式）
-	HasImages bool     // 是否包含图片
-	AudioURLs []string // 语音/音频地址列表
-	MessageID int64    // QQ 消息 ID（随机触发自动引用时定位到具体某条消息）
+	Nickname     string               // 发言用户昵称（群名片优先）
+	Content      any                  // string 或 []map[string]any（OpenAI 多模态格式）
+	HasMedia     bool                 // 是否包含多模态内容项（图片 / 动图 / 视频）
+	AudioObjects []mediaobject.Object // 音频多模态对象
+	MessageID    int64                // QQ 消息 ID（随机触发自动引用时定位到具体某条消息）
 }
 
 // GroupPool 单个群聊的消息缓存池（FIFO，保留最新 maxGroupPoolSize 条）

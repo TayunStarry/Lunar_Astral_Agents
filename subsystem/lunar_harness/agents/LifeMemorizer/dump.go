@@ -21,9 +21,9 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          AgentID,
-		Label:       "生活记忆整理者",
+		Label:       RoleName,
 		Group:       "Go 智能体",
-		Description: "生活记忆整理者最近一次的批次规模、尝试次数与失败原因",
+		Description: RoleName + "最近一次的批次规模、尝试次数与失败原因",
 		Export:      exportContext,
 	})
 }

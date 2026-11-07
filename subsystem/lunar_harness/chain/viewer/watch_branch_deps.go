@@ -8,6 +8,7 @@ package viewer
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -31,7 +32,10 @@ type watchDeps struct {
 	// understand 解码本地片段并做视觉理解，返回理解文本与降级说明。
 	understand func(context.Context, viewerstore.WatchSegment, viewerstore.WatchVideo, int) (string, string, error)
 	remark     func(context.Context, viewerstore.WatchVideo, string) (string, error)
-	// postComment 把评论发到原视频评论区，返回（是否发布、是否 @ 了作者、错误）。
+	// rollRemark 普通片段是否触发评论；最后一个片段不调用它（收束评论必发）。
+	rollRemark func() bool
+	// postComment 把评论发到原视频评论区，closing=true 时随机 @ 1-3 个特别关注，
+	// 返回（是否发布、是否 @ 了人、错误）。
 	postComment func(viewerstore.WatchVideo, string, bool) (bool, bool, error)
 	markWatched func(string, int, int64) (viewerstore.SegmentWatchResult, error)
 	// removeClip 删除已看完片段的本地文件并清空存储路径；失败只影响清理，不影响观看流程。
@@ -51,6 +55,7 @@ func defaultWatchDeps() watchDeps {
 		loadSegments:   viewerstore.LoadSegments,
 		understand:     understandClip,
 		remark:         remarkOnVideo,
+		rollRemark:     rollSegmentRemark,
 		postComment:    postVideoComment,
 		markWatched:    viewerstore.MarkSegmentWatched,
 		removeClip:     discardWatchedClip,
@@ -115,8 +120,8 @@ func remarkOnVideo(ctx context.Context, _ viewerstore.WatchVideo, material strin
 	})
 }
 
-// postVideoComment 打开 B 站并发布视频评论；最后一段按需 @ 原作者。
-func postVideoComment(video viewerstore.WatchVideo, message string, mentionAuthor bool) (bool, bool, error) {
+// postVideoComment 打开 B 站并发布视频评论；收束评论随机 @ 1-3 个特别关注。
+func postVideoComment(video viewerstore.WatchVideo, message string, closing bool) (bool, bool, error) {
 	session, err := openBilibiliBrowser()
 	if err != nil {
 		return false, false, err
@@ -132,28 +137,17 @@ func postVideoComment(video viewerstore.WatchVideo, message string, mentionAutho
 	if info.Aid <= 0 {
 		return false, false, fmt.Errorf("视频 aid 缺失，无法发评论")
 	}
-	targets, mentioned := authorTargets(video, info, mentionAuthor)
-	if err := session.postCommentOnObject(1, strconv.FormatInt(info.Aid, 10), message, targets); err != nil {
-		return false, mentioned, err
+	var targets []MentionTarget
+	if closing {
+		targets = closingMentionTargets(session)
 	}
-	return true, mentioned, nil
+	if err := session.postCommentOnObject(1, strconv.FormatInt(info.Aid, 10), message, targets); err != nil {
+		return false, len(targets) > 0, err
+	}
+	return true, len(targets) > 0, nil
 }
 
-// authorTargets 解析 @ 原作者的目标；昵称或 UID 缺失时不加 @，避免无效字段。
-func authorTargets(video viewerstore.WatchVideo, info videoInfo, mentionAuthor bool) ([]MentionTarget, bool) {
-	if !mentionAuthor {
-		return nil, false
-	}
-	name := strings.TrimSpace(video.AuthorName)
-	uid, _ := strconv.ParseInt(strings.TrimSpace(video.AuthorUID), 10, 64)
-	if name == "" {
-		name = strings.TrimSpace(info.Owner)
-	}
-	if uid <= 0 {
-		uid = info.OwnerMid
-	}
-	if name == "" || uid <= 0 {
-		return nil, false
-	}
-	return []MentionTarget{{Name: name, UID: uid}}, true
+// rollSegmentRemark 普通片段是否触发评论（0~1 均匀随机）。
+func rollSegmentRemark() bool {
+	return rand.Float64() < segmentRemarkChance
 }

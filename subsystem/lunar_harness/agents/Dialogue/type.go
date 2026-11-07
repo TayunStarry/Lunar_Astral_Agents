@@ -35,8 +35,6 @@ type LoopHook struct {
 	Role string
 	// MaxRounds 允许的工具调用轮次上限（含收尾轮）
 	MaxRounds int
-	// MaxRepeats 同一响应签名允许重复出现的次数上限
-	MaxRepeats int
 	// MaxToolRounds 允许实际执行工具的轮次上限；<=0 时取 MaxRounds（不额外限制）。
 	// 轮次上限的判定只在此处（RunToolLoop）生效，调用方不再自行计数。
 	MaxToolRounds int
@@ -49,7 +47,7 @@ type LoopHook struct {
 	OnToolRoundsExhausted func(ctx context.Context, round int, reply agentbase.Reply) (agentbase.Reply, error)
 	// Execute 执行一次工具调用
 	Execute func(ctx context.Context, call agentbase.ToolCall) (string, bool, error)
-	// OnLoop 循环重复被中断时回调（参数为已执行轮次）
+	// OnLoop 流式输出循环被中断时回调（参数为已执行轮次）
 	OnLoop func(rounds int, err error)
 	// OnFailure 其它失败时回调
 	OnFailure func(err error)

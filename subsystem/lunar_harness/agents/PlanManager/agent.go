@@ -3,7 +3,7 @@ package PlanManager
 // agent.go 计划管理智能体入口：自然语言指令 → 计划表工具循环 → 结构化结果。
 //
 // 只负责计划表的新增 / 删除 / 改写 / 查询；不读写文件、不调度其它智能体。
-// 循环、重复检测与失败上报统一复用 protocol/agentbase。
+// 循环、轮次上限与失败上报统一复用 protocol/agentbase。
 
 import (
 	"context"
@@ -38,7 +38,6 @@ func Execute(ctx context.Context, instruction string) (result Result, err error)
 		ID:                 "plan_manager",
 		Label:              roleLabel,
 		MaxRounds:          maxRounds,
-		MaxRepeats:         maxRepeats,
 		MaxToolResultRunes: maxToolResultRunes,
 	})
 	executed := false

@@ -13,7 +13,7 @@ func ToolCatalog() []agentinfo.Agent {
 		{Name: OpRemove, Description: "从压缩包内移除指定条目。"},
 	}
 	return []agentinfo.Agent{{
-		ID: "archive_ops", Name: "归档操作", Source: "agents/ArchiveOps",
+		ID: "archive_ops", Name: Module,
 		Note:  "归档操作智能体：按自然语言指令创建 / 删除压缩包、增删条目；结构查询与内容读取归归档解析智能体。",
 		Tools: tools,
 	}}

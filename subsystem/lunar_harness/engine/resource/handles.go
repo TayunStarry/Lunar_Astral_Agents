@@ -147,6 +147,11 @@ func (d *store) InsertResource(res *Resource) error {
 
 	res.Seq = seq
 	res.Handle = handle
+	// parsed_at 只表示「解析文本实际写入时间」：没有文本时保持 0
+	parsedAt := int64(0)
+	if strings.TrimSpace(res.ParseText) != "" {
+		parsedAt = now
+	}
 	result, err := tx.Exec(`INSERT INTO url_master
 		(url, parse_text, parse_state, bound_handle, kind, name, ext, mime, content_hash, blob_path,
 		 size_bytes, width, height, duration_ms, title, tags, origin, retain, state, section_count,
@@ -155,7 +160,7 @@ func (d *store) InsertResource(res *Resource) error {
 		res.URL, res.ParseText, res.ParseState, handle, res.Kind, res.Name, res.Ext, res.MIME,
 		res.ContentHash, res.BlobPath, res.SizeBytes, res.Width, res.Height, res.DurationMS,
 		res.Title, tagsToJSON(res.Tags), res.Origin, res.Retain, res.State, res.SectionCount,
-		res.CreatedAt, res.UsedAt, now, boolToInt(res.BlobOwned))
+		res.CreatedAt, res.UsedAt, parsedAt, boolToInt(res.BlobOwned))
 	if err != nil {
 		rollbackTx(tx)
 		d.rollbackSeqLocked(res.Kind, seq)

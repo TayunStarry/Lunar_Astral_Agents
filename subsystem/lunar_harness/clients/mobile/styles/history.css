@@ -219,56 +219,26 @@
 	border-radius: 10px;
 }
 
-/* ===== 媒体块 ===== */
+/* ===== 媒体块（内容块由共享样式提供，这里只做手机端尺寸约束） ===== */
 .history-media {
 	margin-top: 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 }
 
-.history-media img,
-.history-media video {
-	display: block;
-	max-width: 100%;
+.history-media .image-grid,
+.history-media .video-container,
+.history-media .message-audio-player {
+	margin: 0;
+}
+
+.history-media .labeled-image-container img {
 	max-height: 260px;
-	border-radius: 10px;
-	border: 1px solid var(--glass-border);
-	object-fit: cover;
 }
 
-.history-media audio {
-	display: block;
-	width: 100%;
-	margin-top: 6px;
-}
-
-.history-voice {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	margin-top: 6px;
-	padding: 5px 12px;
-	border-radius: 999px;
-	border: 1px solid var(--glass-border);
-	background: var(--btn-glass-bg);
-	color: rgba(255, 255, 255, 0.78);
-	font-size: 12px;
-	cursor: pointer;
-	-webkit-tap-highlight-color: transparent;
-	transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.history-voice:active {
-	border-color: var(--accent-color);
-	color: #ffffff;
-}
-
-.history-transcript {
-	margin-top: 6px;
-	padding: 6px 10px;
-	border-radius: 10px;
-	border: 1px solid var(--glass-border);
-	font-size: 12px;
-	line-height: 1.5;
-	color: rgba(255, 255, 255, 0.7);
+.history-media .video-container video {
+	max-height: 260px;
 }
 
 /* 音乐卡在历史气泡内：收紧外边距，其余视觉沿用共享播放器 */
@@ -321,4 +291,30 @@
 	30% { transform: scale(0.82); }
 	45% { transform: scale(1); }
 	75% { transform: scale(0.82); }
+}
+
+/* ===== 用户消息发送状态（乐观渲染） ===== */
+.history-item.is-send-pending {
+	opacity: 0.82;
+}
+
+.history-item.is-send-failed {
+	opacity: 1;
+}
+
+.history-send-status {
+	align-self: flex-end;
+	margin-top: 2px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+	line-height: 1.5;
+	color: rgba(255, 255, 255, 0.62);
+	background: rgba(255, 255, 255, 0.08);
+}
+
+.history-item.is-send-failed .history-send-status {
+	color: #ffd7d7;
+	background: rgba(220, 53, 69, 0.28);
+	border: 1px solid rgba(220, 53, 69, 0.45);
 }

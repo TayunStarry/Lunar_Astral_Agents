@@ -17,6 +17,8 @@ type StaticRoots struct {
 	Library http.FileSystem
 	// Reliance 前端共享依赖（挂载于 /reliance/）
 	Reliance http.FileSystem
+	// Shared 桌面端与移动端共用 ES Module 共享层（挂载于 /shared/）
+	Shared http.FileSystem
 }
 
 // Ready 月华消息终端与琉璃桌面的静态资源是否均已就绪
@@ -36,6 +38,12 @@ type WindowFocusResponse struct {
 	Success bool `json:"success"`
 	// Message 结果说明
 	Message string `json:"message"`
+}
+
+// MediaPlatformHostsResponse 共享媒体平台域名表响应（前端抽取 webpage 信封时使用）
+type MediaPlatformHostsResponse struct {
+	// VideoPlatformHosts 共享视频平台域名（与 engine/mediaobject.VideoPlatformHosts 同源）
+	VideoPlatformHosts []string `json:"video_platform_hosts"`
 }
 
 // SystemEndpoint 单条系统端点定义（统一路由注册表的元素）。

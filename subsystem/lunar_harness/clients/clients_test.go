@@ -31,6 +31,13 @@ func TestFrontendEntrypointsAreEmbedded(t *testing.T) {
 		{"共享依赖·Live2D 引擎入口", RelianceFS(), "/lunar.live2d_engine/index.html"},
 		{"共享依赖·GIF 引擎入口", RelianceFS(), "/lunar.gif_engine/index.html"},
 		{"共享依赖·通信桥", RelianceFS(), "/ws_bridge.js"},
+		{"共享模块·桌面端入口", SharedFS(), "/desktop.js"},
+		{"共享模块·WebSocket", SharedFS(), "/core/socket.js"},
+		{"共享模块·音频队列", SharedFS(), "/core/audio-queue.js"},
+		{"共享模块·消息内容块", SharedFS(), "/core/message-view.js"},
+		{"共享模块·Toast", SharedFS(), "/core/toast.js"},
+		{"共享样式·设计令牌", SharedFS(), "/styles/tokens.css"},
+		{"共享样式·消息内容块", SharedFS(), "/styles/message-view.css"},
 	}
 
 	for _, tc := range cases {

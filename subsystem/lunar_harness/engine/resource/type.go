@@ -15,6 +15,9 @@ package resource
 
 import "database/sql"
 
+// ParseCategory 解析文本的内容类别，决定有效期分档（判定见 parse_fresh.go）
+type ParseCategory int
+
 // Resource 资源目录中的一行（模型与前端可见的资源视图）
 type Resource struct {
 	ID           int64    `json:"id"`
@@ -44,6 +47,8 @@ type Resource struct {
 	ParseText string `json:"-"`
 	// ParseState 解析状态：none / ready / failed
 	ParseState string `json:"-"`
+	// ParsedAt 解析文本写入时间（Unix 秒，0 表示从未写入）
+	ParsedAt int64 `json:"-"`
 	// BlobOwned 实体是否为「归档私有副本」：true = 归档自己写入、配额回收可清理；
 	// false = 前端/引擎写入的实体，回收器不得删除（防止误删用户可见文件）
 	BlobOwned bool `json:"blob_owned"`
@@ -201,6 +206,47 @@ type AdmitResult struct {
 	Deduped bool `json:"deduped"`
 	// State blob 状态
 	State string `json:"state"`
+}
+
+// ClassifyInput 资源分类请求（引擎层唯一分类入口的入参）
+//
+// 适配器 / 前端只填声明字段（KindHint / MIME / Name），分类器自行决定
+// 是否读取本地文件头或联网探测；调用方不得再按扩展名、主机名另写判定。
+type ClassifyInput struct {
+	// SourceKind 来源类型：path / url / data / bytes / workspace
+	SourceKind string
+	// Source 来源值（路径 / 地址 / data URI）
+	Source string
+	// Name 建议文件名（用于取扩展名）
+	Name string
+	// KindHint 显式类型码（多模态对象声明的 Kind，优先级最高）
+	KindHint string
+	// MIME 显式 MIME（多模态对象声明的 MIME，优先级仅次于 Kind）
+	MIME string
+	// LocalPath 已归一到的本地文件（存在时优先按文件头魔数嗅探）
+	LocalPath string
+	// Head 调用方已预读的文件头（可为空）：用于落盘前路由等「字节已在手上」的场景，
+	// 与 LocalPath 的魔数嗅探同优先级，避免为判定类型再读一次文件或流
+	Head []byte
+}
+
+// ClassifyResult 资源分类结果
+type ClassifyResult struct {
+	// Kind 类型码 D/I/V/A/G/U
+	Kind string
+	// Ext 归一扩展名（含点，可能为空）
+	Ext string
+	// MIME 规范 MIME
+	MIME string
+	// Basis 本次判定的依据（declared / magic / extension / fallback；仅存储层归位会出现后三者）
+	Basis string
+}
+
+// magicInfo 文件头魔数嗅探结果
+type magicInfo struct {
+	Kind string
+	Ext  string
+	MIME string
 }
 
 // URLAdmitInput 链接资源登记请求

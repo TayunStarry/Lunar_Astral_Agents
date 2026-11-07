@@ -18,7 +18,7 @@ import (
 func mustPrompt(name string) string {
 	data, err := prompts.Read(name)
 	if err != nil {
-		panic(fmt.Sprintf("加载桌面操纵提示词 %s 失败: %v", name, err))
+		panic(fmt.Sprintf("加载"+DisplayName+"提示词 %s 失败: %v", name, err))
 	}
 	return string(data)
 }

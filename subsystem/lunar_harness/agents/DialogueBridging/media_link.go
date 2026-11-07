@@ -65,18 +65,18 @@ func mediaLinkText(source, name string) string {
 }
 
 // saveVideoFileURL 把渠道下发的视频字节按内容哈希落到 multimedia/，返回可登记的读取地址
+//
+// 扩展名只取分类层判定结果：写入侧不再按扩展名猜类型，也不在缺失时伪造 .mp4；
+// 分类层判不出扩展名时按无扩展名落盘，由后续读取按文件头识别。
 func saveVideoFileURL(name string, data []byte) string {
 	if len(data) == 0 {
 		return ""
 	}
 	base := filepath.Base(strings.ReplaceAll(strings.TrimSpace(name), "\\", "/"))
 	if base == "" || base == "." || base == "/" {
-		base = "视频.mp4"
+		base = "视频"
 	}
-	ext := strings.ToLower(filepath.Ext(base))
-	if ext == "" || resource.KindOfExt(ext) != resource.KindVideo {
-		ext = ".mp4"
-	}
+	ext := classifySegmentBytes(base, data).Ext
 	sum := sha256.Sum256(data)
 	rel := fmt.Sprintf("multimedia/video_%s%s", hex.EncodeToString(sum[:8]), ext)
 	result, err := persistence.SaveFileEx(rel, persistence.SaveOptions{Overwrite: true}, bytes.NewReader(data))

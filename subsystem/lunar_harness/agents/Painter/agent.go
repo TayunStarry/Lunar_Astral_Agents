@@ -59,7 +59,7 @@ func (s *session) bindReference(reference *Reference) {
 		if s.artwork.Image != "" {
 			s.reference = s.artwork
 			s.fromRuntime = true
-			logger.Info(module, "[绘制者] 本次任务未指定参考图，自动沿用最近产出画作: %s", s.artwork.Image)
+			logger.Info(module, "["+roleLabel+"] 本次任务未指定参考图，自动沿用最近产出画作: %s", s.artwork.Image)
 		}
 		return
 	}
@@ -68,7 +68,7 @@ func (s *session) bindReference(reference *Reference) {
 	width, height, err := s.env.VisionCopy(reference.Source, reference.Handle)
 	vision := s.env.VisionReference(reference.Handle, reference.Source)
 	if err != nil || vision == "" {
-		logger.Warn(module, "[绘制者] 参考图视觉副本生成失败: %v", err)
+		logger.Warn(module, "["+roleLabel+"] 参考图视觉副本生成失败: %v", err)
 		return
 	}
 	s.reference.Vision = vision
@@ -87,7 +87,7 @@ func (s *session) rememberRuntimeArtwork(source, note string) {
 	}
 	width, height, err := s.env.VisionCopy(rel, "")
 	if err != nil {
-		logger.Warn(module, "[绘制者] 运行时画作缩影生成失败: %v", err)
+		logger.Warn(module, "["+roleLabel+"] 运行时画作缩影生成失败: %v", err)
 		return
 	}
 	handle := ""

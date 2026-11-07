@@ -2,11 +2,13 @@ package ViewerScreening
 
 // variable.go 观影者-阅片的常量集中管理。
 
+import "LunarSubsystem/LunarHarness/protocol/agentinfo"
+
 const (
 	// AgentID 故障归属 ID
 	AgentID = "viewer_screening"
 	// Role 推理实况角色标签
-	Role = "观影者-阅片"
+	Role = agentinfo.NameViewerScreening
 
 	// 提示词文件名
 	promptImpress  = "viewerScreeningImpress.md"

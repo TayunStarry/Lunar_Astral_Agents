@@ -22,9 +22,6 @@ func InboxReply(ctx context.Context, in InboxInput) (text string, err error) {
 	task = renderPrompt(task, "{scene}", strings.TrimSpace(in.Scene))
 	task += "\n回应必须接住对方这句话的具体内容（提到的人、事、情绪），不要用「谢谢支持」这类空话。"
 	system := withPersona(in.Persona, task)
-	if block := strings.TrimSpace(in.Memory); block != "" {
-		system += "\n\n" + block
-	}
 	text, err = viewbase.Chat(ctx, viewbase.ChatRequest{
 		Agent: AgentID, Role: Role, Model: in.Model, System: system, User: in.Material, Attempts: attempts,
 	})

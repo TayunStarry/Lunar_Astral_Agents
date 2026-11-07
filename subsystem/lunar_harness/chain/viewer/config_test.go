@@ -8,16 +8,17 @@ import (
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
 
-// TestSliceUnderstandPromptIsFeeling 钉住切片任务是「观看感受」，不是分时段内容摘要。
-func TestSliceUnderstandPromptIsFeeling(t *testing.T) {
+// TestSliceUnderstandPromptIsConcrete 钉住切片任务要可复述的具体事实与固定字段，
+// 而不是空泛感受或旧式分时段摘要。
+func TestSliceUnderstandPromptIsConcrete(t *testing.T) {
 	slice := module.WatchSlice{Start: 0, End: 60, Images: []string{"a", "b"}}
 	prompt := module.WatchTask(1, 3, slice, "你正在看《X》，UP主：Y。")
-	for _, bad := range []string{"【内容概述】", "【关键信息】", "按时间顺序归并成", "3-6 个连续时段", "描述者格式"} {
+	for _, bad := range []string{"【内容概述】", "【关键信息】", "按时间顺序归并成", "3-6 个连续时段", "描述者格式", "2-4 句感受"} {
 		if strings.Contains(prompt, bad) {
-			t.Fatalf("切片任务不应要求结构化摘要，命中 %q：%s", bad, prompt)
+			t.Fatalf("切片任务不应要求空泛感受或旧式摘要，命中 %q：%s", bad, prompt)
 		}
 	}
-	for _, want := range []string{"第一人称", "发生了什么", "2-4 句"} {
+	for _, want := range []string{"场景：", "主体：", "动作：", "画面文字：", "情绪与语气：", "这段在讲什么", "不超过 200 字", "禁止空话套话"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("切片任务应要求 %q：%s", want, prompt)
 		}

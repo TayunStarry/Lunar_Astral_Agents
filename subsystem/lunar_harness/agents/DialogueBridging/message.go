@@ -59,20 +59,20 @@ func handleGroupMessage(msg napcat.NapcatMessage) {
 	napcat.CacheMemberName(msg.GroupID, msg.UserID, memberName)
 	napcat.WarmGroupMembers(msg.GroupID)
 
-	content, hasImages, audioURLs := parseMessageSegments(msg.GroupID, msg.Message)
+	content, hasMedia, audioObjects := parseMessageSegments(msg.GroupID, msg.Message)
 
 	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
 	redPacket := parseRawRedPacket(msg.Raw)
 	if redPacket != nil {
 		content = buildRedPacketText(redPacket)
-		hasImages = false
-		audioURLs = nil
-	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(audioURLs) == 0 {
+		hasMedia = false
+		audioObjects = nil
+	} else if strings.TrimSpace(contentToText(content)) == "" && !hasMedia && len(audioObjects) == 0 {
 		// 无可理解内容的空消息不入池不触发
 		return
 	}
 
-	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, AudioURLs: audioURLs, MessageID: msg.MessageID}
+	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasMedia: hasMedia, AudioObjects: audioObjects, MessageID: msg.MessageID}
 
 	selfID := msg.SelfID
 	if selfID == 0 {
@@ -115,10 +115,10 @@ func handleGroupMessage(msg napcat.NapcatMessage) {
 		}
 
 		req := BridgeRequest{
-			Target:    BridgeTarget{ID: msg.GroupID, IsGroup: true, GroupName: groupName},
-			Messages:  buildGroupMessages(groupName, entries),
-			AudioURLs: collectGroupAudioURLs(entries),
-			Trigger:   trigger,
+			Target:       BridgeTarget{ID: msg.GroupID, IsGroup: true, GroupName: groupName},
+			Messages:     buildGroupMessages(groupName, entries),
+			AudioObjects: collectGroupAudioObjects(entries),
+			Trigger:      trigger,
 		}
 		// 被 @ 触发的回应，首次发言自动 @ 回发起者
 		if atSelf {

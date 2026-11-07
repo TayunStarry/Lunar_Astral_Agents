@@ -96,10 +96,11 @@ func TestArchiveAdmitURLHandle(t *testing.T) {
 	setupArchiveTest(t)
 
 	first, err := AdmitURL(URLAdmitInput{
-		URL:     "https://www.bilibili.com/video/BV1xx411c7mD",
-		Title:   "一段视频",
-		Summary: "看完了，讲的是海边日落。",
-		Origin:  OriginChannel,
+		URL:      "https://www.bilibili.com/video/BV1xx411c7mD",
+		Title:    "一段视频",
+		Summary:  "看完了，讲的是海边日落。",
+		Origin:   OriginChannel,
+		KindHint: KindVideo,
 	})
 	if err != nil {
 		t.Fatalf("链接入仓失败: %v", err)
@@ -108,8 +109,9 @@ func TestArchiveAdmitURLHandle(t *testing.T) {
 		t.Fatalf("B 站链接应为视频句柄 @V.001，实际 %s / %s", first.Handle, first.Kind)
 	}
 	second, err := AdmitURL(URLAdmitInput{
-		URL:    "https://www.bilibili.com/video/BV1xx411c7mD",
-		Origin: OriginChannel,
+		URL:      "https://www.bilibili.com/video/BV1xx411c7mD",
+		Origin:   OriginChannel,
+		KindHint: KindVideo,
 	})
 	if err != nil {
 		t.Fatalf("重复链接入仓失败: %v", err)
@@ -776,9 +778,9 @@ func TestArchiveGrammar(t *testing.T) {
 	}
 }
 
-// TestArchiveAdmitCorrectsImageExtByContent GIF 内容以 .png 命名入库时，
-// 落盘扩展名与 MIME 必须按真实字节纠正（QQ 等渠道常把动图命名成静态扩展名）。
-func TestArchiveAdmitCorrectsImageExtByContent(t *testing.T) {
+// TestArchiveAdmitKeepsDeclaredImageType 声明优先：入库不再按字节纠正扩展名，
+// 类型一致性由接收侧的 VerifyStored 强制校验。
+func TestArchiveAdmitKeepsDeclaredImageType(t *testing.T) {
 	setupArchiveTest(t)
 
 	frame := image.NewPaletted(image.Rect(0, 0, 8, 8), color.Palette{color.Black})
@@ -800,13 +802,16 @@ func TestArchiveAdmitCorrectsImageExtByContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("入库失败: %v", err)
 	}
-	if result.MIME != "image/gif" {
-		t.Errorf("MIME 应按内容纠正为 image/gif，实际 %s", result.MIME)
+	if result.MIME != "image/png" {
+		t.Errorf("入库应保留声明的 image/png，实际 %s", result.MIME)
 	}
-	if !strings.HasSuffix(result.BlobPath, ".gif") {
-		t.Errorf("落盘扩展名应按内容纠正为 .gif，实际 %s", result.BlobPath)
+	if !strings.HasSuffix(result.BlobPath, ".png") {
+		t.Errorf("落盘扩展名应保留声明名，实际 %s", result.BlobPath)
 	}
 	if _, statErr := os.Stat(filepath.Join(config.LocalDir, filepath.FromSlash(result.BlobPath))); statErr != nil {
-		t.Errorf("纠正后的实体未落盘: %v", statErr)
+		t.Errorf("实体未落盘: %v", statErr)
+	}
+	if err := VerifyStored(KindImage, AbsPathOfBlob(result.BlobPath), "image/png"); err == nil {
+		t.Errorf("GIF 字节声明为静态 PNG 应被强制校验拒绝")
 	}
 }

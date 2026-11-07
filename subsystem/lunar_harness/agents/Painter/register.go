@@ -32,12 +32,11 @@ func init() {
 		ID:          agentID,
 		Label:       roleLabel,
 		Group:       "Go 智能体",
-		Description: "绘制者最近一次绘制任务的说明、产出句柄与跨轮上下文条数",
+		Description: roleLabel + "最近一次绘制任务的说明、产出句柄与跨轮上下文条数",
 		Export:      exportContext,
 	})
-	agentrepair.RegisterResettable(agentID, roleLabel,
-		"绘制者的跨任务画作、最近作品路径与跨轮上下文；reset 清空这些运行时状态",
-		resetState,
+	agentrepair.RegisterReadonly(agentID, roleLabel,
+		roleLabel+"的跨任务画作、最近作品路径与跨轮上下文（只读）",
 		func(int) (any, error) { return exportContext(false) })
 }
 
@@ -70,7 +69,7 @@ func resetState() string {
 	had := state.path != "" || state.artwork.Handle != "" || len(state.history) > 0
 	state = runtimeState{}
 	if had {
-		return "已清空绘制者的跨任务画作、最近作品路径与上下文"
+		return "已清空" + roleLabel + "的跨任务画作、最近作品路径与上下文"
 	}
-	return "绘制者当前没有跨任务状态"
+	return roleLabel + "当前没有跨任务状态"
 }

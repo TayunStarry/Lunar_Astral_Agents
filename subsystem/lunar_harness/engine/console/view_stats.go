@@ -5,6 +5,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // ==== 运行状态屏 ====
@@ -95,7 +97,7 @@ func (m appModel) viewStats() string {
 
 	// 右栏合并了原「前端页面」屏：先看两个前端窗口是否在线，再看桌面操纵状态。
 	right := append(m.viewFrontendSection(rightW), "")
-	right = append(right, sectionRule("桌面操纵智能体", rightW), "")
+	right = append(right, sectionRule(agentinfo.NameDesktopOperator+"智能体", rightW), "")
 	right = append(right, m.viewDesktopOperatorState(rightW)...)
 
 	var body []string

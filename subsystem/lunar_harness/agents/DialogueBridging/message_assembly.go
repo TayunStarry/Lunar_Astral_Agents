@@ -5,6 +5,8 @@ package DialogueBridging
 import (
 	"fmt"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 )
 
 func snapshotGroupPool(groupID int64) []GroupPoolEntry {
@@ -46,18 +48,18 @@ func buildGroupMessages(groupName string, entries []GroupPoolEntry) []map[string
 	messages := make([]map[string]any, 0, len(entries))
 	for _, e := range entries {
 		prefix := fmt.Sprintf("[群聊: %s][用户: %s]: ", groupName, e.Nickname)
-		messages = append(messages, buildUserMessage(prefix, e.Content, e.HasImages))
+		messages = append(messages, buildUserMessage(prefix, e.Content, e.HasMedia))
 	}
 	return messages
 }
 
-// collectGroupAudioURLs 汇总群聊缓存池条目中的语音/音频地址
-func collectGroupAudioURLs(entries []GroupPoolEntry) []string {
-	var urls []string
+// collectGroupAudioObjects 汇总群聊缓存池条目中的音频多模态对象
+func collectGroupAudioObjects(entries []GroupPoolEntry) []mediaobject.Object {
+	var objects []mediaobject.Object
 	for _, e := range entries {
-		urls = append(urls, e.AudioURLs...)
+		objects = append(objects, e.AudioObjects...)
 	}
-	return urls
+	return objects
 }
 
 // contentToText 从解析结果（string 或 多模态数组）中提取纯文本

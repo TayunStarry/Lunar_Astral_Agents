@@ -71,7 +71,7 @@ func engineVideoFrames(p *plugin, source string, opts map[string]any) map[string
 	for i, t := range sampling {
 		img, ferr := multimodal.ExtractVideoFrameAt(localPath, t, maxDim)
 		if ferr != nil {
-			logger.Warn(ServiceName, "[video.frames] 第%d帧(%ss)抽取失败，跳过: %v", i, multimodal.FormatSeconds(t), ferr)
+			logger.Warn(ServiceName, "[video.frames] 第%d帧(%s)抽取失败，跳过: %v", i, multimodal.FormatPreciseSeconds(t), ferr)
 			skipped++
 			continue
 		}

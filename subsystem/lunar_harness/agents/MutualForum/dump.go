@@ -22,7 +22,7 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "mutual_forum_agent",
-		Label:       "互助论坛-模型",
+		Label:       roleLabel,
 		Group:       "Go 智能体",
 		Description: "互助论坛智能体最近一次模型轮次的轮次、工具调用数与错误（不含内部 api_key）",
 		Export:      exportContext,

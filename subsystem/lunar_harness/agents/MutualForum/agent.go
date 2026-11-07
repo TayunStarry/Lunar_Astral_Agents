@@ -80,7 +80,6 @@ func RunRound(ctx context.Context, instruction string, history []agentbase.Messa
 		ID:                 "mutual_forum",
 		Label:              roleLabel,
 		MaxRounds:          maxToolRounds,
-		MaxRepeats:         -1, // 迁移前无跨轮重复检测，保持原有行为
 		MaxToolResultRunes: -1, // 工具结果原样回填 JSON
 	})
 	result, callErr := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{

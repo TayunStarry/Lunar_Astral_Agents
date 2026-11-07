@@ -31,6 +31,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/activity"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // autoRespondDeps 自动响应的可替换依赖；生产实现见 realAutoRespondDeps，
@@ -159,7 +160,11 @@ func respondOne(ctx context.Context, deps autoRespondDeps, item unreadReply) err
 	if err != nil {
 		return err
 	}
+	// 生成回复是一次独立的模型调用：自己起一条实况，避免内容被拼进上一条
+	// （对话者/生活链前一步）的实况里。多条待回应 = 同一智能体的多条记录。
+	agentbase.BeginLive(roleLabel)
 	body, err := deps.generate(ctx, rc)
+	agentbase.EndLive(roleLabel)
 	if err != nil {
 		return err
 	}

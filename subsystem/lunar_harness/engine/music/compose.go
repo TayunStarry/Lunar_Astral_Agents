@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // ComposeScore 把音乐模型产出的 AMT token 解码为乐谱，并渲染成 WAV。
@@ -17,7 +18,7 @@ func ComposeScore(ids []int, brief Brief) (RenderResult, error) {
 	if err != nil {
 		return RenderResult{}, fmt.Errorf("AMT 解码失败（%d tokens）: %w", len(ids), err)
 	}
-	logger.Info(module, "[演奏者] AMT 解码完成: %d tokens → %d 声部", len(ids), len(score.Voices))
+	logger.Info(module, "["+agentinfo.NameMusician+"] AMT 解码完成: %d tokens → %d 声部", len(ids), len(score.Voices))
 
 	rendered, err := Render(score, VoiceSourceModel)
 	if err != nil {

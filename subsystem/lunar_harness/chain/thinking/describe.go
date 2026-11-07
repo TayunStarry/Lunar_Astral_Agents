@@ -7,6 +7,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
 	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/engine/resourcehub"
 	"LunarSubsystem/LunarHarness/executors/ArchiveReader"
 )
@@ -46,24 +47,31 @@ func describeResource(handle, question string) string {
 	}
 	normalized := formatHandle(*parsed)
 	cached := ""
+	fresh := false
 	if entry := getResourceEntry(normalized); entry != nil {
 		cached = entry.ParseText
+		fresh = resource.ParseTextFresh(*entry, resource.ParseCategoryOf(*entry))
 	}
-	if cached != "" && question == "" {
+	// 只有未过期缓存才能作为失败兜底；过期内容一律不回吐
+	fallback := ""
+	if fresh {
+		fallback = cached
+	}
+	if fresh && question == "" {
 		return cached
 	}
 	if parsed.Kind == "I" || parsed.Kind == "G" {
 		text, err := Vision.DescribeMedia(normalized, question)
 		if err != nil {
 			logger.Warn(lunarCoreModule, "[视觉理解] 影像描述失败: %v", err)
-			return cached
+			return fallback
 		}
 		if desc := strings.TrimSpace(text); desc != "" {
 			return desc
 		}
-		return cached
+		return fallback
 	}
-	return cached
+	return fallback
 }
 
 // describeVideoURL 本机视频地址（@U 背后的 /file/read/）→ 观看管线

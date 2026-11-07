@@ -115,8 +115,6 @@ var (
 	cachedMessages []CachedMessage
 	// lastSnapshot 上次成功写盘的序列化快照
 	lastSnapshot string
-	// animatedHistoryCache 历史动图判定缓存
-	animatedHistoryCache = map[string]bool{}
 )
 
 // ==== 计划表 ====
@@ -131,21 +129,10 @@ const (
 
 	// affectionRoundWindow 情感认知评估时每个角色取用的最近轮数
 	affectionRoundWindow = 5
-	// imageWindowSize 对话者上下文中允许保留的真实图片数量
-	imageWindowSize = 20
 	// maxToolRounds 单次应答允许的工具调用轮次上限
 	maxToolRounds = 5
-	// dialogueMaxRepeats 同一响应签名（正文 + 工具名 + 参数）允许重复出现的次数上限。
-	// 手写循环没有跨轮重复检测，接入基座后显式启用，避免模型反复发起同一调用耗空轮次。
-	dialogueMaxRepeats = 3
 	// dialogueAgentID 对话者在智能修复侧的故障归属 ID（与 agentrepair 注册的 ID 一致）
 	dialogueAgentID = "dialogue"
-	// compactDefaultRunes 上下文按水位裁剪时的默认目标字数
-	compactDefaultRunes = 6000
-	// compactMinRunes 上下文裁剪的最小目标字数（低于此值会明显伤到近期上下文）
-	compactMinRunes = 1000
-	// compactMaxRunes 上下文裁剪的最大目标字数
-	compactMaxRunes = 20000
 
 	// visionReadPath 视觉读取端点路径
 	visionReadPath = "/file/miniature/"
@@ -159,6 +146,9 @@ const (
 
 	// unavailableLinkText 链接无法登记时的中性占位（绝不回显地址与 BV 号）
 	unavailableLinkText = "（这条链接暂时无法归档）"
+
+	// missingImageHandleText 远期记忆里没有句柄的图片的兜底：宁可留一条说明，也不静默丢弃
+	missingImageHandleText = "（一张未能登记句柄的图片）"
 
 	// scheduleTriggerPrefix 计划到期触发消息统一前缀
 	scheduleTriggerPrefix = "[计划提醒]"
@@ -203,26 +193,28 @@ var assistantTextPushHook = pushAssistantContext
 // synthesizeSpeech 语音合成入口（前端不在线时返回空串）；测试可替换。
 var synthesizeSpeech = synthesizeSpeechImpl
 
-// fastAckOpenings 快速应答的开头候选（空串表示本次没有开头，直接说正文）
+// 快速应答三段的舍弃概率：先各自独立抽签决定这一段是否缺席，再从对应候选池取词。
+// 首尾更容易被舍弃（开口一句「好嘞」和结尾一句「稍等」都可有可无），正文是语义主干，
+// 保留概率最高；三段同时缺席时由正文兜底，保证不会推出空消息。
+var (
+	fastAckOpeningDrop = 0.45
+	fastAckActionDrop  = 0.15
+	fastAckEndingDrop  = 0.55
+)
+
+// fastAckOpenings 快速应答的开场候选：短促的应答词，像随口应一声
 var fastAckOpenings = []string{
-	"", "", "", // 有时没有开头，直接说正文
-	"收到", "收到收到", "好嘞", "好嘞好嘞", "交给我吧", "这个交给我", "没问题",
-	"没问题哈", "这个我来", "我来我来", "嗯嗯", "嗯呢", "好的", "好哒", "好呀",
-	"行", "可以呀", "知道啦", "知道知道", "明白", "明白啦", "来啦", "来咯",
-	"我看看", "这就安排", "马上安排", "安排上了", "OK", "OK啦", "这个简单",
-	"放心交给我", "包在我身上", "我来接手", "我这边来", "好说好说", "哦哦",
-	"嗯", "诶好", "可以可以", "我这就弄",
+	"收到", "行", "成", "好嘞", "可以", "嗯嗯", "哦哦", "诶", "啊这", "得嘞",
+	"明白", "知道啦", "没问题", "交给我", "我来我来", "我看看", "好说", "在的",
+	"OK", "可以呀", "嗯", "安排", "这我熟", "小事", "马上办",
 }
 
-// fastAckEndings 快速应答的结尾候选（空串表示本次没有结尾，说完正文就收）
+// fastAckEndings 快速应答的收尾候选：口语化的安抚，别把人晾着
 var fastAckEndings = []string{
-	"", "", "", // 有时没有结尾，说完正文就收
-	"稍等我一下", "稍等哈", "稍等片刻", "稍等哦", "等我一下下", "等我一会儿",
-	"等我下哈", "等我下下", "等我好消息", "一会儿就好", "一会儿见", "马上回来",
-	"马上就来", "马上搞定", "马上就好", "马上给你结果", "很快的", "很快哦",
-	"很快搞定", "很快回来", "很快就有结果", "这就去办", "这就给你办",
-	"不耽误你太久", "给我点时间", "我尽快", "别急哈", "耐心等我一小会儿",
-	"这边很快就完事", "一下下就好", "马上哈", "稍等马上来",
+	"稍等哈", "等我一会儿", "别急，很快的", "马上就有结果", "一会儿就好",
+	"等我下", "马上回来", "给我一小会儿", "立马就好", "等我消息",
+	"这就好了", "很快搞定", "一会儿给你信儿", "稍等一小会儿", "马上哈",
+	"别急哈", "再等我一下", "很快就回",
 }
 
 // fastAckLines 复合工具的快速应答正文候选。
@@ -232,19 +224,17 @@ var fastAckEndings = []string{
 var fastAckLines = map[string][]string{
 	// dispatch_technique 技法创作（绘制 / 音乐 / 截图 / 文件操作共用一套口吻）
 	Dialogue.ToolDispatchTechnique: {
-		"这就开工", "我这就动手", "马上给你安排", "这就安排上", "我来接手",
-		"这就去办", "包在我身上", "给我点时间，我这就弄", "马上开始", "这就处理",
+		"这就动手", "我这就弄", "给我点时间搞一下", "我上手试试", "这就给你整",
+		"先弄起来", "我这就开工", "我摸摸看", "这就开整", "我这就去做",
 	},
 	// network_explore 联网探索（检索 / 观影 / 论坛 / 通讯共用一套口吻）
 	Dialogue.ToolNetworkExplore: {
-		"这就去网上看看", "我先查查看", "我这就去跑一趟", "稍等，我去了解一下",
-		"这就去翻一翻", "我去打听打听", "马上帮你查", "让我去看看情况",
-		"这就去联网瞧瞧", "我去搜一圈",
+		"我去网上翻翻", "让我查查", "我先去搜一下", "去打听打听", "我这就跑一趟",
+		"上网瞅一圈", "让我看看情况", "我这就去翻一翻", "去查点资料", "我上网摸摸",
 	},
 	// use_the_program 扩展应用（打开 / 调用应用共用一套口吻）
 	Dialogue.ToolUseTheProgram: {
-		"这就帮你打开", "我这就去调它", "稍等，我去启动一下", "马上把程序调起来",
-		"这就把应用打开", "我去运行看看", "让我先启动一下", "这就连接过去",
-		"马上给你打开", "我这就安排应用",
+		"我去把它打开", "这就给你开", "让我调出来", "我这就启动一下", "去跑一下这个程序",
+		"我把应用调起来", "我这就去连一下", "先开起来看看", "我去操作一下", "这就给你调出来",
 	},
 }

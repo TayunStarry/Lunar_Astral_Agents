@@ -4,7 +4,6 @@ package DialogueBridging
 
 import (
 	"LunarSubsystem/LunarHarness/clients/napcat"
-	"LunarSubsystem/LunarHarness/engine/resource"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -54,39 +53,30 @@ func extractSegmentText(groupID int64, depth int, segments []napcat.MessageSegme
 					sb.WriteString(handle)
 					sb.WriteString("]")
 				} else {
-					sb.WriteString(mediaDisplayName(resource.KindImage, "图片.png", imageData.File, imageData.URL, imageData.Path))
+					sb.WriteString(mediaDisplayName("图片", imageData.File, imageData.URL, imageData.Path))
 				}
 			}
 		case "video":
 			var videoData napcat.VideoData
 			if json.Unmarshal(segment.Data, &videoData) == nil {
 				source := resolveVideoSource(videoData)
-				name := mediaDisplayName(resource.KindVideo, "视频.mp4", videoData.File, source)
+				name := mediaDisplayName("视频", videoData.File, source)
 				sb.WriteString(mediaLinkText(source, name))
 			}
 		case "record":
 			var recordData napcat.RecordData
 			if json.Unmarshal(segment.Data, &recordData) == nil {
 				source := resolveAudioSource(recordData)
-				name := mediaDisplayName(resource.KindAudio, "语音.mp3", recordData.File, source)
+				name := mediaDisplayName("语音", recordData.File, source)
 				sb.WriteString(name)
 				sb.WriteString(" ")
 			}
 		case "file":
 			var fileData napcat.FileData
 			if json.Unmarshal(segment.Data, &fileData) == nil {
-				text, isImage, dataURI := processFileSegment(fileData)
-				if isImage {
-					if handle, ok := admitInboundImage(napcat.ImageData{URL: dataURI}); ok {
-						sb.WriteString("[")
-						sb.WriteString(handle)
-						sb.WriteString("]")
-					} else {
-						sb.WriteString(mediaDisplayName(resource.KindImage, "图片.png", fileData.FileName, fileData.Name))
-					}
-				} else {
-					sb.WriteString(text)
-				}
+				// 引用摘要只取文本描述：媒体文件按声明名展示，文档仍是句柄文本
+				text, _, _ := processFileSegment(groupID, fileData)
+				sb.WriteString(text)
 			}
 		case "face":
 			if text := faceDisplayText(segment.Data); text != "" {

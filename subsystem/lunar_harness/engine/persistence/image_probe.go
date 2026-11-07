@@ -1,10 +1,18 @@
 package persistence
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"strings"
 )
+
+// pngSignature PNG 文件头魔数
+var pngSignature = []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
+
+// maxProbeChunks chunk 扫描上限，避免损坏数据把扫描拖成死循环
+const maxProbeChunks = 100
 
 // =============================================================================
 // 图片字节探测 — data URI 解析、魔数嗅探、data URI 重建
@@ -51,6 +59,9 @@ func SniffImageFormat(raw []byte) (ext string, mimeType string) {
 	case len(raw) >= 3 && raw[0] == 0xFF && raw[1] == 0xD8 && raw[2] == 0xFF:
 		return ".jpg", "image/jpeg"
 	case len(raw) >= 8 && raw[0] == 0x89 && raw[1] == 0x50 && raw[2] == 0x4E && raw[3] == 0x47:
+		if IsAnimatedPNG(raw) {
+			return ".apng", "image/apng"
+		}
 		return ".png", "image/png"
 	case len(raw) >= 4 && raw[0] == 0x47 && raw[1] == 0x49 && raw[2] == 0x46 && raw[3] == 0x38:
 		return ".gif", "image/gif"
@@ -61,6 +72,63 @@ func SniffImageFormat(raw []byte) (ext string, mimeType string) {
 	default:
 		return "", ""
 	}
+}
+
+// IsAnimatedPNG 判断 PNG 字节是否携带 acTL（Animation Control）块，即 APNG。
+//
+// 按 APNG 规范 acTL 必须出现在 IDAT 之前，因此扫到 IDAT/IEND 即可停止；
+// 任一 chunk 的声明长度越界视为数据不完整，同样判为非 APNG。
+func IsAnimatedPNG(raw []byte) bool {
+	if len(raw) < len(pngSignature) || !bytes.HasPrefix(raw, pngSignature) {
+		return false
+	}
+	offset := len(pngSignature)
+	for i := 0; i < maxProbeChunks && offset+8 <= len(raw); i++ {
+		length := int(binary.BigEndian.Uint32(raw[offset : offset+4]))
+		switch string(raw[offset+4 : offset+8]) {
+		case "acTL":
+			return true
+		case "IDAT", "IEND":
+			return false
+		}
+		if offset+12+length > len(raw) {
+			return false
+		}
+		offset += 12 + length
+	}
+	return false
+}
+
+// IsAnimatedWebP 判断 WebP 字节是否携带 ANIM 块（动态 WebP）。
+//
+// RIFF 的长度字段与 chunk 大小都是小端无符号数：先按 RIFF 声明的容器长度裁出
+// 可扫描区间（超过实际字节数则按实际长度），再逐 chunk 前进；chunk 大小为奇数时
+// 后随 1 字节 padding。chunk 声明长度超出容器即视为数据不完整，停止扫描。
+// 长度一律按 uint64 参与运算，避免 32 位平台上最高位置 1 时溢出成负数。
+func IsAnimatedWebP(raw []byte) bool {
+	if len(raw) < 12 || string(raw[0:4]) != "RIFF" || string(raw[8:12]) != "WEBP" {
+		return false
+	}
+	fileEnd := 8 + uint64(binary.LittleEndian.Uint32(raw[4:8]))
+	if fileEnd > uint64(len(raw)) {
+		fileEnd = uint64(len(raw))
+	}
+	offset := uint64(12)
+	for i := 0; i < maxProbeChunks && offset+8 <= fileEnd; i++ {
+		chunkType := string(raw[offset : offset+4])
+		chunkSize := uint64(binary.LittleEndian.Uint32(raw[offset+4 : offset+8]))
+		if chunkType == "ANIM" {
+			return true
+		}
+		if offset+8+chunkSize > fileEnd {
+			return false
+		}
+		offset += 8 + chunkSize
+		if chunkSize%2 == 1 {
+			offset++
+		}
+	}
+	return false
 }
 
 // SniffImageMIME 按文件头魔数嗅探图片 mime（未知格式回退 image/png）。

@@ -6,13 +6,15 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // ==== 智能体侧常量与全局变量 ====
 
 const (
 	// roleLabel 该智能体在「推理实况」中的角色标签（模块名 Mutual Forum）
-	roleLabel = "互助论坛"
+	roleLabel = agentinfo.NameMutualForum
 	// maxToolRounds 单次需求允许的工具调用轮次上限
 	maxToolRounds = 8
 	// modelTimeout 单次模型调用超时

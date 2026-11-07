@@ -6,6 +6,7 @@ package Vision
 // 原图字节不出 Go 侧（见 docs/adr/0008）。
 
 import (
+	"LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
@@ -38,10 +39,13 @@ func describeStaticImage(res resource.Resource, abs, question string) (string, e
 	return text, nil
 }
 
-// imageTask 构建图片描述任务
+// imageTask 构建图片描述任务：前置与影像观看共用的判定标准，图片只降低篇幅。
 func imageTask(question string) string {
+	task := ""
 	if question != "" {
-		return agentbase.RenderPrompt(agentbase.PromptText("visionImageQuestionTask.md"), "{question}", question)
+		task = agentbase.RenderPrompt(agentbase.PromptText("visionImageQuestionTask.md"), "{question}", question)
+	} else {
+		task = agentbase.PromptText("visionImageTask.md")
 	}
-	return agentbase.PromptText("visionImageTask.md")
+	return multimodal.WithVisualRules(task)
 }

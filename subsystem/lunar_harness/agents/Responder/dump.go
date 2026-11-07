@@ -28,7 +28,7 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "responder",
-		Label:       "通用应答",
+		Label:       roleLabel,
 		Group:       "Go 智能体",
 		Description: "通用应答的队列与运行状态（待处理数、特许运行、忙碌标记；不保留上下文）",
 		Export:      exportContext,

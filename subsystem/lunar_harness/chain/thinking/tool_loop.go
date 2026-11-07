@@ -12,14 +12,13 @@ import (
 
 // runToolLoop 执行一次应答周期。
 //
-// 轮次编排、轮次上限、重复签名拦截与故障上报由对话者智能体（agents/Dialogue）负责；
+// 轮次编排、轮次上限、输出循环回调与故障上报由对话者智能体（agents/Dialogue）负责；
 // 本文件只保留对话者特有的每轮上下文重组与收尾回调。
 func (role *DialogueRole) runToolLoop(cache *ChatCache) {
 	Dialogue.RunToolLoop(context.Background(), Dialogue.LoopHook{
 		Role:               role.RoleTag,
 		MaxRounds:          maxToolRounds + 1, // 5 轮工具执行 + 1 轮收尾；轮次上限判定统一在 RunToolLoop
 		MaxToolRounds:      maxToolRounds,
-		MaxRepeats:         dialogueMaxRepeats,
 		MaxToolResultRunes: -1, // 原手写循环对工具结果不做截断
 		Call: func(ctx context.Context, round int) (agentbase.Reply, error) {
 			return role.roundReply(ctx, round, cache)
@@ -45,7 +44,7 @@ func (role *DialogueRole) runToolLoop(cache *ChatCache) {
 
 // exhaustToolRounds 工具轮次用尽：说明上限、回填未执行原因，实际计数与判定在 RunToolLoop。
 func (role *DialogueRole) exhaustToolRounds(round int, reply agentbase.Reply) {
-	logger.Warn(lunarCoreModule, "[对话者] 工具调用轮次达到上限（%d），停止继续调用", maxToolRounds)
+	logger.Warn(lunarCoreModule, "["+Dialogue.Role+"] 工具调用轮次达到上限（%d），停止继续调用", maxToolRounds)
 	role.speakAssistantText(strings.TrimSpace(reply.Text))
 	calls := make([]ToolCallItem, 0, len(reply.ToolCalls))
 	for _, call := range reply.ToolCalls {

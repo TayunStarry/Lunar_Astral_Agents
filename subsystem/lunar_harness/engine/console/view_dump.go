@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // ==== 数据导出屏 ====
@@ -59,22 +61,22 @@ var dumpOptionList = []dumpOption{
 		desc:    "模型调用轮次：思考全文 / 输出全文 / 工具调用序列 / 每轮耗时，导出为 .json",
 		toolTip: "正在导出推理实况…"},
 
-	{kind: dumpKindContext, key: "dialogue", hotkey: "03", group: "Go 智能体", title: "对话者",
-		desc: "对话者与月华主上下文的合并快照"},
+	{kind: dumpKindContext, key: "dialogue", hotkey: "03", group: "Go 智能体", title: agentinfo.NameDialogue,
+		desc: agentinfo.NameDialogue + "与月华主上下文的合并快照"},
 	{kind: dumpKindContext, key: "file_editor", hotkey: "04", title: "文件编辑",
 		desc: "文件编辑的系统提示词、工具清单与文档库现状（按次执行，不保留上下文）"},
 	{kind: dumpKindContext, key: "creative", hotkey: "05", title: "自由创作",
 		desc: "自由创作体系的规划日志：上一轮计划、备忘、参考资料、错误与收尾简述"},
 	{kind: dumpKindContext, key: "responder", hotkey: "06", title: "通用应答",
 		desc: "通用应答的队列与运行状态：待处理数、特许运行、忙碌标记"},
-	{kind: dumpKindContext, key: "savior", hotkey: "07", title: "智能修复",
-		desc: "智能修复的待处理故障队列、尝试次数与静默截止时间"},
+	{kind: dumpKindContext, key: "savior", hotkey: "07", title: agentinfo.NameSavior,
+		desc: agentinfo.NameSavior + "的待处理故障队列、尝试次数与静默截止时间"},
 	{kind: dumpKindContext, key: "web_search", hotkey: "08", title: "网络搜索",
 		desc: "最近一次检索的检索词、引擎、页数与结构化报告"},
 	{kind: dumpKindContext, key: "bilibili", hotkey: "09", title: "哔哩观影",
 		desc: "哔哩观影选片配置、已看视频规模与日记/历史记忆"},
 	{kind: dumpKindContext, key: "desktop", hotkey: "10", title: "桌面操作",
-		desc: "最近一次桌面操纵任务的要求、起止时间、结果或中断原因"},
+		desc: "最近一次" + agentinfo.NameDesktopOperator + "任务的要求、起止时间、结果或中断原因"},
 	{kind: dumpKindContext, key: "vision", hotkey: "11", title: "视觉理解",
 		desc: "视觉理解的图片 / 动图 / 视频工具清单与运行说明（按次执行，不保留上下文）"},
 	{kind: dumpKindContext, key: "dialogue_bridging", hotkey: "12", title: "通讯桥接",
@@ -339,7 +341,7 @@ func (m appModel) viewDump() string {
 		body = append(body, "  "+selectStyle.Render(m.spinner.View())+" "+valueStyle.Render("正在导出…"))
 	case m.dump.lastErr != "":
 		body = append(body, "  "+errStyle.Render("✗ 导出失败："+m.dump.lastErr),
-			"  "+dimStyle.Render("对话者需要月华运行时就绪；其余智能体需先运行过对应功能才有内容可导"))
+			"  "+dimStyle.Render(agentinfo.NameDialogue+"需要月华运行时就绪；其余智能体需先运行过对应功能才有内容可导"))
 	case m.dump.lastLabel != "":
 		body = append(body,
 			"  "+okStyle.Render("✓ 已写出 "+m.dump.lastResult.Path),

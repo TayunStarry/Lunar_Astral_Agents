@@ -40,7 +40,7 @@ func Chat(ctx context.Context, req Request) (agentbase.Reply, error) {
 	})
 }
 
-// RunToolLoop 执行一次应答周期：轮次编排、工具轮次上限、重复签名拦截与错误上报统一在此。
+// RunToolLoop 执行一次应答周期：轮次编排、工具轮次上限、输出循环回调与错误上报统一在此。
 func RunToolLoop(ctx context.Context, hook LoopHook) {
 	maxToolRounds := hook.MaxToolRounds
 	if maxToolRounds <= 0 {
@@ -50,7 +50,6 @@ func RunToolLoop(ctx context.Context, hook LoopHook) {
 		ID:                 AgentID,
 		Label:              hook.Role,
 		MaxRounds:          hook.MaxRounds,
-		MaxRepeats:         hook.MaxRepeats,
 		MaxToolResultRunes: hook.MaxToolResultRunes,
 	})
 	result, err := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{
@@ -73,7 +72,8 @@ func RunToolLoop(ctx context.Context, hook LoopHook) {
 		return
 	}
 	if errors.Is(err, agentbase.ErrLoop) {
-		loopErr := fmt.Errorf("工具循环重复（第 %d 轮）：同一响应签名连续出现，已停止本轮应答", result.Rounds)
+		// 工具调用重复已不再拦截；这里只可能是流式输出的循环检查。
+		loopErr := fmt.Errorf("模型输出陷入重复（第 %d 轮），已停止本轮应答", result.Rounds)
 		if hook.OnLoop != nil {
 			hook.OnLoop(result.Rounds, loopErr)
 		}

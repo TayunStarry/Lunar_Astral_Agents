@@ -5,13 +5,17 @@ package CreatorPlanner
 import (
 	"sync"
 	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 const (
 	// AgentID 推理实况、数据导出与失败上报共用的智能体标识。
 	AgentID = "creator"
-	// PlannerRole 调度者角色名（与迁移前的提示词角色保持一致）。
+	// PlannerRole 调度者角色名（行为判别条件，必须与链侧传值保持一致，勿改）。
 	PlannerRole = "自由创作.调度者"
+	// DisplayName 导出、维修与目录展示用的显示名。
+	DisplayName = agentinfo.NameCreator
 
 	// AgentWriter 文字创作者角色。
 	AgentWriter = "writer"
@@ -23,11 +27,16 @@ const (
 	AgentRunner = "runner"
 
 	// MaxPlannerRounds 调度者推理轮次上限。
-	MaxPlannerRounds = 6
+	//
+	// 调度者要做「列目录 → 查资源 → 读文件 → 核对变更 → 提交计划」这类多步取证，
+	// 旧值 6 轮会在真正提交计划前就被判定失败；这里给足余量，但仍保留硬上限兜底，
+	// 防止模型无意义空转无限消耗模型调用与上下文预算。
+	MaxPlannerRounds = 24
 	// MaxExecutorRounds 单步智能体推理轮次上限。
-	MaxExecutorRounds = 8
-	// MaxRepeats 同一输出/工具调用重复达到该次数即判定循环输出。
-	MaxRepeats = 3
+	//
+	// 单步执行者要覆盖「读文件 → 识别 → 写入 / 改写 → 校验」的完整闭环，
+	// 旧值 8 轮对多文件步骤偏紧；放宽到 32 轮，同样保留硬上限。
+	MaxExecutorRounds = 32
 	// ModelTimeout 单次模型调用超时。
 	ModelTimeout = 90 * time.Second
 
@@ -43,14 +52,11 @@ const (
 	// MaxChangeQuery 单次 change_query 返回的文件变更次数上限（工具 schema 上限）。
 	MaxChangeQuery = 10
 
-	// denyDefaultTTL 工具禁用默认有效期。
-	denyDefaultTTL = 30 * time.Minute
-	// denyMaxTTL 工具禁用最长有效期。
-	denyMaxTTL = 2 * time.Hour
-	// maxDeniedTools 同时禁用的工具上限。
-	maxDeniedTools = 8
 	// maxRecordedToolCalls 单次循环记录的工具调用条数上限。
-	maxRecordedToolCalls = 16
+	//
+	// 只影响诊断序列（失败简报、数据导出），不影响工具能否执行；
+	// 与新的轮次上限对齐，避免一轮多调用时记录被截断、排障缺失关键证据。
+	maxRecordedToolCalls = 64
 )
 
 // ==== 提示词文件 ====
@@ -76,10 +82,8 @@ var (
 	// lastRun 最近一次推理循环的摘要（供数据导出与修复复位）。
 	lastRun = map[string]any{}
 
-	// policyMu 保护工具禁用表与本次循环的调用记录。
+	// policyMu 保护本次循环的工具调用记录。
 	policyMu sync.Mutex
-	// deniedTools 工具名 → 禁用信息。
-	deniedTools = map[string]deniedTool{}
 	// toolCalls 本次（或最近一次）循环的工具调用序列。
 	toolCalls []toolCallRecord
 	// toolCallCounts 工具名 → 调用次数。

@@ -2,15 +2,9 @@
 //  星月智能 · 消息终端 — 消息发送与输入事件
 // ============================================================
 
-// ---------- 消息发送 ----------
-async function sendMessages(payload) {
-    const res = await fetch('/write/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: payload })
-    });
-    if (!res.ok) throw new Error('发送失败');
-    return res.json();
+// ---------- 消息发送（共享层适配） ----------
+function sendMessages(payload) {
+    return window.LunarShared.api.sendMessages(payload);
 }
 
 function setSendingState(sending) {
@@ -30,10 +24,9 @@ async function handleSend() {
     setSendingState(true);
 
     try {
-        const contentBlocks = [];      // 多模态文本块（img/video/audio/other）
+        const envelopes = [];          // 内容信封（六类：图片/动图/视频/音频/文件/网页）
         const attachments = [];        // 本地附件预览
         const categories = new Set();
-        const documentRefs = [];       // 已入库文档 {handle, name}
         const quoteSnapshots = quotedMessages.map(quoteSnapshotOfMessage);
         const quoteBlock = buildQuoteContentBlock();
 
@@ -44,7 +37,7 @@ async function handleSend() {
                 case 'image':
                     try {
                         const fileUrl = await saveFile(pf.file);
-                        contentBlocks.push({ type: 'image_url', image_url: { url: fileUrl } });
+                        envelopes.push(window.LunarShared.media.imageEnvelope(pf.file, fileUrl));
                         attachments.push({ type: category, src: fileUrl.replace(window.location.origin, ''), label: pf.name });
                         categories.add('image');
                     }
@@ -54,7 +47,7 @@ async function handleSend() {
                 case 'video':
                     try {
                         const fileUrl = await saveFile(pf.file);
-                        contentBlocks.push({ type: 'video_url', video_url: { url: fileUrl } });
+                        envelopes.push(window.LunarShared.media.videoEnvelope(pf.file, fileUrl));
                         attachments.push({ type: 'video', src: fileUrl.replace(window.location.origin, ''), label: pf.name });
                         categories.add('image');
                     }
@@ -65,58 +58,57 @@ async function handleSend() {
                     try {
                         const base64Data = await fileToRawBase64(pf.file);
                         const format = getAudioFormat(pf.file);
-                        contentBlocks.push({ type: 'input_audio', input_audio: { data: base64Data, format } });
+                        envelopes.push(window.LunarShared.media.audioEnvelope(pf.file, base64Data, format));
                     }
                     catch (err) { showToast(`无法读取音频 ${pf.name}`, 'error'); }
                     // 历史记录使用独立 blob URL，避免被清理撤销
                     attachments.push({ type: 'audio', src: URL.createObjectURL(pf.file), label: pf.name });
                     categories.add('voice');
                     break;
-                // 文本文件 -> 服务端入库并拿到句柄（正文不进上下文）
+                // 文本 / 其他文件 -> file 信封（服务端按内容哈希去重并生成句柄）
                 case 'text':
-                    try {
-                        documentRefs.push(await admitDocumentFile(pf.file));
-                        categories.add('file');
-                    }
-                    catch (err) { showToast(`无法上传文件 ${pf.name}`, 'error'); }
-                    break;
-                // 多模态消息 -> 其他文件：一律按文档入库拿句柄（解析不了也保留句柄）
                 default:
                     try {
-                        documentRefs.push(await admitDocumentFile(pf.file));
+                        const fileUrl = await saveFile(pf.file);
+                        envelopes.push(window.LunarShared.media.fileEnvelope(pf.file, fileUrl));
+                        // 本地气泡保留原始文件名与大小；信封内对应 name / bytes
+                        attachments.push({ type: 'file', label: pf.name, size: formatFileSize(pf.file.size) });
                         categories.add('file');
                     }
                     catch (err) {
-                        contentBlocks.push({ type: 'text', text: `${pf.name}（${formatFileSize(pf.file.size)}）` });
+                        // 上传失败时退回文本，至少让月华知道用户带了什么文件
+                        envelopes.push({ type: 'text', text: `${pf.name}（${formatFileSize(pf.file.size)}）` });
                         categories.add('text');
                     }
                     break;
             }
         }
+        // 输入框里的 URL 由前端抽成 webpage 信封，正文保持纯文本
+        const textSplit = await window.LunarShared.media.extractWebpageEnvelopes(text);
+        envelopes.push(...textSplit.envelopes);
         // ---- 组装引用与主用户文本（一次导入/引用只显示一个气泡）----
-        // 文档引用统一为规范句柄 @D.003：文件在 Go 侧或前端上传后入库时即已分配，
-        // 消息里只传句柄，正文由月华按需用 fetch_resources 读取。
-        const handleRefs = [
-            ...referencedFiles,
-            ...documentRefs.map(item => item.handle)
-        ].map(id => String(id).trim().replace(/^[#@]/, ''))
+        // 手动引用的文档统一为规范句柄 @D.003，正文由月华按需用 fetch_resources 读取；
+        // 待发送附件不再预入库，统一由 file 信封在服务端按内容哈希入库。
+        const handleRefs = referencedFiles
+            .map(id => String(id).trim().replace(/^[#@]/, ''))
             .filter(Boolean);
         const refText = [...new Set(handleRefs)].map(id => `@${id}`).join(' ');
-        // 主用户文本：有文字时带引用，只发文件时正文就是句柄
+        // 主用户文本：有文字时带引用，只发引用时正文就是句柄
         const userText = text ? (refText ? refText + ' ' : '') + text : refText;
+        const backendText = textSplit.text ? (refText ? refText + ' ' : '') + textSplit.text : refText;
         if (text) categories.add('text');
-        if (documentRefs.length || referencedFiles.length) categories.add('file');
+        if (referencedFiles.length) categories.add('file');
 
         // ---- 组装发送给后端的消息数组 ----
         // 发送给月华的主文本带 QQ 适配器同款用户名前缀；本地展示（addMessage）仍用不带前缀的 userText
-        const payloadText = userText ? buildUserNamePrefix() + userText : userText;
+        const payloadText = backendText ? buildUserNamePrefix() + backendText : backendText;
         const sendPayload = [];
-        if (userText || contentBlocks.length || quoteBlock) {
+        if (userText || envelopes.length || quoteBlock) {
             const blocks = [];
             if (quoteBlock) blocks.push(quoteBlock);
             if (payloadText) blocks.push({ type: 'text', text: payloadText });
-            blocks.push(...contentBlocks);
-            sendPayload.push({ role: 'user', content: contentBlocks.length ? blocks : (quoteBlock ? blocks : payloadText) });
+            blocks.push(...envelopes);
+            sendPayload.push({ role: 'user', content: envelopes.length ? blocks : (quoteBlock ? blocks : payloadText) });
         }
 
         // ---- 本地历史展示（单个气泡）----

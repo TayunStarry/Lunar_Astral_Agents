@@ -19,7 +19,7 @@ var friendsSectionRegex = regexp.MustCompile(`\n?\{friends-appearance\}\n?`)
 func SystemPrompt(lunarAppearance, crystalAppearance string) string {
 	raw, err := prompts.Read("prompts/dialogueRole.md")
 	if err != nil {
-		logger.Error(LoggerModule, "读取对话者提示词失败: %v", err)
+		logger.Error(LoggerModule, "读取"+Role+"提示词失败: %v", err)
 		return "你的名字叫做月华, 是一个女孩子"
 	}
 	prompt := strings.ReplaceAll(string(raw), "{lunar-appearance}", lunarAppearance)
@@ -52,11 +52,11 @@ func buildFriendsAppearanceSection() string {
 		if name == "月华" || name == "琉璃" {
 			continue
 		}
-		appearance := strings.TrimSpace(characters[name].Appearance)
-		if appearance == "" {
+		profile := characters[name]
+		if strings.TrimSpace(profile.Appearance) == "" {
 			continue
 		}
-		lines = append(lines, "- "+name+"："+appearance)
+		lines = append(lines, "- "+name+"："+profile.Look(false))
 	}
 	if len(lines) == 0 {
 		return ""

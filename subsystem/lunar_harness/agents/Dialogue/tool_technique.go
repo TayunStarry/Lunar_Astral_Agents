@@ -17,6 +17,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/Screenshoter"
 	"LunarSubsystem/LunarHarness/engine/resourcehub"
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 const (
@@ -213,11 +214,11 @@ func (screenshotEnv) SaveImage(name string, data []byte) (string, error) {
 func techniqueScope(kind string) (string, bool) {
 	switch kind {
 	case TechniquePainter:
-		return "绘制者子智能体：按自然语言创作图像，支持文生图、图生图、立绘、合照与超分；handle 可传参考图句柄（如 @I.003）。", true
+		return agentinfo.NamePainter + "子智能体：按自然语言创作图像，支持文生图、图生图、立绘、合照与超分；handle 可传参考图句柄（如 @I.003）。", true
 	case TechniqueMusician:
-		return "演奏者子智能体：创作音乐作品，输出旋律、和弦与乐器编排说明。", true
+		return agentinfo.NameMusician + "子智能体：创作音乐作品，输出旋律、和弦与乐器编排说明。", true
 	case TechniqueScreenshoter:
-		return "截图者子智能体：截取屏幕、窗口或指定区域，并把截图展示给用户。", true
+		return agentinfo.NameScreenshoter + "子智能体：截取屏幕、窗口或指定区域，并把截图展示给用户。", true
 	case TechniqueFileOperations, TechniqueCreatorLegacy, TechniqueFileEditorLegacy:
 		return "文件操作子智能体：统一编排文件读写、文档整理、压缩包处理、文献读取与脚本运行；按目标自动路由到文件编辑、归档解析 / 操作与文献解析，写入自动快照、审查与回滚。", true
 	}

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
@@ -32,24 +33,18 @@ func setupConvertTest(t *testing.T) {
 	}
 }
 
-// TestConvertBilibiliURLBecomesHandle 用户消息里的 B 站地址只留视频句柄，BV 号不得进入上下文
-func TestConvertBilibiliURLBecomesHandle(t *testing.T) {
-	setupConvertTest(t)
-
-	text := textWithResourceHandles("@钛宇-月华 https://www.bilibili.com/video/BV1o4xg6RE9m 讲述了啥？", channelOrigin)
-	if !strings.Contains(text, "@V.") {
-		t.Fatalf("B 站地址应换成视频句柄，实际 %q", text)
+// TestTextStaysPure 文本信封保持纯文本：URL 抽取由发送侧负责，接收侧不再猜测
+func TestTextStaysPure(t *testing.T) {
+	message := PostMessage{
+		Role:    RoleUser,
+		Content: "https://www.bilibili.com/video/BV1o4xg6RE9m 讲述了啥？",
 	}
-	if strings.Contains(text, "BV1o4xg6RE9m") || strings.Contains(text, "bilibili.com") {
-		t.Fatalf("句柄化后不应残留地址或 BV 号，实际 %q", text)
+	converted := ResourcesConversionHandle([]PostMessage{message})
+	if len(converted) != 1 {
+		t.Fatalf("应保留 1 条消息，实际 %d", len(converted))
 	}
-	if !strings.Contains(text, "讲述了啥") {
-		t.Fatalf("原问题的文字部分应保留，实际 %q", text)
-	}
-
-	bvOnly := textWithResourceHandles("BV1o4xg6RE9m 讲述了啥？", channelOrigin)
-	if containsBV(bvOnly, "BV1o4xg6RE9m") {
-		t.Fatalf("裸 BV 号不应回显，实际 %q", bvOnly)
+	if converted[0].Content != message.Content {
+		t.Fatalf("纯文本不应被改写，实际 %v", converted[0].Content)
 	}
 }
 
@@ -99,9 +94,10 @@ func TestUseResourceUnwatchedBilibiliDirectImpression(t *testing.T) {
 	t.Cleanup(func() { bilibiliImpressionHook = old })
 
 	admitted, err := resource.AdmitURL(resource.URLAdmitInput{
-		URL:    "https://www.bilibili.com/video/BV1DLpF6r6pH",
-		Title:  "分享一个视频",
-		Origin: channelOrigin,
+		URL:      "https://www.bilibili.com/video/BV1DLpF6r6pH",
+		Title:    "分享一个视频",
+		Origin:   channelOrigin,
+		KindHint: resource.KindVideo,
 	})
 	if err != nil {
 		t.Fatalf("链接入仓失败: %v", err)
@@ -137,9 +133,10 @@ func TestUseResourceBilibiliImpressionFailure(t *testing.T) {
 	t.Cleanup(func() { bilibiliImpressionHook = old })
 
 	admitted, err := resource.AdmitURL(resource.URLAdmitInput{
-		URL:    "https://www.bilibili.com/video/BV1DLpF6r6pH",
-		Title:  "分享一个视频",
-		Origin: channelOrigin,
+		URL:      "https://www.bilibili.com/video/BV1DLpF6r6pH",
+		Title:    "分享一个视频",
+		Origin:   channelOrigin,
+		KindHint: resource.KindVideo,
 	})
 	if err != nil {
 		t.Fatalf("链接入仓失败: %v", err)
@@ -161,10 +158,11 @@ func TestUseResourceWatchedBilibiliKeepsSummary(t *testing.T) {
 	t.Cleanup(func() { bilibiliImpressionHook = old })
 
 	admitted, err := resource.AdmitURL(resource.URLAdmitInput{
-		URL:     "https://www.bilibili.com/video/BV1DLpF6r6pH",
-		Title:   "分享一个视频",
-		Summary: "讲的是本地部署模型实测。",
-		Origin:  channelOrigin,
+		URL:      "https://www.bilibili.com/video/BV1DLpF6r6pH",
+		Title:    "分享一个视频",
+		Summary:  "讲的是本地部署模型实测。",
+		Origin:   channelOrigin,
+		KindHint: resource.KindVideo,
 	})
 	if err != nil {
 		t.Fatalf("链接入仓失败: %v", err)
@@ -233,16 +231,16 @@ func TestUseResourceUnreadPageFetchFailure(t *testing.T) {
 	}
 }
 
-// TestConvertPageURLBecomesHandle 普通网页地址同样句柄化
-func TestConvertPageURLBecomesHandle(t *testing.T) {
+// TestWebpageEnvelopeRespectsPlatformDeclaration 网页信封按发送侧声明分流 U / V，不做平台识别
+func TestWebpageEnvelopeRespectsPlatformDeclaration(t *testing.T) {
 	setupConvertTest(t)
-
-	text := textWithResourceHandles("看看这个 https://example.com/news/2026/10/28 怎么样", channelOrigin)
-	if !strings.Contains(text, "@U.") {
-		t.Fatalf("网页地址应换成网页句柄，实际 %q", text)
+	raw := json.RawMessage(`{"type":"webpage","webpage":{"source":"qq_group","url":"https://www.bilibili.com/video/BV1xx411c7mD","platform":"web_page"}}`)
+	var item ContentItem
+	if err := json.Unmarshal(raw, &item); err != nil {
+		t.Fatalf("解析网页信封失败: %v", err)
 	}
-	if strings.Contains(text, "example.com/news") {
-		t.Fatalf("句柄化后不应保留原始链接，实际 %q", text)
+	if _, _, err := mediaobject.ValidateEnvelope(toEnvelope(item)); err == nil {
+		t.Fatalf("web_page 声明与视频平台域名不一致时应判定无效")
 	}
 }
 

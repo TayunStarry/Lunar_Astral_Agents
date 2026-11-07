@@ -46,6 +46,7 @@ func persistWatchItems(items []*watchItem, deps watchlistDeps) (int, error) {
 			AuthorName:  record.Info.Owner,
 			Comments:    commentTexts(record.Comments),
 			DurationSec: record.Info.Duration,
+			Topics:      record.Impression.Topics,
 		})
 	}
 	if len(candidates) == 0 {

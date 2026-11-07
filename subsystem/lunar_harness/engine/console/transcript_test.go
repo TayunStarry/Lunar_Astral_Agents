@@ -65,8 +65,8 @@ func TestBuildTranscriptCapturesTurns(t *testing.T) {
 	}
 
 	// 进行中的轮次要能被导出，且标记为 active（不丢"正在跑"这个事实）
-	StreamBegin("绘制者")
-	StreamDelta("绘制者", KindContent, "画到一半")
+	StreamBegin("图像绘制")
+	StreamDelta("图像绘制", KindContent, "画到一半")
 	live := BuildTranscript()
 	if len(live.Turns) != 2 {
 		t.Fatalf("进行中轮次未纳入导出: %d", len(live.Turns))

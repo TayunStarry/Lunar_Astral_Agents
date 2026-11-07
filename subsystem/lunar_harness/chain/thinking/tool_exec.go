@@ -7,6 +7,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
@@ -35,7 +36,9 @@ func (role *DialogueRole) executeToolCall(call agentbase.ToolCall) (string, bool
 		if result.Text != "" {
 			content = append(content, ContentItem{Type: ContentText, Text: result.Text})
 		}
-		if converted := convertImageResource(image, "tool-output"); converted.Type != "" {
+		// 工具产物（截图、渲染图等）都是静图：这里显式声明，不靠后缀或字节推断
+		payload := &URLPayload{Type: mediaobject.TypeImageStatic, URL: image}
+		if converted := convertImageResource(payload, "tool-output"); converted.Type != "" {
 			content = append(content, converted)
 		}
 		role.Messages = append(role.Messages, PostMessage{Role: RoleUser, Content: content})
@@ -91,7 +94,7 @@ func reportDialogueFailure(err error) {
 	}
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			logger.Warn(lunarCoreModule, "[对话者] 故障上报异常: %v", recovered)
+			logger.Warn(lunarCoreModule, "["+Dialogue.Role+"] 故障上报异常: %v", recovered)
 		}
 	}()
 	Dialogue.ReportFailure(err)

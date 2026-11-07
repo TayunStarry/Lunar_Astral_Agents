@@ -275,17 +275,6 @@ func writeRollback(snapshot Snapshot, failures []string) {
 	_ = persistence.WriteFileAtomic(rel, raw)
 }
 
-// WriteTrace 把完整流程追踪写入当前流程目录（供追溯，不参与下一轮上下文）。
-func WriteTrace(flowID string, value any) error {
-	flowID = safeFlowID(flowID)
-	raw, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化流程追踪失败: %w", err)
-	}
-	rel := filepath.ToSlash(filepath.Join(SnapshotRootRel, flowID, flowTraceFile))
-	return persistence.WriteFileAtomic(rel, raw)
-}
-
 // CleanupFlows 只保留最近 keep 个流程快照目录。
 func CleanupFlows(keep int) {
 	if keep <= 0 {

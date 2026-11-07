@@ -47,7 +47,7 @@ func planBrief(ctx context.Context, instruction string) (music.Brief, error) {
 		MaxAttempts: retryAttempts,
 		RetryLoop:   true,
 		OnRetry: func(attempt int, retryErr error) {
-			logger.Warn(module, "[演奏者] 输出陷入重复，已中断并重试（%d/%d）", attempt, retryAttempts-1)
+			logger.Warn(module, "["+roleLabel+"] 输出陷入重复，已中断并重试（%d/%d）", attempt, retryAttempts-1)
 		},
 	})
 	if err != nil {

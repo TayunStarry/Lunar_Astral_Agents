@@ -33,14 +33,13 @@ func pumpNext() {
 		awaitingResponse = false
 		logger.SubError("LunarCore", "Napcat", "SendMessageToAgent 回调未注册，无法推送消息")
 	}
-	if SendAudioToAgent != nil && len(req.AudioURLs) > 0 {
-		SendAudioToAgent(req.AudioURLs)
+	if SendAudioToAgent != nil && len(req.AudioObjects) > 0 {
+		SendAudioToAgent(req.AudioObjects)
 	}
 }
 
-// parseMessageSegments 解析消息段列表，返回 (内容, 是否含图片, 语音/音频地址列表)
+// parseMessageSegments 解析消息段列表，返回 (内容, 是否含多模态内容项, 音频对象列表)
 //
-// 纯文本返回 string，包含图片返回 []map[string]any；视频与文件在解析阶段即收进
-// 资源归档层、正文只写规范句柄（句柄不可得时退化为文件名），语音地址另行返回，
-// 由智能体侧的语音管线完成入库与转写。
+// 纯文本返回 string，包含图片/视频/动图返回 []map[string]any；媒体一律按来源方
+// 声明的类型写成多模态对象，音频对象另行返回，由智能体侧的语音管线完成入库与转写。
 // groupID 用于 @ 目标与回复引用的成员名称解析（私聊传 0）

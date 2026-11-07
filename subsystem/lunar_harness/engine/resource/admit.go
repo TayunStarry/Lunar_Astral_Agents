@@ -68,38 +68,36 @@ func Admit(in AdmitInput) (AdmitResult, error) {
 		return AdmitResult{}, fmt.Errorf("资源内容为空: %s", in.Name)
 	}
 
-	ext := strings.ToLower(filepath.Ext(in.Name))
+	// 2. 类型归位：入站信封以 KindHint / 声明 MIME 为唯一依据；
+	//    内部来源（扫描、工具落盘）没有声明时才按存储层归位，绝不参与信封分类。
+	cls := Classify(ClassifyInput{
+		SourceKind: in.SourceKind,
+		Source:     in.Source,
+		Name:       in.Name,
+		KindHint:   in.KindHint,
+		MIME:       in.MIME,
+		LocalPath:  localPath,
+	})
+	if cls.Kind == "" {
+		cls = DetectStorageKind(ClassifyInput{
+			SourceKind: in.SourceKind,
+			Source:     in.Source,
+			Name:       in.Name,
+			LocalPath:  localPath,
+		})
+	}
+	kind, ext := cls.Kind, cls.Ext
 	if ext == "" {
 		ext = strings.ToLower(filepath.Ext(localPath))
 	}
-	kind := trimKind(in.KindHint)
-	if kind == "" {
-		kind = KindOfExt(ext)
-	}
-	if kind == "" {
-		kind = KindDocument
-	}
-	// 2.1 图片以内容为准修正扩展名与 MIME；动图单独归 G
-	if kind == KindImage || kind == KindAnimated {
-		if realExt, realMIME := sniffFileImageFormat(localPath); realExt != "" {
-			if realExt != ext {
-				logger.Info("FileManager", "图片扩展名与内容不符，按实际格式纠正: %q -> %q", ext, realExt)
-				ext = realExt
-			}
-			in.MIME = realMIME
-			if isAnimatedFile(localPath, ext) {
-				kind = KindAnimated
-			} else {
-				kind = KindImage
-			}
-		}
-	}
-	if !IsMediaExtension(ext) {
+	mimeType := textutil.FirstNonEmpty(in.MIME, cls.MIME)
+	// 只有媒体类需要内容哈希寻址；类型码来自分类器，避免显式声明与扩展名冲突时误判
+	if !isMediaKind(kind) {
 		hash = ""
 	}
 
 	// 3. 落盘（源文件一律原地保留；只有系统自建临时来源会被清理）
-	blobRel, moved, blobOwned, err := placeBlob(localPath, hash, ext, in.Name, in.SourceKind)
+	blobRel, moved, blobOwned, err := placeBlob(localPath, hash, ext, in.Name, in.SourceKind, kind)
 	if err != nil {
 		return AdmitResult{}, err
 	}
@@ -114,7 +112,7 @@ func Admit(in AdmitInput) (AdmitResult, error) {
 		Kind:        kind,
 		Name:        in.Name,
 		Ext:         ext,
-		MIME:        resolveMIME(in.MIME, ext),
+		MIME:        resolveMIME(mimeType, ext),
 		ContentHash: hash,
 		BlobPath:    blobRel,
 		URL:         FileReadURL(blobRel),

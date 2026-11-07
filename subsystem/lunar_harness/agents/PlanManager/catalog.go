@@ -11,7 +11,7 @@ func ToolCatalog() []agentinfo.Agent {
 		tools = append(tools, agentinfo.Tool{Name: def.Function.Name, Description: def.Function.Description})
 	}
 	return []agentinfo.Agent{{
-		ID: "plan_manager", Name: "计划管理", Source: "agents/PlanManager",
+		ID: "plan_manager", Name: roleLabel,
 		Note:  "计划管理智能体：按自然语言新增、删除、改写与查询计划表。",
 		Tools: tools,
 	}}

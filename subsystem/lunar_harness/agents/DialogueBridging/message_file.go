@@ -5,78 +5,68 @@ package DialogueBridging
 import (
 	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
+	"LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
 
-func processFileSegment(fileData napcat.FileData) (string, bool, string) {
+// processFileSegment 处理文件消息段，返回 (文本描述, 信封类型, 信封载荷)。
+//
+// 文件通道可以承载图片：类型以字节嗅探为准（QQ 常用 .jpg / .png 文件名存放
+// GIF 数据），嗅探失败才退回来源方声明的文件名扩展名；其余文件仍落资源归档
+// 并交出句柄文本，避免把大文件 base64 塞进消息体。
+func processFileSegment(groupID int64, fileData napcat.FileData) (string, string, any) {
 	fileName := fileSegmentName(fileData)
 
 	// 未提供任何可读取标识时，仅回传名称与大小信息
 	if fileData.FileID == "" && fileData.File == "" && fileData.URL == "" && fileData.Path == "" {
-		return describeFile(fileName, fileData.FileSize), false, ""
+		return describeFile(fileName, fileData.FileSize), "", nil
 	}
 
 	data, err := readFileSegmentBytes(fileData)
 	if err != nil || len(data) == 0 {
 		logger.SubError("LunarCore", "Napcat", "下载文件失败: %v", err)
-		return describeFile(fileName, fileData.FileSize), false, ""
+		return describeFile(fileName, fileData.FileSize), "", nil
 	}
 
-	// 图片文件 → 作为多媒体内容处理（扩展名缺失时按文件头嗅探）
-	if mimeType := imageMIME(fileName); mimeType != "" {
-		return "", true, "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
-	}
-	if mimeType := sniffImageMIME(data); mimeType != "" {
-		return "", true, "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
-	}
-
-	// 视频文件 → 先落到 multimedia/，再以 @U 链接句柄回引（不再压成 @V 归档副本）
-	ext := strings.ToLower(filepath.Ext(fileName))
-	if resource.KindOfExt(ext) == resource.KindVideo {
-		if url := saveVideoFileURL(fileName, data); url != "" {
-			if res, err := resource.AdmitURL(resource.URLAdmitInput{
-				URL:      url,
-				KindHint: resource.KindVideo,
-				Name:     fileName,
-				Title:    fileName,
-				Origin:   resource.OriginChannel,
-			}); err == nil && res.Handle != "" {
-				return "[" + res.Handle + "] " + fileName + " ", false, ""
-			}
+	// 图片 / 动图：先按字节嗅探真实类型；嗅探失败才退回文件名扩展名声明
+	mimeType, animated := sniffImageBytes(data)
+	if mimeType == "" {
+		if extMIME := mediaobject.MIMETypeOfExt(fileName); strings.HasPrefix(extMIME, "image/") {
+			logger.SubWarn("LunarCore", "Napcat", "文件图片嗅探失败，按文件名扩展名声明: name=%s mime=%s", fileName, extMIME)
+			mimeType, animated = extMIME, mediaobject.IsAnimatedImageMIME(extMIME)
 		}
-		return fileName + " ", false, ""
+	}
+	if mimeType != "" {
+		dataURI := "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
+		envelope, payload := buildFileImageEnvelope(groupID, dataURI, fileName, mimeType, animated)
+		return fileName + " ", envelope, payload
 	}
 
-	// 其余文件（文本 / 代码 / 表格 / 二进制 / 未知类型）一律作文档句柄
-	// （文本/表格可在思考链中按句柄读取；解析不了的文件仍保留句柄与文件名）
-	kindHint := resource.KindOfExt(ext)
-	if kindHint == "" {
-		kindHint = resource.KindDocument
-	}
+	// 其余一律作文档句柄（文本/代码/表格可在思考链中按句柄读取）
 	res, err := resource.Admit(resource.AdmitInput{
 		SourceKind: resource.SourceKindBytes,
 		Data:       data,
 		Name:       fileName,
-		KindHint:   kindHint,
 		Origin:     resource.OriginChannel,
 		Retain:     resource.RetainNormal,
 	})
 	if err != nil || res.Handle == "" {
 		logger.SubError("LunarCore", "Napcat", "文件入库失败: %v", err)
-		return describeFile(fileName, fileData.FileSize), false, ""
+		return describeFile(fileName, fileData.FileSize), "", nil
 	}
 	name := res.Name
 	if name == "" {
 		name = fileName
 	}
-	return "[" + res.Handle + "] " + name + " ", false, ""
+	return "[" + res.Handle + "] " + name + " ", "", nil
 }
 
 // fileSegmentName 取文件段的展示文件名（显式名优先，其次引用路径基名）
@@ -85,7 +75,7 @@ func fileSegmentName(fileData napcat.FileData) string {
 	if fileData.Path != "" {
 		candidates = append(candidates, napcat.FileURLPath(fileData.Path))
 	}
-	return mediaDisplayName("", "未命名文件", candidates...)
+	return mediaDisplayName("未命名文件", candidates...)
 }
 
 // readFileSegmentBytes 按可用性依次尝试文件段的三种读取来源
@@ -141,80 +131,49 @@ func fileSizeText(raw json.RawMessage) string {
 	return ""
 }
 
-// imageMIME 通过扩展名判断并返回图片 MIME 类型，非图片返回空字符串
-func imageMIME(fileName string) string {
-	switch strings.ToLower(strings.TrimPrefix(filepath.Ext(fileName), ".")) {
-	case "png":
-		return "image/png"
-	case "jpg", "jpeg":
-		return "image/jpeg"
-	case "gif":
-		return "image/gif"
-	case "webp":
-		return "image/webp"
-	case "bmp":
-		return "image/bmp"
-	default:
-		return ""
-	}
-}
-
-// sniffImageMIME 通过文件头识别常见图片格式，非图片返回空字符串
-func sniffImageMIME(data []byte) string {
+// sniffImageBytes 通过文件头魔数嗅探真实图片类型与动画能力，非图片返回空 MIME。
+//
+// QQ 常把 GIF 数据存成 .jpg / .png 文件名，信封声明必须以字节为准：
+// PNG 复用 persistence.SniffImageFormat 的 acTL 判定识别 APNG，WebP 扫 ANIM 块识别动态 WebP，GIF 统一按动图声明。
+func sniffImageBytes(data []byte) (string, bool) {
 	switch {
 	case len(data) >= 8 && bytes.HasPrefix(data, []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}):
-		return "image/png"
+		_, mimeType := persistence.SniffImageFormat(data)
+		return mimeType, mimeType == "image/apng"
 	case len(data) >= 3 && bytes.HasPrefix(data, []byte{0xFF, 0xD8, 0xFF}):
-		return "image/jpeg"
+		return "image/jpeg", false
 	case len(data) >= 6 && (bytes.HasPrefix(data, []byte("GIF87a")) || bytes.HasPrefix(data, []byte("GIF89a"))):
-		return "image/gif"
+		return "image/gif", true
 	case len(data) >= 12 && bytes.HasPrefix(data, []byte("RIFF")) && bytes.Equal(data[8:12], []byte("WEBP")):
-		return "image/webp"
+		return "image/webp", persistence.IsAnimatedWebP(data)
 	case len(data) >= 2 && bytes.HasPrefix(data, []byte("BM")):
-		return "image/bmp"
+		return "image/bmp", false
 	default:
-		return ""
+		return "", false
 	}
 }
 
-// dataURIExt 从 data:image/... URI 的 MIME 推断扩展名（未知时回退 .png）
-func dataURIExt(dataURI string) string {
-	meta := dataURI
-	if end := strings.IndexAny(meta, ";,"); end >= 0 {
-		meta = meta[:end]
-	}
-	switch strings.ToLower(strings.TrimPrefix(meta, "data:")) {
-	case "image/jpeg", "image/jpg":
-		return ".jpg"
-	case "image/gif":
-		return ".gif"
-	case "image/webp":
-		return ".webp"
-	case "image/bmp":
-		return ".bmp"
-	default:
-		return ".png"
-	}
+// sniffImageMIME 只取嗅探出的 MIME，供只关心类型的调用点复用
+func sniffImageMIME(data []byte) string {
+	mimeType, _ := sniffImageBytes(data)
+	return mimeType
 }
 
-// forwardImageName 为转发图片生成带图片扩展名的建议文件名。
-//
-// QQ CDN 直链经常没有扩展名；如果没有扩展名，归档层会按文档处理。
-// 这里未知格式一律先用 .jpg，归档层随后会按文件头嗅探把 GIF/WebP 等纠正过来。
-func forwardImageName(source string) string {
-	if strings.HasPrefix(source, "data:") {
-		return "forward" + dataURIExt(source)
+// decodeDataURIBytes 解码 data URI 的 base64 载荷；非 base64 data URI 返回空
+func decodeDataURIBytes(ref string) []byte {
+	ref = strings.TrimSpace(ref)
+	if !strings.HasPrefix(strings.ToLower(ref), "data:") {
+		return nil
 	}
-	pathPart := source
-	if cut := strings.IndexAny(pathPart, "?#"); cut >= 0 {
-		pathPart = pathPart[:cut]
+	comma := strings.IndexByte(ref, ',')
+	if comma < 0 || !strings.Contains(strings.ToLower(ref[:comma]), ";base64") {
+		return nil
 	}
-	switch ext := strings.ToLower(filepath.Ext(pathPart)); ext {
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp":
-		return "forward" + ext
-	default:
-		return "forward.jpg"
+	data, err := base64.StdEncoding.DecodeString(ref[comma+1:])
+	if err != nil || len(data) == 0 {
+		return nil
 	}
+	return data
 }
 
 // extractJsonCardTitle 从 JSON 卡片数据中提取标题（小程序 / 分享卡片 / 邀请等）
@@ -237,6 +196,41 @@ func extractJsonCardTitle(data string) string {
 	}
 	if title, ok := payload["title"].(string); ok && title != "" {
 		return title
+	}
+	return ""
+}
+
+// extractJsonCardLink 从 JSON 卡片数据中提取可下发的 http/https 链接。
+//
+// QQ 卡片把链接放在不同层：顶层 url，或 meta.<业务>.jumpUrl / qqdocurl / url
+// （news 为分享卡片，detail_1 为公众号文章）。按固定顺序扫描，保证结果稳定。
+func extractJsonCardLink(data string) string {
+	var payload map[string]any
+	if json.Unmarshal([]byte(data), &payload) != nil {
+		return ""
+	}
+	if link, ok := payload["url"].(string); ok && isHTTPLink(link) {
+		return strings.TrimSpace(link)
+	}
+	meta, ok := payload["meta"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	keys := make([]string, 0, len(meta))
+	for key := range meta {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		item, ok := meta[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, field := range []string{"jumpUrl", "qqdocurl", "url"} {
+			if link, ok := item[field].(string); ok && isHTTPLink(link) {
+				return strings.TrimSpace(link)
+			}
+		}
 	}
 	return ""
 }

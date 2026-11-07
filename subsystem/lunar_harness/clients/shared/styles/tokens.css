@@ -1,0 +1,34 @@
+/* ========== 星月智能 · 共享设计令牌（仅颜色 / 尺寸 / 字体） ==========
+ *
+ * 桌面端与移动端各自维护自己的主题变量；这里只做「同名语义」的别名，
+ * 让共享组件用一套变量名，同时保留两端既有主题取值。
+ * 缺失的变量走括号内兜底值，不覆盖任何端内布局。
+ */
+
+/* 同时声明在 body 上：桌面端暗色主题把 --glass-bg / --text-secondary
+ * 覆写在 body.dark-mode，别名必须在 body 上求值才能跟随主题切换。 */
+:root,
+body {
+	/* 圆角 */
+	--shared-radius-md: var(--radius-md, 10px);
+	--shared-radius-lg: var(--radius-lg, 12px);
+	--shared-radius-pill: 999px;
+
+	/* 文本颜色 */
+	--shared-text-primary: var(--text-primary, rgba(255, 255, 255, 0.92));
+	--shared-text-secondary: var(--text-secondary, rgba(255, 255, 255, 0.7));
+
+	/* 玻璃与强调色 */
+	--shared-glass-bg: var(--glass-bg, rgba(255, 255, 255, 0.12));
+	--shared-glass-border: var(--glass-border, rgba(255, 255, 255, 0.25));
+	--shared-panel-bg: var(--panel-header-bg, rgba(50, 50, 58, 0.6));
+	--shared-accent: var(--accent-color, #9d6bff);
+
+	/* 尺寸 */
+	--shared-image-max-height: 360px;
+	--shared-video-max-height: 380px;
+	--shared-touch-target: 32px;
+
+	/* 字体 */
+	--shared-font-mono: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+}

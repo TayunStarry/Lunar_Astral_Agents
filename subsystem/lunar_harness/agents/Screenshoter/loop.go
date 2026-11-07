@@ -14,7 +14,7 @@ import (
 
 // run 执行工具推理循环并返回截图汇总。
 //
-// 循环编排、重复检测与失败上报统一由 protocol/agentbase 的 RunToolLoop 承担；
+// 循环编排、轮次上限与失败上报统一由 protocol/agentbase 的 RunToolLoop 承担；
 // 模型失败仍沿用原语义：记录日志后带着已有截图继续收尾。
 func (s *session) run() string {
 	s.shots = nil
@@ -31,7 +31,6 @@ func (s *session) run() string {
 		ID:                 agentID,
 		Label:              roleLabel,
 		MaxRounds:          maxIterations,
-		MaxRepeats:         -1, // 内容循环由 StreamWithRetry 负责，跨轮不重复检测
 		MaxToolResultRunes: -1, // 工具结果原样回填
 	})
 	result, err := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{
@@ -41,10 +40,10 @@ func (s *session) run() string {
 			return trimHistory(messages, contextLimit)
 		},
 		Call: func(ctx context.Context, round int, messages []agentbase.Message, tools []agentbase.ToolDefinition) (agentbase.Reply, error) {
-			logger.Info(module, "[截图者] 第 %d 轮推理", round)
+			logger.Info(module, "["+roleLabel+"] 第 %d 轮推理", round)
 			reply, streamErr := s.stream(ctx, messages, tools)
 			if streamErr != nil {
-				logger.Warn(module, "[截图者] 第 %d 轮推理失败: %v", round, streamErr)
+				logger.Warn(module, "["+roleLabel+"] 第 %d 轮推理失败: %v", round, streamErr)
 			}
 			return reply, streamErr
 		},
@@ -102,7 +101,7 @@ func (s *session) stream(ctx context.Context, messages []baseMessage, tools []ag
 		MaxAttempts: retryAttempts,
 		RetryLoop:   true,
 		OnRetry: func(attempt int, err error) {
-			logger.Warn(module, "[截图者] 输出陷入重复，已中断并重试（%d/%d）", attempt, retryAttempts-1)
+			logger.Warn(module, "["+roleLabel+"] 输出陷入重复，已中断并重试（%d/%d）", attempt, retryAttempts-1)
 		},
 	})
 }

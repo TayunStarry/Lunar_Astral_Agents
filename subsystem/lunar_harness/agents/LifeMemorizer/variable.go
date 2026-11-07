@@ -4,14 +4,15 @@ package LifeMemorizer
 
 import (
 	"sync"
-	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 const (
 	// AgentID 推理实况、数据导出与失败上报共用的智能体标识。
 	AgentID = "life_memorizer"
-	// RoleName 实况角色标签（记忆整理按次执行、静默调用）。
-	RoleName = "生活记忆整理者"
+	// RoleName 实况角色标签（记忆整理按次执行，每次模型调用各自一条实况）。
+	RoleName = agentinfo.NameLifeMemorizer
 
 	// MaxTextRunes 单条整理后记忆的最大字符数（超出时在句读处结束，不硬切半句）。
 	MaxTextRunes = 512
@@ -41,14 +42,6 @@ const (
 	// promptTask 记忆条目化整理任务模板（含 {item-count} / {min-keep} 占位）。
 	promptTask = "lifeMemoryTask.md"
 
-	// policyDefaultTTL 修复策略的默认有效期。
-	policyDefaultTTL = 30 * time.Minute
-	// policyMaxTTL 修复策略的最长有效期。
-	policyMaxTTL = 2 * time.Hour
-	// retainPercentFloor 修复时可下调的正文保留下限（再低就会明显丢事实）。
-	retainPercentFloor = 5
-	// maxSkippedClusters 同时记住的「不可合并簇」上限。
-	maxSkippedClusters = 32
 	// maxRecordedInputs 复跑验证时保留的上次输入条数。
 	maxRecordedInputs = 12
 	// maxRecordedInputRunes 复跑验证保留的输入总字数上限。
@@ -60,15 +53,6 @@ var (
 	lastRunMu sync.Mutex
 	// lastRun 最近一次整理任务的摘要（供数据导出与修复复位）。
 	lastRun = map[string]any{}
-
-	// policyMu 保护修复策略（临时阈值与不可合并簇）。
-	policyMu sync.Mutex
-	// retainOverride 临时下调的正文保留下限；0 表示使用默认值。
-	retainOverride int
-	// retainUntil 临时阈值的到期时间。
-	retainUntil time.Time
-	// skippedClusters 内容指纹 → 跳过合并的截止时间。
-	skippedClusters = map[string]time.Time{}
 
 	// inputsMu 保护最近一次合并的输入（仅用于修复后复跑验证）。
 	inputsMu sync.Mutex

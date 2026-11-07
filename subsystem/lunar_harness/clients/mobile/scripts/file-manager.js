@@ -3,17 +3,17 @@ import {
     getFileCategory,
     revokeAllFilePreviews,
     getVideoThumbnail,
-    formatFileSize,
     fileToRawBase64,
     getAudioFormat,
 } from './file.js';
-import { saveFile, admitDocumentFile } from './fetch.js';
+import { saveFile } from './fetch.js';
+import { imageEnvelope, videoEnvelope, audioEnvelope, fileEnvelope } from '/shared/core/media.js';
 
 /**
  * 待发送附件管理器
  *
  * 负责移动端文件的选择、悬浮气泡预览渲染、删除与上传，
- * 以及把附件转换为 OpenAI 兼容的消息内容块（与电脑端 send.js 规则一致）。
+ * 以及把附件转换为六类内容信封（与电脑端 send.js 规则一致）。
  */
 export class FilePreviewManager {
     /** @type {Array<{file: File, url: string, type: string, name: string}>} 待发送附件预览 */
@@ -123,8 +123,8 @@ export class FilePreviewManager {
      * 上传附件并返回处理结果
      *
      * 音频文件不上传服务器（后续以 base64 直接嵌入消息）；
-     * 文本与其他文件按文档入库，只带回句柄（正文不进上下文）；
-     * 图片与视频经 /file/write 保存并返回可访问 URL。
+     * 图片、视频、文本与其他文件统一经 /file/write 保存，按内容哈希落盘，
+     * 随后以对应信封下发，不再预入库换句柄。
      */
     async processFileUpload(preview) {
         const category = getFileCategory(preview.file);
@@ -136,17 +136,6 @@ export class FilePreviewManager {
                 fileName: preview.name,
                 fileSize: preview.file.size,
                 previewUrl: URL.createObjectURL(preview.file),
-            };
-        }
-
-        if (category === 'text' || category === 'other') {
-            const admitted = await admitDocumentFile(preview.file);
-            return {
-                fileUrl: null,
-                handle: admitted.handle,
-                category,
-                fileName: admitted.name,
-                fileSize: preview.file.size,
             };
         }
 
@@ -163,12 +152,12 @@ export class FilePreviewManager {
     }
 
     /**
-     * 构建 OpenAI 兼容的消息内容块
+     * 构建消息内容项
      *
      * 规则与电脑端一致：
-     * - 图片 → image_url；视频 → video_url（句柄由服务端生成）
-     * - 音频 → input_audio（统一内联下发，服务端转写，不落盘）
-     * - 文本 / 其他文件 → 只带文档句柄，正文不进上下文
+     * - 图片 → image_static / image_animated；视频 → video（句柄由服务端生成）
+     * - 音频 → audio（data URI 内联下发，服务端转写，不落盘）
+     * - 文本 / 其他文件 → file 信封（name / bytes 保留原始文件名与大小）
      *
      * @param {Array<object>} fileResults - processFileUpload 的结果列表
      * @returns {Promise<Array<object>>} 内容块数组
@@ -178,16 +167,14 @@ export class FilePreviewManager {
 
         for (const res of fileResults) {
             const preview = this.previews.find(p => p.name === res.fileName);
+            const sourceFile = preview?.file || { name: res.fileName, type: '', size: res.fileSize };
 
             if (res.category === 'audio') {
                 if (!preview) continue;
                 try {
                     const base64Data = await fileToRawBase64(preview.file);
                     const audioFormat = getAudioFormat(preview.file);
-                    contentBlocks.push({
-                        type: 'input_audio',
-                        input_audio: { data: base64Data, format: audioFormat }
-                    });
+                    contentBlocks.push(audioEnvelope(preview.file, base64Data, audioFormat));
                 } catch (err) {
                     this.showError?.(`无法读取音频 ${res.fileName}`);
                 }
@@ -195,19 +182,13 @@ export class FilePreviewManager {
             }
 
             if (res.category === 'image') {
-                contentBlocks.push({ type: 'image_url', image_url: { url: res.fileUrl } });
+                contentBlocks.push(imageEnvelope(sourceFile, res.fileUrl));
             }
             else if (res.category === 'video') {
-                contentBlocks.push({ type: 'video_url', video_url: { url: res.fileUrl } });
-            }
-            else if (res.handle) {
-                contentBlocks.push({ type: 'text', text: `${res.handle} ${res.fileName}` });
+                contentBlocks.push(videoEnvelope(sourceFile, res.fileUrl));
             }
             else {
-                contentBlocks.push({
-                    type: 'text',
-                    text: `${res.fileName}（${formatFileSize(res.fileSize)}）`
-                });
+                contentBlocks.push(fileEnvelope(sourceFile, res.fileUrl));
             }
         }
 

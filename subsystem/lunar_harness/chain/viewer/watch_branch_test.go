@@ -1,6 +1,6 @@
 package viewer
 
-// watch_branch_test.go 看视频分支：取片段顺序、最后一段 @、降级、状态更新、8 视频里程碑去重。
+// watch_branch_test.go 看视频分支：取片段顺序、概率评论、收束评论 @、降级、状态更新、8 视频里程碑去重。
 
 import (
 	"context"
@@ -49,13 +49,17 @@ func newWatchTestDeps(t *testing.T) (watchDeps, *watchTestLog) {
 			log.material = material
 			return "橘猫那一下太可爱了", nil
 		},
-		postComment: func(_ viewerstore.WatchVideo, message string, mentionAuthor bool) (bool, bool, error) {
+		postComment: func(_ viewerstore.WatchVideo, message string, closing bool) (bool, bool, error) {
 			log.order = append(log.order, "post")
-			log.posted, log.mentionAsked = message, mentionAuthor
+			log.posted, log.closingAsked = message, closing
 			if log.postFailed {
 				return false, false, nil
 			}
-			return true, mentionAuthor, nil
+			return true, closing, nil
+		},
+		rollRemark: func() bool {
+			log.rolled++
+			return log.remarkHit
 		},
 		markWatched: func(_ string, index int, _ int64) (viewerstore.SegmentWatchResult, error) {
 			log.order = append(log.order, "mark")
@@ -91,7 +95,9 @@ type watchTestLog struct {
 	understandErr   error
 	material        string
 	posted          string
-	mentionAsked    bool
+	remarkHit       bool
+	rolled          int
+	closingAsked    bool
 	postFailed      bool
 	markIndex       int
 	markErr         error
@@ -104,6 +110,7 @@ type watchTestLog struct {
 func TestWatchSegmentPublishesCommentAndUpdatesActivity(t *testing.T) {
 	deps, log := newWatchTestDeps(t)
 	log.segmentIndex, log.segmentTotal = 0, 3
+	log.remarkHit = true
 
 	out, err := watchWithDeps(context.Background(), "", deps)
 	if err != nil {
@@ -113,10 +120,10 @@ func TestWatchSegmentPublishesCommentAndUpdatesActivity(t *testing.T) {
 		t.Fatalf("片段定位不符: %+v", out)
 	}
 	if !out.CommentPosted || out.Mentioned {
-		t.Fatalf("非最后一段应发评论且不 @：%+v", out)
+		t.Fatalf("非最后一段命中概率后应发评论且不 @：%+v", out)
 	}
-	if log.mentionAsked {
-		t.Fatal("非最后一段不应请求 @ 作者")
+	if log.closingAsked {
+		t.Fatal("非最后一段不应按收束评论处理")
 	}
 	if !strings.Contains(log.material, "橘猫") || !strings.Contains(log.material, "测试视频") {
 		t.Fatalf("评论材料应同时包含画面理解与视频印象，实际 %q", log.material)
@@ -137,9 +144,11 @@ func TestWatchSegmentPublishesCommentAndUpdatesActivity(t *testing.T) {
 	}
 }
 
-func TestWatchLastSegmentMentionsAuthor(t *testing.T) {
+// TestWatchLastSegmentAlwaysPostsClosing 收束评论不受概率影响：未命中概率也必发，并 @ 特别关注。
+func TestWatchLastSegmentAlwaysPostsClosing(t *testing.T) {
 	deps, log := newWatchTestDeps(t)
 	log.segmentIndex, log.segmentTotal = 2, 3
+	log.remarkHit = false
 
 	out, err := watchWithDeps(context.Background(), "", deps)
 	if err != nil {
@@ -148,11 +157,40 @@ func TestWatchLastSegmentMentionsAuthor(t *testing.T) {
 	if !out.LastSegment {
 		t.Fatal("最后一个片段应被识别")
 	}
-	if !log.mentionAsked || !out.Mentioned {
-		t.Fatalf("最后一段的评论应带 @ 作者，实际 asked=%v mentioned=%v", log.mentionAsked, out.Mentioned)
+	if log.rolled != 0 {
+		t.Fatalf("最后一个片段不应经过概率判定，实际掷了 %d 次", log.rolled)
+	}
+	if !out.CommentPosted || !log.closingAsked || !out.Mentioned {
+		t.Fatalf("收束评论必发并 @，实际 posted=%v closing=%v mentioned=%v",
+			out.CommentPosted, log.closingAsked, out.Mentioned)
 	}
 	if !strings.Contains(log.activity, "最后一个片段") {
 		t.Fatalf("最后一段的状态文案不符: %q", log.activity)
+	}
+}
+
+// TestWatchSegmentSkipsCommentWhenChanceMisses 未命中概率：不发评论，但状态照常推进、片段照常清理。
+func TestWatchSegmentSkipsCommentWhenChanceMisses(t *testing.T) {
+	deps, log := newWatchTestDeps(t)
+	log.segmentIndex, log.segmentTotal = 1, 4
+	log.remarkHit = false
+
+	out, err := watchWithDeps(context.Background(), "", deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.CommentPosted || out.Comment != "" {
+		t.Fatalf("未命中概率不应生成或发布评论：%+v", out)
+	}
+	if log.rolled != 1 {
+		t.Fatalf("普通片段应经过一次概率判定，实际 %d", log.rolled)
+	}
+	want := []string{"next", "understand", "activity", "mark", "remove"}
+	if strings.Join(log.order, ",") != strings.Join(want, ",") {
+		t.Fatalf("未命中评论时仍应更新状态并清理片段：want %v，实际 %v", want, log.order)
+	}
+	if log.markIndex != 1 || log.removedIndex != 1 {
+		t.Fatalf("应标记并清理同一个片段，mark=%d remove=%d", log.markIndex, log.removedIndex)
 	}
 }
 
@@ -160,6 +198,7 @@ func TestWatchDegradesWhenClipUndecodable(t *testing.T) {
 	deps, log := newWatchTestDeps(t)
 	log.segmentIndex, log.segmentTotal = 0, 2
 	log.understandErr = errors.New("ffmpeg 解码失败")
+	log.remarkHit = true
 
 	out, err := watchWithDeps(context.Background(), "对话者想看猫", deps)
 	if err != nil {

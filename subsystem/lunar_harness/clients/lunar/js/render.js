@@ -197,9 +197,11 @@ function renderMessageElement(msg) {
     // 音频文件块
     if (msg.audioSrc) host.appendChild(buildAudioFileBlock(msg));
 
-    // 文本内容容器
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'markdown-content';
+    // 文本内容容器（共享文本块，正文稍后由 fillUserMessageContent / fillMarkdownContent 填充）
+    const contentDiv = window.LunarShared.messageView.buildTextBlock('', {
+        className: 'markdown-content',
+        render: false
+    });
     host.appendChild(contentDiv);
 
     // 资源收录引用图标（按钮）：点击把句柄载入输入框
@@ -222,7 +224,8 @@ function renderMessageElement(msg) {
     // 音乐卡片挂在气泡下方，同属一个消息块但视觉独立
     if (hasMusic) {
         el.appendChild(bubble);
-        el.appendChild(buildMusicCard(msg));
+        const card = buildMusicCard(msg);
+        if (card) el.appendChild(card);
     }
 
     messageArea.appendChild(el);

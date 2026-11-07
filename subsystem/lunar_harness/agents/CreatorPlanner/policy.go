@@ -1,21 +1,17 @@
 package CreatorPlanner
 
-// policy.go 创作规划者的工具循环修复策略：记录调用序列、临时禁用问题工具、验证拦截是否生效。
+// policy.go 创作规划者的工具循环修复策略：记录调用序列，并可复位已卡死的在途记录。
 //
-// 禁用表是「下一次运行真实生效」的修复手段：被禁用的工具在 Execute 入口直接返回业务错误，
-// 让模型改用其他工具或结束，而不是继续空转到轮次上限。
+// 智能维修只允许修复已经产生的状态（最近推理记录、工具调用序列），
+// 不得临时禁用工具或改写后续判定策略——那会约束智能体未来的行为。
 
 import (
 	"context"
-	"fmt"
-	"sort"
-	"strings"
-	"time"
 
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
-// beginToolRun 开始新一轮工具循环：清空上一次的调用记录，保留禁用表。
+// beginToolRun 开始新一轮工具循环：清空上一次的调用记录。
 func beginToolRun() {
 	policyMu.Lock()
 	toolCalls = nil
@@ -35,61 +31,6 @@ func recordToolCall(name, args, note string) {
 			Note: note,
 		})
 	}
-}
-
-// toolDeniedReason 判断工具是否在禁用期内，返回禁用原因。
-func toolDeniedReason(name string) (string, bool) {
-	now := time.Now()
-	policyMu.Lock()
-	defer policyMu.Unlock()
-	for tool, denied := range deniedTools {
-		if now.After(denied.Until) {
-			delete(deniedTools, tool)
-		}
-	}
-	denied, ok := deniedTools[name]
-	if !ok || now.After(denied.Until) {
-		return "", false
-	}
-	return denied.Reason, true
-}
-
-// denyTool 临时禁用工具，返回到期时间。
-func denyTool(name, reason string, ttl time.Duration) (time.Time, error) {
-	name = agentbase.TruncateRunes(name, 120)
-	if name == "" {
-		return time.Time{}, fmt.Errorf("缺少要禁用的工具名")
-	}
-	if ttl <= 0 {
-		ttl = denyDefaultTTL
-	}
-	if ttl > denyMaxTTL {
-		ttl = denyMaxTTL
-	}
-	until := time.Now().Add(ttl)
-	policyMu.Lock()
-	deniedTools[name] = deniedTool{Reason: reason, Until: until}
-	for len(deniedTools) > maxDeniedTools {
-		oldestName := ""
-		var oldest time.Time
-		for tool, denied := range deniedTools {
-			if oldestName == "" || denied.Until.Before(oldest) {
-				oldestName, oldest = tool, denied.Until
-			}
-		}
-		delete(deniedTools, oldestName)
-	}
-	policyMu.Unlock()
-	return until, nil
-}
-
-// clearDeniedTools 解除全部工具禁用。
-func clearDeniedTools() int {
-	policyMu.Lock()
-	defer policyMu.Unlock()
-	count := len(deniedTools)
-	deniedTools = map[string]deniedTool{}
-	return count
 }
 
 // dominantTool 返回本次循环调用次数最多的工具及其示例参数。
@@ -113,27 +54,11 @@ func dominantTool() (string, string, int) {
 	return name, args, count
 }
 
-// toolPolicySnapshot 返回禁用表与调用序列的摘要。
+// toolPolicySnapshot 返回本次循环调用序列的摘要。
 func toolPolicySnapshot() map[string]any {
-	now := time.Now()
 	policyMu.Lock()
 	defer policyMu.Unlock()
-	denied := make([]map[string]any, 0, len(deniedTools))
-	for tool, item := range deniedTools {
-		if now.After(item.Until) {
-			continue
-		}
-		denied = append(denied, map[string]any{
-			"tool":             tool,
-			"reason":           item.Reason,
-			"remaining_minute": int(item.Until.Sub(now).Minutes()),
-		})
-	}
-	sort.Slice(denied, func(i, j int) bool {
-		return denied[i]["tool"].(string) < denied[j]["tool"].(string)
-	})
 	return map[string]any{
-		"denied_tools":   denied,
 		"recorded_calls": len(toolCalls),
 		"call_counts":    cloneCounts(toolCallCounts),
 	}
@@ -163,42 +88,31 @@ func toolRunRecords() []map[string]any {
 	return out
 }
 
-// resetRepairState 清空最近推理记录与调用序列；禁用表保留（那是修复手段）。
+// resetRepairState 清空最近推理记录与调用序列（只复位已产生的状态）。
 func resetRepairState() string {
 	beginToolRun()
-	return resetLastRun() + "，并清空工具调用序列（已生效的工具禁用保留）"
+	return resetLastRun() + "，并清空工具调用序列"
 }
 
-// verifyToolPolicy 检查本次循环里调用最多的问题工具是否已被禁用。
-func verifyToolPolicy(_ context.Context, params map[string]any) (any, error) {
-	name, args, count := dominantTool()
-	if provided, ok := params["tool"].(string); ok && strings.TrimSpace(provided) != "" {
-		name = strings.TrimSpace(provided)
-	}
-	if name == "" {
+// verifyResetState 验证 reset 是否真的清掉了在途记录；不涉及任何后续行为约束。
+func verifyResetState(_ context.Context, _ map[string]any) (any, error) {
+	policyMu.Lock()
+	recorded := len(toolCalls)
+	policyMu.Unlock()
+	lastRunCleared := len(snapshotLastRun()) == 0
+	if recorded == 0 && lastRunCleared {
 		return map[string]any{
-			"verified": false,
-			"mode":     "policy_check",
-			"reason":   "没有记录到工具调用序列，无法确认禁用是否命中；请读取运行态人工核对",
-		}, nil
-	}
-	reason, denied := toolDeniedReason(name)
-	if !denied {
-		return map[string]any{
-			"verified":     false,
-			"mode":         "policy_check",
-			"tool":         name,
-			"repeat_count": count,
-			"reason":       "问题工具尚未被禁用，下一轮仍可能重复调用",
+			"verified":       true,
+			"mode":           "state_check",
+			"detail":         "在途工具调用序列与最近推理记录均已清空；未改动后续工具可用性",
+			"recorded_calls": 0,
 		}, nil
 	}
 	return map[string]any{
-		"verified":     true,
-		"mode":         "policy_check",
-		"tool":         name,
-		"tool_args":    args,
-		"repeat_count": count,
-		"deny_reason":  reason,
-		"detail":       "下一轮调用该工具会直接返回禁用错误，模型需改用其他工具或结束",
+		"verified":       false,
+		"mode":           "state_check",
+		"recorded_calls": recorded,
+		"last_run_clear": lastRunCleared,
+		"reason":         "在途记录尚未清空，请重新执行 reset",
 	}, nil
 }

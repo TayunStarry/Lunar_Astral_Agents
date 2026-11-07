@@ -13,6 +13,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 const (
@@ -78,7 +79,7 @@ func ExecuteNetworkExplore(args map[string]any) (result ToolResult) {
 		}
 		instruction := agentdispatch.WithHandles(call.Instruction, call.Handle)
 		text, runErr := DialogueBridging.Run(instruction)
-		return toolJSON(networkExploreResult("通讯桥接", text, runErr, call.Handle))
+		return toolJSON(networkExploreResult(agentinfo.NameDialogueBridging, text, runErr, call.Handle))
 	default:
 		return toolJSON(agentdispatch.Failure("type 只能取 web_search / bilibili_viewer / mutual_forum / qq_send", nil))
 	}

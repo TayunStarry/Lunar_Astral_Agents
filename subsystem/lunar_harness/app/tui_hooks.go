@@ -178,27 +178,74 @@ func WireTUIEngineHooks() {
 	thinking.SetDesktopActorStopHook(desktopchain.Stop)
 }
 
+// roleAgentIDs 实况角色标签 → 智能修复使用的智能体 ID（显式映射，禁止前缀猜测）。
+var roleAgentIDs = map[string]string{
+	agentinfo.NameVision:           "vision",
+	agentinfo.NameDocumentReader:   "document_reader",
+	agentinfo.NameArchiveOps:       "archive_ops",
+	"归档解析":                         "archive_reader",
+	agentinfo.NameFileEditor:       "file_editor",
+	agentinfo.NameCreator:          "creator",
+	"创作规划者":                        "creator",
+	"自由创作.调度者":                     "creator",
+	"自由创作":                         "creative",
+	agentinfo.NameLifeMemorizer:    "life_memorizer",
+	"生活记忆整理者":                      "life_memorizer",
+	agentinfo.NamePainter:          "painter",
+	"绘制者":                          "painter",
+	agentinfo.NameScreenshoter:     "screenshoter",
+	"截图者":                          "screenshoter",
+	agentinfo.NameDesktopOperator:  "desktop_agent",
+	"桌面操作-模型":                      "desktop_agent",
+	"桌面操纵":                         "desktop_agent",
+	agentinfo.NameMusician:         "musician",
+	"演奏者":                          "musician",
+	agentinfo.NameDialogueBridging: "dialogue_bridging",
+	agentinfo.NameMutualForum:      "mutual_forum_agent",
+	"互助论坛-模型":                      "mutual_forum_agent",
+	agentinfo.NameSearchPlanner:    "search_planner",
+	"搜索者-规划":                       "search_planner",
+	agentinfo.NameSearchSummarizer: "search_summarizer",
+	"搜索者-摘要":                       "search_summarizer",
+	agentinfo.NameViewerScreening:  "viewer_screening",
+	"观影者-阅片":                       "viewer_screening",
+	agentinfo.NameViewerCensor:     "viewer_censor",
+	"观影者-审查":                       "viewer_censor",
+	agentinfo.NameViewerCritic:     "viewer_critic",
+	"观影者-评论":                       "viewer_critic",
+	agentinfo.NameViewerShare:      "viewer_share",
+	"观影者-分享":                       "viewer_share",
+	agentinfo.NameViewerRemark:     "viewer_remark",
+	"观影者-观感":                       "viewer_remark",
+	agentinfo.NameDialogue:         "dialogue",
+	"对话者":                          "dialogue",
+	agentinfo.NameResponder:        "responder",
+	agentinfo.NameSavior:           "savior",
+	"智能修复":                         "savior",
+	"哔哩观影":                         "bilibili",
+	"网络搜索":                         "web_search",
+}
+
 // agentIDByRole 把故障归属映射到智能修复使用的智能体 ID。
-// 新基座直接上报标准 ID；旧调用点仍按实况角色标签上报，这里做兼容映射。
+// 新基座直接上报标准 ID；旧调用点仍按实况角色标签上报，这里做显式兼容映射。
 func agentIDByRole(role string) string {
+	role = strings.TrimSpace(role)
+	if id, ok := roleAgentIDs[role]; ok {
+		return id
+	}
+	if base, _, ok := strings.Cut(role, "·"); ok {
+		if id, ok := roleAgentIDs[base]; ok {
+			return id
+		}
+	}
 	switch role {
 	case "vision", "document_reader", "archive_ops", "archive_reader",
 		"file_editor", "creator", "creative", "life_memorizer", "painter", "screenshoter",
-		"desktop", "bilibili",
-		"web_search", "search_planner", "search_summarizer", "mutual_forum", "dialogue_bridging",
-		"viewer_screening", "viewer_censor", "viewer_critic", "viewer_share",
+		"desktop", "desktop_agent", "bilibili",
+		"web_search", "search_planner", "search_summarizer", "mutual_forum", "mutual_forum_agent", "dialogue_bridging",
+		"viewer_screening", "viewer_censor", "viewer_critic", "viewer_share", "viewer_remark",
 		"responder", "savior", "dialogue", "unknown":
 		return role
-	}
-	switch {
-	case strings.Contains(role, "视觉"):
-		return "vision"
-	case strings.Contains(role, "文献"):
-		return "document_reader"
-	case strings.Contains(role, "归档操作"):
-		return "archive_ops"
-	case strings.Contains(role, "归档"):
-		return "archive_reader"
 	}
 	return "dialogue"
 }

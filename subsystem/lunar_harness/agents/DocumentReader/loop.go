@@ -23,7 +23,6 @@ func runToolLoop(ctx context.Context, doc *docContext, messages []agentbase.Mess
 		ID:                 "document_reader",
 		Label:              roleLabel,
 		MaxRounds:          maxRounds,
-		MaxRepeats:         -1, // 迁移前无跨轮重复检测，保持原有行为
 		MaxToolResultRunes: -1, // 工具结果由 executeFileTool 自行截断
 	})
 	_, err := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{

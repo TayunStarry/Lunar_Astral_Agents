@@ -32,12 +32,11 @@ func init() {
 		ID:          agentID,
 		Label:       roleLabel,
 		Group:       "Go 智能体",
-		Description: "截图者最近一次截图任务的说明、是否带主帧与跨轮上下文条数",
+		Description: roleLabel + "最近一次截图任务的说明、是否带主帧与跨轮上下文条数",
 		Export:      exportContext,
 	})
-	agentrepair.RegisterResettable(agentID, roleLabel,
-		"截图者的跨任务会话上下文；reset 清空这些运行时状态",
-		resetState,
+	agentrepair.RegisterReadonly(agentID, roleLabel,
+		roleLabel+"的跨任务会话上下文与最近一次任务记录（只读）",
 		func(int) (any, error) { return exportContext(false) })
 }
 
@@ -70,7 +69,7 @@ func resetState() string {
 	had := len(state.history) > 0
 	state = runtimeState{}
 	if had {
-		return "已清空截图者的跨任务会话上下文"
+		return "已清空" + roleLabel + "的跨任务会话上下文"
 	}
-	return "截图者当前没有跨任务上下文"
+	return roleLabel + "当前没有跨任务上下文"
 }

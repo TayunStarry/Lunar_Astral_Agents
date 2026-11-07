@@ -65,11 +65,13 @@ func ensureWatchlist(ctx context.Context, lifeTriggered bool, deps watchlistDeps
 	}
 	result.Triggered = true
 	budget := newWatchlistBudget(deps.budget.total, deps.budget.perItem, deps.now)
-	logger.Info("BilibiliViewer", "待看列表：触发条件满足，开始筛候选（目标 %d 个，总预算 %s）",
-		deps.want, budget.total)
+	// 静态偏好来自配置；动态主题词来自「看过」视频的回流池，无动态词时自动退化为仅静态词。
+	keywords := selectionConfig(preferenceKeywords(), dynamicKeywords(budget.now().Unix()))
+	logger.Info("BilibiliViewer", "待看列表：触发条件满足，开始筛候选（目标 %d 个，静态偏好 %d 词，动态主题 %d 词，总预算 %s）",
+		deps.want, len(keywords.PreferenceKeywords), len(keywords.DesireKeywords), budget.total)
 
 	// 第一步：按历史观影记忆筛候选。
-	links, err := gatherWatchLinks(session, preferenceKeywords(), deps)
+	links, err := gatherWatchLinks(session, keywords, deps)
 	if err != nil {
 		return result, err
 	}
@@ -150,48 +152,10 @@ func stopForBudget(result *WatchlistResult, skipped int, phase string) {
 	logger.Warn("BilibiliViewer", "待看列表：%s阶段时间预算用尽，提前结束，放弃 %d 个候选（已完成的成果保留）", phase, skipped)
 }
 
-// preferenceKeywords 汇总历史观影记忆里的偏好词。
-//
-// 数据源选择：记忆库里的旧观影条目已迁走，viewer.db 中的 viewer_profile（选片口味）、
-// viewer_stance（评论倾向）与 viewer_observation（近期观感主题）是唯一权威的历史观影记忆；
-// 配置文件里的长期偏好作为兜底补充。
-func preferenceKeywords() []string {
-	lists := make([][]string, 0, 6)
-	if profile, _, ok, err := viewerstore.LoadProfile(); err == nil && ok {
-		lists = append(lists, splitDesireWords(profile))
-	}
-	if stance, _, ok, err := viewerstore.LoadStance(); err == nil && ok {
-		lists = append(lists, splitDesireWords(stance))
-	}
-	if observations, err := viewerstore.LoadObservations(); err == nil {
-		for _, observation := range observations {
-			lists = append(lists, splitDesireWords(observation.Topics))
-		}
-	}
-	lists = append(lists, LoadConfig().PreferenceKeywords)
-
-	out := make([]string, 0, 8)
-	seen := make(map[string]bool)
-	for _, list := range lists {
-		for _, raw := range list {
-			word := raw
-			if word == "" || seen[word] {
-				continue
-			}
-			seen[word] = true
-			out = append(out, word)
-			if len(out) >= 8 {
-				return out
-			}
-		}
-	}
-	return out
-}
-
 // gatherWatchLinks 从首页与关键词搜索结果里凑够候选，并排除已看过/已在待看列表里的视频。
 //
 // 带「片段下载失败」原因的 rejected 行不算永久历史：允许重新进入候选，下一轮重试下载。
-func gatherWatchLinks(session watchSession, keywords []string, deps watchlistDeps) ([]videoLink, error) {
+func gatherWatchLinks(session watchSession, selection Config, deps watchlistDeps) ([]videoLink, error) {
 	want := deps.want
 	if want <= 0 {
 		want = watchlistWanted
@@ -200,7 +164,7 @@ func gatherWatchLinks(session watchSession, keywords []string, deps watchlistDep
 	if err != nil {
 		return nil, fmt.Errorf("读取首页视频卡片失败: %w", err)
 	}
-	for _, keyword := range pickSearchKeywords(keywords, searchKeywordTries) {
+	for _, keyword := range pickSearchKeywords(searchKeywords(selection), searchKeywordTries) {
 		if len(dedupeLinks(pool)) >= want*2 {
 			break
 		}
@@ -215,8 +179,7 @@ func gatherWatchLinks(session watchSession, keywords []string, deps watchlistDep
 		}
 		pool = append(pool, found...)
 	}
-	cfg := Config{PreferenceKeywords: keywords, DesireKeywords: keywords}
-	pool = filterAndScore(dedupeLinks(pool), cfg)
+	pool = filterAndScore(dedupeLinks(pool), selection)
 	sort.SliceStable(pool, func(i, j int) bool { return pool[i].Score > pool[j].Score })
 
 	seen := seenSnapshot()

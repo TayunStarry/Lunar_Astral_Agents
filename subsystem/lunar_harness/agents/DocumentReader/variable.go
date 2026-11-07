@@ -2,11 +2,15 @@ package DocumentReader
 
 // variable.go 文献解析智能体的常量与识别规则（业务逻辑不得写在本文件）
 
-import "regexp"
+import (
+	"regexp"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
+)
 
 const (
 	// roleLabel TUI 实况屏显示的角色标签
-	roleLabel = "文献解析"
+	roleLabel = agentinfo.NameDocumentReader
 	// summaryStoreChars 写回资源目录的摘要最大字符数
 	summaryStoreChars = 1000
 	// maxToolRounds 文件探查的最大工具轮次（超长文档需要更多分片轮次）

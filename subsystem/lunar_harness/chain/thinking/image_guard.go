@@ -77,9 +77,9 @@ func imageBlockReason(raw string, sideCap int) string {
 		return ""
 	}
 	lower := strings.ToLower(raw)
-	if strings.HasPrefix(lower, "data:video/") || hasVideoExt(lower) {
-		// 视频一律走 @U 链接句柄：模型上下文里不应该出现视频本体或直链
-		return "视频资源未经句柄化"
+	if strings.HasPrefix(lower, "data:video/") {
+		// image_url 只承载图片；出现视频数据说明上游把视频放错了内容项，按实际类型拦下
+		return "该内容项是视频，不应出现在图片位置"
 	}
 	if strings.HasPrefix(lower, "data:image/") {
 		width, height, err := inlineImageSize(raw)

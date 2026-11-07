@@ -1,8 +1,8 @@
 package viewerstore
 
-// text.go 记忆正文的通用文本处理：机械内容识别、结论截断与旧正文分段。
+// text.go 观影正文的通用文本处理：机械内容识别与 BV 号转调。
 //
-// 这些规则同时被存储层迁移与编排层的记忆清洗使用，因此放在存储层统一维护。
+// 规则同时被编排层的记忆清洗使用，因此放在存储层统一维护。
 
 import (
 	"strings"
@@ -19,54 +19,6 @@ func LooksMechanical(text string) bool {
 		}
 	}
 	return false
-}
-
-// Conclusion 只取解读的首句作为长期结论，其余细节留在正文里。
-func Conclusion(text string) string {
-	runes := []rune(strings.TrimSpace(text))
-	for index, char := range runes {
-		if index >= ConclusionMaxRunes {
-			break
-		}
-		switch char {
-		case '。', '！', '？', '!', '?', '\n':
-			return string(runes[:index+1])
-		}
-	}
-	if len(runes) > ConclusionMaxRunes {
-		return string(runes[:ConclusionMaxRunes])
-	}
-	return string(runes)
-}
-
-// memorySegment 取「标记：」后到下一个 ｜ 之间的内容。
-func memorySegment(text, marker string) string {
-	index := strings.Index(text, marker)
-	if index < 0 {
-		return ""
-	}
-	rest := text[index+len(marker):]
-	if end := strings.Index(rest, "｜"); end >= 0 {
-		rest = rest[:end]
-	}
-	return strings.TrimSpace(rest)
-}
-
-// memoryLastSegment 取正文最后一个 ｜ 之后的结论。
-func memoryLastSegment(text string) string {
-	parts := strings.Split(text, "｜")
-	return strings.TrimSpace(parts[len(parts)-1])
-}
-
-// stripMemoryMarker 去掉旧正文里的展示标记（兼容全角/半角冒号）。
-func stripMemoryMarker(text, marker string) string {
-	text = strings.TrimSpace(text)
-	for _, candidate := range []string{marker, strings.TrimSuffix(marker, "：") + ":"} {
-		if strings.HasPrefix(text, candidate) {
-			return strings.TrimSpace(text[len(candidate):])
-		}
-	}
-	return text
 }
 
 // ==== BV 号规则 ====

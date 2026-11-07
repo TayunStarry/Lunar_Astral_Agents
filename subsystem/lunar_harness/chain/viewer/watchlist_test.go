@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -267,6 +268,35 @@ func TestEnsureWatchlistCollectsAndDownloads(t *testing.T) {
 	}
 	for bv := range reviewed {
 		assertWatchSegments(t, bv, 1, viewerstore.WatchSegmentMax)
+	}
+}
+
+// TestEnsureWatchlistPersistsImpressionTopics 印象主题词随入队写入 watch_video；未看完不入偏好池。
+func TestEnsureWatchlistPersistsImpressionTopics(t *testing.T) {
+	isolateViewerDB(t)
+	session := &fakeWatchSession{links: watchTestLinks(30)}
+	deps := newWatchlistTestDeps(session, &fakeWatchDownloader{})
+	deps.want = 1
+	deps.impress = func(_ context.Context, _ *videoRecord) videoImpression {
+		return videoImpression{Summary: "摘要", Topics: []string{"主题甲", "主题乙"}}
+	}
+	result, err := ensureWatchlist(context.Background(), true, deps)
+	if err != nil {
+		t.Fatalf("管线执行失败: %v", err)
+	}
+	if result.Enqueued != 1 {
+		t.Fatalf("应入队 1 条，实际 %+v", result)
+	}
+	approved, err := viewerstore.LoadApprovedVideos()
+	if err != nil || len(approved) != 1 {
+		t.Fatalf("读取过审视频失败 len=%d err=%v", len(approved), err)
+	}
+	if strings.Join(approved[0].Topics, ",") != "主题甲,主题乙" {
+		t.Fatalf("印象主题词未随入队落库: %v", approved[0].Topics)
+	}
+	// 入队 ≠ 看过：偏好看板在看完之前保持为空。
+	if topics, err := viewerstore.ActiveTopics(watchDynamicKeywordLimit, time.Now().Unix()); err != nil || len(topics) != 0 {
+		t.Fatalf("未看完不应产生动态偏好，实际 %v err=%v", topics, err)
 	}
 }
 

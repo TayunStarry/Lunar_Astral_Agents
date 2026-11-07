@@ -5,24 +5,29 @@ package DialogueBridging
 import (
 	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/resource"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"encoding/json"
 	"strconv"
 	"unicode/utf8"
 )
 
-func parseMessageSegments(groupID int64, segments []napcat.MessageSegment) (any, bool, []string) {
+// parseMessageSegments 解析消息段列表，返回 (内容, 是否含多模态内容项, 音频对象列表)。
+// 群聊与私聊共用本实现，媒体类型只取 NapCat 消息段声明，按新信封逐项打包。
+func parseMessageSegments(groupID int64, segments []napcat.MessageSegment) (any, bool, []mediaobject.Object) {
 	var contentArray []map[string]any
 	var contentStr string
-	var hasImages bool
-	var audioURLs []string
+	var hasMedia bool
+	var audioObjects []mediaobject.Object
 
 	for _, segment := range segments {
 		switch segment.Type {
 		case "text":
 			var textData napcat.TextData
 			if json.Unmarshal(segment.Data, &textData) == nil {
-				appendContent(&contentArray, &contentStr, textData.Text)
+				// 文本保持纯文本，其中的链接抽成 webpage 信封（视频平台声明 web_video）
+				if appendTextWithWebpages(&contentArray, &contentStr, groupID, textData.Text) {
+					hasMedia = true
+				}
 			}
 		case "at":
 			var atData napcat.AtData
@@ -39,26 +44,20 @@ func parseMessageSegments(groupID int64, segments []napcat.MessageSegment) (any,
 			if json.Unmarshal(segment.Data, &imageData) == nil {
 				imgURL := resolveImageURL(imageData)
 				if imgURL != "" {
-					hasImages = true
-					markMultimedia(&contentArray, &contentStr)
-					contentArray = append(contentArray, map[string]any{
-						"type":      "image_url",
-						"image_url": map[string]string{"url": imgURL},
-					})
+					hasMedia = true
+					envelope, payload := buildImageSegmentEnvelope(groupID, imageData, imgURL)
+					appendEnvelopeItem(&contentArray, &contentStr, envelope, payload)
 				}
 			}
 		case "mface":
 			// 商城表情：新版 NapCat 会转成 image 段，旧版仍以 mface 下发。
-			// 有直链/本地路径时按图片处理；否则退回摘要文案，避免整条消息被当成空消息丢弃。
+			// 有直链/本地路径时按动图处理；否则退回摘要文案，避免整条消息被当成空消息丢弃。
 			var mfaceData napcat.MFaceData
 			if json.Unmarshal(segment.Data, &mfaceData) == nil {
 				if imgURL := resolveMFaceImage(mfaceData); imgURL != "" {
-					hasImages = true
-					markMultimedia(&contentArray, &contentStr)
-					contentArray = append(contentArray, map[string]any{
-						"type":      "image_url",
-						"image_url": map[string]string{"url": imgURL},
-					})
+					hasMedia = true
+					envelope, payload := buildMFaceEnvelope(groupID, mfaceData, imgURL)
+					appendEnvelopeItem(&contentArray, &contentStr, envelope, payload)
 				} else {
 					appendContent(&contentArray, &contentStr, "[表情: "+mfaceDisplayText(mfaceData)+"] ")
 				}
@@ -67,18 +66,24 @@ func parseMessageSegments(groupID int64, segments []napcat.MessageSegment) (any,
 			var videoData napcat.VideoData
 			if json.Unmarshal(segment.Data, &videoData) == nil {
 				source := resolveVideoSource(videoData)
-				name := mediaDisplayName(resource.KindVideo, "视频.mp4", videoData.File, source)
-				appendContent(&contentArray, &contentStr, mediaLinkText(source, name))
+				if source != "" {
+					hasMedia = true
+					envelope, payload := buildVideoEnvelope(groupID, videoData, source)
+					appendEnvelopeItem(&contentArray, &contentStr, envelope, payload)
+				} else {
+					name := mediaDisplayName("视频", videoData.File, source)
+					appendContent(&contentArray, &contentStr, mediaLinkText(source, name))
+				}
 			}
 		case "record":
 			var recordData napcat.RecordData
 			if json.Unmarshal(segment.Data, &recordData) == nil {
 				source := resolveAudioSource(recordData)
-				// 语音在智能体侧统一句柄化并转写（ResourcesConversionHandle），这里只带地址与文件名
+				// 语音在智能体侧统一句柄化并转写（ResourcesConversionHandle），这里只声明对象
 				if source != "" {
-					audioURLs = append(audioURLs, source)
+					audioObjects = append(audioObjects, buildAudioObject(groupID, recordData, source))
 				}
-				name := mediaDisplayName(resource.KindAudio, "语音.mp3", recordData.File, source)
+				name := mediaDisplayName("语音", recordData.File, source)
 				appendContent(&contentArray, &contentStr, name+" ")
 			}
 		case "face":
@@ -90,32 +95,39 @@ func parseMessageSegments(groupID int64, segments []napcat.MessageSegment) (any,
 		case "json":
 			var jsonData napcat.JsonData
 			if json.Unmarshal(segment.Data, &jsonData) == nil {
-				if title := extractJsonCardTitle(jsonData.Data); title != "" {
+				// 摘要文本始终保留；拿到链接时再补一个 webpage 信封（一卡一信封）
+				title := extractJsonCardTitle(jsonData.Data)
+				if title != "" {
 					appendContent(&contentArray, &contentStr, "[卡片: "+title+"] ")
 				} else {
 					appendContent(&contentArray, &contentStr, "[卡片] ")
+				}
+				if envelope, payload := buildCardWebpageEnvelope(groupID, extractJsonCardLink(jsonData.Data), title); envelope != "" {
+					hasMedia = true
+					appendEnvelopeItem(&contentArray, &contentStr, envelope, payload)
 				}
 			}
 		case "share":
 			var shareData napcat.ShareData
 			if json.Unmarshal(segment.Data, &shareData) == nil {
+				// 摘要文本始终保留；链接只进网页信封，不重复留在文本里
 				if shareData.Title != "" {
 					appendContent(&contentArray, &contentStr, "[链接: "+shareData.Title+"] ")
 				} else {
 					appendContent(&contentArray, &contentStr, "[链接] ")
 				}
+				if envelope, payload := buildCardWebpageEnvelope(groupID, shareData.URL, shareData.Title); envelope != "" {
+					hasMedia = true
+					appendEnvelopeItem(&contentArray, &contentStr, envelope, payload)
+				}
 			}
 		case "file":
 			var fileData napcat.FileData
 			if json.Unmarshal(segment.Data, &fileData) == nil {
-				fileText, isImage, dataURI := processFileSegment(fileData)
-				if isImage {
-					hasImages = true
-					markMultimedia(&contentArray, &contentStr)
-					contentArray = append(contentArray, map[string]any{
-						"type":      "image_url",
-						"image_url": map[string]string{"url": dataURI},
-					})
+				fileText, envelope, payload := processFileSegment(groupID, fileData)
+				if envelope != "" {
+					hasMedia = true
+					appendEnvelopeItem(&contentArray, &contentStr, envelope, payload)
 				} else {
 					appendContent(&contentArray, &contentStr, fileText)
 				}
@@ -132,10 +144,10 @@ func parseMessageSegments(groupID int64, segments []napcat.MessageSegment) (any,
 		}
 	}
 
-	if hasImages {
-		return contentArray, true, audioURLs
+	if hasMedia {
+		return contentArray, true, audioObjects
 	}
-	return contentStr, false, audioURLs
+	return contentStr, false, audioObjects
 }
 
 // renderReplyQuote 通过 get_msg 还原被回复消息，渲染为 [回复 <发送者>: <内容摘要>]

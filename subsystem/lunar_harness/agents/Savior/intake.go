@@ -28,8 +28,8 @@ func ReportRun(agent string, err error) {
 
 // ReportDetail 上报一次结构化故障。
 //
-// 同一「智能体 + 故障类型」只保留一条待修故障，其余更新为最新状态并累计出现次数；
-// 连续出现达到 escalateAfter 时标记升级，后续不再调用模型重试。
+// 同一「智能体 + 故障类型」只保留一条待诊断故障，其余更新为最新状态并累计出现次数；
+// 连续出现达到 escalateAfter 时标记升级：仍会给出一次维修建议，但不再自动重试。
 func ReportDetail(detail agentbase.FailureDetail) {
 	agent := strings.TrimSpace(detail.Agent)
 	if agent == "" {
@@ -59,7 +59,7 @@ func ReportDetail(detail agentbase.FailureDetail) {
 	record := history[key]
 	if record == nil {
 		if len(pending) >= maxPending {
-			logger.Warn(roleLabel, "[智能修复] 故障队列已满，忽略 %s 的新故障", agent)
+			logger.Warn(roleLabel, "["+roleLabel+"] 故障队列已满，忽略 %s 的新故障", agent)
 			return
 		}
 		record = &faultHistory{}
@@ -76,7 +76,7 @@ func ReportDetail(detail agentbase.FailureDetail) {
 		existing.At = time.Now()
 		existing.Occurrences = record.Count
 		existing.Escalated = existing.Escalated || record.Count >= escalateAfter
-		logger.Warn(roleLabel, "[智能修复] 故障 #%d（%s/%s）再次出现（第 %d 次）：%s",
+		logger.Warn(roleLabel, "["+roleLabel+"] 故障 #%d（%s/%s）再次出现（第 %d 次）：%s",
 			existing.ID, agent, kind, record.Count, previewRunes(message, maxBriefRunes))
 		return
 	}
@@ -93,7 +93,7 @@ func ReportDetail(detail agentbase.FailureDetail) {
 	failure.Escalated = failure.Occurrences >= escalateAfter
 	pending[key] = failure
 	order = append(order, key)
-	logger.Warn(roleLabel, "[智能修复] 收到故障 #%d（%s/%s，第 %d 次）：%s",
+	logger.Warn(roleLabel, "["+roleLabel+"] 收到故障 #%d（%s/%s，第 %d 次）：%s",
 		seq, agent, kind, failure.Occurrences, previewRunes(message, maxBriefRunes))
 }
 
@@ -139,11 +139,28 @@ func mergeMetrics(base, extra map[string]int64) map[string]int64 {
 	return out
 }
 
-// resolve 修复成功：清空该键的历史计数，避免下次同类故障被误判为复发。
+// resolve 给出建议：清空该键的历史计数，避免下次同类故障被误判为复发。
 func resolve(key string) {
 	mu.Lock()
 	delete(pending, key)
 	delete(history, key)
 	delete(escalated, key)
 	mu.Unlock()
+}
+
+// storeAdvice 记录一条维修建议（同键只保留最新，最多 maxAdvices 条）。
+func storeAdvice(failure *Failure, advice *Advice) {
+	mu.Lock()
+	defer mu.Unlock()
+	advices[failure.Key] = advice
+	for len(advices) > maxAdvices {
+		oldestKey := ""
+		var oldest time.Time
+		for key, item := range advices {
+			if oldestKey == "" || item.At.Before(oldest) {
+				oldestKey, oldest = key, item.At
+			}
+		}
+		delete(advices, oldestKey)
+	}
 }

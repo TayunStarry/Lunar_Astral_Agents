@@ -358,6 +358,22 @@
         }
     }
 
+    /**
+     * 截图信封：截图恒为 PNG，按 data URI 声明的 MIME 落到 image_static；
+     * 若截图产出 gif/apng，自动改发 image_animated。
+     */
+    function screenshotEnvelope(shot) {
+        const url = String((shot && shot.dataUrl) || '');
+        const match = /^data:([^;,]+)/i.exec(url);
+        const mime = match ? match[1].toLowerCase() : 'image/png';
+        const type = (mime === 'image/gif' || mime === 'image/apng') ? 'image_animated' : 'image_static';
+        const payload = { source: 'client_upload', url: url, mime: mime };
+        payload.name = 'viewport.' + (mime.split('/')[1] || 'png');
+        const envelope = { type: type };
+        envelope[type] = payload;
+        return envelope;
+    }
+
     async function runLTPXAgent(instruction) {
         const text = String(instruction || '').trim();
         if (!text) throw new Error('空指令');
@@ -371,7 +387,7 @@
         // 组装本轮用户消息：页面信息(+<image> 标记，供多模态/Llama 视觉对齐) + 截图 + 元素列表 + 月华指令
         const userParts = [
             { type: 'text', text: '【页面信息】' + buildPageInfoText() + (shot && shot.dataUrl ? '\n<image>' : '') },
-            ...(shot && shot.dataUrl ? [{ type: 'image_url', image_url: { url: shot.dataUrl } }] : []),
+            ...(shot && shot.dataUrl ? [screenshotEnvelope(shot)] : []),
             { type: 'text', text: '【页面元素】\n' + buildCompactElements(elems) },
             { type: 'text', text: '【月华指令】' + text }
         ];

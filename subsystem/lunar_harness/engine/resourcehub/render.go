@@ -10,9 +10,9 @@ package resourcehub
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
@@ -46,9 +46,10 @@ func RenderHandle(input, ask string) (string, string, error) {
 	if hooks.IsArchiveExt != nil && hooks.IsArchiveExt(entryExt(entry)) {
 		return archiveBlock(normalized, entry, ask, hooks), normalized, nil
 	}
-	// 解析文本优先（文件类直接读原文，不在此短路）
+	// 解析文本优先（文件类直接读原文，不在此短路）；
+	// 过期文本视为未命中，继续走下面的重新生成分支并覆盖旧文本
 	if entry.Kind != resource.KindDocument &&
-		entry.ParseState == resource.ParseReady && strings.TrimSpace(entry.ParseText) != "" {
+		resource.ParseTextFresh(entry, resource.ParseCategoryOf(entry)) {
 		return resourceBlockHeader(normalized, entry) + entry.ParseText, normalized, nil
 	}
 	switch entry.Kind {
@@ -101,10 +102,10 @@ func audioBlock(handle string, entry resource.Resource) string {
 	return resourceBlockHeader(handle, entry) + text
 }
 
-// videoBlock 视频：B 站走直驱印象；本地或远程直链走观看管线
+// videoBlock 视频：无本地副本视为发送侧声明的平台页面，走直驱印象；有副本走观看管线
 func videoBlock(handle string, entry resource.Resource, ask string, hooks Hooks) string {
 	rawURL := entry.URL
-	if resource.BilibiliBvid(rawURL) != "" {
+	if strings.TrimSpace(entry.BlobPath) == "" && mediaobject.IsVideoPlatformURL(rawURL) {
 		impression, err := bilibiliImpression(rawURL, ask, hooks)
 		if err != nil {
 			return resourceBlockHeader(handle, entry) + "视频印象获取失败：" + err.Error()
@@ -115,9 +116,9 @@ func videoBlock(handle string, entry resource.Resource, ask string, hooks Hooks)
 		return resourceBlockHeader(handle, entry) + impression
 	}
 	source := rawURL
-	remote := entry.BlobPath == "" || !resource.IsLocalURL(rawURL)
+	remote := !resource.IsLocalURL(rawURL)
 	if remote {
-		admitted := admitMedia(rawURL, mediaName(rawURL, ".mp4"), entry.Origin, resource.KindVideo)
+		admitted := admitMedia(rawURL, mediaName(rawURL, ".mp4"), entry.Origin, entry.Kind)
 		if admitted == nil || admitted.Handle == "" {
 			return resourceBlockHeader(handle, entry) + "视频读取失败：本地副本未能下载落盘"
 		}
@@ -127,7 +128,7 @@ func videoBlock(handle string, entry resource.Resource, ask string, hooks Hooks)
 	if err != nil {
 		// 远程地址失效且本地无副本：重新下载一次
 		if remote && hooks.IsVideoExpired != nil && hooks.IsVideoExpired(err) {
-			if admitted := admitMedia(rawURL, mediaName(rawURL, ".mp4"), entry.Origin, resource.KindVideo); admitted != nil {
+			if admitted := admitMedia(rawURL, mediaName(rawURL, ".mp4"), entry.Origin, entry.Kind); admitted != nil {
 				if retry, retryErr := describeVideo(admitted.URL, ask, hooks); retryErr == nil {
 					return resourceBlockHeader(handle, entry) + retry
 				}
@@ -145,30 +146,9 @@ func videoBlock(handle string, entry resource.Resource, ask string, hooks Hooks)
 	return resourceBlockHeader(handle, entry) + desc
 }
 
-// webBlock 网页：本地已有视频 / 动图副本走观看管线；否则网页现场读取
+// webBlock 网页：U 句柄现场读取；视频平台页面在接入时已声明为 web_video 并登记为 V。
 func webBlock(handle string, entry resource.Resource, ask string, hooks Hooks) string {
 	rawURL := entry.URL
-	if resource.BilibiliBvid(rawURL) != "" {
-		impression, err := bilibiliImpression(rawURL, ask, hooks)
-		if err != nil {
-			return resourceBlockHeader(handle, entry) + "视频印象获取失败：" + err.Error()
-		}
-		if strings.TrimSpace(impression) != "" {
-			_ = resource.SetParseText(rawURL, impression)
-		}
-		return resourceBlockHeader(handle, entry) + impression
-	}
-	ext := strings.ToLower(filepath.Ext(pathPartOf(rawURL)))
-	if resource.KindOfExt(ext) == resource.KindVideo || (resource.MayBeAnimated(ext) && resource.KindOfExt(ext) == resource.KindImage) {
-		admitted := admitMedia(rawURL, mediaName(rawURL, ext), entry.Origin, "")
-		if admitted != nil && admitted.URL != "" {
-			desc, err := describeVideo(admitted.URL, ask, hooks)
-			if err == nil && strings.TrimSpace(desc) != "" {
-				_ = resource.SetParseText(rawURL, desc)
-				return resourceBlockHeader(handle, entry) + desc
-			}
-		}
-	}
 	if hooks.ReadPage == nil {
 		return resourceBlockHeader(handle, entry) + "（当前没有可用的网页读取能力）"
 	}
@@ -181,7 +161,7 @@ func webBlock(handle string, entry resource.Resource, ask string, hooks Hooks) s
 	}
 	_ = resource.SetParseText(rawURL, summary)
 	if strings.TrimSpace(title) != "" {
-		_, _ = resource.AdmitURL(resource.URLAdmitInput{URL: rawURL, Title: title, Origin: entry.Origin})
+		_, _ = resource.AdmitURL(resource.URLAdmitInput{URL: rawURL, Title: title, Origin: entry.Origin, KindHint: resource.KindURL})
 	}
 	return resourceBlockHeader(handle, entry) + summary
 }
@@ -216,9 +196,29 @@ func documentBlock(handle string, entry resource.Resource, ask string, hooks Hoo
 	}
 	truncated := ""
 	if result.Truncated {
-		truncated = "\n（内容较长已截断；可带 |L起-止 或 |§n 定向读取）"
+		truncated = "\n" + truncatedHint(handle, result)
 	}
 	return fmt.Sprintf("【%s%s%s｜共 %d 行】\n%s%s", handle, sectionNote, rangeNote, result.TotalLines, result.Content, truncated)
+}
+
+// truncatedHint 截断时给出可执行的续读指引：明确本次实际返回的区间与下一页行锚点，
+// 避免模型以为已拿到全文而反复用同一参数重取。
+func truncatedHint(handle string, result resource.ReadResult) string {
+	if result.TotalLines > 0 && result.LineEnd >= result.TotalLines {
+		return fmt.Sprintf("（本次返回第 %d-%d 行，共 %d 行；已到末尾）",
+			result.LineStart, result.LineEnd, result.TotalLines)
+	}
+	base := handle
+	if parsed, ok := resource.ParseHandle(handle); ok {
+		base = parsed.Text()
+	}
+	nextStart := result.LineEnd + 1
+	nextEnd := nextStart + documentChunkLines - 1
+	if result.TotalLines > 0 && nextEnd > result.TotalLines {
+		nextEnd = result.TotalLines
+	}
+	return fmt.Sprintf("（本次只返回第 %d-%d 行，共 %d 行；继续读取请用 %s|L%d-%d，不要用 handle/path 从头重取）",
+		result.LineStart, result.LineEnd, result.TotalLines, base, nextStart, nextEnd)
 }
 
 // archiveBlock 压缩包 / GGUF：交给归档解析智能体做确定性解析

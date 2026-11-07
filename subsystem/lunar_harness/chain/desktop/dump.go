@@ -27,21 +27,12 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "desktop",
-		Label:       "桌面操作",
+		Label:       "桌面编排",
 		Group:       "逻辑链",
-		Description: "最近一次桌面操纵任务的要求、起止时间、结果或中断原因",
+		Description: "最近一次桌面编排任务的要求、起止时间、结果或中断原因",
 		Export:      exportContext,
 	})
-	agentrepair.RegisterResettable("desktop", "桌面操作",
-		"桌面操纵的运行状态（要求、起止时间、结果）；reset 中断正在运行的任务",
-		resetDesktopRun,
+	agentrepair.RegisterReadonly("desktop", "桌面编排",
+		"桌面编排的运行状态（要求、起止时间、结果，只读）",
 		func(int) (any, error) { return exportContext(false) })
-}
-
-// resetDesktopRun 中断当前任务；未运行时直接返回。
-func resetDesktopRun() string {
-	if Stop() {
-		return "已中断桌面操纵任务"
-	}
-	return "桌面操纵当前没有运行中的任务"
 }

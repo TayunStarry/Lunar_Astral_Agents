@@ -5,7 +5,6 @@ package agentbase
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 )
 
@@ -32,7 +31,7 @@ func toolReply(text, name string) Reply {
 
 // TestRunToolLoopExecutesAndReturns 工具结果必须回填，下一轮无工具调用时结束。
 func TestRunToolLoopExecutesAndReturns(t *testing.T) {
-	agent := NewAgent(AgentConfig{Label: "测试", MaxRounds: 3, MaxRepeats: -1, MaxToolResultRunes: -1})
+	agent := NewAgent(AgentConfig{Label: "测试", MaxRounds: 3, MaxToolResultRunes: -1})
 	var calls []string
 	result, err := agent.RunToolLoop(context.Background(), ToolLoopRequest{
 		Messages: []Message{{Role: "user", Content: "开始"}},
@@ -60,22 +59,26 @@ func TestRunToolLoopExecutesAndReturns(t *testing.T) {
 	}
 }
 
-// TestRunToolLoopRepeatDetection 同一响应签名达到上限时必须返回循环错误。
-func TestRunToolLoopRepeatDetection(t *testing.T) {
-	agent := NewAgent(AgentConfig{Label: "测试", MaxRounds: 5, MaxRepeats: 2, MaxToolResultRunes: -1})
+// TestRunToolLoopRepeatedCallsNotInterrupted 相同工具调用不再按签名提前拦截，
+// 只在轮次额度耗尽时结束。
+func TestRunToolLoopRepeatedCallsNotInterrupted(t *testing.T) {
+	agent := NewAgent(AgentConfig{Label: "测试", MaxRounds: 3, MaxToolResultRunes: -1})
+	executions := 0
 	_, err := agent.RunToolLoop(context.Background(), ToolLoopRequest{
-		Call:      fakeCall(toolReply("重复", "ping")),
-		Execute:   func(context.Context, ToolCall) (string, bool, error) { return "结果", false, nil },
-		MaxRounds: 5,
+		Call:    fakeCall(toolReply("重复", "ping")),
+		Execute: func(context.Context, ToolCall) (string, bool, error) { executions++; return "结果", false, nil },
 	})
-	if !errors.Is(err, ErrLoop) {
-		t.Fatalf("应命中循环检测，实际: %v", err)
+	if !errors.Is(err, ErrMaxRounds) {
+		t.Fatalf("应只在轮次额度耗尽时结束，实际: %v", err)
+	}
+	if executions != 3 {
+		t.Fatalf("重复调用应执行满 3 轮，实得 %d 轮", executions)
 	}
 }
 
 // TestRunToolLoopMaxRounds 轮次耗尽必须返回 ErrMaxRounds。
 func TestRunToolLoopMaxRounds(t *testing.T) {
-	agent := NewAgent(AgentConfig{MaxRounds: 2, MaxRepeats: -1, MaxToolResultRunes: -1})
+	agent := NewAgent(AgentConfig{MaxRounds: 2, MaxToolResultRunes: -1})
 	_, err := agent.RunToolLoop(context.Background(), ToolLoopRequest{
 		Call:      fakeCall(toolReply("继续", "ping")),
 		Execute:   func(context.Context, ToolCall) (string, bool, error) { return "结果", false, nil },
@@ -88,7 +91,7 @@ func TestRunToolLoopMaxRounds(t *testing.T) {
 
 // TestRunToolLoopTruncatesToolResult 工具结果按配置截断。
 func TestRunToolLoopTruncatesToolResult(t *testing.T) {
-	agent := NewAgent(AgentConfig{MaxRounds: 2, MaxRepeats: -1, MaxToolResultRunes: 3})
+	agent := NewAgent(AgentConfig{MaxRounds: 2, MaxToolResultRunes: 3})
 	result, err := agent.RunToolLoop(context.Background(), ToolLoopRequest{
 		Call:    fakeCall(toolReply("调用", "ping"), Reply{Text: "完成"}),
 		Execute: func(context.Context, ToolCall) (string, bool, error) { return "一二三四五", false, nil },
@@ -104,7 +107,7 @@ func TestRunToolLoopTruncatesToolResult(t *testing.T) {
 
 // TestRunToolLoopDoneStops 工具返回 done 时立即结束并保留本轮助手正文。
 func TestRunToolLoopDoneStops(t *testing.T) {
-	agent := NewAgent(AgentConfig{MaxRounds: 5, MaxRepeats: -1, MaxToolResultRunes: -1})
+	agent := NewAgent(AgentConfig{MaxRounds: 5, MaxToolResultRunes: -1})
 	result, err := agent.RunToolLoop(context.Background(), ToolLoopRequest{
 		Call:      fakeCall(toolReply("准备提交", "submit")),
 		Execute:   func(context.Context, ToolCall) (string, bool, error) { return "已提交", true, nil },
@@ -129,13 +132,5 @@ func TestRunToolLoopContextCanceled(t *testing.T) {
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("应返回取消错误，实际: %v", err)
-	}
-}
-
-// TestLoopErrorContainsRole 循环错误必须带角色与轮次。
-func TestLoopErrorContainsRole(t *testing.T) {
-	err := LoopError("测试", 2)
-	if !strings.Contains(err.Error(), "测试") || !strings.Contains(err.Error(), "第 2 轮") {
-		t.Fatalf("循环错误信息不完整: %v", err)
 	}
 }

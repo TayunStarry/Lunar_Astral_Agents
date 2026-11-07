@@ -82,8 +82,9 @@ func TestRemoteBilibiliBindsFullPageURL(t *testing.T) {
 	setupArchiveTest(t)
 
 	res, err := AdmitURL(URLAdmitInput{
-		URL:    "https://www.bilibili.com/video/BV1o4xg6RE9m?spm_id_from=333.1007.0.0",
-		Origin: OriginChannel,
+		URL:      "https://www.bilibili.com/video/BV1o4xg6RE9m?spm_id_from=333.1007.0.0",
+		Origin:   OriginChannel,
+		KindHint: KindVideo,
 	})
 	if err != nil {
 		t.Fatalf("B 站链接入仓失败: %v", err)

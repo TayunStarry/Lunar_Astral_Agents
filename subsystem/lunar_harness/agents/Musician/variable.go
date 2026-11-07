@@ -2,13 +2,17 @@ package Musician
 
 // variable.go 演奏者的提示词、角色标签、缺省篇幅与音乐模型切换参数。
 
-import "time"
+import (
+	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
+)
 
 const (
 	// module 日志模块名
 	module = "Musician"
 	// roleLabel 推理实况与请求头角色标签
-	roleLabel = "演奏者"
+	roleLabel = agentinfo.NameMusician
 	// systemPromptPath 演奏者提示词（相对 prompts/）
 	systemPromptPath = "musicianRole.md"
 	// minMelodyBars 缺省篇幅（小节数）

@@ -1,32 +1,25 @@
 package thinking
 
-// resource_convert.go 未读上下文的统一资源预处理（ResourcesConversionHandle）
+// resource_convert.go 未读上下文的统一资源清洗（ResourcesConversionHandle）
 //
-// 规范要求：
-//   - 图片 → 视觉缩影链接（句柄藏在 tag 参数里）；
-//   - 视频 / 动图 → 句柄文本；音频 → 转写文本 + 悬空句柄（音频本体不落盘）；
-//   - 引用消息 → 「引用快照」文本，被引用音频按悬空句柄读取转写；
-//   - 文本中的 URL → 句柄文本；接入阶段只登记，解析留到 fetch_resources；
-//   - 文件 / 代码 / 未知类型 → @D 文件句柄。
+// 入站多模态信封已在 prepareInboundMessages 中完成「声明校验 + 落盘 + 字节校验」，
+// 这里只处理清洗后的内部内容项：
+//   - 静态图 → 视觉缩影链接（句柄藏在 tag 参数里）；
+//   - 音频 → 句柄 + 转写文本；
+//   - 引用消息 → 引用快照文本；
+//   - 文本保持纯文本：URL 抽取由发送侧负责，接收侧不再做任何猜测。
 //
-// 任何分支都不产出「[图片]」「[视频]」这类类型占位符：拿不到句柄时退化为文件名。
+// 旧信封（image_url / video_url / audio_url / input_audio）在入站阶段即判定无效，
+// 这里不再保留任何兼容分支；历史缓存重放由 cachedToContext 直接生成清洗后的内容。
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/engine/resource"
-	"LunarSubsystem/LunarHarness/engine/viewerstore"
 	"LunarSubsystem/LunarHarness/internal/textutil"
-)
-
-var (
-	// 文本中的网络地址（到空白或常见中英文标点为止）
-	textURLPattern = regexp.MustCompile(`(?i)https?://[^\s<>"'）】」，。；！？、]+`)
-	// 地址尾部可能粘上的英文标点
-	urlTrailingPunct = ".,;:!?)]}>'\""
 )
 
 // ResourcesConversionHandle 未读上下文的统一资源预处理：返回「可直接进模型上下文」的消息副本。
@@ -34,32 +27,36 @@ func ResourcesConversionHandle(messages []PostMessage) []PostMessage {
 	if len(messages) == 0 {
 		return messages
 	}
-	converted := make([]PostMessage, len(messages))
-	for index := range messages {
-		converted[index] = messages[index]
-		if text, ok := messages[index].Content.(string); ok {
-			// 工具回传的文本（检索报告等）保持原样
-			if messages[index].Role == RoleTool {
-				continue
-			}
-			converted[index].Content = textWithResourceHandles(text, channelOrigin)
-			continue
-		}
-		items := asItems(messages[index].Content)
-		if len(items) == 0 {
-			continue
-		}
-		out := make([]ContentItem, 0, len(items))
-		for _, item := range items {
-			out = append(out, convertResourceItem(item, channelOrigin))
-		}
-		converted[index].Content = out
+	prepared := prepareInboundMessages(messages)
+	converted := make([]PostMessage, len(prepared.Messages))
+	for index := range prepared.Messages {
+		converted[index] = convertMessageResources(prepared.Messages[index], false)
 	}
-	// 本批音频已在资源转换时全部转写：统一卸载 ASR，避免逐条加载/卸载抖动
+	// 本批音频已在接入阶段全部转写：统一卸载 ASR，避免逐条加载/卸载抖动
 	if batchHasAudio(messages) {
 		resource.UnloadASRModel()
 	}
 	return converted
+}
+
+// convertMessageResources 单条消息的内部内容项清洗
+//
+// replay=true 表示历史消息重放：视频只登记句柄，不重新下载落盘。
+func convertMessageResources(message PostMessage, replay bool) PostMessage {
+	if _, ok := message.Content.(string); ok {
+		// 工具回传的文本与用户纯文本都保持原样
+		return message
+	}
+	items := asItems(message.Content)
+	if len(items) == 0 {
+		return message
+	}
+	out := make([]ContentItem, 0, len(items))
+	for _, item := range items {
+		out = append(out, convertResourceItem(item, channelOrigin, replay))
+	}
+	message.Content = out
+	return message
 }
 
 // batchHasAudio 本批未读上下文是否包含音频资源（引用块仅在被引用消息含音频句柄时计为音频）
@@ -67,7 +64,7 @@ func batchHasAudio(messages []PostMessage) bool {
 	for _, message := range messages {
 		for _, item := range asItems(message.Content) {
 			switch item.Type {
-			case ContentAudioURL, ContentInputAudio, ContentAudioHandle:
+			case ContentAudio, ContentAudioHandle:
 				return true
 			case ContentQuote:
 				if item.Quote == nil {
@@ -84,38 +81,21 @@ func batchHasAudio(messages []PostMessage) bool {
 	return false
 }
 
-// convertResourceItem 单项资源转换
-func convertResourceItem(item ContentItem, origin string) ContentItem {
+// convertResourceItem 单项内部资源转换
+func convertResourceItem(item ContentItem, origin string, replay bool) ContentItem {
 	switch item.Type {
 	case ContentText:
-		return ContentItem{Type: ContentText, Text: textWithResourceHandles(item.Text, origin)}
+		return item
 	case ContentImageURL:
 		if item.ImageURL == nil || strings.TrimSpace(item.ImageURL.URL) == "" {
 			return ContentItem{Type: ContentText, Text: ""}
 		}
-		return convertImageResource(item.ImageURL.URL, origin)
-	case ContentVideoURL:
-		source := ""
-		if item.VideoURL != nil {
-			source = item.VideoURL.URL
+		// base64 模式下的视觉缩影没有 tag 参数：已是清洗产物且带句柄时原样保留，
+		// 避免二次转换把缩影再登记成另一个资源、导致近期与远期句柄不一致
+		if item.ResourceHandle != "" && strings.HasPrefix(strings.ToLower(strings.TrimSpace(item.ImageURL.URL)), "data:") {
+			return item
 		}
-		return ContentItem{Type: ContentText, Text: videoHandleText(source, origin)}
-	case ContentAudioURL:
-		source := ""
-		if item.AudioURL != nil {
-			source = item.AudioURL.URL
-		}
-		return ContentItem{Type: ContentText, Text: audioHandleText(source, mediaName(source, ".wav"), origin)}
-	case ContentInputAudio:
-		if item.InputAudio == nil {
-			return ContentItem{Type: ContentText, Text: ""}
-		}
-		format := item.InputAudio.Format
-		if format == "" {
-			format = "wav"
-		}
-		source := "data:audio/" + format + ";base64," + item.InputAudio.Data
-		return ContentItem{Type: ContentText, Text: audioHandleText(source, mediaName(source, ".wav"), clientUploadOrigin)}
+		return convertImageResource(item.ImageURL, origin)
 	case ContentAudioHandle:
 		if item.AudioHandle == nil {
 			return ContentItem{Type: ContentText, Text: ""}
@@ -128,80 +108,53 @@ func convertResourceItem(item ContentItem, origin string) ContentItem {
 	}
 }
 
-// convertImageResource 图片类：已带视觉句柄的原样保留；动图 → 句柄；静图 → 视觉缩影
-func convertImageResource(source, origin string) ContentItem {
-	source = resource.UpgradeCDNScheme(source)
+// convertImageResource 内部 image_url 只承载静态图：已带视觉句柄的原样保留，其余落盘为缩影
+func convertImageResource(payload *URLPayload, origin string) ContentItem {
+	source := resource.UpgradeCDNScheme(payload.URL)
 	if tag := handleFromVisionURL(source); tag != "" {
-		return ContentItem{Type: ContentImageURL, ImageURL: &URLPayload{URL: source}}
+		return ContentItem{Type: ContentImageURL, ImageURL: &URLPayload{URL: source}, ResourceHandle: tag}
 	}
-	if isVideoSource(source) {
-		return ContentItem{Type: ContentText, Text: videoHandleText(source, origin)}
-	}
-	animated, err := isAnimatedImageSource(source)
-	if err != nil {
-		logger.Warn(lunarCoreModule, "[资源转换] 动图判定失败（%s）: %v", resource.ShortURLForLog(source), err)
-	}
-	if err == nil && animated {
-		return ContentItem{Type: ContentText, Text: animatedHandleText(source, origin)}
-	}
-	name := "image" + guessImageExt(source)
-	admitted := admitImageDataURI(source, name)
+	name := imageNameFor(source, resource.KindImage, payload.MIME)
+	admitted, admitErr := admitImageSource(source, name, resource.KindImage)
 	if admitted == nil || admitted.Handle == "" || admitted.BlobPath == "" {
 		if admitted != nil && admitted.Handle != "" {
 			forgetResourceSource(admitted.Handle)
 		}
 		forgetResourceSource(source)
-		return ContentItem{Type: ContentText, Text: ""}
+		return ContentItem{Type: ContentText, Text: imageFailureText(admitErr)}
 	}
-	return ContentItem{Type: ContentImageURL, ImageURL: &URLPayload{URL: visionReference(admitted.Handle, admitted.BlobPath)}}
+	if err := resource.VerifyStored(resource.KindImage, resource.AbsPathOfBlob(admitted.BlobPath), payload.MIME); err != nil {
+		if !admitted.Deduped {
+			_ = resource.Delete(admitted.Handle)
+		}
+		return ContentItem{Type: ContentText, Text: imageFailureText(err)}
+	}
+	return ContentItem{
+		Type:           ContentImageURL,
+		ImageURL:       &URLPayload{URL: visionReference(admitted.Handle, admitted.BlobPath)},
+		ResourceHandle: admitted.Handle,
+	}
 }
 
-// textWithResourceHandles 文本里的网络地址 / BV 号 → 句柄，只登记不解析
-func textWithResourceHandles(text, origin string) string {
-	if strings.TrimSpace(text) == "" {
-		return text
+// imageFailureText 图片读取失败的模型可见说明：固定标注媒体种类为图片，并带上真实原因
+func imageFailureText(err error) string {
+	reason := "资源未能下载或不是可识别的图片"
+	if err != nil && strings.TrimSpace(err.Error()) != "" {
+		reason = strings.TrimSpace(err.Error())
 	}
-	converted := textURLPattern.ReplaceAllStringFunc(text, func(match string) string {
-		trimmed := strings.TrimRight(match, urlTrailingPunct)
-		if trimmed == "" {
-			return match
-		}
-		if !urlDeservesHandle(trimmed) {
-			return match
-		}
-		handle := urlHandleText(trimmed, "", origin)
-		if handle == trimmed || handle == "" {
-			return match
-		}
-		return handle + match[len(trimmed):]
-	})
-	converted = viewerstore.ReplaceBVID(converted, func(match string) string {
-		return urlHandleText(match, ".mp4", origin)
-	})
-	return converted
+	return "（图片读取失败：" + textutil.TruncateRunes(reason, 200) + "）"
 }
 
-// urlDeservesHandle 文本里的 http(s) 地址与 BV 号一律转句柄
-func urlDeservesHandle(rawURL string) bool {
-	if resource.BilibiliBvid(rawURL) != "" {
-		return true
-	}
-	return isHTTPURL(rawURL)
-}
-
-// urlHandleText 网络视频 / 网页 / BV 号 → 句柄；接入阶段不做任何内容解析
-func urlHandleText(source, fallbackExt, origin string) string {
+// urlHandleText 链接按显式声明登记句柄；kindHint 由调用方给出
+func urlHandleText(source, kindHint, origin string) string {
 	raw := strings.TrimSpace(source)
 	if raw == "" {
 		return ""
 	}
-	url := mediaURLForSource(raw, fallbackExt)
-	if url == "" {
-		return unavailableLinkText
-	}
 	result, err := resource.AdmitURL(resource.URLAdmitInput{
-		URL:    url,
-		Origin: origin,
+		URL:      raw,
+		Origin:   origin,
+		KindHint: kindHint,
 	})
 	if err != nil {
 		logger.Warn(lunarCoreModule, "[资源转换] 链接入库失败: %v", err)
@@ -213,51 +166,38 @@ func urlHandleText(source, fallbackExt, origin string) string {
 	return result.Handle
 }
 
-// animatedHandleText 动图 → @G 句柄；已有解析文本时一并带上
-func animatedHandleText(source, _ string) string {
-	tag := handleFromVisionURL(source)
-	admittedURL := ""
-	if tag == "" {
-		if admitted := admitImageDataURI(source, "image"+guessImageExt(source)); admitted != nil {
-			tag = admitted.Handle
-			admittedURL = admitted.URL
-		}
-	}
-	if tag == "" {
-		return mediaName(source, ".gif")
-	}
-	if admittedURL != "" {
-		if summary := strings.TrimSpace(resource.ParseTextOf(admittedURL)); summary != "" {
-			return tag + "（动图：" + textutil.TruncateRunes(summary, 1200) + "）"
-		}
-	}
-	return tag
-}
-
-// videoHandleText 视频 → @V 句柄：B 站指向完整页面 URL，其余先下载落盘再绑定本地 URL
-func videoHandleText(source, origin string) string {
+// videoHandleText 视频 → @V 句柄。
+//
+// 平台页面（发送侧声明 web_video，共享域名表核对）只登记远程句柄；
+// 其余来源按声明类型下载落盘。这里不再比对域名或扩展名猜测类型。
+func videoHandleText(source, origin string, replay bool) string {
 	raw := strings.TrimSpace(source)
 	if raw == "" {
 		return ""
 	}
-	lower := strings.ToLower(raw)
-	if resource.BilibiliBvid(raw) != "" || strings.Contains(lower, "bilibili.com/video/") || strings.Contains(lower, "b23.tv/") {
-		return urlHandleText(raw, ".mp4", origin)
+	if mediaobject.IsVideoPlatformURL(raw) {
+		return urlHandleText(raw, resource.KindVideo, origin)
+	}
+	if replay {
+		return urlHandleText(raw, resource.KindVideo, origin)
 	}
 	name := mediaName(raw, ".mp4")
 	admitted := admitMedia(raw, name, origin, resource.KindVideo)
 	if admitted == nil || admitted.Handle == "" {
-		logger.Warn(lunarCoreModule, "[资源转换] 视频落盘失败，退回远程句柄: %s", resource.ShortURLForLog(raw))
-		if handle := urlHandleText(raw, ".mp4", origin); handle != "" && handle != unavailableLinkText {
-			return handle
+		logger.Warn(lunarCoreModule, "[资源转换] 视频落盘失败: %s", resource.ShortURLForLog(raw))
+		return urlHandleText(raw, resource.KindVideo, origin)
+	}
+	if err := resource.VerifyStored(resource.KindVideo, resource.AbsPathOfBlob(admitted.BlobPath), ""); err != nil {
+		if !admitted.Deduped {
+			_ = resource.Delete(admitted.Handle)
 		}
-		return name
+		logger.Warn(lunarCoreModule, "[资源转换] 视频声明校验失败: %v", err)
+		return urlHandleText(raw, resource.KindVideo, origin)
 	}
 	return admitted.Handle
 }
 
-// audioHandleText 音频 → 转写文本 + @A 悬空句柄。
-// 音频不再落盘：接入阶段直接走 audio_transcriber，句柄只保留带描述的记录。
+// audioHandleText 音频 → 落盘 audios + 转写文本 + @A 句柄
 func audioHandleText(source, name, origin string) string {
 	if strings.TrimSpace(source) == "" {
 		return ""
@@ -306,48 +246,4 @@ func quoteContextText(quote *QuotePayload) string {
 		builder.WriteString(content)
 	}
 	return builder.String()
-}
-
-// mediaURLForSource 把媒体来源整理成可直接登记的地址（本地地址补全为服务地址）
-func mediaURLForSource(source, _ string) string {
-	raw := strings.TrimSpace(source)
-	if raw == "" {
-		return ""
-	}
-	lower := strings.ToLower(raw)
-	if bvid := resource.BilibiliBvid(raw); bvid != "" && !strings.Contains(lower, "http") {
-		return "https://www.bilibili.com/video/" + bvid
-	}
-	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
-		return raw
-	}
-	if strings.HasPrefix(lower, "data:") {
-		// 音频一律走转写悬空句柄，绝不落盘；这里仅处理图片/视频数据 URI
-		if strings.HasPrefix(lower, "data:audio/") {
-			return ""
-		}
-		if rel := saveBase64Media(raw, "", "video"); rel != "" {
-			return resource.FileReadURL(rel)
-		}
-		return ""
-	}
-	if rel := localPathToReadURL(raw); rel != "" {
-		return rel
-	}
-	return ""
-}
-
-// isVideoSource 判定来源是否为视频（视频扩展名 / data:video / B 站地址与 BV 号）
-func isVideoSource(source string) bool {
-	lower := strings.ToLower(strings.TrimSpace(source))
-	if lower == "" {
-		return false
-	}
-	if strings.HasPrefix(lower, "data:video/") || hasVideoExt(pathPartOf(lower)) {
-		return true
-	}
-	if resource.BilibiliBvid(source) != "" {
-		return true
-	}
-	return strings.Contains(lower, "bilibili.com/video/") || strings.Contains(lower, "b23.tv/")
 }

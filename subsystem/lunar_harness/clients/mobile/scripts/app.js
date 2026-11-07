@@ -4,9 +4,12 @@ import { VoiceChat } from './voice.js';
 import { Toast } from './toast.js';
 import { sendMessages } from './fetch.js';
 import { initUserName, getUserNamePrefix } from './username.js';
+import { setupRendererFrame as setupSharedRendererFrame } from '/shared/core/renderer.js';
 import { FilePreviewManager } from './file-manager.js';
 import { HistoryView } from './history-view.js';
 import { createViewSwitcher, maybeShowHistoryHint } from './view-switch.js';
+import { extractWebpageEnvelopes } from '/shared/core/media.js';
+import { formatFileSize } from './file.js';
 
 class LunarCoreApp {
 	wsClient = null;
@@ -184,26 +187,7 @@ class LunarCoreApp {
 	 * 配置读取失败或取值非法时回退 bedrock。
 	 */
 	async setupRendererFrame() {
-		const frame = document.getElementById('rendererFrame');
-		if (!frame) return;
-		let renderer = 'bedrock';
-		try {
-			const res = await fetch('/file/read/config/general.json');
-			if (res.ok) {
-				const config = await res.json();
-				const value = config && config.system ? config.system.character_renderer : null;
-				if (value === 'live2d' || value === 'bedrock' || value === 'gif') renderer = value;
-			}
-		} catch (e) {
-			// 配置读取失败：回退 bedrock
-		}
-		const sources = {
-			live2d: frame.dataset.srcLive2d,
-			gif: frame.dataset.srcGif,
-		};
-		const src = sources[renderer] || frame.dataset.src;
-		if (!src) return;
-		frame.src = `${src}&ws=${window.location.host}`;
+		await setupSharedRendererFrame('rendererFrame');
 	}
 
 	async handleWebSocketMessage(message) {
@@ -343,8 +327,44 @@ class LunarCoreApp {
 
 		this.setLoadingState(true);
 
+		// ==== 乐观渲染：先上屏，再上传/落库（不等服务端回执） ====
+		const localId = `live-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+		const previews = this.fileManager ? this.fileManager.previews.slice() : [];
+		const categories = new Set();
+		if (text) categories.add('text');
+		const optimisticAttachments = [];
+		for (const preview of previews) {
+			if (preview.type === 'image' || preview.type === 'video' || preview.type === 'audio') {
+				// 独立 blob URL：清空待发送预览时不会连带撤销已上屏消息的图片
+				optimisticAttachments.push({
+					type: preview.type,
+					src: URL.createObjectURL(preview.file),
+					label: preview.name
+				});
+			} else {
+				// 非媒体文件：本地气泡保留文件名与大小（信封内对应 name / bytes）
+				optimisticAttachments.push({
+					type: 'file',
+					label: preview.name,
+					size: formatFileSize(preview.file.size)
+				});
+			}
+			if (preview.type === 'image' || preview.type === 'video') categories.add('image');
+			else if (preview.type === 'audio') categories.add('voice');
+			else categories.add('file');
+		}
+		this.historyView?.appendLive({
+			id: localId,
+			role: 'user',
+			categories: categories.size ? Array.from(categories) : ['text'],
+			content: text,
+			attachments: optimisticAttachments.length ? optimisticAttachments : undefined,
+			status: 'sending',
+			timestamp: Date.now()
+		});
+
 		try {
-			// 附件上传并构建内容块（图片/视频/音频/文本文件）
+			// 附件上传并构建内容信封（图片/视频/音频/文本文件）
 			let contentBlocks = [];
 			if (hasFiles) {
 				const results = await Promise.all(
@@ -353,25 +373,32 @@ class LunarCoreApp {
 				contentBlocks = await this.fileManager.buildFileContentBlocks(results);
 			}
 
+			// 输入框里的 URL 由前端抽成 webpage 信封，正文保持纯文本
+			const textSplit = await extractWebpageEnvelopes(text);
+			contentBlocks.push(...textSplit.envelopes);
+
 			// QQ 适配器标准格式：主文本带用户名前缀（与电脑端一致）
 			let content;
 			if (contentBlocks.length) {
 				content = [
-					...(text ? [{ type: 'text', text: getUserNamePrefix() + text }] : []),
+					...(textSplit.text ? [{ type: 'text', text: getUserNamePrefix() + textSplit.text }] : []),
 					...contentBlocks,
 				];
 			} else {
-				content = getUserNamePrefix() + text;
+				content = getUserNamePrefix() + textSplit.text;
 			}
 
 			await sendMessages([{ role: 'user', content }]);
 
 			// 发送成功后清空输入与待发送附件
+			this.historyView?.updateLiveStatus(localId, 'sent');
 			this.messageInput.value = '';
 			this.autoResizeTextarea();
 			this.fileManager.clearFilePreviews();
 		} catch (error) {
 			console.error('Send error:', error);
+			// 失败：消息气泡标记失败，输入与附件保留，用户可直接重试
+			this.historyView?.updateLiveStatus(localId, 'failed');
 			this.showError(error instanceof Error ? error.message : '发送失败');
 		} finally {
 			this.setLoadingState(false);

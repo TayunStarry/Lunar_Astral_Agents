@@ -12,7 +12,7 @@ func ToolCatalog() []agentinfo.Agent {
 		tools = append(tools, agentinfo.Tool{Name: def.Function.Name, Description: def.Function.Description})
 	}
 	return []agentinfo.Agent{{
-		ID: "document_reader", Name: "文献解析", Source: "agents/DocumentReader",
+		ID: "document_reader", Name: roleLabel,
 		Note:  "文献解析智能体：自动识别格式，按行 / 分批解析小说、文献、文档、DTS、源码等超大规模文本。",
 		Tools: tools,
 	}}

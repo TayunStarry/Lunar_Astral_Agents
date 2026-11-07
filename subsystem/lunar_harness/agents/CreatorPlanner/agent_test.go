@@ -24,7 +24,7 @@ func TestToolSchemasRegistered(t *testing.T) {
 func TestPlannerPromptComposesModeAndHistory(t *testing.T) {
 	prompt := PlannerPrompt(false, []string{"写一首短诗"}, 2, 1, 1, 3)
 	for _, want := range []string{
-		"你是「自由创作.调度者」",
+		"你是「创作调度」",
 		"【本轮创作参考（来自对话者给出的期望",
 		"- 写一首短诗",
 		"【本次为自由创作模式】",

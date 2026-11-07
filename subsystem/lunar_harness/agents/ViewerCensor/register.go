@@ -52,12 +52,11 @@ func init() {
 		ID:          AgentID,
 		Label:       Role,
 		Group:       "Go 智能体",
-		Description: "观影者-审查最近一次合规复核的模型原始输出",
+		Description: Role + "最近一次合规复核的模型原始输出",
 		Export:      exportContext,
 	})
-	agentrepair.RegisterResettable(AgentID, Role,
-		"观影者-审查的最近一次审核输出；reset 清空该记录",
-		resetReviewState,
+	agentrepair.RegisterReadonly(AgentID, Role,
+		Role+"的最近一次审核输出（只读）",
 		func(int) (any, error) { return exportContext(false) })
 	toolreg.Register(AgentID, toolreg.Schema{
 		Name:        "review_video",
@@ -68,7 +67,7 @@ func init() {
 // ToolCatalog 返回审查的阶段能力（审查不使用 function calling）。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
-		ID: AgentID, Name: Role, Source: "agents/ViewerCensor",
+		ID: AgentID, Name: Role,
 		Note:  "观影者之一：只做合规与风险判定，并附带一句观影评价。",
 		Tools: agentinfo.ToolsFromRegistry(AgentID),
 	}}
@@ -88,8 +87,8 @@ func resetReviewState() string {
 	lastReviewItem = nil
 	lastReviewMu.Unlock()
 	if had {
-		logger.Info("CrystalAstral", "观影者-审查最近审核记录已清空")
-		return "已清空观影者-审查的最近审核记录"
+		logger.Info("CrystalAstral", Role+"最近审核记录已清空")
+		return "已清空" + Role + "的最近审核记录"
 	}
-	return "观影者-审查当前没有审核记录"
+	return Role + "当前没有审核记录"
 }

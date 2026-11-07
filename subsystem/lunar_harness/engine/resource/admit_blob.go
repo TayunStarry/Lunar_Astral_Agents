@@ -28,24 +28,30 @@ import (
 
 // snapshotRel 生成内容仓库的相对路径
 //
-// 媒体类：图片/视频/音频统一落在 multimedia 与 audios 两棵内容树内，供视觉读取端点
-// 与本地观看管线按路径取用；命名沿用 sha16，保持内容寻址。
-// 文本类：落在 documents 根，**直接使用原文件名**，便于人机两端按名称传递与讨论；
-// 同名文件视为同一份文档并被覆盖更新。
-// 不可读二进制（压缩包 / 可执行 / 模型 / 未知扩展名）：落在 unknown 根，同样使用原文件名。
-func snapshotRel(hash, ext, name string) string {
-	if IsMediaExtension(ext) {
-		// 音频进 audios/，图片与视频进 multimedia/：两条内容寻址树各司其职
-		if KindOfExt(ext) == KindAudio {
-			return path.Join(StorageRootAudios, hash+ext)
-		}
-		return path.Join(StorageRootMultimedia, hash+ext)
+// 目录一律由分类器给出的类型码决定，不再按扩展名二次判断：
+// 音频进 audios/，图片 / 动图 / 视频进 multimedia/（均内容寻址，命名沿用 sha16）；
+// 文档类落在 documents 根，**直接使用原文件名**，便于人机两端按名称传递与讨论，
+// 同名文件视为同一份文档并被覆盖更新；不可读二进制落在 unknown 根，同样使用原文件名。
+func snapshotRel(hash, ext, name, kind string) string {
+	if root := mediaStorageRoot(kind); root != "" {
+		return path.Join(root, hash+ext)
 	}
 	base := safeDocumentName(name, hash, ext)
 	if isBinaryStorageExt(ext) {
 		return path.Join(StorageRootUnknown, base)
 	}
 	return path.Join(StorageRootDocuments, base)
+}
+
+// mediaStorageRoot 媒体类型码对应的内容树根（非媒体返回空）
+func mediaStorageRoot(kind string) string {
+	switch kind {
+	case KindAudio:
+		return StorageRootAudios
+	case KindImage, KindAnimated, KindVideo:
+		return StorageRootMultimedia
+	}
+	return ""
 }
 
 // safeDocumentName 把建议文件名规整为 documents/ 下可用的裸文件名
@@ -97,17 +103,20 @@ func safeDocumentName(name, hash, ext string) string {
 // 文本类目标已存在时按「同名即同一份文档」覆盖写入，并保守标记为非归档所有，
 // 避免回收器删掉用户可见的原文件名文件。
 //
+// 两条分支的判据都是分类器给出的类型码（而非扩展名）：显式声明为图片但扩展名
+// 不常见的资源同样按媒体走内容寻址，不会掉进文档树被同名覆盖。
+//
 // 返回值 moved 表示是否新写入了实体；owned 表示该实体是否归归档所有（可回收）。
-func placeBlob(localPath, hash, ext, name, sourceKind string) (rel string, moved bool, owned bool, err error) {
+func placeBlob(localPath, hash, ext, name, sourceKind, kind string) (rel string, moved bool, owned bool, err error) {
 	localAbs := filepath.Clean(localPath)
-	archiveRel := snapshotRel(hash, ext, name)
+	archiveRel := snapshotRel(hash, ext, name, kind)
 	archiveAbs := filepath.Join(filepath.Clean(config.LocalDir), filepath.FromSlash(archiveRel))
 
 	// 分支 1：已在系统自有的存储内 → 原地引用（受保护，不归归档所有）
 	if rel, ok := relativeToLocalDir(localAbs); ok && IsStoragePath(rel) && fileExists(localAbs) {
 		return rel, false, false, nil
 	}
-	if IsMediaExtension(ext) {
+	if isMediaKind(kind) {
 		// 媒体：内容寻址，目标存在即同内容复用
 		if fileExists(archiveAbs) {
 			removeTemporarySource(localAbs, sourceKind)

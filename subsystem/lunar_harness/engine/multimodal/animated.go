@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/netsource"
+	"LunarSubsystem/LunarHarness/engine/persistence"
 )
 
 // maxAnimatedBytes 动态图最大输入字节数（与静态图处理保持一致的上限）
@@ -37,9 +38,9 @@ func IsAnimatedImage(imgData []byte) bool {
 		}
 		return len(gifImg.Image) > 2
 	case "png":
-		return isAPNG(imgData)
+		return persistence.IsAnimatedPNG(imgData)
 	case "webp":
-		return isAnimatedWebP(imgData)
+		return persistence.IsAnimatedWebP(imgData)
 	default:
 		return false
 	}
@@ -129,60 +130,4 @@ func downloadImageBytes(url string) ([]byte, error) {
 		return nil, fmt.Errorf("图片数据过大，超过 %dMB 限制", maxAnimatedBytes/1024/1024)
 	}
 	return data, nil
-}
-
-// isAPNG 检测PNG数据是否为动态PNG（APNG）
-// 通过扫描PNG chunk，检测是否存在acTL（Animation Control）chunk
-func isAPNG(data []byte) bool {
-	// PNG签名: 8字节
-	if len(data) < 8+4+4+4 {
-		return false
-	}
-	// 跳过PNG签名(8字节)，从第一个chunk开始扫描
-	offset := 8
-	// 限制扫描100个chunk，防止恶意数据
-	for i := 0; i < 100 && offset+12 <= len(data); i++ {
-		// chunk结构: 4字节长度 + 4字节类型 + 数据 + 4字节CRC
-		chunkLen := int(data[offset])<<24 | int(data[offset+1])<<16 | int(data[offset+2])<<8 | int(data[offset+3])
-		chunkType := string(data[offset+4 : offset+8])
-
-		if chunkType == "acTL" {
-			return true
-		}
-		// 跳转到下一个chunk: 4(length) + 4(type) + chunkLen(data) + 4(CRC)
-		offset += 12 + chunkLen
-	}
-	return false
-}
-
-// isAnimatedWebP 检测WebP数据是否为动态WebP
-// 通过扫描RIFF容器中的chunk，检测是否存在ANIM chunk
-func isAnimatedWebP(data []byte) bool {
-	// RIFF容器最小长度: RIFF(4) + size(4) + WEBP(4) + chunk(4+4) = 20
-	if len(data) < 20 {
-		return false
-	}
-	// 检查RIFF头
-	if string(data[0:4]) != "RIFF" || string(data[8:12]) != "WEBP" {
-		return false
-	}
-	// 从第一个chunk开始扫描（偏移12字节跳过RIFF头+WEBP标识）
-	offset := 12
-	fileEnd := 8 + (int(data[4]) | int(data[5])<<8 | int(data[6])<<16 | int(data[7])<<24)
-
-	// 限制扫描100个chunk
-	for i := 0; i < 100 && offset+8 <= len(data) && offset+8 <= fileEnd; i++ {
-		chunkType := string(data[offset : offset+4])
-		chunkSize := int(data[offset+4]) | int(data[offset+5])<<8 | int(data[offset+6])<<16 | int(data[offset+7])<<24
-
-		if chunkType == "ANIM" {
-			return true
-		}
-		// 跳转到下一个chunk（注意chunk大小奇偶填充）
-		offset += 8 + chunkSize
-		if chunkSize%2 == 1 {
-			offset++ // 奇数大小会有1字节填充
-		}
-	}
-	return false
 }

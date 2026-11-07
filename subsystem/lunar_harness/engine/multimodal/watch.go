@@ -83,24 +83,21 @@ func SegmentImages(localPath string, segment MediaSegment, frameMax int) ([]stri
 	if frameMax > WatchFramesMax {
 		frameMax = WatchFramesMax
 	}
-	span := segment.End - segment.Start
-	if span <= 0 {
+	times := segmentSampleTimes(segment, frameMax)
+	if len(times) == 0 {
 		return nil, fmt.Errorf("切片时间区间无效: %.3f-%.3f", segment.Start, segment.End)
 	}
 	quality := config.JPEGQuality
-	images := make([]string, 0, frameMax)
-	for i := 0; i < frameMax; i++ {
-		// 取 span/frameMax 的步长而不是 span/(frameMax-1)：末帧落在区间内，
-		// 不会去取片段结束点（该点已属于下一片）
-		t := segment.Start + span*float64(i)/float64(frameMax)
+	images := make([]string, 0, len(times))
+	for i, t := range times {
 		img, err := ExtractVideoFrameAt(localPath, t, MaxMediaWidth)
 		if err != nil {
-			logger.Warn(LogModuleMedia, "切片第%d帧(%s)抽取失败，跳过: %v", i+1, FormatSeconds(t), err)
+			logger.Warn(LogModuleMedia, "切片第%d帧(%s)抽取失败，跳过: %v", i+1, FormatPreciseSeconds(t), err)
 			continue
 		}
 		buf := &bytes.Buffer{}
 		if err := encodeImage(buf, img, "jpeg", quality); err != nil {
-			logger.Warn(LogModuleMedia, "切片第%d帧(%s)编码失败，跳过: %v", i+1, FormatSeconds(t), err)
+			logger.Warn(LogModuleMedia, "切片第%d帧(%s)编码失败，跳过: %v", i+1, FormatPreciseSeconds(t), err)
 			continue
 		}
 		images = append(images, "data:image/jpeg;base64,"+base64.StdEncoding.EncodeToString(buf.Bytes()))
@@ -109,6 +106,35 @@ func SegmentImages(localPath string, segment MediaSegment, frameMax int) ([]stri
 		return nil, fmt.Errorf("切片 %s-%s 未抽取到可用画面", FormatSeconds(segment.Start), FormatSeconds(segment.End))
 	}
 	return images, nil
+}
+
+// segmentSampleTimes 生成切片内的等距采样时间点（观看链路的唯一实现）。
+//
+// 取 span/frameMax 的步长而不是 span/(frameMax-1)：末帧落在区间内，不会去取片段结束点。
+// 步长小于 minFrameInterval 时减少帧数：FFmpeg 的 -ss 只有毫秒精度，否则多个帧号会
+// 落到同一个请求时间点，重复解码同一画面。
+func segmentSampleTimes(segment MediaSegment, frameMax int) []float64 {
+	span := segment.End - segment.Start
+	if span <= 0 || frameMax <= 0 {
+		return nil
+	}
+	if frameMax > WatchFramesMax {
+		frameMax = WatchFramesMax
+	}
+	step := span / float64(frameMax)
+	if step < minFrameInterval {
+		frameMax = int(span / minFrameInterval)
+		if frameMax < 1 {
+			frameMax = 1
+		}
+		step = span / float64(frameMax)
+	}
+	times := make([]float64, 0, frameMax)
+	for i := 0; i < frameMax; i++ {
+		// 与 FFmpeg 的 -ss %.3f 对齐：先取整到毫秒，避免浮点误差让相邻帧号落到同一时间点。
+		times = append(times, math.Round((segment.Start+step*float64(i))*1000)/1000)
+	}
+	return times
 }
 
 // VideoToWatchSlices 视频 → 观看切片（全部在内存中，不写媒体目录）。

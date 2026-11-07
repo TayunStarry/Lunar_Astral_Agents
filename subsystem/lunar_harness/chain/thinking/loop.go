@@ -13,6 +13,7 @@ import (
 	"LunarSubsystem/LunarHarness/chain/viewer"
 	"LunarSubsystem/LunarHarness/engine/affection"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/engine/mood"
 )
 
@@ -240,12 +241,31 @@ func EnqueueMessage(messages ...PostMessage) {
 	unreadMu.Unlock()
 }
 
-// EnqueueAudioURL 将语音/音频 URL 包装为音频内容项并追加到队列（入库与转写出智能体侧完成）
-func EnqueueAudioURL(url, source string) {
+// EnqueueAudioObject 将音频多模态对象包装为 audio 信封并追加到队列。
+// 接入阶段统一完成落盘、校验与转写，这里只做协议搬运。
+func EnqueueAudioObject(object mediaobject.Object, source string) {
+	refURL := strings.TrimSpace(object.URL)
+	if refURL == "" && strings.TrimSpace(object.Data) != "" {
+		format := strings.TrimSpace(object.Format)
+		if format == "" {
+			format = "wav"
+		}
+		refURL = "data:audio/" + format + ";base64," + object.Data
+	}
+	mediaSource := strings.TrimSpace(object.Source)
+	if mediaSource == "" {
+		mediaSource = mediaobject.SourceQQPrivate
+	}
 	EnqueueMessage(PostMessage{
-		Role:    RoleUser,
-		Content: []ContentItem{{Type: ContentAudioURL, AudioURL: &URLPayload{URL: url}}},
-		Source:  source,
+		Role: RoleUser,
+		Content: []ContentItem{{
+			Type: ContentAudio,
+			Audio: &mediaobject.AudioPayload{
+				Ref:        mediaobject.Ref{Source: mediaSource, URL: refURL, MIME: object.MIME, Name: object.Name},
+				DurationMS: object.DurationMS,
+			},
+		}},
+		Source: source,
 	})
 }
 

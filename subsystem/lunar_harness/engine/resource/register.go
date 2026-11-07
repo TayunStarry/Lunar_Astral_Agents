@@ -83,22 +83,21 @@ func upsertHandleForPath(rel, abs string) (handle string, canonicalRel string, e
 		return "", rel, err
 	}
 	ext := strings.ToLower(filepath.Ext(rel))
-	kind := KindOfExt(ext)
-	if kind == "" {
-		kind = KindDocument
-	}
+	// 存储扫描属于文件管理系统内部归位：按目录/字节确定类型，不参与入站信封分类
+	cls := DetectStorageKind(ClassifyInput{
+		SourceKind: SourceKindPath,
+		Source:     rel,
+		Name:       filepath.Base(rel),
+		LocalPath:  abs,
+	})
+	kind := cls.Kind
+	mimeType := resolveMIME(cls.MIME, ext)
 	var hash string
 	var size = info.Size()
-	if IsMediaExtension(ext) {
+	if IsMediaExtension(ext) || isMediaKind(kind) {
 		hash, size, err = fileSHA16(abs)
 		if err != nil {
 			return "", rel, err
-		}
-		if kind == KindImage {
-			// 动图与静图分开：真实字节判定，扩展名只做初筛
-			if isAnimatedFile(abs, ext) {
-				kind = KindAnimated
-			}
 		}
 	}
 	rawURL := NormalizeURL(FileReadURL(rel))
@@ -107,7 +106,7 @@ func upsertHandleForPath(rel, abs string) (handle string, canonicalRel string, e
 		if existing.Kind != kind {
 			// 类型码变化：InsertResource 会作废旧句柄并重绑
 			res := Resource{
-				Kind: kind, Name: filepath.Base(rel), Ext: ext, MIME: resolveMIME("", ext),
+				Kind: kind, Name: filepath.Base(rel), Ext: ext, MIME: mimeType,
 				ContentHash: hash, BlobPath: rel, SizeBytes: size, Title: strings.TrimSuffix(filepath.Base(rel), ext),
 				Origin: existing.Origin, Retain: existing.Retain, State: StateActive, BlobOwned: existing.BlobOwned,
 			}
@@ -116,7 +115,7 @@ func upsertHandleForPath(rel, abs string) (handle string, canonicalRel string, e
 			}
 			return res.Handle, rel, nil
 		}
-		if err := archiveDB.UpdateResourceScan(existing.ID, filepath.Base(rel), ext, resolveMIME("", ext), hash, size); err != nil {
+		if err := archiveDB.UpdateResourceScan(existing.ID, filepath.Base(rel), ext, mimeType, hash, size); err != nil {
 			return "", rel, err
 		}
 		archiveDB.TouchResource(existing.ID)
@@ -126,7 +125,7 @@ func upsertHandleForPath(rel, abs string) (handle string, canonicalRel string, e
 		Kind:        kind,
 		Name:        filepath.Base(rel),
 		Ext:         ext,
-		MIME:        resolveMIME("", ext),
+		MIME:        mimeType,
 		ContentHash: hash,
 		BlobPath:    rel,
 		SizeBytes:   size,

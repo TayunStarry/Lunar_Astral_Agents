@@ -30,27 +30,22 @@ func LocalPathURL(rawURL string) (string, bool) {
 	return abs, true
 }
 
-// IsLocalVideoURL 判断地址是否指向本机视频文件
+// IsLocalVideoURL 判断地址是否指向本机视频文件（按本地字节魔数校验）
 func IsLocalVideoURL(rawURL string) bool {
 	abs, ok := LocalPathURL(rawURL)
 	if !ok {
 		return false
 	}
-	return KindOfExt(filepath.Ext(abs)) == KindVideo
+	return DetectStorageKind(ClassifyInput{
+		SourceKind: SourceKindPath,
+		Source:     abs,
+		LocalPath:  abs,
+	}).Kind == KindVideo
 }
 
-// IsVideoURL 判断链接是否为本机或远程视频地址（按路径扩展名与 B 站域名）
+// IsVideoURL 只对本地实体做字节校验；远程链接的类型必须由发送侧声明，不在此推断。
 func IsVideoURL(rawURL string) bool {
-	if IsLocalVideoURL(rawURL) {
-		return true
-	}
-	if BilibiliBvid(rawURL) != "" {
-		return true
-	}
-	if !IsRemoteURL(rawURL) {
-		return false
-	}
-	return KindOfExt(extOfURL(rawURL)) == KindVideo
+	return IsLocalVideoURL(rawURL)
 }
 
 // Outline 返回资源大纲（段落表 + 规范句柄）

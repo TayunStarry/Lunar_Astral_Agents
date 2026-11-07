@@ -2,11 +2,13 @@ package ViewerCritic
 
 // variable.go 观影者-评论的常量集中管理。
 
+import "LunarSubsystem/LunarHarness/protocol/agentinfo"
+
 const (
 	// AgentID 故障归属 ID
 	AgentID = "viewer_critic"
 	// Role 推理实况角色标签
-	Role = "观影者-评论"
+	Role = agentinfo.NameViewerCritic
 	// promptInbox 被动消息回应提示词
 	promptInbox = "viewerCriticInbox.md"
 	// promptMemory 观后回顾提示词

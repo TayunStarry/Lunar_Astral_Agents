@@ -33,7 +33,7 @@ func autoChat(ctx context.Context, role string, messages []chatMessage, tools []
 		MaxAttempts: autoLoopMaxRetries + 1,
 		RetryLoop:   true,
 		OnRetry: func(attempt int, err error) {
-			logger.Warn("LunarHarness", "桌面操纵检测到模型重复输出，已中断并重新生成（重试 %d/%d）", attempt, autoLoopMaxRetries)
+			logger.Warn("LunarHarness", DisplayName+"检测到模型重复输出，已中断并重新生成（重试 %d/%d）", attempt, autoLoopMaxRetries)
 		},
 	})
 	if err != nil {
@@ -41,7 +41,7 @@ func autoChat(ctx context.Context, role string, messages []chatMessage, tools []
 			return chatMessage{}, ErrCanceled
 		}
 		if errors.Is(err, agentbase.ErrLoop) {
-			logger.Error("LunarHarness", "桌面操纵模型连续 %d 次陷入重复输出，跳过本次调用", autoLoopMaxRetries+1)
+			logger.Error("LunarHarness", DisplayName+"模型连续 %d 次陷入重复输出，跳过本次调用", autoLoopMaxRetries+1)
 		}
 		return chatMessage{}, err
 	}

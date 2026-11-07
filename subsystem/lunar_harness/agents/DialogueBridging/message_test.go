@@ -17,43 +17,9 @@ import (
 
 	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
-
-// TestDataURIExt 合并转发内的图片常常只有 file 引用，get_image 下载后是 data URI。
-// 归档层按扩展名推断类型，data URI 必须补上正确扩展名，否则会被当成文档。
-func TestDataURIExt(t *testing.T) {
-	cases := map[string]string{
-		"data:image/png;base64,AAAA":  ".png",
-		"data:image/jpeg;base64,AAAA": ".jpg",
-		"data:image/jpg;base64,AAAA":  ".jpg",
-		"data:image/gif;base64,AAAA":  ".gif",
-		"data:image/webp;base64,AAA":  ".webp",
-		"data:image/bmp;base64,AAAA":  ".bmp",
-		"data:image/avif;base64,AAA":  ".png", // 未知格式回退 png
-		"data:,":                      ".png",
-	}
-	for uri, want := range cases {
-		if got := dataURIExt(uri); got != want {
-			t.Fatalf("dataURIExt(%q) = %q, want %q", uri, got, want)
-		}
-	}
-}
-
-// TestForwardImageName QQ CDN 直链常常没有扩展名；没有图片扩展名时归档层会按文档处理。
-func TestForwardImageName(t *testing.T) {
-	cases := map[string]string{
-		"https://multimedia.nt.qq.com.cn/download?fileid=abc": "forward.jpg",
-		"https://example.com/a.png":                           "forward.png",
-		"https://example.com/a.JPEG?x=1":                      "forward.jpeg",
-		"data:image/gif;base64,AAA":                           "forward.gif",
-	}
-	for source, want := range cases {
-		if got := forwardImageName(source); got != want {
-			t.Fatalf("forwardImageName(%q) = %q, want %q", source, got, want)
-		}
-	}
-}
 
 // TestAdmitForwardImageDataURI 只有 file 引用、下载后为 data URI 的转发图片
 // 必须能收进资源归档并返回句柄，而不是退化成 [图片]。
@@ -105,8 +71,8 @@ func TestExtractSegmentTextAdmitsImage(t *testing.T) {
 	}
 
 	fallback := extractSegmentText(0, 0, []napcat.MessageSegment{{Type: "image", Data: json.RawMessage(`{}`)}})
-	if fallback != "图片.png" {
-		t.Fatalf("图片入库失败时应退化为文件名而非占位符，实际 %q", fallback)
+	if fallback != "图片" {
+		t.Fatalf("图片入库失败时应退化为通用名而非占位符，实际 %q", fallback)
 	}
 }
 
@@ -144,8 +110,9 @@ func TestExtractSegmentTextAdmitsMedia(t *testing.T) {
 		"url":  "data:audio/mp3;base64," + base64.StdEncoding.EncodeToString([]byte("fake-mp3-bytes")),
 	})
 	audioText := extractSegmentText(0, 0, []napcat.MessageSegment{{Type: "record", Data: audioData}})
-	if !strings.Contains(audioText, "voice.mp3") {
-		t.Fatalf("语音应带纠正扩展名后的文件名，实际 %q", audioText)
+	// 写入侧不再按扩展名纠正文件名：保留来源方声明的 voice.amr，类型交给分类层判定。
+	if !strings.Contains(audioText, "voice.amr") {
+		t.Fatalf("语音应保留来源声明的文件名，实际 %q", audioText)
 	}
 
 	fileData, _ := json.Marshal(map[string]string{
@@ -280,7 +247,7 @@ func startBridgeTest(t *testing.T, groupID int64) (*fakeNapcat, *int) {
 	useNapcatTestClient(t, fake.server.URL)
 	delivered := 0
 	SendMessageToAgent = func(messages []map[string]any) { delivered++ }
-	SendAudioToAgent = func(urls []string) {}
+	SendAudioToAgent = func(objects []mediaobject.Object) {}
 	return fake, &delivered
 }
 
@@ -490,7 +457,8 @@ func TestParseMessageSegmentsMFaceText(t *testing.T) {
 	}
 }
 
-// TestParseMessageSegmentsFileChannelImage 文件通道传来的图片（只给 path）要按图片处理
+// TestParseMessageSegmentsFileChannelImage 文件通道图片按字节嗅探结果声明：
+// 真实 PNG 字节发 image_static，真实 GIF 字节发 image_animated。
 func TestParseMessageSegmentsFileChannelImage(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "photo.png")
 	if err := os.WriteFile(path, testPNG(t, 6, 4), 0o644); err != nil {
@@ -500,17 +468,274 @@ func TestParseMessageSegmentsFileChannelImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("序列化文件段失败: %v", err)
 	}
-	content, hasImages, _ := parseMessageSegments(0, []napcat.MessageSegment{{Type: "file", Data: data}})
-	if !hasImages {
-		t.Fatalf("文件通道图片未被识别: %#v", content)
+	content, hasMedia, _ := parseMessageSegments(0, []napcat.MessageSegment{{Type: "file", Data: data}})
+	if !hasMedia {
+		t.Fatalf("文件通道图片应生成图片信封: %#v", content)
 	}
 	items, ok := content.([]map[string]any)
-	if !ok || len(items) == 0 {
-		t.Fatalf("文件通道图片内容结构异常: %#v", content)
+	if !ok || len(items) != 1 || items[0]["type"] != mediaobject.EnvelopeImageStatic {
+		t.Fatalf("文件通道图片应声明 image_static: %#v", content)
 	}
-	imageItem := items[len(items)-1]
-	if imageItem["type"] != "image_url" {
-		t.Fatalf("文件通道图片未生成 image_url 项: %#v", imageItem)
+	payload, ok := items[0][mediaobject.EnvelopeImageStatic].(*mediaobject.ImageStaticPayload)
+	if !ok {
+		t.Fatalf("载荷应挂在同名专用字段 image_static: %#v", items[0])
+	}
+	if payload.Source != mediaobject.SourceQQPrivate || payload.MIME != "image/png" || payload.Name != "photo.png" {
+		t.Fatalf("图片信封声明不完整: %#v", payload)
+	}
+	if !strings.HasPrefix(payload.URL, "data:image/png;base64,") {
+		t.Fatalf("图片信封应携带 data URI 引用，实际 %q", payload.URL)
+	}
+}
+
+// testGIF 最小 GIF89a 字节（QQ 常把 GIF 数据存成 .jpg / .png 文件名）
+func testGIF() []byte {
+	return []byte{
+		0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
+		0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF,
+		0x21, 0xF9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00,
+		0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+		0x02, 0x02, 0x44, 0x01, 0x00, 0x3B,
+	}
+}
+
+// TestParseMessageSegmentsSniffsGIFBytes QQ 常用 .jpg 文件名存放 GIF 数据：
+// 声明必须以文件头魔数为准——发 image_animated + 真实 MIME image/gif，
+// name 仍保留来源方原始文件名，不按真实格式改名。
+func TestParseMessageSegmentsSniffsGIFBytes(t *testing.T) {
+	const fileName = "C3ACBFAB273FB38FCCBBBE36A6D78433.jpg"
+	gifBytes := testGIF()
+
+	// image 段：引用头也谎称 image/jpeg，实际字节是 GIF
+	liarURI := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(gifBytes)
+	imageData, _ := json.Marshal(map[string]any{"file": fileName, "url": liarURI})
+	content, hasMedia, _ := parseMessageSegments(0, []napcat.MessageSegment{{Type: "image", Data: imageData}})
+	if !hasMedia {
+		t.Fatalf("图片段应生成信封: %#v", content)
+	}
+	items, ok := content.([]map[string]any)
+	if !ok || len(items) != 1 || items[0]["type"] != mediaobject.EnvelopeImageAnimated {
+		t.Fatalf(".jpg 文件名承载 GIF 字节应声明 image_animated: %#v", content)
+	}
+	imagePayload, ok := items[0][mediaobject.EnvelopeImageAnimated].(*mediaobject.ImageAnimatedPayload)
+	if !ok || imagePayload.MIME != "image/gif" || imagePayload.Name != fileName {
+		t.Fatalf("动图信封应按真实字节声明 MIME 并保留原名: %#v", items[0])
+	}
+	if !strings.HasPrefix(imagePayload.URL, "data:image/gif;base64,") {
+		t.Fatalf("引用应按真实格式重建为 GIF data URI，实际 %q", imagePayload.URL)
+	}
+
+	// file 段：下载到字节后同样以魔数为准
+	path := filepath.Join(t.TempDir(), fileName)
+	if err := os.WriteFile(path, gifBytes, 0o644); err != nil {
+		t.Fatalf("写测试 GIF 失败: %v", err)
+	}
+	fileData, _ := json.Marshal(map[string]any{"file": fileName, "name": fileName, "path": path})
+	content, hasMedia, _ = parseMessageSegments(0, []napcat.MessageSegment{{Type: "file", Data: fileData}})
+	if !hasMedia {
+		t.Fatalf("文件通道 GIF 应生成图片信封: %#v", content)
+	}
+	items, ok = content.([]map[string]any)
+	if !ok || len(items) != 1 || items[0]["type"] != mediaobject.EnvelopeImageAnimated {
+		t.Fatalf("文件通道的 .jpg 名 GIF 应声明 image_animated: %#v", content)
+	}
+	filePayload, ok := items[0][mediaobject.EnvelopeImageAnimated].(*mediaobject.ImageAnimatedPayload)
+	if !ok || filePayload.MIME != "image/gif" || filePayload.Name != fileName {
+		t.Fatalf("文件通道动图声明不符合真实字节: %#v", items[0])
+	}
+}
+
+// TestAdmitForwardGIFImageKeepsName 转发图同样按字节归档：.jpg 名 GIF 应入动图资源，
+// 展示名仍保留来源方原始文件名。
+func TestAdmitForwardGIFImageKeepsName(t *testing.T) {
+	origLocal := config.LocalDir
+	origArchive := config.ArchiveDBPath
+	tmp := t.TempDir()
+	config.LocalDir = tmp
+	config.ArchiveDBPath = filepath.Join(tmp, "database", "archive.db")
+	t.Cleanup(func() {
+		_ = resource.Close()
+		config.LocalDir = origLocal
+		config.ArchiveDBPath = origArchive
+	})
+
+	const fileName = "C3ACBFAB273FB38FCCBBBE36A6D78433.jpg"
+	gifURI := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(testGIF())
+	handle, ok := admitInboundImage(napcat.ImageData{URL: gifURI, File: fileName})
+	if !ok || len(handle) < 2 || handle[1] != 'G' {
+		t.Fatalf(".jpg 名 GIF 转发图应按动图入库并返回 @G 句柄，实得 %q", handle)
+	}
+}
+
+// TestParseMessageSegmentsImageEnvelope image 段按声明区分静态图与动图，
+// 且信封类型与专用载荷字段同名。
+func TestParseMessageSegmentsImageEnvelope(t *testing.T) {
+	staticURL := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString([]byte("jpeg-bytes"))
+	staticData, _ := json.Marshal(map[string]any{"file": "pic.jpg", "url": staticURL})
+	content, hasMedia, _ := parseMessageSegments(1, []napcat.MessageSegment{{Type: "image", Data: staticData}})
+	if !hasMedia {
+		t.Fatalf("图片段应生成图片信封: %#v", content)
+	}
+	items, ok := content.([]map[string]any)
+	if !ok || len(items) != 1 || items[0]["type"] != mediaobject.EnvelopeImageStatic {
+		t.Fatalf("普通图片应声明 image_static: %#v", content)
+	}
+	payload, ok := items[0][mediaobject.EnvelopeImageStatic].(*mediaobject.ImageStaticPayload)
+	if !ok || payload.Source != mediaobject.SourceQQGroup || payload.MIME != "image/jpeg" || payload.Name != "pic.jpg" {
+		t.Fatalf("静态图信封声明不完整: %#v", items[0])
+	}
+
+	animatedURL := "data:image/gif;base64," + base64.StdEncoding.EncodeToString([]byte("gif-bytes"))
+	animatedData, _ := json.Marshal(map[string]any{"file": "emoji.gif", "sub_type": 1, "url": animatedURL})
+	content, _, _ = parseMessageSegments(1, []napcat.MessageSegment{{Type: "image", Data: animatedData}})
+	items, ok = content.([]map[string]any)
+	if !ok || len(items) != 1 || items[0]["type"] != mediaobject.EnvelopeImageAnimated {
+		t.Fatalf("sub_type=1 的表情图片应声明 image_animated: %#v", content)
+	}
+	if _, ok := items[0][mediaobject.EnvelopeImageAnimated].(*mediaobject.ImageAnimatedPayload); !ok {
+		t.Fatalf("载荷应挂在同名专用字段 image_animated: %#v", items[0])
+	}
+
+	mfaceData, _ := json.Marshal(map[string]any{"url": animatedURL, "summary": "[比心]"})
+	content, _, _ = parseMessageSegments(1, []napcat.MessageSegment{{Type: "mface", Data: mfaceData}})
+	items, ok = content.([]map[string]any)
+	if !ok || len(items) != 1 || items[0]["type"] != mediaobject.EnvelopeImageAnimated {
+		t.Fatalf("商城表情应归入 image_animated: %#v", content)
+	}
+}
+
+// TestParseMessageSegmentsVideoEnvelope video 段按新信封声明，MIME 取来源方声明
+func TestParseMessageSegmentsVideoEnvelope(t *testing.T) {
+	videoURL := "data:video/mp4;base64," + base64.StdEncoding.EncodeToString([]byte("mp4-bytes"))
+	videoData, _ := json.Marshal(map[string]any{"file": "clip.mp4", "url": videoURL})
+	content, hasMedia, _ := parseMessageSegments(1, []napcat.MessageSegment{{Type: "video", Data: videoData}})
+	if !hasMedia {
+		t.Fatalf("视频段应生成视频信封: %#v", content)
+	}
+	items, ok := content.([]map[string]any)
+	if !ok || len(items) != 1 || items[0]["type"] != mediaobject.EnvelopeVideo {
+		t.Fatalf("视频应声明 video 信封: %#v", content)
+	}
+	payload, ok := items[0][mediaobject.EnvelopeVideo].(*mediaobject.VideoPayload)
+	if !ok || payload.Source != mediaobject.SourceQQGroup || payload.MIME != "video/mp4" || payload.Name != "clip.mp4" {
+		t.Fatalf("视频信封声明不完整: %#v", items[0])
+	}
+}
+
+// TestParseMessageSegmentsTextWebpage 文本保持纯文本，其中的链接抽成 webpage 信封；
+// 命中共享视频平台域名表时声明 web_video，普通网页不声明平台（后端缺省 web_page）。
+func TestParseMessageSegmentsTextWebpage(t *testing.T) {
+	content, hasMedia, _ := parseMessageSegments(1, []napcat.MessageSegment{
+		textSeg("看这个 https://www.bilibili.com/video/BV1xx 和 https://example.com/a?b=1 哦"),
+	})
+	if !hasMedia {
+		t.Fatalf("文本链接应生成 webpage 信封: %#v", content)
+	}
+	items, ok := content.([]map[string]any)
+	if !ok {
+		t.Fatalf("含链接的文本应转为内容项数组: %#v", content)
+	}
+	var webpages []*mediaobject.WebpagePayload
+	for _, item := range items {
+		if item["type"] == mediaobject.EnvelopeWebpage {
+			payload, _ := item[mediaobject.EnvelopeWebpage].(*mediaobject.WebpagePayload)
+			webpages = append(webpages, payload)
+			continue
+		}
+		if text, ok := item["text"].(string); ok && strings.Contains(text, "http") {
+			t.Fatalf("链接应被抽离文本，实际仍残留: %q", text)
+		}
+	}
+	if len(webpages) != 2 {
+		t.Fatalf("应抽出 2 个网页信封，实际 %d: %#v", len(webpages), items)
+	}
+	if webpages[0].URL != "https://www.bilibili.com/video/BV1xx" || webpages[0].Platform != mediaobject.WebPlatformVideo {
+		t.Fatalf("视频平台链接应声明 web_video: %#v", webpages[0])
+	}
+	if webpages[1].URL != "https://example.com/a?b=1" || webpages[1].Platform != "" {
+		t.Fatalf("普通链接不声明平台: %#v", webpages[1])
+	}
+	if webpages[0].Source != mediaobject.SourceQQGroup {
+		t.Fatalf("网页信封来源应为 qq_group: %#v", webpages[0])
+	}
+}
+
+// TestParseMessageSegmentsShareCard share 段：摘要文本保留，链接只进一个 webpage 信封；
+// 没有链接时只保留摘要文本，不伪造信封。
+func TestParseMessageSegmentsShareCard(t *testing.T) {
+	withLink, _ := json.Marshal(map[string]string{
+		"url":     "https://www.bilibili.com/video/BV1xx",
+		"title":   "分享标题",
+		"content": "摘要",
+	})
+	content, hasMedia, _ := parseMessageSegments(1, []napcat.MessageSegment{{Type: "share", Data: withLink}})
+	if !hasMedia {
+		t.Fatalf("带链接的分享卡片应生成网页信封: %#v", content)
+	}
+	items, ok := content.([]map[string]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("应只有摘要文本 + 一个网页信封: %#v", content)
+	}
+	payload, ok := items[1][mediaobject.EnvelopeWebpage].(*mediaobject.WebpagePayload)
+	if !ok || payload.URL != "https://www.bilibili.com/video/BV1xx" ||
+		payload.Name != "分享标题" || payload.Source != mediaobject.SourceQQGroup ||
+		payload.Platform != mediaobject.WebPlatformVideo {
+		t.Fatalf("分享卡片网页信封声明不完整: %#v", items[1])
+	}
+	if text, _ := items[0]["text"].(string); !strings.Contains(text, "分享标题") || strings.Contains(text, "http") {
+		t.Fatalf("摘要文本应保留且不重复链接，实际 %q", text)
+	}
+
+	// 私聊 + 有链接但无标题：中性名兜底，来源随群聊/私聊切换
+	noTitle, _ := json.Marshal(map[string]string{"url": "https://example.com/a"})
+	content, hasMedia, _ = parseMessageSegments(0, []napcat.MessageSegment{{Type: "share", Data: noTitle}})
+	items, ok = content.([]map[string]any)
+	if !hasMedia || !ok || len(items) != 2 {
+		t.Fatalf("无标题分享卡片仍应生成网页信封: %#v", content)
+	}
+	payload, _ = items[1][mediaobject.EnvelopeWebpage].(*mediaobject.WebpagePayload)
+	if payload == nil || payload.Source != mediaobject.SourceQQPrivate || payload.Name != "网页链接" || payload.Platform != "" {
+		t.Fatalf("无标题分享卡片应用中性名: %#v", items[1])
+	}
+
+	// 无链接：维持现状，只输出摘要文本
+	noLink, _ := json.Marshal(map[string]string{"title": "纯文本卡片"})
+	content, hasMedia, _ = parseMessageSegments(1, []napcat.MessageSegment{{Type: "share", Data: noLink}})
+	text, ok := content.(string)
+	if hasMedia || !ok || !strings.Contains(text, "纯文本卡片") {
+		t.Fatalf("无链接分享卡片应只保留摘要文本: %#v", content)
+	}
+}
+
+// TestParseMessageSegmentsJsonCard json 段：从 meta 里的 jumpUrl 抽网页信封，
+// 标题作信封名；小程序等无 URL 卡片维持摘要文本。
+func TestParseMessageSegmentsJsonCard(t *testing.T) {
+	card := `{"prompt":"卡片标题","meta":{"news":{"jumpUrl":"https://example.com/a"},"detail_1":{"desc":"详情"}}}`
+	data, _ := json.Marshal(map[string]string{"data": card})
+	content, hasMedia, _ := parseMessageSegments(1, []napcat.MessageSegment{{Type: "json", Data: data}})
+	if !hasMedia {
+		t.Fatalf("带链接的 JSON 卡片应生成网页信封: %#v", content)
+	}
+	items, ok := content.([]map[string]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("应只有摘要文本 + 一个网页信封: %#v", content)
+	}
+	payload, ok := items[1][mediaobject.EnvelopeWebpage].(*mediaobject.WebpagePayload)
+	if !ok || payload.URL != "https://example.com/a" || payload.Name != "卡片标题" ||
+		payload.Source != mediaobject.SourceQQGroup || payload.Platform != "" {
+		t.Fatalf("JSON 卡片网页信封声明不完整: %#v", items[1])
+	}
+	if text, _ := items[0]["text"].(string); !strings.Contains(text, "卡片标题") {
+		t.Fatalf("摘要文本应保留卡片标题，实际 %q", text)
+	}
+
+	noLink := `{"prompt":"小程序卡片","meta":{"detail_1":{"title":"应用"}}}`
+	data, _ = json.Marshal(map[string]string{"data": noLink})
+	content, hasMedia, _ = parseMessageSegments(1, []napcat.MessageSegment{{Type: "json", Data: data}})
+	text, ok := content.(string)
+	if hasMedia || !ok || !strings.Contains(text, "小程序卡片") {
+		t.Fatalf("无链接 JSON 卡片应只保留摘要文本: %#v", content)
 	}
 }
 
@@ -585,7 +810,7 @@ func TestPrivateMessagesAreBatched(t *testing.T) {
 
 	deliveries := make([][]map[string]any, 0)
 	SendMessageToAgent = func(messages []map[string]any) { deliveries = append(deliveries, messages) }
-	SendAudioToAgent = func(urls []string) {}
+	SendAudioToAgent = func(objects []mediaobject.Object) {}
 
 	newPrivate := func(text string) napcat.NapcatMessage {
 		return napcat.NapcatMessage{

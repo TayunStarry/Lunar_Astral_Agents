@@ -13,7 +13,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
@@ -109,8 +108,12 @@ func archiveUnusablePath(rel, reason string) {
 
 // validateStorageFile 扫描期的完整性校验：图片必须能解析出宽高（SVG 除外）
 func validateStorageFile(rel, abs string) error {
-	ext := strings.ToLower(filepath.Ext(rel))
-	if KindOfExt(ext) != KindImage || ext == ".svg" {
+	cls := DetectStorageKind(ClassifyInput{
+		SourceKind: SourceKindPath,
+		Source:     rel,
+		LocalPath:  abs,
+	})
+	if cls.Kind != KindImage || cls.Ext == ".svg" {
 		return nil
 	}
 	if _, _, err := imageDimensions(abs); err != nil {

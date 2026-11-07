@@ -2,11 +2,15 @@ package Vision
 
 // variable.go 视觉理解智能体的常量与工具名（业务逻辑不得写在本文件）
 
-import "time"
+import (
+	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
+)
 
 const (
 	// roleLabel TUI 实况屏显示的角色标签
-	roleLabel = "视觉理解"
+	roleLabel = agentinfo.NameVision
 	// summaryStoreChars 写回资源目录的摘要最大字符数
 	summaryStoreChars = 1000
 	// remoteVideoDownloadTimeout 远程视频回源超时（沿用原有 5 分钟）

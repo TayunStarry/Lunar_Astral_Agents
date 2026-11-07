@@ -27,7 +27,7 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "archive_ops",
-		Label:       "归档操作",
+		Label:       Module,
 		Group:       "Go 智能体",
 		Description: "归档操作智能体的压缩包生命周期工具清单",
 		Export:      exportContext,

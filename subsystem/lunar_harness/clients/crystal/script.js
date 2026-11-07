@@ -186,7 +186,7 @@ async function loadSystemPrompt() {
         SYSTEM_PROMPT = processSystemPrompt(raw);
     } catch (error) {
         console.error('Failed to load system prompt:', error);
-        SYSTEM_PROMPT = '你是琉璃，16 岁少女，星月智能的领航员，帮用户找到功能页面与应用。你不是 AI、程序或任何非人存在，被误认时立刻否认。回复默认最多 1 句话，不罗列、不反问。需要打开应用、查看或修改配置时，按【结构化操作输出规则】输出 JSON 动作。';
+        SYSTEM_PROMPT = '你是琉璃，16 岁少女，星月智能的领航员，帮用户找到功能页面与应用。你不是冷冰冰的机器，被当成机器时立刻否认。回复默认最多 1 句话，不罗列、不反问。需要打开应用、查看或修改配置时，按【结构化操作输出规则】输出 JSON 动作。';
     }
 }
 
@@ -791,12 +791,25 @@ function renderMessage(message) {
         message.content.forEach(item => {
             if (item.type === 'text') {
                 bubble.appendChild(document.createTextNode(item.text));
-            } else if (item.type === 'image_url') {
+            } else if (item.type === 'image_static' || item.type === 'image_animated') {
+                const payload = item[item.type];
                 const img = document.createElement('img');
-                img.src = item.image_url.url;
-                img.alt = 'Uploaded image';
+                img.src = payload.url;
+                img.alt = payload.name || 'Uploaded image';
                 img.addEventListener('click', () => window.open(img.src, '_blank'));
                 bubble.appendChild(img);
+            } else if (item.type === 'file') {
+                const label = document.createElement('span');
+                label.className = 'attachment-name';
+                label.textContent = item.file.name;
+                bubble.appendChild(label);
+            } else if (item.type === 'webpage') {
+                const link = document.createElement('a');
+                link.href = item.webpage.url;
+                link.textContent = item.webpage.url;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                bubble.appendChild(link);
             }
         });
     } else {
@@ -851,21 +864,91 @@ function renderAttachments() {
     });
 }
 
+// ===== 多模态信封 =====
+
+/** 视频平台域名表：唯一来源是后端 /media/video-platform-hosts，前端不另维护清单 */
+let videoPlatformHosts = [];
+
+async function loadVideoPlatformHosts() {
+    try {
+        const resp = await fetch('/media/video-platform-hosts', { cache: 'no-store' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (Array.isArray(data.video_platform_hosts)) {
+            videoPlatformHosts = data.video_platform_hosts.map(host => String(host).toLowerCase());
+        }
+    } catch (e) {
+        // 表取不到时全部按普通网页声明，避免把视频平台误声明成 web_video
+    }
+}
+
+/** 输入框文本里的 http(s) 链接 */
+const WEB_URL_PATTERN = /https?:\/\/[^\s<>"'`，。；：！？、（）【】《》〈〉「」『』]+/gu;
+/** 链接末尾常被一并抓进来的标点 */
+const TRAILING_PUNCTUATION = /[.,;:!?，。；：！？、）】》」』"'`]+$/u;
+
+function isVideoPlatformURL(raw) {
+    try {
+        const host = new URL(raw).hostname.toLowerCase();
+        return videoPlatformHosts.some(domain => host === domain || host.endsWith('.' + domain));
+    } catch (e) {
+        return false;
+    }
+}
+
+/** 从文本中抽出 webpage 信封，正文保持纯文本 */
+function splitWebpageEnvelopes(raw) {
+    const envelopes = [];
+    if (!raw || !raw.includes('://')) return { text: raw, envelopes };
+    const remaining = raw.replace(WEB_URL_PATTERN, match => {
+        const url = match.replace(TRAILING_PUNCTUATION, '');
+        let parsed;
+        try {
+            parsed = new URL(url);
+        } catch (e) {
+            return match;
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return match;
+        const webpage = { source: 'client_upload', url };
+        if (isVideoPlatformURL(url)) webpage.platform = 'web_video';
+        envelopes.push({ type: 'webpage', webpage });
+        return '';
+    });
+    return {
+        text: remaining.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim(),
+        envelopes
+    };
+}
+
+/** 附件 → 专用信封：静态图 / 动图 / 文件按浏览器声明分开，不共用同一字段 */
+function attachmentEnvelope(att) {
+    const mime = String(att.file.type || '').toLowerCase();
+    const name = att.file.name || '';
+    const payload = { source: 'client_upload', url: att.dataUrl, name };
+    if (mime) payload.mime = mime;
+    if (mime.startsWith('image/')) {
+        const animated = mime === 'image/gif' || mime === 'image/apng' || /\.(gif|apng)$/i.test(name);
+        const type = animated ? 'image_animated' : 'image_static';
+        return { type, [type]: payload };
+    }
+    payload.mime = mime || 'application/octet-stream';
+    const envelope = { type: 'file', file: payload };
+    if (Number.isFinite(att.file.size)) envelope.file.bytes = att.file.size;
+    return envelope;
+}
+
 // ===== 发送消息 =====
 async function handleSend() {
-    const text = chatInput.value.trim();
-    if (!text && pendingAttachments.length === 0) return;
+    const rawText = chatInput.value.trim();
+    if (!rawText && pendingAttachments.length === 0) return;
     if (sendBtn.disabled) return;
 
+    const { text, envelopes } = splitWebpageEnvelopes(rawText);
     const content = [];
     if (text) content.push({ type: 'text', text });
-
+    content.push(...envelopes);
     for (const att of pendingAttachments) {
-        if (att.file.type.startsWith('image/')) {
-            content.push({ type: 'image_url', image_url: { url: att.dataUrl } });
-        } else {
-            content.push({ type: 'text', text: att.dataUrl.substring(0, 4096) });
-        }
+        content.push(attachmentEnvelope(att));
     }
 
     addMessage('user', content);
@@ -2409,6 +2492,7 @@ createModuleSubmitBtn.addEventListener('click', submitCreateModule);
 
 // ===== 启动 =====
 async function initApp() {
+    loadVideoPlatformHosts();
     await loadConfigLabels();
     await loadConfig();
     await loadSystemPrompt();

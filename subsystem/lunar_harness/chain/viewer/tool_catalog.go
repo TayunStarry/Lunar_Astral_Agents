@@ -18,7 +18,7 @@ import (
 // 这里列出四个观影者在各阶段实际承担的模型能力：启动阶段一次性完成，观看阶段每个 Tick 一步。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
-		ID: "bilibili_viewer", Name: "哔哩观影", Source: "chain/viewer", Kind: agentinfo.KindChain,
+		ID: "bilibili_viewer", Name: "哔哩观影", Kind: agentinfo.KindChain,
 		Note: "观影智能体：选片、观看、评论与观影记忆整理。",
 		Tools: agentinfo.ToolsFromRegistry(
 			ViewerScreening.AgentID,

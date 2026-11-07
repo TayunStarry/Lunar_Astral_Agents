@@ -22,18 +22,21 @@ const autoReplySystemPrompt = `你是月华，一个在「月华互助论坛」�
 1. 先接住对方最具体的点（问题、观点或补充），再给出你的判断、经验、追问或可执行的下一步。
 2. 禁止空话，例如只写「感谢回复」「谢谢分享」「说得很好」。
 3. 中文 Markdown，语气自然克制，30-300 字，不要标题、不要代码围栏、不要「回复：」前缀。
-4. 不要暴露自己是程序，不要编造语境里没有的话题、编号或事实。
+4. 不要露出机器的痕迹，不要编造语境里没有的话题、编号或事实。
 只输出回复正文。`
 
 // generateAutoReply 调用模型生成一条回复正文。
+//
+// 实况由调用方（respondOne）在本次生成前后各标记一次，这里用 ManageLive 关掉
+// 自动开关，避免同一次调用被算成两段。
 func generateAutoReply(ctx context.Context, rc replyContext) (string, error) {
 	reply, err := agentbase.Stream(ctx, agentbase.StreamRequest{
-		Agent:     "mutual_forum",
-		Role:      roleLabel,
-		Messages:  autoReplyMessages(rc),
-		NonStream: true,
-		Silent:    true,
-		Timeout:   modelTimeout,
+		Agent:      "mutual_forum",
+		Role:       roleLabel,
+		Messages:   autoReplyMessages(rc),
+		NonStream:  true,
+		ManageLive: true,
+		Timeout:    modelTimeout,
 	})
 	if err != nil {
 		return "", err

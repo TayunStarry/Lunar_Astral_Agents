@@ -144,7 +144,7 @@ func ToolCatalog() []agentinfo.Agent {
 		}
 	}
 	return []agentinfo.Agent{{
-		ID: "file_editor", Name: "文件编辑", Source: "agents/FileEditor",
+		ID: "file_editor", Name: Module,
 		Note:  "文件编辑智能体：文档库读写、检索、置换与项目运行。",
 		Tools: tools,
 	}}

@@ -100,6 +100,7 @@ func Assemble() {
 			Crystal:  crystalStaticRoot(),
 			Library:  clients.LibraryFS(),
 			Reliance: clients.RelianceFS(),
+			Shared:   clients.SharedFS(),
 		}
 	}
 

@@ -12,7 +12,7 @@ func ToolCatalog() []agentinfo.Agent {
 		tools = append(tools, agentinfo.Tool{Name: def.Function.Name, Description: def.Function.Description})
 	}
 	return []agentinfo.Agent{{
-		ID: "mutual_forum", Name: "互助论坛", Source: "agents/MutualForum",
+		ID: "mutual_forum", Name: roleLabel,
 		Note:  "论坛协作智能体：发布需求、检索答复并整理上下文。",
 		Tools: tools,
 	}}

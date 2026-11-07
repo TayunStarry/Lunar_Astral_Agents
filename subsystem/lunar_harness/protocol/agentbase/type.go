@@ -223,8 +223,6 @@ type AgentConfig struct {
 	Timeout time.Duration
 	// MaxRounds 工具循环默认上限
 	MaxRounds int
-	// MaxRepeats 同一工具调用签名重复上限（负值 = 关闭重复检测）
-	MaxRepeats int
 	// MaxToolResultRunes 单条工具结果回填上限（负值 = 关闭截断）
 	MaxToolResultRunes int
 }
@@ -234,14 +232,6 @@ type AgentConfig struct {
 type Agent struct {
 	// Config 基座配置
 	Config AgentConfig
-}
-
-// RepeatTracker 工具调用签名重复跟踪器。
-type RepeatTracker struct {
-	// limit 同一签名允许出现的次数上限
-	limit int
-	// seen 签名 → 出现次数
-	seen map[string]int
 }
 
 // Usage OpenAI 兼容响应中的 token 用量

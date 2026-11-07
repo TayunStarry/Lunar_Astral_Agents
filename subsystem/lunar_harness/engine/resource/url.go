@@ -63,17 +63,21 @@ func RememberWebPage(rawURL, title, summary string) error {
 }
 
 // WebPageFresh 判断某 URL 的解析文本是否在 TTL 内（供「近期已访问」过滤）
+//
+// ttl <= 0 时回落到网页档默认有效期；判定统一委托 parseTextFreshWithin，
+// 与其他调用点共用同一份实现。
 func WebPageFresh(rawURL string, ttl time.Duration) bool {
-	if EnsureReady() != nil || ttl <= 0 {
+	if EnsureReady() != nil {
 		return false
 	}
 	res, found := archiveDB.FindResourceByURL(rawURL)
-	if !found || res.ParseState != ParseReady || strings.TrimSpace(res.ParseText) == "" {
+	if !found {
 		return false
 	}
-	var parsedAt int64
-	_ = archiveDB.db.QueryRow(`SELECT parsed_at FROM url_master WHERE url = ?`, res.URL).Scan(&parsedAt)
-	return time.Since(time.Unix(parsedAt, 0)) < ttl
+	if ttl <= 0 {
+		ttl = WebParseTTL
+	}
+	return parseTextFreshWithin(res, ttl)
 }
 
 // BilibiliBvid 从链接或文本中提取 BV 号（无则空串）；规则唯一实现在 internal/textutil。
@@ -277,9 +281,14 @@ func formatURLContent(res Resource) string {
 		builder.WriteString("\n标题: ")
 		builder.WriteString(title)
 	}
+	// 解析文本过期即视为未命中：只提示需要重新获取，不回吐旧内容
 	if summary := strings.TrimSpace(res.ParseText); summary != "" {
-		builder.WriteString("\n解析: ")
-		builder.WriteString(summary)
+		if ParseTextFresh(res, ParseCategoryOf(res)) {
+			builder.WriteString("\n解析: ")
+			builder.WriteString(summary)
+		} else {
+			builder.WriteString("\n解析: （之前的解析已过期，需要重新获取）")
+		}
 	} else {
 		builder.WriteString("\n解析: （这条链接还没有读到内容）")
 	}

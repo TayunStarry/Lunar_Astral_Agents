@@ -19,6 +19,8 @@ const (
 	LibraryPrefix = "/library/"
 	// ReliancePrefix 前端共享依赖的挂载前缀（字体图标 / 高亮 / 公式 / 音乐库 / 渲染引擎）
 	ReliancePrefix = "/reliance/"
+	// SharedPrefix 桌面端与移动端共用 ES Module 共享层的挂载前缀
+	SharedPrefix = "/shared/"
 )
 
 // noStoreHandler 为静态文件响应补齐缓存控制头。
@@ -50,6 +52,7 @@ func registerStatic(mux *http.ServeMux, roots StaticRoots) {
 	mountSubtree(mux, DesktopPrefix, roots.Crystal, "琉璃桌面")
 	mountSubtree(mux, LibraryPrefix, roots.Library, "资源库")
 	mountSubtree(mux, ReliancePrefix, roots.Reliance, "前端共享依赖")
+	mountSubtree(mux, SharedPrefix, roots.Shared, "前端共享模块")
 }
 
 // mountSubtree 以子树方式挂载一个前端，并为不带斜杠的前缀补一次重定向。

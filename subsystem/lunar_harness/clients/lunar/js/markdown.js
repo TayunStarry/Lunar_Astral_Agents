@@ -1,137 +1,45 @@
 // ============================================================
-//  星月智能 · 消息终端 — Markdown / 图表 / 数学渲染
+//  星月智能 · 消息终端 — Markdown / 图表 / 数学渲染（共享层适配）
+//  解析与增强逻辑在 /shared/core/markdown.js，
+//  这里仅保留桌面端「文件引用占位 → 按钮」的渲染流程。
 // ============================================================
 
 // ---------- Markdown / 图表 / 数学渲染 ----------
 async function ensureMarked() {
-    if (window.marked) return true;
-    for (let i = 0; i < 50; i++) {
-        await new Promise(r => setTimeout(r, 100));
-        if (window.marked) return true;
-    }
-    return false;
+    return window.LunarShared.markdown.ensureMarked();
 }
 
 function initMermaid() {
-    if (mermaidInitialized || !window.mermaid) return;
-    window.mermaid.initialize({
-        startOnLoad: false,
-        theme: isDarkMode ? 'dark' : 'default',
-        securityLevel: 'loose',
-        fontFamily: 'inherit'
+    const ready = window.LunarShared.markdown.initMermaid({
+        dark: isDarkMode,
+        // 主题切换时 mermaidInitialized 已被置 false，需要强制重新初始化
+        force: !mermaidInitialized
     });
-    mermaidInitialized = true;
+    if (ready) mermaidInitialized = true;
 }
 
 function processThinkTags(html) {
-    return html.replace(/<think>([\s\S]*?)<\/think>/gi, (match, content) => {
-        return `<div class="think-block"><div class="think-summary"><i class="fas fa-chevron-right toggle-icon"></i> 思考过程</div><div class="think-content">${content}</div></div>`;
-    });
+    return window.LunarShared.markdown.processThinkTags(html);
 }
 
 async function renderMarkdown(rawContent) {
-    let html = processThinkTags(rawContent);
-    if (window.marked) {
-        html = await window.marked.parse(html);
-    } else {
-        html = '<p>' + escapeHtml(rawContent).replace(/\n/g, '<br>') + '</p>';
-    }
-    return html;
+    return window.LunarShared.markdown.renderMarkdown(rawContent, { processThink: true });
 }
 
 function highlightCode(container) {
-    if (!window.hljs) return;
-    container.querySelectorAll('pre code').forEach((block) => {
-        if (block.parentElement && block.parentElement.classList.contains('hljs')) return;
-        const langClass = Array.from(block.classList).find(c => c.startsWith('language-'));
-        if (langClass && (langClass === 'language-echarts' || langClass === 'language-mermaid')) return;
-        try {
-            window.hljs.highlightElement(block);
-        } catch (e) {
-            console.warn('代码高亮失败', e);
-        }
-    });
+    window.LunarShared.markdown.highlightCode(container);
 }
 
 function renderECharts(container) {
-    if (!window.echarts) return;
-    container.querySelectorAll('pre code.language-echarts').forEach((block) => {
-        try {
-            const clean = block.textContent.trim();
-            const config = JSON.parse(clean);
-            const chartDiv = document.createElement('div');
-            chartDiv.className = 'echarts-container';
-            const inner = document.createElement('div');
-            inner.style.width = '100%';
-            inner.style.height = '100%';
-            chartDiv.appendChild(inner);
-            const pre = block.parentElement;
-            if (pre && pre.tagName === 'PRE') {
-                pre.replaceWith(chartDiv);
-            } else {
-                block.replaceWith(chartDiv);
-            }
-            const chart = window.echarts.init(inner);
-            chart.setOption(config);
-            chartDiv._echartsInstance = chart;
-            setTimeout(() => chart.resize(), 100);
-            window.addEventListener('resize', () => chart.resize());
-        } catch (e) {
-            console.warn('ECharts 渲染失败', e);
-        }
-    });
+    window.LunarShared.markdown.renderECharts(container);
 }
 
 async function renderMermaid(container) {
-    if (!window.mermaid || !mermaidInitialized) return;
-    const blocks = Array.from(container.querySelectorAll('pre code.language-mermaid'));
-    for (const block of blocks) {
-        const code = (block.textContent || '').trim();
-        if (!code) continue;
-        try {
-            await window.mermaid.parse(code);
-            const id = `mermaid-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-            const { svg } = await window.mermaid.render(id, code);
-            const wrapper = document.createElement('div');
-            wrapper.className = 'mermaid-container';
-            wrapper.innerHTML = svg;
-            const pre = block.parentElement;
-            if (pre && pre.tagName === 'PRE') {
-                pre.replaceWith(wrapper);
-            } else {
-                block.replaceWith(wrapper);
-            }
-        } catch (e) {
-            console.error('Mermaid 渲染失败', e);
-            const errDiv = document.createElement('div');
-            errDiv.className = 'mermaid-error';
-            errDiv.textContent = `Mermaid 渲染失败：${e.message || String(e)}`;
-            const pre = block.parentElement;
-            if (pre && pre.tagName === 'PRE') {
-                pre.replaceWith(errDiv);
-            } else {
-                block.replaceWith(errDiv);
-            }
-        }
-    }
+    await window.LunarShared.markdown.renderMermaid(container);
 }
 
 function renderMath(container) {
-    if (typeof window.renderMathInElement === 'function') {
-        try {
-            window.renderMathInElement(container, {
-                delimiters: [
-                    { left: '$$', right: '$$', display: true },
-                    { left: '$', right: '$', display: false },
-                    { left: '\\(', right: '\\)', display: false },
-                    { left: '\\[', right: '\\]', display: true }
-                ],
-                throwOnError: false
-            });
-        } catch (e) {
-            console.warn('KaTeX 渲染失败', e);
-        }
-    }
+    window.LunarShared.markdown.renderMath(container);
 }
 
 async function fillMarkdownContent(el, content) {
@@ -155,9 +63,5 @@ async function fillMarkdownContent(el, content) {
     contentDiv.querySelectorAll('.file-ref-inline').forEach(btn => {
         btn.addEventListener('click', () => addFileReference(btn.dataset.ref));
     });
-    contentDiv.querySelectorAll('table').forEach(t => t.classList.add('markdown-table'));
-    highlightCode(contentDiv);
-    renderECharts(contentDiv);
-    await renderMermaid(contentDiv);
-    renderMath(contentDiv);
+    await window.LunarShared.markdown.enhanceContent(contentDiv);
 }

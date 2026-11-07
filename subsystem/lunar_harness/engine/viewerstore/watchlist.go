@@ -45,14 +45,18 @@ func EnqueueVideos(items []WatchCandidate) (EnqueueReport, error) {
 		if err != nil {
 			return report, fmt.Errorf("序列化评论摘录失败: %w", err)
 		}
+		topics, err := json.Marshal(item.Topics)
+		if err != nil {
+			return report, fmt.Errorf("序列化主题词失败: %w", err)
+		}
 		nextSeq := seq + 1
 		result, err := tx.Exec(`INSERT INTO watch_video
 			(bv, title, intro, author_uid, author_name, comments, duration_sec,
-			 status, queue_seq, queued_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 status, queue_seq, queued_at, topics)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(bv) DO NOTHING`,
 			item.BV, item.Title, item.Intro, item.AuthorUID, item.AuthorName, string(comments),
-			item.DurationSec, string(WatchStatusPending), nextSeq, now)
+			item.DurationSec, string(WatchStatusPending), nextSeq, now, string(topics))
 		if err != nil {
 			return report, fmt.Errorf("写入待看视频失败: %w", err)
 		}

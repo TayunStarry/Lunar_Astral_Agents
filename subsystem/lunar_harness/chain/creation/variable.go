@@ -85,10 +85,10 @@ const (
 
 // agentLabels 智能体名称 → 中文角色名。
 var agentLabels = map[string]string{
-	agentWriter:     "文字创作者",
-	agentEngineer:   "工程创作者",
-	agentResearcher: "资料查阅者",
-	agentRunner:     "脚本运行者",
+	agentWriter:     "文字创作",
+	agentEngineer:   "工程创作",
+	agentResearcher: "资料查阅",
+	agentRunner:     "脚本运行",
 }
 
 // ==== 工具名 ====

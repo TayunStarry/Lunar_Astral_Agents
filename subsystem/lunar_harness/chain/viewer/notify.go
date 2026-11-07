@@ -33,7 +33,7 @@ func generateInboxReply(item inboxItem) (string, error) {
 		fmt.Fprintf(&material, "所在位置：《%s》\n", item.Title)
 	}
 	text, err := ViewerCritic.InboxReply(context.Background(), ViewerCritic.InboxInput{
-		Persona: string(persona), Scene: scene, Memory: memoryMaterial(10),
+		Persona: string(persona), Scene: scene,
 		Material: material.String(), Model: modelPrimary,
 	})
 	if err != nil {

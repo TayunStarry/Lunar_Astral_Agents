@@ -4,33 +4,40 @@
 
 // ---------- 通用工具 ----------
 function generateId() {
-    // UUID v4 风格 ID：msg- 前缀 + 标准 v4 UUID（随机数取自 crypto.getRandomValues）
-    const bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; // 版本位 → v4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80; // 变体位 → RFC 4122
-    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-    const uuid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-    return `msg-${uuid}`;
+    return window.LunarShared.utils.generateId();
 }
 
 function getTimeString() {
-    return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return window.LunarShared.utils.formatTime(undefined, true);
 }
 
 function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str == null ? '' : String(str);
-    return div.innerHTML;
+    return window.LunarShared.utils.escapeHtml(str);
 }
 
+// ---------- Toast（共享队列 / 生命周期，桌面端沿用胶囊视觉） ----------
+const desktopToast = window.LunarShared ? new window.LunarShared.ToastController({
+    baseClass: 'toast',
+    // 桌面端一直只有单一胶囊样式，不加类型类名
+    typeClassPrefix: '',
+    types: {
+        info: { icon: 'fa-circle-info', color: '', autoDismiss: 2800 },
+        success: { icon: 'fa-check-circle', color: '', autoDismiss: 2800 },
+        error: { icon: 'fa-exclamation-triangle', color: '', autoDismiss: 2800 }
+    },
+    showClose: false,
+    iconStyle: 'margin-right:8px;',
+    // 进出场由 feedback.css 的 .toast 动画负责
+    enterClass: '',
+    leaveClass: '',
+    // 桌面端由 CSS 动画负责淡出，到点直接移除（保持原有 2800ms 生命周期）
+    removeDelay: 0,
+    colorVariable: null
+}) : null;
+
 function showToast(msg, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    const icons = { info: 'fa-circle-info', success: 'fa-check-circle', error: 'fa-exclamation-triangle' };
-    toast.innerHTML = `<i class="fas ${icons[type] || icons.info}" style="margin-right:8px;"></i>${escapeHtml(msg)}`;
-    toastContainer.appendChild(toast);
-    setTimeout(() => toast.remove(), 2800);
+    if (!desktopToast) return;
+    desktopToast.show(msg, type);
 }
 
 function updateEmptyState() {
@@ -47,15 +54,9 @@ function scrollToTop(smooth = true) {
 
 // ---------- 剪贴板 / 文件路径编码 ----------
 async function copyToClipboard(text) {
-    try {
-        await navigator.clipboard.writeText(text || '');
-        return true;
-    } catch {
-        return false;
-    }
+    return window.LunarShared.utils.copyToClipboard(text);
 }
 
 function encodeFilePath(path) {
-    // 路径为 ASCII，直接 base64 编码
-    return btoa(unescape(encodeURIComponent(path)));
+    return window.LunarShared.utils.encodeFilePath(path);
 }

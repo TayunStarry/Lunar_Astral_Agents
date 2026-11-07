@@ -12,6 +12,7 @@ import (
 func TestWatchKeepsClipWhenCommentNotPosted(t *testing.T) {
 	deps, log := newWatchTestDeps(t)
 	log.segmentIndex, log.segmentTotal = 0, 2
+	log.remarkHit = true
 	log.postFailed = true
 
 	out, err := watchWithDeps(context.Background(), "", deps)

@@ -52,12 +52,11 @@ func init() {
 		ID:          AgentID,
 		Label:       Role,
 		Group:       "Go 智能体",
-		Description: "观影者-评论最近一次点评输出（互动回应 / 观后回顾）",
+		Description: Role + "最近一次点评输出（互动回应 / 观后回顾）",
 		Export:      exportContext,
 	})
-	agentrepair.RegisterResettable(AgentID, Role,
-		"观影者-评论的最近一次点评输出；reset 清空该记录",
-		resetCriticState,
+	agentrepair.RegisterReadonly(AgentID, Role,
+		Role+"的最近一次点评输出（只读）",
 		func(int) (any, error) { return exportContext(false) })
 	toolreg.Register(AgentID,
 		toolreg.Schema{Name: "reply_inbox", Description: "按场景生成一句自然回应（注入人设与长期记忆）。"},
@@ -68,7 +67,7 @@ func init() {
 // ToolCatalog 返回评论的阶段能力（评论不使用 function calling）。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
-		ID: AgentID, Name: Role, Source: "agents/ViewerCritic",
+		ID: AgentID, Name: Role,
 		Note:  "观影者之一：只生成点评类文本（互动回应与观后回顾）。",
 		Tools: agentinfo.ToolsFromRegistry(AgentID),
 	}}
@@ -88,8 +87,8 @@ func resetCriticState() string {
 	lastCriticItem = nil
 	lastCriticMu.Unlock()
 	if had {
-		logger.Info("CrystalAstral", "观影者-评论最近点评记录已清空")
-		return "已清空观影者-评论的最近点评记录"
+		logger.Info("CrystalAstral", Role+"最近点评记录已清空")
+		return "已清空" + Role + "的最近点评记录"
 	}
-	return "观影者-评论当前没有点评记录"
+	return Role + "当前没有点评记录"
 }

@@ -53,9 +53,12 @@ async function sendDrawboardMessage() {
 
         if (backendConnected) {
             // 发送给月华的文本带用户名前缀（与 QQ 适配器一致），本地展示不带
+            // 输入框里的 URL 抽成 webpage 信封，正文保持纯文本
+            const textSplit = await window.LunarShared.media.extractWebpageEnvelopes(text);
             const content = [
-                { type: 'text', text: buildUserNamePrefix() + text },
-                { type: 'image_url', image_url: { url: fileUrl } }
+                ...(textSplit.text ? [{ type: 'text', text: buildUserNamePrefix() + textSplit.text }] : []),
+                ...textSplit.envelopes,
+                window.LunarShared.media.imageEnvelope(file, fileUrl)
             ];
             await sendMessages([{ role: 'user', content }]);
         } else {

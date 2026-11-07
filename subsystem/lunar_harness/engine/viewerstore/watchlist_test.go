@@ -3,11 +3,7 @@ package viewerstore
 // watchlist_test.go 待看视频列表与片段存储的验收用例（全部使用 t.TempDir）。
 
 import (
-	"path/filepath"
 	"testing"
-
-	"LunarSubsystem/LunarHarness/engine/config"
-	"LunarSubsystem/LunarHarness/engine/dbopen"
 )
 
 // watchCandidate 构造一条带片段的入队候选。
@@ -173,50 +169,6 @@ func TestWatchStateSurvivesReopen(t *testing.T) {
 	}
 	if count, err := CountCompletedVideos(); err != nil || count != 1 {
 		t.Fatalf("读回进度后看完应计 1，实际 %d err=%v", count, err)
-	}
-}
-
-// TestOpenLegacyDBAddsWatchTables 旧库（只有 viewer_observation）打开后自动补表，旧数据不变。
-func TestOpenLegacyDBAddsWatchTables(t *testing.T) {
-	dir := t.TempDir()
-	oldDir := config.LocalDir
-	config.LocalDir = dir
-	Close()
-	t.Cleanup(func() {
-		Close()
-		config.LocalDir = oldDir
-	})
-
-	path := filepath.Join(dir, "database", "bilibili", "viewer.db")
-	db, err := dbopen.Open(path, dbopen.Options{CreateDir: true})
-	if err != nil {
-		t.Fatalf("预置旧库失败: %v", err)
-	}
-	if _, err := db.Exec(`CREATE TABLE viewer_observation (
-		bv TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '',
-		topics TEXT NOT NULL DEFAULT '', tone TEXT NOT NULL DEFAULT '',
-		conclusion TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL DEFAULT 0)`); err != nil {
-		t.Fatalf("建旧表失败: %v", err)
-	}
-	if _, err := db.Exec(`INSERT INTO viewer_observation (bv, title, updated_at)
-		VALUES ('BV1legacy', '旧观感', 1)`); err != nil {
-		t.Fatalf("写入旧数据失败: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("关闭旧库失败: %v", err)
-	}
-
-	if err := Init(); err != nil {
-		t.Fatalf("旧库打开应自动补表: %v", err)
-	}
-	if count, err := CountRows("watch_video"); err != nil || count != 0 {
-		t.Fatalf("补表后 watch_video 应为空表，实际 %d err=%v", count, err)
-	}
-	if count, err := CountRows("watch_segment"); err != nil || count != 0 {
-		t.Fatalf("补表后 watch_segment 应为空表，实际 %d err=%v", count, err)
-	}
-	if observations, err := LoadObservations(); err != nil || len(observations) != 1 {
-		t.Fatalf("旧数据应保持可读，实际 %d err=%v", len(observations), err)
 	}
 }
 

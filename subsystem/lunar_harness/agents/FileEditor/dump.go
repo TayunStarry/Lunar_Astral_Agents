@@ -38,7 +38,7 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "file_editor",
-		Label:       "文件编辑",
+		Label:       Module,
 		Group:       "Go 智能体",
 		Description: "文件编辑智能体的系统提示词、工具清单与文档库现状（按次执行，不保留上下文）",
 		Export:      exportContext,

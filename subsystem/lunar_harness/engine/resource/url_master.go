@@ -34,6 +34,7 @@ func scanURLRecord(scanner interface{ Scan(...any) error }) (Resource, error) {
 		return res, err
 	}
 	res.BlobOwned = blobOwned != 0
+	res.ParsedAt = parsedAt
 	res.Tags = []string{}
 	// API 兼容：摘要字段直接映射唯一解析文本
 	res.Summary = res.ParseText
@@ -87,6 +88,11 @@ func (d *store) upsertURLRecord(res *Resource) error {
 	existing, found := d.findURLRecord(res.URL)
 	if !found {
 		tagsJSON := tagsToJSON(res.Tags)
+		// parsed_at 只表示「解析文本实际写入时间」：没有文本时保持 0
+		parsedAt := int64(0)
+		if strings.TrimSpace(res.ParseText) != "" {
+			parsedAt = now
+		}
 		result, err := d.db.Exec(`INSERT INTO url_master
 			(url, parse_text, parse_state, kind, name, ext, mime, content_hash, blob_path, size_bytes,
 			 width, height, duration_ms, title, tags, origin, retain, state, section_count,
@@ -95,7 +101,7 @@ func (d *store) upsertURLRecord(res *Resource) error {
 			res.URL, res.ParseText, res.ParseState, res.Kind, res.Name, res.Ext, res.MIME,
 			res.ContentHash, res.BlobPath, res.SizeBytes, res.Width, res.Height, res.DurationMS,
 			res.Title, tagsJSON, res.Origin, res.Retain, res.State, res.SectionCount,
-			res.CreatedAt, res.UsedAt, now, boolToInt(res.BlobOwned))
+			res.CreatedAt, res.UsedAt, parsedAt, boolToInt(res.BlobOwned))
 		if err != nil {
 			return err
 		}

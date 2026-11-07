@@ -4,11 +4,13 @@ package Responder
 
 import (
 	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 const (
 	// roleLabel 控制台显示名（同时作为日志模块名，归入「系统日志 · 后勤」）
-	roleLabel = "通用应答"
+	roleLabel = agentinfo.NameResponder
 	// queueCapacity 未处理请求上限（超出直接拒绝，避免无限堆积）
 	queueCapacity = 64
 	// maxAttempts 单条请求的最大尝试次数（首次 + 三次重试）

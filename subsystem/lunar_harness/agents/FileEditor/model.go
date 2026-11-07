@@ -15,7 +15,7 @@ import (
 // runToolLoop 工具推理循环：模型通过 function calling 逐步调用工具。
 // 返回本轮简述与实际涉及的资源句柄（去重、保持首次出现顺序）。
 //
-// 循环编排、重复检测与失败上报统一由 protocol/agentbase 的 RunToolLoop 承担。
+// 循环编排、轮次上限与失败上报统一由 protocol/agentbase 的 RunToolLoop 承担。
 func runToolLoop(ctx context.Context, systemPrompt, instruction string) (string, []string, error) {
 	handles := make([]string, 0, 8)
 	handleSeen := map[string]bool{}
@@ -23,7 +23,6 @@ func runToolLoop(ctx context.Context, systemPrompt, instruction string) (string,
 		ID:                 "file_editor",
 		Label:              Module,
 		MaxRounds:          maxRounds,
-		MaxRepeats:         maxRepeats,
 		MaxToolResultRunes: -1, // 工具结果由本包的截断逻辑处理，保留原有提示文案
 	})
 	result, err := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{
@@ -61,10 +60,6 @@ func runToolLoop(ctx context.Context, systemPrompt, instruction string) (string,
 				content = truncateToolResult(content)
 			}
 			return content, false, nil
-		},
-		// 保持迁移前的重复错误文案（不带角色前缀）。
-		RepeatError: func(round int) error {
-			return fmt.Errorf("%w（第 %d 轮出现重复的工具调用）", agentbase.ErrLoop, round)
 		},
 		// 失败由 Run/Execute 外层统一上报，避免同一错误重复进入修复队列。
 		DisableReport: true,

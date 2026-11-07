@@ -73,8 +73,6 @@ const (
 	manifestFile = "manifest.json"
 	// rollbackFile 回滚结果文件名
 	rollbackFile = "rollback.json"
-	// flowTraceFile 完整流程追踪文件名
-	flowTraceFile = "flow.json"
 	// blobsDir 快照副本子目录
 	blobsDir = "blobs"
 	// maxSnapshotFlows 保留的流程快照目录数量（超出时删除最旧的）

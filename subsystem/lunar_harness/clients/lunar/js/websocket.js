@@ -76,53 +76,50 @@ function handleWebSocketMessage(msg) {
     addMessage({ id: generateId(), role: 'assistant', categories: ['text'], content: '```json\n' + JSON.stringify(msg, null, 2) + '\n```', timestamp: Date.now() });
 }
 
-// ---------- WebSocket 连接管理 ----------
+// ---------- WebSocket 连接管理（共享层适配） ----------
+// 连接、自动重连、消息分发统一由 /shared/core/socket.js 实现；
+// 桌面端保留 3 次、1.5 倍递增的退避曲线与连接状态 UI。
+let desktopSocketClient = null;
+
 function connectWebSocket() {
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-    try {
-        ws = new WebSocket(WS_URL);
-    } catch (err) {
-        scheduleReconnect();
-        return;
+    if (!desktopSocketClient) {
+        desktopSocketClient = new window.LunarShared.WebSocketClient(WS_URL, {
+            maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
+            getReconnectDelay: attempt => RECONNECT_BASE_DELAY * Math.pow(1.5, attempt - 1),
+            onSocketChange: socket => { ws = socket; },
+            onStatus: (status, detail) => {
+                if (status === 'open') {
+                    reconnectAttempts = 0;
+                    backendConnected = true;
+                    updateConnectionStatusUI('connected');
+                } else if (status === 'reconnecting') {
+                    reconnectAttempts = detail.attempt || reconnectAttempts;
+                    reconnectTimer = desktopSocketClient.reconnectTimer;
+                    backendConnected = false;
+                    updateConnectionStatusUI('disconnected');
+                } else if (status === 'failed') {
+                    reconnectAttempts = detail.attempts || reconnectAttempts;
+                    backendConnected = false;
+                    updateConnectionStatusUI('failed');
+                    showToast('后端连接失败，已进入本地模式', 'error');
+                } else if (status === 'closed' || status === 'error') {
+                    backendConnected = false;
+                    updateConnectionStatusUI('disconnected');
+                }
+            }
+        });
+        desktopSocketClient.onMessage(handleWebSocketMessage);
+        // 非 JSON 消息按纯文本渲染（与旧行为一致）
+        desktopSocketClient.onParseError(raw => {
+            addMessage({ id: generateId(), role: 'assistant', categories: ['text'], content: raw, timestamp: Date.now() });
+        });
     }
-
-    ws.onopen = () => {
-        reconnectAttempts = 0;
-        backendConnected = true;
-        updateConnectionStatusUI('connected');
-    };
-
-    ws.onmessage = (event) => {
-        try {
-            const parsed = JSON.parse(event.data);
-            handleWebSocketMessage(parsed);
-        } catch {
-            addMessage({ id: generateId(), role: 'assistant', categories: ['text'], content: event.data, timestamp: Date.now() });
-        }
-    };
-
-    ws.onerror = () => {
-        updateConnectionStatusUI('disconnected');
-    };
-
-    ws.onclose = () => {
-        backendConnected = false;
-        updateConnectionStatusUI('disconnected');
-        if (!manualClose) scheduleReconnect();
-    };
+    desktopSocketClient.connect();
 }
 
-function scheduleReconnect() {
-    if (manualClose) return;
-    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        backendConnected = false;
-        updateConnectionStatusUI('failed');
-        showToast('后端连接失败，已进入本地模式', 'error');
-        return;
-    }
-    const delay = RECONNECT_BASE_DELAY * Math.pow(1.5, reconnectAttempts);
-    reconnectTimer = setTimeout(() => {
-        reconnectAttempts++;
-        connectWebSocket();
-    }, delay);
+function disconnectWebSocket() {
+    manualClose = true;
+    desktopSocketClient?.disconnect();
+    desktopSocketClient = null;
+    ws = null;
 }

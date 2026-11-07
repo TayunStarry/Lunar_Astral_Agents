@@ -45,9 +45,9 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          AgentID,
-		Label:       "搜索者-规划",
+		Label:       modelRole,
 		Group:       "Go 智能体",
-		Description: "搜索者-规划最近一次结构化决策（管线 / 检索词 / 参数 / 把握）",
+		Description: modelRole + "最近一次结构化决策（管线 / 检索词 / 参数 / 把握）",
 		Export:      exportContext,
 	})
 }

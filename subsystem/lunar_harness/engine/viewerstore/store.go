@@ -6,11 +6,8 @@ package viewerstore
 // 打开时带 busy_timeout + WAL、单连接、建表全部 IF NOT EXISTS。
 //
 // 表的职责：
-//   - viewer_observation：近期观感，BV 号主键，同视频重复观看覆盖更新，最多 ObservationMax 行；
-//   - viewer_profile / viewer_stance：选片口味 / 评论倾向单行表（固定 key）；
-//   - viewer_round：观影轮次追溯，最多 RoundMax 行；
-//   - viewer_archive：淘汰前先写入的归档（先归档再删，可回退）；
-//   - viewer_meta：迁移完成标记等内部状态。
+//   - watch_video：待看视频列表；
+//   - watch_segment：待看视频的切片与观看进度。
 
 import (
 	"database/sql"
@@ -88,42 +85,6 @@ func Close() {
 // createTables 幂等建表。
 func createTables(db *sql.DB) error {
 	statements := []string{
-		`CREATE TABLE IF NOT EXISTS viewer_observation (
-			bv          TEXT PRIMARY KEY,
-			title       TEXT NOT NULL DEFAULT '',
-			url         TEXT NOT NULL DEFAULT '',
-			topics      TEXT NOT NULL DEFAULT '',
-			tone        TEXT NOT NULL DEFAULT '',
-			conclusion  TEXT NOT NULL DEFAULT '',
-			updated_at  INTEGER NOT NULL DEFAULT 0
-		)`,
-		`CREATE TABLE IF NOT EXISTS viewer_profile (
-			slot        TEXT PRIMARY KEY,
-			value       TEXT NOT NULL DEFAULT '',
-			updated_at  INTEGER NOT NULL DEFAULT 0
-		)`,
-		`CREATE TABLE IF NOT EXISTS viewer_stance (
-			slot        TEXT PRIMARY KEY,
-			value       TEXT NOT NULL DEFAULT '',
-			updated_at  INTEGER NOT NULL DEFAULT 0
-		)`,
-		`CREATE TABLE IF NOT EXISTS viewer_round (
-			round_id    TEXT PRIMARY KEY,
-			bvids       TEXT NOT NULL DEFAULT '',
-			conclusion  TEXT NOT NULL DEFAULT '',
-			created_at  INTEGER NOT NULL DEFAULT 0
-		)`,
-		`CREATE TABLE IF NOT EXISTS viewer_archive (
-			id           INTEGER PRIMARY KEY AUTOINCREMENT,
-			kind         TEXT NOT NULL,
-			payload      TEXT NOT NULL,
-			reason       TEXT NOT NULL,
-			archived_at  INTEGER NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS viewer_meta (
-			key    TEXT PRIMARY KEY,
-			value  TEXT NOT NULL DEFAULT ''
-		)`,
 		// 待看视频列表：bv 主键保证入队幂等，queue_seq 固定入队顺序（不回收）；
 		// 时间字段一律 Unix 秒，archived 只做逻辑归档，统计仍包含历史行。
 		`CREATE TABLE IF NOT EXISTS watch_video (
@@ -142,10 +103,18 @@ func createTables(db *sql.DB) error {
 			completed     INTEGER NOT NULL DEFAULT 0,
 			completed_at  INTEGER NOT NULL DEFAULT 0,
 			archived      INTEGER NOT NULL DEFAULT 0,
-			archived_at   INTEGER NOT NULL DEFAULT 0
+			archived_at   INTEGER NOT NULL DEFAULT 0,
+			topics        TEXT NOT NULL DEFAULT ''
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_watch_video_queue
 			ON watch_video(status, archived, completed, queue_seq)`,
+		// 主题词偏好池：看过视频的印象主题词按时间衰减后的权重累积在这里。
+		// 选片只读这张小表，不回扫 watch_video 历史行。
+		`CREATE TABLE IF NOT EXISTS watch_topic (
+			topic      TEXT PRIMARY KEY,
+			weight     REAL NOT NULL DEFAULT 0,
+			updated_at INTEGER NOT NULL DEFAULT 0
+		)`,
 		// 片段表：(bv, seg_index) 唯一，重复切片段时整组覆盖；
 		// 播放顺序依赖联表后的 queue_seq + seg_index，索引覆盖「未看片段」筛选。
 		`CREATE TABLE IF NOT EXISTS watch_segment (
@@ -168,5 +137,57 @@ func createTables(db *sql.DB) error {
 			return fmt.Errorf("建表失败: %w", err)
 		}
 	}
+	return ensureWatchVideoColumns(db)
+}
+
+// ensureWatchVideoColumns 给旧库补齐后加的列（列已存在时跳过）。
+func ensureWatchVideoColumns(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(watch_video)`)
+	if err != nil {
+		return fmt.Errorf("读取待看视频表结构失败: %w", err)
+	}
+	existing := make(map[string]bool)
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			columnTyp string
+			notNull   int
+			defaultV  sql.NullString
+			primary   int
+		)
+		if err := rows.Scan(&cid, &name, &columnTyp, &notNull, &defaultV, &primary); err != nil {
+			rows.Close()
+			return fmt.Errorf("解析待看视频表结构失败: %w", err)
+		}
+		existing[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("读取待看视频表结构失败: %w", err)
+	}
+	// 单连接策略下必须先关掉结果集，否则后续 ALTER 会一直等这条连接。
+	rows.Close()
+	for _, add := range watchVideoColumnAdds {
+		if existing[add.Column] {
+			continue
+		}
+		if _, err := db.Exec(add.SQL); err != nil {
+			return fmt.Errorf("补齐 %s 列失败: %w", add.Column, err)
+		}
+	}
 	return nil
+}
+
+// CountRows 统计表行数（测试与对账用）。
+func CountRows(table string) (int, error) {
+	db, err := openStore()
+	if err != nil {
+		return 0, err
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
 }

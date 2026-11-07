@@ -82,7 +82,7 @@ func TestEngineScreenDesktopOperatorWithoutHooks(t *testing.T) {
 	m.width, m.height = 120, 46
 	m.screen = screenStats
 	out := m.View()
-	if !strings.Contains(out, "桌面操纵") || !strings.Contains(out, "宿主未接入桌面操纵") {
-		t.Fatalf("未接入桌面操纵钩子时应明确提示:\n%s", out)
+	if !strings.Contains(out, "桌面操作") || !strings.Contains(out, "宿主未接入桌面操作") {
+		t.Fatalf("未接入桌面操作钩子时应明确提示:\n%s", out)
 	}
 }

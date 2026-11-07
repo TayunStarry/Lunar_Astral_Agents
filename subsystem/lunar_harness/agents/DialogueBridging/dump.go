@@ -32,7 +32,7 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "dialogue_bridging",
-		Label:       "通讯桥接",
+		Label:       roleLabel,
 		Group:       "Go 智能体",
 		Description: "最近一次自然语言需求、多目标投递清单与逐项执行报告",
 		Export:      exportContext,

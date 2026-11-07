@@ -18,11 +18,7 @@ function cleanup() {
     if (reconnectTimer) clearTimeout(reconnectTimer);
     stopVoiceListening(false);
     AudioQueue.stop();
-    if (ws) {
-        ws.onclose = null;
-        ws.close();
-        ws = null;
-    }
+    disconnectWebSocket();
     document.querySelectorAll('.echarts-container').forEach(c => {
         if (c._echartsInstance) c._echartsInstance.dispose();
     });
@@ -33,18 +29,12 @@ function cleanup() {
  *  （lunar.live2d_engine）或 GIF 动图引擎（lunar.gif_engine）；缺省回退月岩。
  *  WsBridge 未传 ws 参数时默认连接同源 /ws，代理场景下自动走代理隧道 */
 function setupRendererFrame() {
-    const frame = document.getElementById('rendererFrame');
-    if (!frame) return;
-    const sources = {
-        live2d: frame.dataset.srcLive2d,
-        gif: frame.dataset.srcGif,
-    };
-    const src = sources[characterRenderer] || frame.dataset.src;
-    if (!src) return;
-    frame.src = `${src}&ws=${window.location.host}`;
+    window.LunarShared.renderer.applyRendererFrame(document.getElementById('rendererFrame'), characterRenderer);
 }
 
 async function init() {
+    // 共享层缺失时由守卫渲染可见错误层并中止初始化，避免半死状态
+    if (!(await window.waitForLunarShared())) return;
     loadTheme();
     setupThemeToggle();
     loadVoiceAutoPlay();

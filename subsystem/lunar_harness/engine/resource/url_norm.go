@@ -108,29 +108,13 @@ func IsRemoteURL(raw string) bool {
 	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
 }
 
-// URLKind 推断外部 URL 应落哪类句柄：B 站与视频直链 → V，动图直链 → G，其余 → U
-func URLKind(raw, hint string) string {
-	if hint != "" && IsHandleKind(hint) {
-		return hint
-	}
-	nURL := NormalizeURL(raw)
-	if IsLocalURL(nURL) {
-		return KindOfExt(extOfURL(nURL))
-	}
-	if BilibiliBvid(nURL) != "" {
-		return KindVideo
-	}
-	ext := extOfURL(nURL)
-	switch KindOfExt(ext) {
-	case KindVideo:
-		return KindVideo
-	case KindAudio:
-		return KindAudio
-	case KindImage:
-		if MayBeAnimated(ext) {
-			return KindAnimated
-		}
-		return KindImage
+// URLKind 返回链接的声明类型码：显式声明优先，未声明时按网页 U 登记。
+//
+// 不再根据 URL 后缀、主机名或远程 Content-Type 推断类型；视频平台页面
+// 由发送侧声明 KindHint=V（webpage.web_video）。
+func URLKind(_ string, hint string) string {
+	if kind := trimKind(hint); kind != "" {
+		return kind
 	}
 	return KindURL
 }

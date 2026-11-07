@@ -11,12 +11,11 @@ import (
 
 // newDialogueRole 创建对话者角色
 func newDialogueRole(lunarAppearance, crystalAppearance string) *DialogueRole {
-	builder := newModelBuilder(Dialogue.SystemPrompt(lunarAppearance, crystalAppearance), "对话者", 48)
+	builder := newModelBuilder(Dialogue.SystemPrompt(lunarAppearance, crystalAppearance), Dialogue.Role, 48)
 	return &DialogueRole{
 		ModelBuilder:      builder,
 		LunarAppearance:   lunarAppearance,
 		CrystalAppearance: crystalAppearance,
-		ImageWindow:       imageWindowSize,
 	}
 }
 
@@ -28,7 +27,7 @@ func (role *DialogueRole) generateDialogue(cache *ChatCache) {
 	stateMu.Unlock()
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			logger.Error(lunarCoreModule, "[对话者] 应答周期异常: %v", recovered)
+			logger.Error(lunarCoreModule, "["+Dialogue.Role+"] 应答周期异常: %v", recovered)
 			stateMu.Lock()
 			lastFailure = fmt.Sprintf("内部异常: %v", recovered)
 			stateMu.Unlock()
@@ -54,7 +53,7 @@ func (role *DialogueRole) speakAssistantText(content string) {
 
 func (role *DialogueRole) fail(err error) {
 	reason := err.Error()
-	logger.Error(lunarCoreModule, "[对话者] 请求处理错误: %s", reason)
+	logger.Error(lunarCoreModule, "["+Dialogue.Role+"] 请求处理错误: %s", reason)
 	stateMu.Lock()
 	lastFailure = reason
 	stateMu.Unlock()
@@ -66,68 +65,11 @@ func (role *DialogueRole) formatHistoricalMessages() {
 	if len(role.Messages) == 0 {
 		return
 	}
-	role.demoteOverflowImages()
-	if len(role.Messages) == 0 {
-		return
-	}
 	lastRole := role.Messages[len(role.Messages)-1].Role
 	if lastRole == RoleUser || lastRole == RoleTool {
 		return
 	}
 	role.writeContext(PostMessage{Role: RoleUser, Content: "继续"})
-}
-
-// demoteOverflowImages 增量降级超窗口图片
-func (role *DialogueRole) demoteOverflowImages() {
-	countImages := func() int {
-		count := 0
-		for _, message := range role.Messages {
-			for _, item := range asItems(message.Content) {
-				if item.Type == ContentImageURL {
-					count++
-				}
-			}
-		}
-		return count
-	}
-	for i := 0; i < len(role.Messages) && countImages() > role.ImageWindow; i++ {
-		items := asItems(role.Messages[i].Content)
-		if len(items) == 0 {
-			continue
-		}
-		hasImage := false
-		for _, item := range items {
-			if item.Type == ContentImageURL {
-				hasImage = true
-				break
-			}
-		}
-		if !hasImage {
-			continue
-		}
-		rebuilt := make([]ContentItem, 0, len(items))
-		for _, item := range items {
-			if item.Type != ContentImageURL || item.ImageURL == nil {
-				rebuilt = append(rebuilt, item)
-				continue
-			}
-			tag := handleFromVisionURL(item.ImageURL.URL)
-			if tag == "" {
-				rebuilt = append(rebuilt, ContentItem{Type: ContentText, Text: "（一张未能登记句柄的图片，已超出窗口）"})
-				continue
-			}
-			rebuilt = append(rebuilt, ContentItem{Type: ContentText, Text: composeImagePlaceholder(tag, role.describeImage(tag, item.ImageURL.URL))})
-		}
-		role.Messages[i].Content = rebuilt
-	}
-}
-
-// describeImage 获取图片条目描述
-func (role *DialogueRole) describeImage(tag, _ string) string {
-	if entry := getResourceEntry(tag); entry != nil && entry.Summary != "" {
-		return sanitizeImageDesc(entry.Summary, 20)
-	}
-	return sanitizeImageDesc(describeResource(tag, ""), 20)
 }
 
 // applyAppendSettings 把追加设定拼到系统提示词末尾
@@ -158,7 +100,7 @@ func analyzeModelResponse(body ModelResponseBody, cache *ChatCache) {
 		if raw != "" && raw != "{}" {
 			var parsed map[string]any
 			if json.Unmarshal([]byte(raw), &parsed) != nil {
-				logger.Warn(lunarCoreModule, "[对话者] 工具调用参数解析失败，已跳过: %s", call.Function.Name)
+				logger.Warn(lunarCoreModule, "["+Dialogue.Role+"] 工具调用参数解析失败，已跳过: %s", call.Function.Name)
 				continue
 			}
 		}

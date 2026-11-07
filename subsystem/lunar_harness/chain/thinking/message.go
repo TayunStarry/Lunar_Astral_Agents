@@ -28,14 +28,15 @@ func MessageBatchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 音频接入：先转写并登记悬空句柄，再进入统一未读队列（音频本体不落盘）
-	messages, handles := ingestBatchAudio(req.Messages)
-	EnqueueMessage(messages...)
+	// 接收侧逐信封校验、落盘与清洗：无效信封单独丢弃并计数，不影响同条消息的其余内容
+	prepared := prepareInboundMessages(req.Messages)
+	EnqueueMessage(prepared.Messages...)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(BatchResponse{
 		Success: true,
 		Length:  UnreadCount(),
-		Handles: handles,
+		Handles: prepared.Handles,
+		Invalid: prepared.Invalid,
 	})
 }

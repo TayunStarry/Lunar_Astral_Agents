@@ -3,7 +3,7 @@ package viewer
 // watch_branch.go 生活链「看视频」分支的唯一实现。
 //
 // 流程固定：取一个已下载未看的片段 → 本地解码播放（抽帧 + 多模态理解）→
-// 按画面理解与视频印象写一条观感评论 → 发布到原视频评论区（最后一段 @ 作者）→
+// 普通片段按概率写观感评论，最后一个片段必定写收束评论并 @ 1-3 个特别关注 →
 // 更新「我刚刚在干的事情」→ 每满 8 个完整视频发一条阶段动态。
 //
 // 生活链权重分支与对话者工具触发都调用 WatchNextSegment，不复制第二份实现。
@@ -34,7 +34,7 @@ type WatchOutcome struct {
 	Comment      string `json:"comment,omitempty"`
 	// CommentPosted 观感评论是否发布成功。
 	CommentPosted bool `json:"comment_posted,omitempty"`
-	// Mentioned 最后一段的评论是否带上了 @ 原作者。
+	// Mentioned 收束评论是否带上了 @ 特别关注。
 	Mentioned bool `json:"mentioned,omitempty"`
 	// Activity 本次写入的状态字段文案。
 	Activity string `json:"activity,omitempty"`
@@ -127,23 +127,7 @@ func watchWithDeps(ctx context.Context, instruction string, deps watchDeps) (Wat
 	out.Activity = activityText(video.Title, out.SegmentIndex, total, out.LastSegment)
 	deps.setActivity(out.Activity)
 
-	material := remarkMaterial(video, out, visual)
-	if instruction = strings.TrimSpace(instruction); instruction != "" {
-		material += "对话者的额外要求：" + truncate(instruction, 400) + "\n"
-	}
-	comment, rErr := deps.remark(ctx, video, material)
-	if rErr != nil {
-		logger.Warn("BilibiliViewer", "观感评论生成失败: %v", rErr)
-		out.Note = joinNote(out.Note, "观感评论生成失败: "+rErr.Error())
-	} else if comment = strings.TrimSpace(comment); comment != "" {
-		out.Comment = comment
-		posted, mentioned, pErr := deps.postComment(video, comment, out.LastSegment)
-		out.CommentPosted, out.Mentioned = posted, mentioned
-		if pErr != nil {
-			logger.Warn("BilibiliViewer", "观感评论发布失败: %v", pErr)
-			out.Note = joinNote(out.Note, "观感评论发布失败: "+pErr.Error())
-		}
-	}
+	commentAttempted := publishWatchRemark(ctx, deps, video, &out, visual, instruction)
 
 	result, err := deps.markWatched(seg.BV, seg.Index, deps.now().Unix())
 	if err != nil {
@@ -154,8 +138,8 @@ func watchWithDeps(ctx context.Context, instruction string, deps watchDeps) (Wat
 		}
 	} else {
 		out.CompletedVideos = result.CompletedVideos
-		// 片段已看且观感评论已发出，才清理本地文件；清理失败只告警，不能让观看流程失败。
-		if out.CommentPosted {
+		// 片段看过且（评论已发或本次未触发评论）就清理；评论尝试失败时保留片段，沿用原有约定。
+		if out.CommentPosted || !commentAttempted {
 			if cErr := deps.removeClip(seg); cErr != nil {
 				logger.Warn("BilibiliViewer", "清理已看完的本地片段失败: %v", cErr)
 				out.Note = joinNote(out.Note, "清理本地片段失败: "+cErr.Error())
@@ -171,6 +155,38 @@ func watchWithDeps(ctx context.Context, instruction string, deps watchDeps) (Wat
 	logger.Info("BilibiliViewer", "[看视频] 《%s》第 %d/%d 段完成，画面来源=%s，评论发布=%v，累计完整视频=%d",
 		out.Title, out.SegmentIndex, out.SegmentTotal, out.VisualSource, out.CommentPosted, out.CompletedVideos)
 	return out, nil
+}
+
+// publishWatchRemark 按档位发布评论：普通片段概率触发，最后一个片段必发收束评论。
+// 返回本次是否尝试过评论（未命中概率返回 false），供清理策略区分「没触发」与「发起失败」。
+func publishWatchRemark(ctx context.Context, deps watchDeps, video viewerstore.WatchVideo, out *WatchOutcome, visual, instruction string) bool {
+	closing := out.LastSegment
+	if !closing && !deps.rollRemark() {
+		logger.Info("BilibiliViewer", "[看视频] 《%s》第 %d/%d 段未命中评论概率，只更新状态",
+			video.Title, out.SegmentIndex, out.SegmentTotal)
+		return false
+	}
+	material := remarkMaterial(video, *out, visual)
+	if instruction = strings.TrimSpace(instruction); instruction != "" {
+		material += "对话者的额外要求：" + truncate(instruction, 400) + "\n"
+	}
+	comment, err := deps.remark(ctx, video, material)
+	if err != nil {
+		logger.Warn("BilibiliViewer", "观感评论生成失败: %v", err)
+		out.Note = joinNote(out.Note, "观感评论生成失败: "+err.Error())
+		return true
+	}
+	if comment = strings.TrimSpace(comment); comment == "" {
+		return true
+	}
+	out.Comment = comment
+	posted, mentioned, err := deps.postComment(video, comment, closing)
+	out.CommentPosted, out.Mentioned = posted, mentioned
+	if err != nil {
+		logger.Warn("BilibiliViewer", "观感评论发布失败: %v", err)
+		out.Note = joinNote(out.Note, "观感评论发布失败: "+err.Error())
+	}
+	return true
 }
 
 // lastSegmentIndex 片段列表里的最后一个序号（列表为空返回 -1）。

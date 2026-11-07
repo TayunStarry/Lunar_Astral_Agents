@@ -29,9 +29,9 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          AgentID,
-		Label:       "创作规划者",
+		Label:       DisplayName,
 		Group:       "Go 智能体",
-		Description: "创作规划者的最近一次推理循环（角色、轮次、错误）与已登记的工具声明",
+		Description: DisplayName + "的最近一次推理循环（角色、轮次、错误）与已登记的工具声明",
 		Export:      exportContext,
 	})
 }

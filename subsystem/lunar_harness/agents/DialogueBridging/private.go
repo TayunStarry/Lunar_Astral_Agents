@@ -103,10 +103,10 @@ func flushPrivatePool(userID int64, trigger TriggerKind) {
 		return
 	}
 	req := BridgeRequest{
-		Target:    BridgeTarget{ID: userID, IsGroup: false},
-		Messages:  buildPrivateMessages(entries),
-		AudioURLs: collectGroupAudioURLs(entries),
-		Trigger:   trigger,
+		Target:       BridgeTarget{ID: userID, IsGroup: false},
+		Messages:     buildPrivateMessages(entries),
+		AudioObjects: collectGroupAudioObjects(entries),
+		Trigger:      trigger,
 	}
 	logger.SubInfo("LunarCore", "Napcat", "私聊合并推送: 用户=%d, 条数=%d, 触发=%s", userID, len(entries), trigger)
 	enqueueRequest(req)
@@ -120,7 +120,7 @@ func buildPrivateMessages(entries []GroupPoolEntry) []map[string]any {
 		if name := strings.TrimSpace(entry.Nickname); name != "" {
 			prefix = "[用户: " + name + "]: "
 		}
-		messages = append(messages, buildUserMessage(prefix, entry.Content, entry.HasImages))
+		messages = append(messages, buildUserMessage(prefix, entry.Content, entry.HasMedia))
 	}
 	return messages
 }
@@ -133,35 +133,35 @@ func handlePrivateMessage(msg napcat.NapcatMessage) {
 	}
 
 	nickname := resolveNickname(msg.UserID, msg.Sender)
-	content, hasImages, audioURLs := parseMessageSegments(0, msg.Message)
+	content, hasMedia, audioObjects := parseMessageSegments(0, msg.Message)
 
 	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
 	rp := parseRawRedPacket(msg.Raw)
 	if rp != nil {
 		content = buildRedPacketText(rp)
-		hasImages = false
-		audioURLs = nil
-	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(audioURLs) == 0 {
+		hasMedia = false
+		audioObjects = nil
+	} else if strings.TrimSpace(contentToText(content)) == "" && !hasMedia && len(audioObjects) == 0 {
 		// 无可理解内容的空消息（系统提示、空卡片等）直接忽略
 		return
 	}
 
 	addToPrivatePool(msg.UserID, GroupPoolEntry{
-		Nickname:  nickname,
-		Content:   content,
-		HasImages: hasImages,
-		AudioURLs: audioURLs,
-		MessageID: msg.MessageID,
+		Nickname:     nickname,
+		Content:      content,
+		HasMedia:     hasMedia,
+		AudioObjects: audioObjects,
+		MessageID:    msg.MessageID,
 	})
 
 	if rp != nil {
 		stopPrivateTimer(msg.UserID)
 		entries := drainPrivatePool(msg.UserID)
 		req := BridgeRequest{
-			Target:    BridgeTarget{ID: msg.UserID, IsGroup: false},
-			Messages:  buildPrivateMessages(entries),
-			AudioURLs: collectGroupAudioURLs(entries),
-			Trigger:   TriggerRedPacket,
+			Target:       BridgeTarget{ID: msg.UserID, IsGroup: false},
+			Messages:     buildPrivateMessages(entries),
+			AudioObjects: collectGroupAudioObjects(entries),
+			Trigger:      TriggerRedPacket,
 		}
 		if rp.IsPhrase {
 			// 口令红包：等待随机 0.5~3 秒再推送，让月华复读口令领取红包

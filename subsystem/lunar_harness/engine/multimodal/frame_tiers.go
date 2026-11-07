@@ -61,7 +61,7 @@ func probeMotion(localPath string, segment MediaSegment) float64 {
 		t := segment.Start + span*ratio
 		img, err := ExtractVideoFrameAt(localPath, t, motionProbeDim)
 		if err != nil {
-			logger.Warn(LogModuleMedia, "观看定档探测帧(%s)抽取失败，跳过: %v", FormatSeconds(t), err)
+			logger.Warn(LogModuleMedia, "观看定档探测帧(%s)抽取失败，跳过: %v", FormatPreciseSeconds(t), err)
 			continue
 		}
 		images = append(images, img)

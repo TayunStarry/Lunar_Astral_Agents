@@ -5,6 +5,8 @@ package Painter
 import (
 	"regexp"
 	"sync"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // ==== 身份与提示词 ====
@@ -15,7 +17,7 @@ const (
 	// agentID 上报、数据导出与智能修复共用的智能体标识
 	agentID = "painter"
 	// roleLabel 实况与请求头中的角色标签
-	roleLabel = "绘制者"
+	roleLabel = agentinfo.NamePainter
 	// rolePromptPath 绘制者角色提示词
 	rolePromptPath = "prompts/painterRole.md"
 	// commonPromptPath 通用绘画提示词（负面词、合照模板、随机池）

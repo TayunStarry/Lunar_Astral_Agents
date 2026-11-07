@@ -190,6 +190,9 @@ func (d *store) FindResourceByURL(rawURL string) (Resource, bool) {
 }
 
 // UpdateResourceURLExtras 更新链接资源的标题与解析文本
+//
+// parsed_at 只在解析文本真的发生变化时续期：仅改标题不能刷新 TTL，
+// 否则旧文本会被永久续命。
 func (d *store) UpdateResourceURLExtras(id int64, title, summary string) error {
 	archiveMu.Lock()
 	defer archiveMu.Unlock()
@@ -199,8 +202,9 @@ func (d *store) UpdateResourceURLExtras(id int64, title, summary string) error {
 		state = ParseReady
 	}
 	_, err := d.db.Exec(`UPDATE url_master SET title = ?, parse_text = CASE WHEN ? <> '' THEN ? ELSE parse_text END,
-		parse_state = CASE WHEN ? <> '' THEN ? ELSE parse_state END, parsed_at = ?, used_at = ? WHERE id = ?`,
-		title, text, text, text, state, now, now, id)
+		parse_state = CASE WHEN ? <> '' THEN ? ELSE parse_state END,
+		parsed_at = CASE WHEN ? <> '' AND ? <> parse_text THEN ? ELSE parsed_at END, used_at = ? WHERE id = ?`,
+		title, text, text, text, state, text, text, now, now, id)
 	return err
 }
 
@@ -227,13 +231,21 @@ func (d *store) UpdateResourceMeta(id int64, width, height int, durationMS int64
 	return err
 }
 
-// RefreshResourceContent 刷新与文件内容相关的列（保留解析文本 / 标题 / 标签）
+// RefreshResourceContent 刷新与文件内容相关的列
+//
+// 复用 content_hash 作为文件指纹：旧指纹非空且发生变化时，说明文件被替换，
+// 旧解析文本立即失效（清空文本并置回 none），避免继续使用旧理解；
+// 指纹未变或新旧任一为空时保留解析文本。
 func (d *store) RefreshResourceContent(id int64, name, ext, mime, hash string, size int64) error {
 	archiveMu.Lock()
 	defer archiveMu.Unlock()
 	_, err := d.db.Exec(`UPDATE url_master SET name = ?, ext = ?, mime = ?, content_hash = ?,
-		size_bytes = ?, state = ?, used_at = ? WHERE id = ?`,
-		name, ext, mime, hash, size, StateActive, time.Now().Unix(), id)
+		size_bytes = ?, state = ?, used_at = ?,
+		parse_text = CASE WHEN content_hash <> '' AND ? <> '' AND content_hash <> ? THEN '' ELSE parse_text END,
+		parse_state = CASE WHEN content_hash <> '' AND ? <> '' AND content_hash <> ? THEN ? ELSE parse_state END
+		WHERE id = ?`,
+		name, ext, mime, hash, size, StateActive, time.Now().Unix(),
+		hash, hash, hash, hash, ParseNone, id)
 	return err
 }
 

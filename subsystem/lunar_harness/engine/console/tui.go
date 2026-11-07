@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"LunarSubsystem/LunarHarness/engine/console/proxy"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // ==== 消息定义 ====
@@ -85,9 +86,9 @@ type menuItem struct {
 // 每屏各自的历史助记键。新增条目时按顺序追加，不要插空或跳号。
 var menuItems = []menuItem{
 	{key: "0", title: "推理实况", group: "运行观测", screen: screenAgent,
-		desc: "月华思考 / 输出 / 工具调用的流式显示（对话者 · 绘制者 · 演奏者 · 通用应答 · 智能修复…）"},
+		desc: "月华思考 / 输出 / 工具调用的流式显示（" + agentinfo.NameDialogue + " · " + agentinfo.NamePainter + " · " + agentinfo.NameMusician + " · " + agentinfo.NameResponder + " · " + agentinfo.NameSavior + "…）"},
 	{key: "1", title: "运行状态", group: "运行观测", screen: screenStats,
-		desc: "运行环境 / 模型计量 / 前端窗口 / 桌面操纵；状态按绿黄红区分"},
+		desc: "运行环境 / 模型计量 / 前端窗口 / " + agentinfo.NameDesktopOperator + "；状态按绿黄红区分"},
 	{key: "2", title: "系统日志", group: "运行观测", screen: screenLogs,
 		desc: "统一日志屏：左右方向键切换 原始 / 警告 / 绘图 / 对话 / 生活 / 后勤"},
 	{key: "3", title: "数据导出", group: "运行观测", screen: screenDump,

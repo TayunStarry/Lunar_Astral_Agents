@@ -1,10 +1,10 @@
 package thinking
 
 import (
-	"math/rand"
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
@@ -32,17 +32,29 @@ func writeMessage(role, source string, content any) {
 			if item.ImageURL != nil {
 				logger.Info(lunarCoreModule, "收到图片: %s", textutil.TruncateRunes(item.ImageURL.URL, 512))
 			}
-		case ContentInputAudio:
-			if item.InputAudio != nil {
-				logger.Info(lunarCoreModule, "收到音频: %s", textutil.TruncateRunes(item.InputAudio.Data, 512))
+		case ContentImageStatic:
+			if item.ImageStatic != nil {
+				logger.Info(lunarCoreModule, "收到静态图信封: %s", textutil.TruncateRunes(item.ImageStatic.Name, 128))
 			}
-		case ContentVideoURL:
-			if item.VideoURL != nil {
-				logger.Info(lunarCoreModule, "收到视频: %s", item.VideoURL.URL)
+		case ContentImageAnimated:
+			if item.ImageAnimated != nil {
+				logger.Info(lunarCoreModule, "收到动图信封: %s", textutil.TruncateRunes(item.ImageAnimated.Name, 128))
 			}
-		case ContentAudioURL:
-			if item.AudioURL != nil {
-				logger.Info(lunarCoreModule, "收到音频: %s", item.AudioURL.URL)
+		case ContentVideo:
+			if item.Video != nil {
+				logger.Info(lunarCoreModule, "收到视频信封: %s", textutil.TruncateRunes(item.Video.Name, 128))
+			}
+		case ContentAudio:
+			if item.Audio != nil {
+				logger.Info(lunarCoreModule, "收到音频信封: %s", textutil.TruncateRunes(item.Audio.Name, 128))
+			}
+		case ContentFile:
+			if item.File != nil {
+				logger.Info(lunarCoreModule, "收到文件信封: %s", textutil.TruncateRunes(item.File.Name, 128))
+			}
+		case ContentWebpage:
+			if item.Webpage != nil {
+				logger.Info(lunarCoreModule, "收到网页信封: %s", textutil.TruncateRunes(item.Webpage.URL, 512))
 			}
 		}
 	}
@@ -125,7 +137,7 @@ func normalizeToolImage(image string) string {
 	if handle := handleFromVisionURL(image); handle != "" {
 		return image
 	}
-	admitted := admitImageDataURI(image, "image"+guessImageExt(image))
+	admitted := admitImageDataURI(image, imageNameFor(image, resource.KindImage, ""), resource.KindImage)
 	if admitted == nil || admitted.Handle == "" || admitted.BlobPath == "" {
 		logger.Warn(lunarCoreModule, "[工具调用] 工具图片入库失败，已丢弃该图")
 		return ""
@@ -133,7 +145,8 @@ func normalizeToolImage(image string) string {
 	return visionReference(admitted.Handle, admitted.BlobPath)
 }
 
-// joinAckParts 丢掉缺席的段落，随机打乱顺序后用随机连接词拼接，再偶尔补一个句尾语气
+// joinAckParts 按固定顺序（开场 → 动作 → 收尾）丢掉空段，用连接词拼接，再偶尔补一个句尾语气。
+// 不做乱序：三段各司其职，位置固定后每次拼装都可预期，读起来也不会前言不搭后语。
 func joinAckParts(parts []string) string {
 	kept := make([]string, 0, len(parts))
 	for _, part := range parts {
@@ -152,15 +165,15 @@ func joinAckParts(parts []string) string {
 		if strings.ContainsRune("，。！？～、", lastRune(current)) {
 			return ""
 		}
-		return pickAckText([]string{"，", "，", "，", "～", "！", "。", "", ""})
+		return pickAckText([]string{"，", "，", "，", "，", "～", " ", ""})
 	}
-	rand.Shuffle(len(kept), func(i, j int) { kept[i], kept[j] = kept[j], kept[i] })
 	text := kept[0]
 	for _, part := range kept[1:] {
 		text += joiner(text) + part
 	}
-	if !strings.ContainsRune("，。！？～、", lastRune(text)) {
-		text += pickAckText([]string{"", "", "", "～", "～", "！", "。", "呀～", "哈～", "啦～", "哦～"})
+	// 结尾已带语气词（哈/啦/呀…）就不再补，避免拼出「稍等哈哈」这种重复
+	if !strings.ContainsRune("，。！？～、哈啦呀呢哦嘛吧", lastRune(text)) {
+		text += pickAckText([]string{"", "", "", "", "", "～", "。", "哈"})
 	}
 	return text
 }

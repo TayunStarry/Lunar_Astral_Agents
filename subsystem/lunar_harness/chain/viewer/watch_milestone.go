@@ -130,7 +130,7 @@ func stageDynamicText(ctx context.Context, count int) (string, error) {
 		return "", fmt.Errorf("读取人设提示词失败: %w", err)
 	}
 	text, err := ViewerShare.Dynamic(ctx, ViewerShare.DynamicInput{
-		Persona: string(persona), Memory: memoryMaterial(12), Material: material, Model: modelPrimary,
+		Persona: string(persona), Material: material, Model: modelPrimary,
 	})
 	if err != nil {
 		return "", err

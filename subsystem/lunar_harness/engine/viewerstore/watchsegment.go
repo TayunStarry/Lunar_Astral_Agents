@@ -150,11 +150,27 @@ func MarkSegmentWatched(bv string, index int, at int64) (SegmentWatchResult, err
 	}
 	result.VideoCompleted = unwatched == 0
 	if result.VideoCompleted {
-		if _, err := tx.Exec(`UPDATE watch_video
+		// 只有完成状态真正从 0 翻到 1 的那一次才给主题词加权，
+		// 重复标记同一片段不会把同一支视频反复计入偏好。
+		updated, err := tx.Exec(`UPDATE watch_video
 			SET completed = 1,
 				completed_at = CASE WHEN completed_at = 0 THEN ? ELSE completed_at END
-			WHERE bv = ?`, at, bv); err != nil {
+			WHERE bv = ? AND completed = 0`, at, bv)
+		if err != nil {
 			return result, fmt.Errorf("标记视频完成失败: %w", err)
+		}
+		changed, err := updated.RowsAffected()
+		if err != nil {
+			return result, fmt.Errorf("读取完成状态结果失败: %w", err)
+		}
+		if changed > 0 {
+			var topics string
+			if err := tx.QueryRow(`SELECT topics FROM watch_video WHERE bv = ?`, bv).Scan(&topics); err != nil {
+				return result, fmt.Errorf("读取视频主题词失败: %w", err)
+			}
+			if err := bumpTopicWeights(tx, decodeWatchTopics(topics), at); err != nil {
+				return result, fmt.Errorf("更新主题词偏好失败: %w", err)
+			}
 		}
 	}
 	count, err := countCompletedVideos(tx)

@@ -11,7 +11,7 @@ func ToolCatalog() []agentinfo.Agent {
 		tools = append(tools, agentinfo.Tool{Name: def.Function.Name, Description: def.Function.Description})
 	}
 	return []agentinfo.Agent{{
-		ID: "creative", Name: "自由创作", Source: "chain/creation", Kind: agentinfo.KindChain,
+		ID: "creative", Name: "自由创作", Kind: agentinfo.KindChain,
 		Note:  "自由创作智能体：生活创作与对话者 file_operations 编排共用；调度者按计划提交步骤，分派文字创作 / 工程创作 / 资料查阅 / 脚本运行子智能体执行。",
 		Tools: tools,
 	}}

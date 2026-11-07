@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 )
 
 // Read 按句柄取回资源内容（带锚点时按锚点定位）
@@ -126,10 +127,31 @@ func readTextResource(res Resource, base ReadResult, handle Handle, abs string, 
 	}
 
 	if len(base.Content) > maxBytes {
-		base.Content = base.Content[:maxBytes]
+		base.Content = truncateTextAtLine(base.Content, maxBytes)
 		base.Truncated = true
+		// 截断后回填实际返回的行区间：标题里的「第 X-Y 行」必须与正文一致，
+		// 否则模型会以为已经拿到全文而反复重取同一段。
+		if base.LineStart > 0 {
+			base.LineEnd = base.LineStart + strings.Count(base.Content, "\n")
+		}
 	}
 	return base, nil
+}
+
+// truncateTextAtLine 按字节上限截断文本，并退回到最近的行首，避免把一行切成半句。
+func truncateTextAtLine(content string, maxBytes int) string {
+	if len(content) <= maxBytes {
+		return content
+	}
+	limit := maxBytes
+	for limit > 0 && !utf8.RuneStart(content[limit]) {
+		limit--
+	}
+	cut := content[:limit]
+	if index := strings.LastIndex(cut, "\n"); index > 0 {
+		cut = cut[:index]
+	}
+	return cut
 }
 
 // findSectionByURL 按章节序号读取段落表条目

@@ -4,15 +4,19 @@ package DialogueBridging
 // 下半部为 QQ 桥接层（NapCat 协议）。
 
 import (
+	"regexp"
 	"sync"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // ==================== 智能体模型调用 ====================
 
 const (
 	// roleLabel 该智能体在「推理实况」中的角色标签
-	roleLabel = "通讯桥接"
+	roleLabel = agentinfo.NameDialogueBridging
 	// maxDirectoryEntries 提示词里最多列出多少个群 / 好友，避免撑爆上下文
 	maxDirectoryEntries = 80
 	// maxSendImages 单次消息最多携带的图片数（超过则分批发送）
@@ -130,12 +134,18 @@ const privatePoolMaxSize = 20
 // groupMutex 保护群聊缓存池的并发访问
 var groupMutex sync.Mutex
 
+// ==== 入站信封解析 ====
+
+// textURLPattern 文本消息中可抽成 webpage 信封的 http(s) 链接
+// （链接到空白、尖括号、引号或中文句读为止，避免把后续正文吞进链接）
+var textURLPattern = regexp.MustCompile(`(?i)https?://[^\s<>"'，。；：！？、（）【】《》]+`)
+
 // ==== 消息发送回调 ====
 
 // SendMessageToAgent 向智能体推送消息的回调函数，由服务器层注册
 // 参数为 OpenAI 格式消息列表 []map[string]any
 var SendMessageToAgent func(messages []map[string]any)
 
-// SendAudioToAgent 向智能体推送语音/音频地址的回调函数，由服务器层注册
-// 参数为语音 URL / 本地路径 / base64 data URI 列表，包装为媒体内容项按到达顺序写入智能体统一未读队列
-var SendAudioToAgent func(urls []string)
+// SendAudioToAgent 向智能体推送音频多模态对象的回调函数，由服务器层注册
+// 参数为已带类型/来源/MIME 的音频对象，按到达顺序写入智能体统一未读队列
+var SendAudioToAgent func(objects []mediaobject.Object)

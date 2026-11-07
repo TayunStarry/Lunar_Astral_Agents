@@ -211,6 +211,57 @@ func TestConsolidateFallsBackOnEmptyArray(t *testing.T) {
 	assertSameTexts(t, fallbackTexts(contents), got)
 }
 
+// TestMergeOpensOwnLiveTurn 合并调用必须自己开一段实况，且角色是记忆整理者本身，
+// 不能靠调用方（对话者）的轮次承接内容。
+func TestMergeOpensOwnLiveTurn(t *testing.T) {
+	var began, ended []string
+	agentbase.SetObserver(agentbase.Observer{
+		Begin: func(role string) { began = append(began, role) },
+		Delta: func(_, _, _ string) {},
+		End:   func(role string) { ended = append(ended, role) },
+	})
+	t.Cleanup(func() { agentbase.SetObserver(agentbase.Observer{}) })
+
+	withFakeModel(t, `["今天下午和小想讨论了记忆库的分簇方案，决定总库为主、攒够 16 条高相似记忆才升级成正式簇"]`)
+	if _, err := Merge(context.Background(), heavyDuplicateInputs()); err != nil {
+		t.Fatalf("合并应通过: %v", err)
+	}
+
+	if len(began) != 1 || began[0] != RoleName {
+		t.Fatalf("应恰好开启一段以 %q 命名的实况，实得 %v", RoleName, began)
+	}
+	if len(ended) != 1 || ended[0] != RoleName {
+		t.Fatalf("应恰好结束同一段实况，实得 %v", ended)
+	}
+}
+
+// TestMergeLiveTurnPerGroup 多组合并 = 同一智能体的多条实况，而不是并进别人的条目。
+func TestMergeLiveTurnPerGroup(t *testing.T) {
+	var began []string
+	agentbase.SetObserver(agentbase.Observer{
+		Begin: func(role string) { began = append(began, role) },
+		Delta: func(_, _, _ string) {},
+		End:   func(string) {},
+	})
+	t.Cleanup(func() { agentbase.SetObserver(agentbase.Observer{}) })
+
+	withFakeModel(t, `["今天下午和小想讨论了记忆库的分簇方案，决定总库为主、攒够 16 条高相似记忆才升级成正式簇"]`)
+	for group := 0; group < 3; group++ {
+		if _, err := Merge(context.Background(), heavyDuplicateInputs()); err != nil {
+			t.Fatalf("第 %d 组合并应通过: %v", group+1, err)
+		}
+	}
+
+	if len(began) != 3 {
+		t.Fatalf("3 组应各开启一条实况，实得 %d 条：%v", len(began), began)
+	}
+	for _, role := range began {
+		if role != RoleName {
+			t.Fatalf("实况角色应全部为 %q，实得 %q", RoleName, role)
+		}
+	}
+}
+
 // withFakeModel 注入固定回复的模型端点，测试结束后恢复
 func withFakeModel(t *testing.T, content string) {
 	t.Helper()

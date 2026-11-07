@@ -50,6 +50,16 @@ func AgentChatHandler(w http.ResponseWriter, r *http.Request) {
 		writeAgentError(w, http.StatusBadRequest, "messages 不能为空")
 		return
 	}
+	// 含多模态内容的请求必须走与 /write/message 相同的信封链路：
+	// 旧 image_url / video_url / audio_url / input_audio 在此被判定无效并丢弃。
+	if AgentPrepareMessagesFunc != nil {
+		prepared, prepareErr := AgentPrepareMessagesFunc(messages)
+		if prepareErr != nil {
+			writeAgentError(w, http.StatusBadRequest, prepareErr.Error())
+			return
+		}
+		messages = prepared
+	}
 	params := payload
 	delete(params, "messages")
 	req := &AgentRequest{

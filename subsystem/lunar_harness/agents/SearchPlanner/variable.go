@@ -2,11 +2,13 @@ package SearchPlanner
 
 // variable.go 全局变量与常量集中声明（类型定义见 type.go）。
 
+import "LunarSubsystem/LunarHarness/protocol/agentinfo"
+
 const (
 	// AgentID 故障归属与导出 ID
 	AgentID = "search_planner"
 	// modelRole 推理实况屏显示名
-	modelRole = "搜索者-规划"
+	modelRole = agentinfo.NameSearchPlanner
 	// promptName 规划提示词文件
 	promptName = "searchPlannerRoute.md"
 	// loopRetries 模型输出陷入重复时的额外重试次数

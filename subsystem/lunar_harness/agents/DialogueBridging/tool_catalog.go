@@ -10,7 +10,7 @@ import "LunarSubsystem/LunarHarness/protocol/agentinfo"
 // 下列私有能力，因此这里展示的是「智能体实际会执行的工具」，不是 function calling Schema。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
-		ID: "dialogue_bridging", Name: "通讯桥接", Source: "agents/DialogueBridging",
+		ID: "dialogue_bridging", Name: roleLabel,
 		Note: "消息投递智能体：把内容分发到多个群聊或联系人。",
 		Tools: []agentinfo.Tool{
 			{Name: "resolve_target", Description: "把群号 / 群名 / QQ 号 / 昵称 / 备注解析为可投递目标，名称歧义时报错。"},

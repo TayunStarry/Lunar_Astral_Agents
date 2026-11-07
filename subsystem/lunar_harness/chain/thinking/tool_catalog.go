@@ -3,6 +3,7 @@ package thinking
 // tool_catalog.go 对话者与各扁平智能体的工具目录（供控制台「工具列表」屏扫描展示）。
 
 import (
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/Painter"
 	"LunarSubsystem/LunarHarness/agents/Screenshoter"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
@@ -19,17 +20,17 @@ func ToolCatalog() []agentinfo.Agent {
 
 	return []agentinfo.Agent{
 		{
-			ID: "dialogue", Name: "对话者", Source: "lunar",
+			ID: "dialogue", Name: Dialogue.Role,
 			Note:  "对话智能体：理解对话意图、调度工具并生成回复。",
 			Tools: dialogueTools,
 		},
-		{ID: "painter", Name: "绘制者", Source: "lunar",
+		{ID: "painter", Name: agentinfo.NamePainter,
 			Note:  "绘图智能体：文生图、图生图、角色立绘与相册管理。",
 			Tools: toolDefinitionsInfo(Painter.ToolDefinitions())},
-		{ID: "musician", Name: "演奏者", Source: "lunar",
+		{ID: "musician", Name: agentinfo.NameMusician,
 			Note:  "音乐智能体：主模型构思作品描述，music_generation 模型生成旋律并渲染演奏音频。",
 			Tools: []agentinfo.Tool{{Name: "music_generation", Description: "加载音乐生成模型产出旋律，完成后卸载并恢复主模型"}}},
-		{ID: "screenshoter", Name: "截图者", Source: "lunar",
+		{ID: "screenshoter", Name: agentinfo.NameScreenshoter,
 			Note:  "截图智能体：截取屏幕、识别区域并回传图片。",
 			Tools: toolDefinitionsInfo(Screenshoter.ToolDefinitions())},
 	}

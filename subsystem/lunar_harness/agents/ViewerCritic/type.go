@@ -8,8 +8,6 @@ type InboxInput struct {
 	Persona string
 	// Scene 互动发生的场景（如「《标题》的视频评论区」）
 	Scene string
-	// Memory 长期记忆块（可为空）
-	Memory string
 	// Material 对方消息与上下文材料
 	Material string
 	// Model 模型名

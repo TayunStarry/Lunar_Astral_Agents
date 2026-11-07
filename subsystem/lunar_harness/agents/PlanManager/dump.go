@@ -93,7 +93,7 @@ func resetRun() string {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          agentID,
-		Label:       "计划管理",
+		Label:       roleLabel,
 		Group:       "Go 智能体",
 		Description: "计划管理最近一次指令、操作结果与错误，以及当前计划表",
 		Export:      exportContext,

@@ -52,12 +52,11 @@ func init() {
 		ID:          AgentID,
 		Label:       Role,
 		Group:       "Go 智能体",
-		Description: "观影者-分享最近一次对外文案（观影动态 / 分享评论）",
+		Description: Role + "最近一次对外文案（观影动态 / 分享评论）",
 		Export:      exportContext,
 	})
-	agentrepair.RegisterResettable(AgentID, Role,
-		"观影者-分享的最近一次对外文案；reset 清空该记录",
-		resetShareState,
+	agentrepair.RegisterReadonly(AgentID, Role,
+		Role+"的最近一次对外文案（只读）",
 		func(int) (any, error) { return exportContext(false) })
 	toolreg.Register(AgentID,
 		toolreg.Schema{Name: "write_dynamic", Description: "生成一轮观影动态正文。"},
@@ -68,7 +67,7 @@ func init() {
 // ToolCatalog 返回分享的阶段能力（分享不使用 function calling）。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
-		ID: AgentID, Name: Role, Source: "agents/ViewerShare",
+		ID: AgentID, Name: Role,
 		Note:  "观影者之一：只生成对外分享文案（观影动态与 @分享评论）。",
 		Tools: agentinfo.ToolsFromRegistry(AgentID),
 	}}
@@ -88,8 +87,8 @@ func resetShareState() string {
 	lastShareItem = nil
 	lastShareMu.Unlock()
 	if had {
-		logger.Info("CrystalAstral", "观影者-分享最近文案记录已清空")
-		return "已清空观影者-分享的最近文案记录"
+		logger.Info("CrystalAstral", Role+"最近文案记录已清空")
+		return "已清空" + Role + "的最近文案记录"
 	}
-	return "观影者-分享当前没有文案记录"
+	return Role + "当前没有文案记录"
 }

@@ -54,7 +54,7 @@ func toolResultContent(outcome Outcome) string {
 		return text
 	}
 	head := agentbase.TruncateRunes(text, ToolMessageMaxRunes)
-	return head + fmt.Sprintf("…（结果过长，已截断，剩余约 %d 字；需要更多内容请用 offset 分批读取）",
+	return head + fmt.Sprintf("…（结果过长，已截断，剩余约 %d 字；请查看开头的句柄与行区间，用「句柄|L起-止」续读，不要重复取同一段）",
 		len([]rune(text))-ToolMessageMaxRunes)
 }
 

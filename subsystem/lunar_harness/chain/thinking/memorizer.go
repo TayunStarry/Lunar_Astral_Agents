@@ -24,6 +24,9 @@ const ragMaxQueries = 4
 const ragMinSimilarity = 0.40
 
 // persistUnreadRecords 把缓冲消息逐个写入记忆库
+//
+// 进入这里的消息已经越过近期记忆的 48 条对话窗口（maxCacheMessages / ContextLimit），
+// 属于远期记忆：只保留文本与资源句柄，图片本体、播放地址与二进制一律不入库。
 func (role *MemorizerRole) persistUnreadRecords() {
 	unreadMu.Lock()
 	records := append([]PostMessage(nil), unreadRecords...)
@@ -40,7 +43,7 @@ func (role *MemorizerRole) persistUnreadRecords() {
 		if message.Role == RoleTool {
 			continue
 		}
-		content := strings.TrimSpace(messageText(message))
+		content := strings.TrimSpace(memoryRecordText(message))
 		if content == "" || len([]rune(content)) <= 5 || strings.Contains(content, scheduleTriggerPrefix) {
 			continue
 		}
@@ -54,6 +57,39 @@ func (role *MemorizerRole) persistUnreadRecords() {
 	unreadRecords = nil
 	unreadMu.Unlock()
 	logger.Info(lunarCoreModule, "[记忆] 已写入 %d 条消息到记忆库", written)
+}
+
+// memoryRecordText 远期记忆的文本形态：只保留文本与资源句柄。
+//
+// 图片句柄优先取清洗阶段记下的句柄，其次从视觉读取地址的 tag 参数解析；
+// 两者都没有时写入明确的缺失说明，避免图片被静默丢弃。
+func memoryRecordText(message PostMessage) string {
+	if text, ok := message.Content.(string); ok {
+		return text
+	}
+	items := asItems(message.Content)
+	if len(items) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		switch item.Type {
+		case ContentText:
+			if strings.TrimSpace(item.Text) != "" {
+				parts = append(parts, item.Text)
+			}
+		case ContentImageURL:
+			handle := strings.TrimSpace(item.ResourceHandle)
+			if handle == "" && item.ImageURL != nil {
+				handle = handleFromVisionURL(item.ImageURL.URL)
+			}
+			if handle == "" {
+				handle = missingImageHandleText
+			}
+			parts = append(parts, handle)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 // queryRagDigest 检索长期记忆并生成时间线上下文

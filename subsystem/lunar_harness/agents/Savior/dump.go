@@ -1,12 +1,13 @@
 package Savior
 
-// dump.go 智能修复的数据导出：待处理故障队列、升级记录与静默状态。
+// dump.go 智能修复的数据导出：待处理故障队列、维修建议、升级记录与静默状态。
 
 import (
 	"sort"
 	"time"
 
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
+	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )
 
 // exportContext 智能修复的上下文快照；dump 导出与智能修复的 Inspect 共用这一份。
@@ -17,6 +18,7 @@ func exportContext(includeImages bool) (any, error) {
 		"kind":          "savior-context",
 		"generated_at":  time.Now().Format(time.RFC3339),
 		"failures":      failures,
+		"advices":       adviceSnapshot(),
 		"escalated":     escalationSnapshot(),
 		"cooldowns":     cooldownSnapshot(),
 		"pending":       len(failures),
@@ -27,14 +29,17 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "savior",
-		Label:       "智能修复",
+		Label:       roleLabel,
 		Group:       "Go 智能体",
-		Description: "智能修复的待处理故障（类型、判据、失败工具、水位、出现次数）与已升级记录",
+		Description: roleLabel + "的待诊断故障与已给出的维修建议（判断、可能原因、建议步骤、风险点、置信度）",
 		Export:      exportContext,
 	})
+	agentrepair.RegisterReadonly("savior", roleLabel,
+		roleLabel+"自身的待诊断故障、已给出的维修建议与静默状态（只读）",
+		func(int) (any, error) { return exportContext(false) })
 }
 
-// failureSnapshot 复制当前待修复故障（按故障编号排序）。
+// failureSnapshot 复制当前待诊断故障（按故障编号排序）。
 func failureSnapshot() []map[string]any {
 	mu.Lock()
 	items := make([]*Failure, 0, len(pending))
@@ -63,6 +68,34 @@ func failureSnapshot() []map[string]any {
 			"escalated":        failure.Escalated,
 			"conclusions":      failure.Conclusions,
 			"at":               failure.At.Format(time.RFC3339),
+		})
+	}
+	return out
+}
+
+// adviceSnapshot 复制已给出的维修建议（按时间排序，最多 maxAdvices 条）。
+func adviceSnapshot() []map[string]any {
+	mu.Lock()
+	items := make([]*Advice, 0, len(advices))
+	for _, advice := range advices {
+		items = append(items, advice)
+	}
+	mu.Unlock()
+	sort.Slice(items, func(i, j int) bool { return items[i].At.Before(items[j].At) })
+	out := make([]map[string]any, 0, len(items))
+	for _, advice := range items {
+		out = append(out, map[string]any{
+			"failure_id": advice.FailureID,
+			"agent":      advice.Agent,
+			"kind":       advice.Kind,
+			"error":      advice.Error,
+			"diagnosis":  advice.Diagnosis,
+			"causes":     advice.Causes,
+			"steps":      advice.Steps,
+			"risks":      advice.Risks,
+			"confidence": advice.Confidence,
+			"basis":      advice.Basis,
+			"at":         advice.At.Format(time.RFC3339),
 		})
 	}
 	return out

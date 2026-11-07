@@ -24,13 +24,15 @@
     <link rel="stylesheet" href="/reliance/fontAwesome/css/all.min.css">
     <link rel="stylesheet" href="/reliance/highlight/styles/github.css">
     <link rel="stylesheet" href="/reliance/music_player/music_player.css">
+    <!-- 共享样式：设计令牌 + 消息内容块 -->
+    <link rel="stylesheet" href="/shared/styles/tokens.css">
+    <link rel="stylesheet" href="/shared/styles/message-view.css">
     <!-- 项目私有样式 -->
     <link rel="stylesheet" href="css/themes.css">
     <link rel="stylesheet" href="css/layout.css">
     <link rel="stylesheet" href="css/controls.css">
     <link rel="stylesheet" href="css/messages.css">
     <link rel="stylesheet" href="css/markdown.css">
-    <link rel="stylesheet" href="css/media.css">
     <link rel="stylesheet" href="css/input.css">
     <link rel="stylesheet" href="css/feedback.css">
     <link rel="stylesheet" href="css/capture.css">
@@ -273,6 +275,9 @@
     <!-- Mermaid 流程图库 -->
     <script src="/reliance/mermaid.min.js"></script>
     <!-- 项目私有脚本 -->
+    <script type="module" src="/shared/desktop.js"></script>
+    <!-- 共享层就绪守卫：必须先于所有依赖 window.LunarShared 的脚本 -->
+    <script defer src="js/shared-boot.js"></script>
     <script defer src="js/config.js"></script>
     <script defer src="js/utils.js"></script>
     <script defer src="js/audio.js"></script>

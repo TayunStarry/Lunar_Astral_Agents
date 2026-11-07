@@ -19,7 +19,7 @@ func init() {
 // 规划智能体不使用 function calling；这里展示它在搜索链中实际承担的一步决策。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
-		ID: AgentID, Name: "搜索者-规划", Source: "agents/SearchPlanner",
+		ID: AgentID, Name: modelRole,
 		Note:  "搜索链第一步：把自然语言需求决策为管线、检索词与参数。",
 		Tools: agentinfo.ToolsFromRegistry(AgentID),
 	}}

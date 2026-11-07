@@ -15,18 +15,19 @@ type rowScanner interface {
 // scanWatchVideo 把一行待看视频读成结构体。
 func scanWatchVideo(scanner rowScanner) (WatchVideo, error) {
 	var video WatchVideo
-	var comments, status string
+	var comments, topics, status string
 	var completed, archived int
 	if err := scanner.Scan(&video.BV, &video.Title, &video.Intro, &video.AuthorUID,
 		&video.AuthorName, &comments, &video.DurationSec, &status, &video.RejectReason,
 		&video.QueueSeq, &video.QueuedAt, &video.ReviewedAt, &completed,
-		&video.CompletedAt, &archived, &video.ArchivedAt); err != nil {
+		&video.CompletedAt, &archived, &video.ArchivedAt, &topics); err != nil {
 		return WatchVideo{}, err
 	}
 	video.Status = WatchStatus(status)
 	video.Completed = completed != 0
 	video.Archived = archived != 0
 	video.Comments = decodeWatchComments(comments)
+	video.Topics = decodeWatchTopics(topics)
 	return video, nil
 }
 
@@ -67,4 +68,16 @@ func decodeWatchComments(raw string) []string {
 		return []string{}
 	}
 	return comments
+}
+
+// decodeWatchTopics 还原主题词；旧行为空串或脏数据一律按空列表处理。
+func decodeWatchTopics(raw string) []string {
+	if raw == "" {
+		return []string{}
+	}
+	var topics []string
+	if err := json.Unmarshal([]byte(raw), &topics); err != nil {
+		return []string{}
+	}
+	return topics
 }

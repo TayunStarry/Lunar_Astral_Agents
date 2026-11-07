@@ -22,8 +22,8 @@ func TestTechniqueDetailsHasNoSideEffect(t *testing.T) {
 	if decoded.Error != "" {
 		t.Fatalf("details 查询不应报错: %s", decoded.Error)
 	}
-	if !strings.Contains(decoded.Result, "绘制者") {
-		t.Fatalf("details 应返回绘制者职能描述，实际 %q", decoded.Result)
+	if !strings.Contains(decoded.Result, "图像绘制") {
+		t.Fatalf("details 应返回图像绘制职能描述，实际 %q", decoded.Result)
 	}
 	if len(decoded.Handle) != 0 {
 		t.Fatalf("details 查询不应涉及句柄，实际 %#v", decoded.Handle)

@@ -15,9 +15,6 @@ func NewAgent(cfg AgentConfig) *Agent {
 	if cfg.MaxRounds <= 0 {
 		cfg.MaxRounds = defaultMaxRounds
 	}
-	if cfg.MaxRepeats == 0 {
-		cfg.MaxRepeats = defaultMaxRepeats
-	}
 	if cfg.MaxToolResultRunes == 0 {
 		cfg.MaxToolResultRunes = defaultMaxToolResultRunes
 	}
@@ -60,11 +57,6 @@ func (a *Agent) Report(err error) {
 // ReportRun 上报一次运行失败（忽略主动取消与循环截断）。
 func (a *Agent) ReportRun(err error) {
 	ReportRun(a.Config.ID, err)
-}
-
-// NewRepeatTracker 创建工具调用重复跟踪器（使用基座默认上限）。
-func (a *Agent) NewRepeatTracker() *RepeatTracker {
-	return NewRepeatTracker(a.Config.MaxRepeats)
 }
 
 // TruncateToolResult 按基座默认上限截断工具结果。

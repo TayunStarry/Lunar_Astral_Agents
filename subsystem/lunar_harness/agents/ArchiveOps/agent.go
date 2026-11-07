@@ -36,7 +36,6 @@ func Execute(ctx context.Context, instruction string) (Result, error) {
 		ID:                 "archive_ops",
 		Label:              roleLabel,
 		MaxRounds:          maxScheduleRounds,
-		MaxRepeats:         -1, // 迁移前无跨轮重复检测，保持原有行为
 		MaxToolResultRunes: -1, // 使用 PreviewRunes 的原有截断语义
 	})
 	result, err := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{

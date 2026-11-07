@@ -5,11 +5,13 @@ package FileEditor
 import (
 	"sync"
 	"time"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 const (
 	// Module 日志模块名（日志分类归入「生活」）
-	Module = "文件编辑"
+	Module = agentinfo.NameFileEditor
 	// documentsRootRel 文件操作根目录（相对 LocalDir）
 	documentsRootRel = "documents"
 	// maxFileReadBytes 单次文件读取上限
@@ -32,8 +34,6 @@ const (
 	toolMessageMaxRunes = 6000
 	// maxRounds 单条指令的工具循环上限
 	maxRounds = 10
-	// maxRepeats 同一工具调用重复达到该次数即判定循环输出
-	maxRepeats = 3
 	// modelTimeout 单次模型调用超时
 	modelTimeout = 90 * time.Second
 	// runTimeout 整轮文件编辑的总超时

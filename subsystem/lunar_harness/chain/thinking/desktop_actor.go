@@ -5,6 +5,7 @@ package thinking
 // 必须立即终止它继续操作，避免与本轮响应、用户输入互相抢占鼠标键盘。
 
 import (
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -25,6 +26,6 @@ func stopDesktopActor() {
 		return
 	}
 	if (*hook)() {
-		logger.Info(lunarCoreModule, "[对话者] 已终止外部桌面智能体，避免它继续操作桌面")
+		logger.Info(lunarCoreModule, "["+Dialogue.Role+"] 已终止外部桌面智能体，避免它继续操作桌面")
 	}
 }

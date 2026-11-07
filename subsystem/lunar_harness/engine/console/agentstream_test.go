@@ -38,6 +38,56 @@ func TestStreamToolBelongsToCurrentTurn(t *testing.T) {
 	}
 }
 
+// 覆盖：不同智能体各写各的轮次，实况里不会互相串味。
+//
+// 回归背景（用户实测）：记忆合并整理的文本被拼进「对话者」的条目里，且不是另起一条，
+// 而是接在对话者已经结束的那一轮后面继续写。根因是 attachTurnLocked 忽略角色、
+// 一律挂到当前/最近一轮；现在只挂本角色自己的轮次。
+func TestStreamKeepsRolesInSeparateTurns(t *testing.T) {
+	resetTurnStore()
+	defer resetTurnStore()
+
+	StreamBegin("对话者")
+	StreamDelta("对话者", KindContent, "我先说")
+	StreamEnd("对话者")
+
+	StreamBegin("记忆整理")
+	StreamDelta("记忆整理", KindContent, "八条重复记忆合并为一条")
+	StreamEnd("记忆整理")
+
+	turns := GetTurns()
+	if len(turns) != 2 {
+		t.Fatalf("应各自成轮，共 2 轮，实得 %d 轮", len(turns))
+	}
+	if turns[0].Role != "对话者" || turns[0].Content != "我先说" {
+		t.Fatalf("对话者轮次被污染: role=%q content=%q", turns[0].Role, turns[0].Content)
+	}
+	if turns[1].Role != "记忆整理" || turns[1].Content != "八条重复记忆合并为一条" {
+		t.Fatalf("记忆整理应独立成轮: role=%q content=%q", turns[1].Role, turns[1].Content)
+	}
+}
+
+// 覆盖：没有 Begin 的增量也不能落到别的智能体轮次里（防止再次出现串味）。
+func TestStreamDeltaWithoutOwnTurnDoesNotLeak(t *testing.T) {
+	resetTurnStore()
+	defer resetTurnStore()
+
+	StreamBegin("对话者")
+	StreamDelta("对话者", KindContent, "我先说")
+	StreamEnd("对话者")
+
+	// 模拟旧实现里静默调用只发增量、不发 Begin 的情况
+	StreamDelta("记忆整理", KindContent, "这段不该并进对话者")
+
+	turns := GetTurns()
+	if len(turns) != 1 {
+		t.Fatalf("迟到增量不应造轮，实得 %d 轮", len(turns))
+	}
+	if strings.Contains(turns[0].Content, "不该并进") {
+		t.Fatalf("异角色增量混进了对话者轮次: %q", turns[0].Content)
+	}
+}
+
 // 覆盖：迟到的工具/增量事件不得凭空造轮。
 //
 // 即便流式桥将来又把上报顺序写反，最坏也只应把内容并进最近一轮，

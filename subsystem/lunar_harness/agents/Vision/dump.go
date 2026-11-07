@@ -26,7 +26,7 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "vision",
-		Label:       "视觉理解",
+		Label:       roleLabel,
 		Group:       "Go 智能体",
 		Description: "视觉理解智能体的工具清单与运行说明（按次执行，不保留上下文）",
 		Export:      exportContext,

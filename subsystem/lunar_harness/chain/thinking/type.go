@@ -6,6 +6,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/chain/thinking/tickloop"
+	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
@@ -13,12 +14,19 @@ import (
 
 // 消息内容类型码（与 OpenAI 兼容协议的内容项 type 一一对应）
 const (
-	ContentText       = "text"
-	ContentImageURL   = "image_url"
-	ContentInputAudio = "input_audio"
-	ContentVideoURL   = "video_url"
-	ContentAudioURL   = "audio_url"
-	// ContentAudioHandle 音频转写悬空句柄内容项（接入阶段完成 ASR 后由服务端替换）
+	ContentText       = mediaobject.EnvelopeText
+	ContentImageURL   = mediaobject.EnvelopeImageURL
+	ContentInputAudio = mediaobject.EnvelopeInputAudio
+	ContentVideoURL   = mediaobject.EnvelopeVideoURL
+	ContentAudioURL   = mediaobject.EnvelopeAudioURL
+	// 入站多模态信封（发送侧声明类型，后端只校验）
+	ContentImageStatic   = mediaobject.EnvelopeImageStatic
+	ContentImageAnimated = mediaobject.EnvelopeImageAnimated
+	ContentVideo         = mediaobject.EnvelopeVideo
+	ContentAudio         = mediaobject.EnvelopeAudio
+	ContentFile          = mediaobject.EnvelopeFile
+	ContentWebpage       = mediaobject.EnvelopeWebpage
+	// ContentAudioHandle 音频句柄内容项（接入阶段完成 ASR 后由服务端生成）
 	ContentAudioHandle = "audio_handle"
 	// ContentQuote 引用消息内容项（单条或多条消息引用）
 	ContentQuote = "quote"
@@ -32,16 +40,11 @@ const (
 	RoleTool      = "tool"
 )
 
-// URLPayload 单个 URL 载荷（图片 / 视频 / 音频共用）
-type URLPayload struct {
-	URL string `json:"url"`
-}
+// URLPayload 媒体载荷（图片 / 视频 / 音频共用），与写入侧共用同一份结构定义
+type URLPayload = mediaobject.Object
 
-// AudioPayload 内联音频载荷
-type AudioPayload struct {
-	Data   string `json:"data"`
-	Format string `json:"format"`
-}
+// AudioPayload 内联音频载荷，与写入侧共用同一份结构定义
+type AudioPayload = mediaobject.Object
 
 // AudioHandlePayload 音频转写悬空句柄载荷
 type AudioHandlePayload struct {
@@ -79,14 +82,22 @@ type QuotePayload struct {
 
 // ContentItem 多模态内容项
 type ContentItem struct {
-	Type        string              `json:"type"`
-	Text        string              `json:"text,omitempty"`
-	ImageURL    *URLPayload         `json:"image_url,omitempty"`
-	InputAudio  *AudioPayload       `json:"input_audio,omitempty"`
-	VideoURL    *URLPayload         `json:"video_url,omitempty"`
-	AudioURL    *URLPayload         `json:"audio_url,omitempty"`
-	AudioHandle *AudioHandlePayload `json:"audio_handle,omitempty"`
-	Quote       *QuotePayload       `json:"quote,omitempty"`
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
+	// ResourceHandle 清洗阶段为图片记下的资源句柄（不上线，仅用于远期记忆追溯；
+	// json:"-" 同时保证发送侧无法伪造，是「服务端清洗产物」的唯一可信标记）
+	ResourceHandle string              `json:"-"`
+	ImageURL       *URLPayload         `json:"image_url,omitempty"`
+	AudioHandle    *AudioHandlePayload `json:"audio_handle,omitempty"`
+	Quote          *QuotePayload       `json:"quote,omitempty"`
+
+	// 入站信封专用载荷：每类信封只允许出现对应的一项
+	ImageStatic   *mediaobject.ImageStaticPayload   `json:"image_static,omitempty"`
+	ImageAnimated *mediaobject.ImageAnimatedPayload `json:"image_animated,omitempty"`
+	Video         *mediaobject.VideoPayload         `json:"video,omitempty"`
+	Audio         *mediaobject.AudioPayload         `json:"audio,omitempty"`
+	File          *mediaobject.FilePayload          `json:"file,omitempty"`
+	Webpage       *mediaobject.WebpagePayload       `json:"webpage,omitempty"`
 }
 
 // MarshalJSON 序列化内容项：文本项必须始终带 text 键。
@@ -94,23 +105,29 @@ type ContentItem struct {
 // 空文本项若因 omitempty 省略该键，整次请求都会 500。
 func (c ContentItem) MarshalJSON() ([]byte, error) {
 	type contentItemJSON struct {
-		Type        string              `json:"type"`
-		Text        *string             `json:"text,omitempty"`
-		ImageURL    *URLPayload         `json:"image_url,omitempty"`
-		InputAudio  *AudioPayload       `json:"input_audio,omitempty"`
-		VideoURL    *URLPayload         `json:"video_url,omitempty"`
-		AudioURL    *URLPayload         `json:"audio_url,omitempty"`
-		AudioHandle *AudioHandlePayload `json:"audio_handle,omitempty"`
-		Quote       *QuotePayload       `json:"quote,omitempty"`
+		Type          string                            `json:"type"`
+		Text          *string                           `json:"text,omitempty"`
+		ImageURL      *URLPayload                       `json:"image_url,omitempty"`
+		AudioHandle   *AudioHandlePayload               `json:"audio_handle,omitempty"`
+		Quote         *QuotePayload                     `json:"quote,omitempty"`
+		ImageStatic   *mediaobject.ImageStaticPayload   `json:"image_static,omitempty"`
+		ImageAnimated *mediaobject.ImageAnimatedPayload `json:"image_animated,omitempty"`
+		Video         *mediaobject.VideoPayload         `json:"video,omitempty"`
+		Audio         *mediaobject.AudioPayload         `json:"audio,omitempty"`
+		File          *mediaobject.FilePayload          `json:"file,omitempty"`
+		Webpage       *mediaobject.WebpagePayload       `json:"webpage,omitempty"`
 	}
 	out := contentItemJSON{
-		Type:        c.Type,
-		ImageURL:    c.ImageURL,
-		InputAudio:  c.InputAudio,
-		VideoURL:    c.VideoURL,
-		AudioURL:    c.AudioURL,
-		AudioHandle: c.AudioHandle,
-		Quote:       c.Quote,
+		Type:          c.Type,
+		ImageURL:      c.ImageURL,
+		AudioHandle:   c.AudioHandle,
+		Quote:         c.Quote,
+		ImageStatic:   c.ImageStatic,
+		ImageAnimated: c.ImageAnimated,
+		Video:         c.Video,
+		Audio:         c.Audio,
+		File:          c.File,
+		Webpage:       c.Webpage,
 	}
 	if c.Type == ContentText {
 		text := c.Text
@@ -281,8 +298,10 @@ type MessageBatchRequest struct {
 type BatchResponse struct {
 	Success bool `json:"success"`
 	Length  int  `json:"length"`
-	// Handles 本批音频转写生成的悬空句柄（按消息内音频顺序；无音频时为空）
+	// Handles 本批音频落盘后生成的句柄（按消息内音频顺序；无音频时为空）
 	Handles []string `json:"handles,omitempty"`
+	// Invalid 本批被丢弃的无效信封数量
+	Invalid int `json:"invalid,omitempty"`
 }
 
 // ProxyRequest 代理请求结构
@@ -385,7 +404,6 @@ type DialogueRole struct {
 	*ModelBuilder
 	LunarAppearance   string
 	CrystalAppearance string
-	ImageWindow       int
 }
 
 // ModelRunFunc 对话者单轮模型调用入口；测试可注入替身，生产默认走 ModelBuilder.run。

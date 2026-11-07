@@ -16,10 +16,10 @@ type MentionTarget struct {
 //
 // videos_per_round 已移除：候选数量由机制决定。
 type Config struct {
-	// PreferenceKeywords 更倾向看的主题词（标题/标签命中即加分）
+	// PreferenceKeywords 更倾向看的主题词（标题/标签命中即加分），来自配置文件。
 	PreferenceKeywords []string `json:"preference_keywords"`
 
-	// DesireKeywords 本轮搜索关键词：由长期记忆与偏好生成，
+	// DesireKeywords 本轮强倾向词：由观看历史回流的主题词生成，权重高于静态偏好；
 	// 只在本次运行内生效，不写回配置文件。
 	DesireKeywords []string `json:"-"`
 

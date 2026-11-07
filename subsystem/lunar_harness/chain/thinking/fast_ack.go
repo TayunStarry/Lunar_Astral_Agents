@@ -8,7 +8,8 @@ package thinking
 //   - use_the_program（扩展应用）
 //
 // 同一轮内多次调用同类（或不同类）复合工具只推一次，由 fastAckSent 去重；
-// 台词候选集中在 variable.go 的 fastAckLines / fastAckOpenings / fastAckEndings。
+// 台词候选集中在 variable.go 的 fastAckLines / fastAckOpenings / fastAckEndings，
+// 三段的舍弃概率是同文件的 fastAckOpeningDrop / fastAckActionDrop / fastAckEndingDrop。
 
 // maybeSendFastAck 复合工具的快速应答（在工具执行前调用）
 func maybeSendFastAck(functionName string) {
@@ -33,15 +34,30 @@ func maybeSendFastAck(functionName string) {
 	fastAckPushHook("text", text, "", true)
 }
 
-// fastAckText 按工具名取正文候选并随机拼装；非复合工具返回空串
+// fastAckText 按工具名取三段候选并拼装；非复合工具返回空串。
+//
+// 顺序固定为「开场 → 动作 → 收尾」，三段各自独立抽签决定是否缺席；
+// 若三段同时缺席，用正文兜底，保证不会推出空消息。
 func fastAckText(functionName string) string {
 	actions := fastAckLines[functionName]
 	if len(actions) == 0 {
 		return ""
 	}
-	return joinAckParts([]string{
-		pickAckText(fastAckOpenings),
-		pickAckText(actions),
-		pickAckText(fastAckEndings),
+	text := joinAckParts([]string{
+		pickAckPart(fastAckOpenings, fastAckOpeningDrop),
+		pickAckPart(actions, fastAckActionDrop),
+		pickAckPart(fastAckEndings, fastAckEndingDrop),
 	})
+	if text == "" {
+		text = pickAckText(actions)
+	}
+	return text
+}
+
+// pickAckPart 按概率舍弃一段；未舍弃时从候选池随机取一条。
+func pickAckPart(items []string, dropChance float64) string {
+	if randomFloat(0, 1) < dropChance {
+		return ""
+	}
+	return pickAckText(items)
 }

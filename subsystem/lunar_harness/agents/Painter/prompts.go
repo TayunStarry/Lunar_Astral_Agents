@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// Appearances 返回内置角色月华与琉璃的基础外观（对话者提示词复用）。
+// Appearances 返回内置角色月华与琉璃的完整外观（基础外观 + 默认服装），对话者提示词复用。
 func Appearances() (lunar, crystal string) {
 	library := newPromptLibrary()
-	return library.Builtin["月华"].Appearance, library.Builtin["琉璃"].Appearance
+	return library.Builtin["月华"].Look(false), library.Builtin["琉璃"].Look(false)
 }
 
 // newPromptLibrary 读取并构建绘制者提示词库。
@@ -65,8 +65,8 @@ func systemPrompt(library *PromptLibrary) string {
 	if raw == "" {
 		return ""
 	}
-	prompt := strings.ReplaceAll(raw, "{lunar-appearance}", library.Builtin["月华"].Appearance)
-	return strings.ReplaceAll(prompt, "{crystal-appearance}", library.Builtin["琉璃"].Appearance)
+	prompt := strings.ReplaceAll(raw, "{lunar-appearance}", library.Builtin["月华"].Look(false))
+	return strings.ReplaceAll(prompt, "{crystal-appearance}", library.Builtin["琉璃"].Look(false))
 }
 
 // renderTemplate 按 {key} 占位符填充模板。
@@ -100,9 +100,6 @@ func (library *PromptLibrary) renderAppearance(template string, parts Appearance
 	if outfit == "" {
 		outfit = defaultOutfit
 	}
-	if base == "" {
-		base = library.Builtin["月华"].Appearance
-	}
 	if gender == "" {
 		gender = "女孩"
 	}
@@ -131,8 +128,14 @@ func (library *PromptLibrary) randomGroupEnvironment() string {
 	return items[randomFloor(0, len(items)-1)]
 }
 
+// Look 返回角色的完整外观文本（基础外观 + 默认服装）。
+// 对话、绘制与合照中所有「外观 + 服装」的拼接都走这里。
+func (profile CustomCharacterProfile) Look(chibi bool) string {
+	return strings.TrimRight(strings.TrimSpace(profile.Appearance), "。") + "。" + characterOutfit(profile, chibi)
+}
+
 // characterOutfit 角色默认服装。
-func characterOutfit(profile CharacterProfile, chibi bool) string {
+func characterOutfit(profile CustomCharacterProfile, chibi bool) string {
 	outfit := profile.OutfitFull
 	if chibi {
 		outfit = profile.OutfitChibi

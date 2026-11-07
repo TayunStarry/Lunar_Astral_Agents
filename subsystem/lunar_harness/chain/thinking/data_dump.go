@@ -10,15 +10,16 @@ import (
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "dialogue",
-		Label:       "对话者",
+		Label:       Dialogue.Role,
 		Group:       "Go 智能体",
-		Description: "对话者 + 月华主上下文",
+		Description: Dialogue.Role + " + 月华主上下文",
 		Export: func(includeImages bool) (any, error) {
 			return dumpCoreContext(includeImages)
 		},
@@ -31,7 +32,7 @@ func DumpAgentContext(agent string, includeImages bool) (string, error) {
 	if agent == "" || agent == "lunar" || agent == "core" || agent == "dialogue" {
 		return agentdump.Export("dialogue", includeImages)
 	}
-	return "", fmt.Errorf("分角色导出已合并为「对话者」：请使用 agent=dialogue（原目标 %s 已移除）", agent)
+	return "", fmt.Errorf("分角色导出已合并为「%s」：请使用 agent=dialogue（原目标 %s 已移除）", Dialogue.Role, agent)
 }
 
 // dumpCoreContext 组装对话者与主上下文。
@@ -71,18 +72,18 @@ func dumpCoreContext(includeImages bool) (any, error) {
 		total += len(messages)
 	}
 	if dialogueRole != nil {
-		addRole("dialogue", "对话者", dialogueRole.ModelBuilder)
+		addRole("dialogue", Dialogue.Role, dialogueRole.ModelBuilder)
 	}
 	sections["memory"] = map[string]any{
 		"label":         "记忆入库与检索",
 		"message_count": 0,
-		"note":          "记忆者不是独立智能体：它只负责写入长期记忆与生成检索摘要，能力通过对话者的 fetch_resources 工具暴露",
+		"note":          "记忆者不是独立智能体：它只负责写入长期记忆与生成检索摘要，能力通过" + Dialogue.Role + "的 fetch_resources 工具暴露",
 	}
 
 	return map[string]any{
 		"kind":             "lunar-dialogue-context",
 		"generated_at":     time.Now().Format(time.RFC3339),
-		"label":            "对话者 + 月华主上下文",
+		"label":            Dialogue.Role + " + 月华主上下文",
 		"include_images":   includeImages,
 		"message_count":    total,
 		"context_overview": overview,

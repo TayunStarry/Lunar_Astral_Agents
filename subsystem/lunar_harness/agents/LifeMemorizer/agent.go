@@ -25,9 +25,14 @@ func Consolidate(ctx context.Context, contents []string) ([]string, error) {
 		return nil, nil
 	}
 	minKeep := minKeepFor(len(contents))
-	threshold := effectiveMinRetain()
+	threshold := MinRetainPercent
 	user := joinContents(contents)
 	var lastErr error
+
+	// 整理同样是一次独立的模型调用：自己开一段实况，避免混进调用方的条目。
+	agentbase.BeginLive(RoleName)
+	defer agentbase.EndLive(RoleName)
+
 	for attempt := 0; attempt <= ModelRetry; attempt++ {
 		system := TaskPrompt(len(contents), minKeep)
 		if attempt > 0 {
@@ -37,12 +42,12 @@ func Consolidate(ctx context.Context, contents []string) ([]string, error) {
 			system = persona + "\n\n## 本次任务\n\n" + system
 		}
 		reply, err := agentbase.Stream(ctx, agentbase.StreamRequest{
-			Agent:     AgentID,
-			Role:      RoleName,
-			Messages:  messagesOf(system, user),
-			Model:     config.AgentMultimodalModel,
-			NonStream: true,
-			Silent:    true,
+			Agent:      AgentID,
+			Role:       RoleName,
+			Messages:   messagesOf(system, user),
+			Model:      config.AgentMultimodalModel,
+			NonStream:  true,
+			ManageLive: true,
 		})
 		if err != nil {
 			lastErr = err
@@ -150,7 +155,7 @@ func resetLastRun() string {
 	lastRunMu.Lock()
 	defer lastRunMu.Unlock()
 	lastRun = map[string]any{}
-	return "已清空生活记忆整理者的最近整理记录"
+	return "已清空" + RoleName + "的最近整理记录"
 }
 
 // errorText 把错误转成记录用文本（nil 输出空串）。

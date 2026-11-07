@@ -30,7 +30,7 @@ func exportContext(includeImages bool) (any, error) {
 func init() {
 	agentdump.Register(agentdump.Provider{
 		ID:          "document_reader",
-		Label:       "文献解析",
+		Label:       roleLabel,
 		Group:       "Go 智能体",
 		Description: "文献解析智能体的文件查询工具清单与运行说明（按次执行，不保留上下文）",
 		Export:      exportContext,

@@ -14,7 +14,7 @@ import (
 )
 
 // RunToolLoop 通用工具推理循环：模型通过 function calling 逐步调用工具，
-// 同一输出/工具调用重复到上限即返回循环错误。
+// 只在轮次额度耗尽或模型/上下文失败时结束；同一工具重复调用不提前拦截。
 func RunToolLoop(ctx context.Context, req Request) (string, error) {
 	lastSummary := ""
 	beginToolRun()
@@ -26,7 +26,6 @@ func RunToolLoop(ctx context.Context, req Request) (string, error) {
 		ID:                 AgentID,
 		Label:              req.Role,
 		MaxRounds:          limit,
-		MaxRepeats:         MaxRepeats,
 		MaxToolResultRunes: -1, // 工具结果由 toolResultContent 截断，保留原有提示文案
 	})
 	result, err := base.RunToolLoop(ctx, agentbase.ToolLoopRequest{
@@ -72,15 +71,6 @@ func RunToolLoop(ctx context.Context, req Request) (string, error) {
 		},
 		// 工具自身的业务错误写入回填内容并继续循环（与迁移前一致）。
 		Execute: func(_ context.Context, call agentbase.ToolCall) (string, bool, error) {
-			if reason, denied := toolDeniedReason(call.Function.Name); denied {
-				outcome := Outcome{
-					JSON:    fmt.Sprintf(`{"error":%q}`, "工具 "+call.Function.Name+" 已被智能修复临时禁用："+reason+"；请改用其他工具，或直接结束本轮"),
-					Summary: call.Function.Name + " 已被禁用",
-				}
-				recordToolCall(call.Function.Name, call.Function.Arguments, "已禁用")
-				lastSummary += outcome.Summary + "；"
-				return toolResultContent(outcome), false, nil
-			}
 			args, parseErr := agentbase.ParseToolArgs(call.Function.Arguments)
 			if parseErr != nil {
 				recordToolCall(call.Function.Name, call.Function.Arguments, "参数解析失败")
@@ -138,8 +128,9 @@ func reportLoopFailure(req Request, err error, tool, args string, repeat, limit 
 		kind = agentbase.FailureKindToolLoop
 		criterion = fmt.Sprintf("工具循环轮次 ≤ %d", limit)
 	case errors.Is(err, agentbase.ErrLoop):
-		kind = agentbase.FailureKindToolLoop
-		criterion = fmt.Sprintf("同一工具调用重复次数 < %d", MaxRepeats)
+		// 只可能是流式输出的循环检查（工具调用重复不再拦截），归入输出类而非 tool_loop。
+		kind = agentbase.FailureKindOutput
+		criterion = "模型输出不陷入重复（流式循环检查）"
 	case isContextOverflow(err):
 		kind = agentbase.FailureKindContext
 		criterion = "单次请求不超过模型上下文"
@@ -198,7 +189,7 @@ func resetLastRun() string {
 	lastRunMu.Lock()
 	defer lastRunMu.Unlock()
 	lastRun = map[string]any{}
-	return "已清空创作规划者的最近推理记录"
+	return "已清空" + DisplayName + "的最近推理记录"
 }
 
 // errorText 把错误转为可导出的短文本。

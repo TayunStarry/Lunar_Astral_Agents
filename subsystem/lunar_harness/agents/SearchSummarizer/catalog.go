@@ -19,7 +19,7 @@ func init() {
 // 摘要智能体不使用 function calling；这里展示它在搜索链中实际承担的一步提取。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
-		ID: AgentID, Name: "搜索者-摘要", Source: "agents/SearchSummarizer",
+		ID: AgentID, Name: modelRole,
 		Note:  "搜索链第三步：把全部页面正文一次提取为针对性摘要。",
 		Tools: agentinfo.ToolsFromRegistry(AgentID),
 	}}

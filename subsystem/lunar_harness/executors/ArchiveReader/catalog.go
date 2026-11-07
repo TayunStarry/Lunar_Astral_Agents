@@ -12,7 +12,7 @@ func ToolCatalog() []agentinfo.Agent {
 		{Name: ToolGGUF, Description: "解析 GGUF 模型文件的元数据摘要（模型名、架构、量化、上下文长度等）。"},
 	}
 	return []agentinfo.Agent{{
-		ID: "archive_reader", Name: "归档解析", Source: "executors/ArchiveReader", Kind: agentinfo.KindExecutor,
+		ID: "archive_reader", Name: "归档解析", Kind: agentinfo.KindExecutor,
 		Note:  "归档解析执行体：基于 Lunar Harness 原生 zip 机制查询压缩包结构、读取条目内容并解析 GGUF 元数据，由文件操作编排调度。",
 		Tools: tools,
 	}}

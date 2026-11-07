@@ -14,6 +14,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // engineState 运行状态屏的本地状态
@@ -31,7 +33,7 @@ type engineState struct {
 // engineKeys 运行状态屏键位：前端窗口重启 + 桌面操纵入口。
 func engineKeys(s engineState) []keyHint {
 	if s.inputMode {
-		return []keyHint{kh("Enter", "启动桌面操纵"), kh("Esc", "取消输入")}
+		return []keyHint{kh("Enter", "启动"+agentinfo.NameDesktopOperator), kh("Esc", "取消输入")}
 	}
 	xLabel := "中断"
 	if status, wired := getDesktopOperatorStatus(); wired && status.Running && status.Stopping {
@@ -75,24 +77,24 @@ func (m appModel) updateEngine(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "x", "X":
 			status, wired := getDesktopOperatorStatus()
 			if !wired {
-				m.engine.msg = "宿主未接入桌面操纵控制钩子"
+				m.engine.msg = "宿主未接入" + agentinfo.NameDesktopOperator + "控制钩子"
 				m.engine.err = true
 				return m, nil
 			}
 			if !status.Running {
-				m.engine.msg = "桌面操纵当前未运行"
+				m.engine.msg = agentinfo.NameDesktopOperator + "当前未运行"
 				m.engine.err = false
 				return m, nil
 			}
 			stopDesktopOperator()
 			if status.Stopping {
-				m.engine.msg = "已强制结束桌面操纵"
+				m.engine.msg = "已强制结束" + agentinfo.NameDesktopOperator
 				m.engine.err = false
-				m.setNotice("桌面操纵已强制结束", false)
+				m.setNotice(agentinfo.NameDesktopOperator+"已强制结束", false)
 			} else {
 				m.engine.msg = "已请求中断；若 4 秒内未退出，再按 x 可强制结束"
 				m.engine.err = false
-				m.setNotice("桌面操纵中断中", false)
+				m.setNotice(agentinfo.NameDesktopOperator+"中断中", false)
 			}
 			return m, nil
 		}
@@ -110,22 +112,22 @@ func (m appModel) updateEngineInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		instruction := strings.TrimSpace(m.engine.input.Value())
 		if instruction == "" {
-			m.engine.msg = "请先输入要桌面操纵执行的桌面任务"
+			m.engine.msg = "请先输入要" + agentinfo.NameDesktopOperator + "执行的桌面任务"
 			m.engine.err = true
 			return m, nil
 		}
 		if err := startDesktopOperator(instruction); err != nil {
-			m.engine.msg = "桌面操纵启动失败: " + err.Error()
+			m.engine.msg = agentinfo.NameDesktopOperator + "启动失败: " + err.Error()
 			m.engine.err = true
-			m.setNotice("桌面操纵启动失败", true)
+			m.setNotice(agentinfo.NameDesktopOperator+"启动失败", true)
 			return m, nil
 		}
 		m.engine.inputMode = false
 		m.engine.input.Blur()
 		m.engine.input.SetValue("")
-		m.engine.msg = "桌面操纵已启动，按 x 可随时中断"
+		m.engine.msg = agentinfo.NameDesktopOperator + "已启动，按 x 可随时中断"
 		m.engine.err = false
-		m.setNotice("桌面操纵已启动", false)
+		m.setNotice(agentinfo.NameDesktopOperator+"已启动", false)
 		return m, nil
 	}
 	var cmd tea.Cmd
@@ -139,8 +141,8 @@ func (m appModel) viewDesktopOperatorState(w int) []string {
 	status, wired := getDesktopOperatorStatus()
 	if !wired {
 		return []string{
-			"  " + warnStyle.Render("宿主未接入桌面操纵控制钩子（当前构建无法在此启动）"),
-			"  " + dimStyle.Render("桌面操纵仅允许从本屏人工启动，不对月华工具链暴露。"),
+			"  " + warnStyle.Render("宿主未接入"+agentinfo.NameDesktopOperator+"控制钩子（当前构建无法在此启动）"),
+			"  " + dimStyle.Render(agentinfo.NameDesktopOperator+"仅允许从本屏人工启动，不对月华工具链暴露。"),
 		}
 	}
 

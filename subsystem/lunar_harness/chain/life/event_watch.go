@@ -86,7 +86,7 @@ func watchDetail(outcome viewer.WatchOutcome) string {
 		parts = append(parts, "评论未发")
 	}
 	if outcome.Mentioned {
-		parts = append(parts, "已@作者")
+		parts = append(parts, "已@特别关注")
 	}
 	if outcome.DynamicPosted {
 		parts = append(parts, "阶段动态已发")

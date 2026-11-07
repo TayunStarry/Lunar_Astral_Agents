@@ -75,6 +75,16 @@ const (
 	// llama-server 的多模态批处理要求非因果注意力块整体落入单个 ubatch，
 	// 高分辨率单帧的视觉 token 数会超出 n_ubatch 上限；长边压到 640px 后每帧落在安全范围。
 	MaxMediaWidth = 640
+	// minFrameInterval 相邻采样点的最小间隔（秒）。
+	// FFmpeg 的 -ss 只保留毫秒精度，步长低于 1ms 时多个帧号会请求同一个时间点。
+	minFrameInterval = 0.001
+)
+
+// ==== 视觉理解提示词 ====
+
+const (
+	// visualFactRulesPrompt 图片描述与影像观看共用的判定标准（唯一来源）
+	visualFactRulesPrompt = "visualFactRules.md"
 )
 
 // ==== 日志模块标签 ====

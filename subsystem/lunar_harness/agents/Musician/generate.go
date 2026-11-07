@@ -30,11 +30,11 @@ func generateBestTokens(brief music.Brief) ([]int, music.Review, error) {
 	defer restoreModels()
 
 	if _, err := llama.UnloadModelByID(config.AgentMultimodalModel); err != nil {
-		logger.Warn(module, "[演奏者] 卸载主模型失败（继续）: %v", err)
+		logger.Warn(module, "["+roleLabel+"] 卸载主模型失败（继续）: %v", err)
 	}
 	// 卸载是异步的：必须等主模型真正退出显存，再让路由服务器加载音乐模型。
 	if err := llama.WaitModelGone(config.AgentMultimodalModel, modelSwapWait); err != nil {
-		logger.Warn(module, "[演奏者] 主模型释放显存超时: %v", err)
+		logger.Warn(module, "["+roleLabel+"] 主模型释放显存超时: %v", err)
 	}
 
 	if err := llama.LoadModelByID(config.MusicGenerationModel); err != nil {
@@ -72,11 +72,11 @@ func generateBestTokens(brief music.Brief) ([]int, music.Review, error) {
 		)
 		cancel()
 		if err != nil {
-			logger.Warn(module, "[演奏者] 候选 %d 生成失败: %v", attempt+1, err)
+			logger.Warn(module, "["+roleLabel+"] 候选 %d 生成失败: %v", attempt+1, err)
 			continue
 		}
 		review := music.ReviewTokens(ids, brief)
-		logger.Info(module, "[演奏者] 候选 %d 体检: %s（%.1f 秒）", attempt+1, review.String(), time.Since(start).Seconds())
+		logger.Info(module, "["+roleLabel+"] 候选 %d 体检: %s（%.1f 秒）", attempt+1, review.String(), time.Since(start).Seconds())
 		if review.Score < bestScore {
 			best, bestReview, bestScore = ids, review, review.Score
 		}
@@ -101,13 +101,13 @@ func generationTimeout() time.Duration {
 // restoreModels 卸载音乐模型并触发主模型恢复（幂等，失败只告警）。
 func restoreModels() {
 	if _, err := llama.UnloadModelByID(config.MusicGenerationModel); err != nil {
-		logger.Warn(module, "[演奏者] 卸载音乐模型失败: %v", err)
+		logger.Warn(module, "["+roleLabel+"] 卸载音乐模型失败: %v", err)
 	}
 	// 等音乐模型真正退出显存后再恢复主模型；LoadModelByID 内部还会对 400 做短重试。
 	if err := llama.WaitModelGone(config.MusicGenerationModel, modelSwapWait); err != nil {
-		logger.Warn(module, "[演奏者] 音乐模型释放显存超时: %v", err)
+		logger.Warn(module, "["+roleLabel+"] 音乐模型释放显存超时: %v", err)
 	}
 	if err := llama.LoadModelByID(config.AgentMultimodalModel); err != nil {
-		logger.Warn(module, "[演奏者] 恢复主模型失败（下次调用会自动加载）: %v", err)
+		logger.Warn(module, "["+roleLabel+"] 恢复主模型失败（下次调用会自动加载）: %v", err)
 	}
 }
