@@ -12,6 +12,8 @@ import (
 	"fmt"
 
 	"LunarSubsystem/LunarHarness/agents/Responder"
+	"LunarSubsystem/LunarHarness/chain/creation"
+	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking"
 	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/server"
@@ -25,6 +27,171 @@ func wireServerHooks() {
 	server.AgentPendingFunc = Responder.Pending
 	server.AgentEnqueueFunc = enqueueExternalAgent
 	server.AgentPrepareMessagesFunc = prepareAgentMessages
+	// 资源库创作入口：HTTP 层只收参，规划执行由创作链完成。
+	server.LibraryCreationSubmitFunc = submitLibraryCreation
+	server.LibraryCreationStatusFunc = libraryCreationStatus
+	server.LibraryCreationListFunc = libraryCreationList
+	// 资源库演绎入口：HTTP 层只收参，分镜规划与逐镜绘制由演绎链完成。
+	server.LibraryStoryboardSubmitFunc = submitLibraryStoryboard
+	server.LibraryStoryboardStatusFunc = libraryStoryboardStatus
+	server.LibraryStoryboardListFunc = libraryStoryboardList
+	// 演绎任务控制：审查确认、暂停、继续、终止。
+	server.LibraryStoryboardConfirmFunc = confirmLibraryStoryboard
+	server.LibraryStoryboardPauseFunc = pauseLibraryStoryboard
+	server.LibraryStoryboardResumeFunc = resumeLibraryStoryboard
+	server.LibraryStoryboardCancelFunc = cancelLibraryStoryboard
+}
+
+// submitLibraryCreation 把资源库请求转成创作任务；单个 handle 与 handles 合并去重。
+func submitLibraryCreation(req server.LibraryCreationRequest) (server.LibraryCreationTask, error) {
+	handles := append([]string(nil), req.Handles...)
+	if req.Handle != "" {
+		handles = append(handles, req.Handle)
+	}
+	view, err := creation.SubmitTask(creation.SubmitRequest{
+		Mode:        req.Mode,
+		Description: req.Description,
+		Handles:     handles,
+	})
+	return toLibraryTask(view), err
+}
+
+// libraryCreationStatus 查询单个创作任务。
+func libraryCreationStatus(taskID string) (server.LibraryCreationTask, bool) {
+	view, ok := creation.TaskStatus(taskID)
+	if !ok {
+		return server.LibraryCreationTask{}, false
+	}
+	return toLibraryTask(view), true
+}
+
+// libraryCreationList 查询最近创作任务。
+func libraryCreationList(limit int) []server.LibraryCreationTask {
+	views := creation.TaskList(limit)
+	out := make([]server.LibraryCreationTask, 0, len(views))
+	for _, view := range views {
+		out = append(out, toLibraryTask(view))
+	}
+	return out
+}
+
+// toLibraryTask 把创作链任务视图映射为 HTTP 层结构。
+func toLibraryTask(view creation.TaskView) server.LibraryCreationTask {
+	return server.LibraryCreationTask{
+		TaskID:    view.TaskID,
+		Mode:      view.Mode,
+		Status:    view.Status,
+		Stage:     view.Stage,
+		Progress:  view.Progress,
+		Summary:   view.Summary,
+		Handles:   append([]string(nil), view.Handles...),
+		Error:     view.Error,
+		CreatedAt: view.CreatedAt,
+		UpdatedAt: view.UpdatedAt,
+	}
+}
+
+// submitLibraryStoryboard 把资源库请求转成演绎任务。
+func submitLibraryStoryboard(req server.LibraryStoryboardRequest) (server.LibraryStoryboardTask, error) {
+	view, err := storyboard.SubmitTask(storyboard.SubmitRequest{
+		Text:   req.Text,
+		Handle: req.Handle,
+		Title:  req.Title,
+		Style:  req.Style,
+		Ratio:  req.Ratio,
+	})
+	return toLibraryStoryboardTask(view), err
+}
+
+// libraryStoryboardStatus 查询单个演绎任务。
+func libraryStoryboardStatus(taskID string) (server.LibraryStoryboardTask, bool) {
+	view, ok := storyboard.TaskStatus(taskID)
+	if !ok {
+		return server.LibraryStoryboardTask{}, false
+	}
+	return toLibraryStoryboardTask(view), true
+}
+
+// libraryStoryboardList 查询最近演绎任务。
+func libraryStoryboardList(limit int) []server.LibraryStoryboardTask {
+	views := storyboard.TaskList(limit)
+	out := make([]server.LibraryStoryboardTask, 0, len(views))
+	for _, view := range views {
+		out = append(out, toLibraryStoryboardTask(view))
+	}
+	return out
+}
+
+// confirmLibraryStoryboard 把审查稿转成演绎链的确认请求。
+func confirmLibraryStoryboard(taskID, title string, shots []server.LibraryStoryboardShotInput) (server.LibraryStoryboardTask, error) {
+	input := make([]storyboard.ReviewShot, 0, len(shots))
+	for _, shot := range shots {
+		input = append(input, storyboard.ReviewShot{
+			Index:     shot.Index,
+			Act:       shot.Act,
+			Scene:     shot.Scene,
+			Narration: shot.Narration,
+			Prompt:    shot.Prompt,
+			Ratio:     shot.Ratio,
+		})
+	}
+	view, err := storyboard.ConfirmTask(taskID, title, input)
+	return toLibraryStoryboardTask(view), err
+}
+
+// pauseLibraryStoryboard 暂停演绎任务。
+func pauseLibraryStoryboard(taskID string) (server.LibraryStoryboardTask, error) {
+	view, err := storyboard.PauseTask(taskID)
+	return toLibraryStoryboardTask(view), err
+}
+
+// resumeLibraryStoryboard 继续已暂停的演绎任务。
+func resumeLibraryStoryboard(taskID string) (server.LibraryStoryboardTask, error) {
+	view, err := storyboard.ResumeTask(taskID)
+	return toLibraryStoryboardTask(view), err
+}
+
+// cancelLibraryStoryboard 终止演绎任务。
+func cancelLibraryStoryboard(taskID, reason string) (server.LibraryStoryboardTask, error) {
+	view, err := storyboard.CancelTask(taskID, reason)
+	return toLibraryStoryboardTask(view), err
+}
+
+// toLibraryStoryboardTask 把演绎链任务视图映射为 HTTP 层结构。
+func toLibraryStoryboardTask(view storyboard.TaskView) server.LibraryStoryboardTask {
+	shots := make([]server.LibraryStoryboardShot, 0, len(view.Shots))
+	for _, shot := range view.Shots {
+		shots = append(shots, server.LibraryStoryboardShot{
+			Index:     shot.Index,
+			Act:       shot.Act,
+			Scene:     shot.Scene,
+			Narration: shot.Narration,
+			Prompt:    shot.Prompt,
+			Ratio:     shot.Ratio,
+			Status:    shot.Status,
+			Handle:    shot.Handle,
+			File:      shot.File,
+			Error:     shot.Error,
+		})
+	}
+	return server.LibraryStoryboardTask{
+		TaskID:    view.TaskID,
+		Status:    view.Status,
+		Stage:     view.Stage,
+		Progress:  view.Progress,
+		Summary:   view.Summary,
+		Title:     view.Title,
+		DocPath:   view.DocPath,
+		DocHandle: view.DocHandle,
+		Shots:     shots,
+		Handles:   append([]string(nil), view.Handles...),
+		Error:     view.Error,
+		Event:     view.Event,
+		ShotIndex: view.ShotIndex,
+		Thought:   view.Thought,
+		CreatedAt: view.CreatedAt,
+		UpdatedAt: view.UpdatedAt,
+	}
 }
 
 // agentEnvelopeTypes 需要经过信封接收链路的内容类型（六类新信封 + 四类已废止旧信封）。

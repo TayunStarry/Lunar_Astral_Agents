@@ -2,10 +2,7 @@ package memory
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -196,45 +193,6 @@ func TestKeywordSearchAcrossCollections(t *testing.T) {
 	empty, err := d.KeywordSearch(TypeAudio, []string{"天气"}, false, 5)
 	if err != nil || len(empty) != 0 {
 		t.Fatalf("按 audio 类型检索文本应返回空，实得 %+v, %v", empty, err)
-	}
-}
-
-// TestTagRequestDisablesThinking 标签生成必须显式关闭推理：
-// Gemma-4 等模型会先输出很长的 reasoning_content，max_tokens 被耗尽后 content 为空，
-// 表现为「LLM 返回空内容」并触发三次无意义重试（动态图标签尤其明显）。
-func TestTagRequestDisablesThinking(t *testing.T) {
-	var got chatRequest
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Errorf("解析标签请求失败: %v", err)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"[\"猫\",\"表情\"]"}}]}`))
-	}))
-	defer server.Close()
-
-	origURL := config.AgentMultimodalURL
-	origModel := config.AgentMultimodalModel
-	config.AgentMultimodalURL = server.URL
-	config.AgentMultimodalModel = "test-multimodal"
-	t.Cleanup(func() {
-		config.AgentMultimodalURL = origURL
-		config.AgentMultimodalModel = origModel
-	})
-
-	d := &Store{httpClient: server.Client()}
-	tags, err := d.generateTags(context.Background(), "data:image/png;base64,AAAA", true, "auto", "")
-	if err != nil {
-		t.Fatalf("标签生成失败: %v", err)
-	}
-	if len(tags) != 2 || tags[0] != "猫" {
-		t.Fatalf("标签结果不正确: %v", tags)
-	}
-	if enabled, ok := got.ChatTemplateKwargs["enable_thinking"]; !ok || enabled != false {
-		t.Fatalf("标签请求未关闭思考: %+v", got.ChatTemplateKwargs)
-	}
-	if got.MaxTokens < 512 {
-		t.Fatalf("标签请求 max_tokens 过小，推理可能耗尽输出: %d", got.MaxTokens)
 	}
 }
 

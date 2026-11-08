@@ -29,7 +29,7 @@
                 <button id="search-clear" class="search-clear hidden" title="清除搜索"><i class="fas fa-xmark"></i></button>
             </div>
             <div class="header-actions">
-                <button id="details-btn" class="icon-btn details-toggle" title="详情面板">
+                <button id="details-btn" class="icon-btn details-toggle" title="详情 / 创作">
                     <i class="fas fa-circle-info"></i>
                 </button>
                 <button id="refresh-btn" class="icon-btn" title="刷新（F5）">
@@ -44,69 +44,143 @@
             </div>
         </header>
 
-        <!-- ==== 左侧：4 个存储根 ==== -->
-        <aside class="panel sidebar">
-            <header class="panel-header">
-                <span class="panel-title"><i class="fas fa-folder-tree"></i> 存储根</span>
-                <span id="entry-count" class="panel-count">0</span>
-            </header>
-            <div class="panel-body">
-                <div id="tree" class="tree" role="tree" aria-label="资源库目录树"></div>
-            </div>
-            <footer class="panel-footer">
-                <span id="truncate-hint" class="footer-hint hidden">
-                    <i class="fas fa-triangle-exclamation"></i> 条目过多，仅展示前 2 万项
-                </span>
-            </footer>
-        </aside>
-
-        <!-- ==== 中间：预览 / 目录 ==== -->
+        <!-- ==== 主显示区：预览 / 变更 ==== -->
         <section class="panel content">
             <header class="panel-header content-header">
                 <div class="crumb-row">
                     <button id="back-btn" class="icon-btn" title="返回上级（Esc）"><i class="fas fa-arrow-left"></i></button>
                     <nav id="crumbs" class="crumbs" aria-label="路径"></nav>
                 </div>
-                <div class="content-actions">
-                    <button id="rename-btn" class="btn-glass btn-sm" title="重命名（F2）" disabled>
-                        <i class="fas fa-pen"></i><span>重命名</span>
-                    </button>
-                    <button id="move-btn" class="btn-glass btn-sm" title="移动（Ctrl+M）" disabled>
-                        <i class="fas fa-folder-open"></i><span>移动</span>
-                    </button>
-                    <button id="delete-btn" class="btn-glass btn-sm danger" title="删除（Delete）" disabled>
-                        <i class="fas fa-trash"></i><span>删除</span>
-                    </button>
-                </div>
-            </header>
-            <div class="panel-body content-body">
-                <div class="content-meta">
+                <div class="content-tools">
                     <div id="view-tabs" class="view-tabs hidden" role="tablist">
                         <button class="view-tab active" data-tab="preview" role="tab">预览</button>
                         <button class="view-tab" data-tab="changes" role="tab">变更</button>
                     </div>
                     <span id="content-summary" class="content-summary"></span>
                 </div>
+            </header>
+            <div class="panel-body content-body">
                 <div id="view-preview" class="view-pane active"></div>
                 <div id="view-changes" class="view-pane"></div>
+                <div id="storyboard-review" class="storyboard-review hidden" role="region" aria-label="分镜审查"></div>
             </div>
         </section>
 
-        <!-- ==== 右侧：详情（窄窗时为抽屉） ==== -->
+        <!-- ==== 右侧：详情 / 创作（两个同级标签页，窄窗时为抽屉） ==== -->
         <aside class="panel details" id="details-panel">
-            <header class="panel-header">
-                <span class="panel-title"><i class="fas fa-circle-info"></i> 详情</span>
-                <button id="details-close" class="icon-btn details-close" title="关闭详情">
+            <header class="panel-header details-header">
+                <div id="details-tabs" class="details-tabs" role="tablist" aria-label="详情与创作">
+                    <button id="details-tab-detail" class="details-tab active" type="button" role="tab"
+                        aria-selected="true" aria-controls="details-pane-detail" data-details-tab="detail">
+                        <i class="fas fa-circle-info"></i><span>详情</span>
+                    </button>
+                    <button id="details-tab-database" class="details-tab hidden" type="button" role="tab"
+                        aria-selected="false" aria-controls="details-pane-database" data-details-tab="database">
+                        <i class="fas fa-database"></i><span>数据库</span>
+                    </button>
+                    <button id="details-tab-create" class="details-tab" type="button" role="tab"
+                        aria-selected="false" aria-controls="details-pane-create" data-details-tab="create">
+                        <i class="fas fa-wand-magic-sparkles"></i><span>创作</span>
+                    </button>
+                    <button id="details-tab-storyboard" class="details-tab" type="button" role="tab"
+                        aria-selected="false" aria-controls="details-pane-storyboard" data-details-tab="storyboard">
+                        <i class="fas fa-film"></i><span>演绎</span>
+                    </button>
+                </div>
+                <button id="details-close" class="icon-btn details-close" title="关闭面板">
                     <i class="fas fa-xmark"></i>
                 </button>
             </header>
-            <div class="panel-body">
-                <div id="details" class="details-body">
-                    <div class="empty-state">
-                        <i class="fas fa-hand-pointer"></i>
-                        <p>选择左侧文件查看详情</p>
+
+            <!-- ==== 标签页：详情 ==== -->
+            <div id="details-pane-detail" class="details-pane active" role="tabpanel"
+                aria-labelledby="details-tab-detail" data-details-pane="detail">
+                <div class="panel-body">
+                    <div id="details" class="details-body">
+                        <div class="empty-state">
+                            <i class="fas fa-hand-pointer"></i>
+                            <p>选择文件查看详情</p>
+                        </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- ==== 标签页：数据库（仅当前预览为数据库文件时出现） ==== -->
+            <div id="details-pane-database" class="details-pane" role="tabpanel"
+                aria-labelledby="details-tab-database" data-details-pane="database">
+                <div class="panel-body">
+                    <div id="database-pane" class="database-pane-body"></div>
+                </div>
+            </div>
+
+            <!-- ==== 标签页：创作 ==== -->
+            <div id="details-pane-create" class="details-pane" role="tabpanel"
+                aria-labelledby="details-tab-create" data-details-pane="create">
+                <form id="requirement-form" class="requirement-body">
+                    <label class="requirement-label" for="requirement-handle">资源句柄</label>
+                    <div class="requirement-handle-row">
+                        <input id="requirement-handle" class="requirement-input" type="text"
+                            placeholder="@D.020（留空则随机选题）" autocomplete="off" spellcheck="false">
+                        <button id="requirement-pick" class="btn-glass btn-sm" type="button" title="带入当前选中项的资源句柄">
+                            <i class="fas fa-arrow-down"></i><span>带入选中</span>
+                        </button>
+                    </div>
+                    <label class="requirement-label" for="requirement-text">需求描述</label>
+                    <textarea id="requirement-text" class="requirement-text"
+                        placeholder="描述希望创作系统如何编排这个资源…（Enter 提交，Shift+Enter 换行）"></textarea>
+                    <div id="requirement-result" class="requirement-result hidden"></div>
+                    <div class="requirement-foot">
+                        <span id="requirement-state" class="requirement-state" role="status"></span>
+                        <button id="requirement-submit" class="btn-glass primary btn-sm" type="submit">
+                            <i class="fas fa-paper-plane"></i><span>提交需求</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ==== 标签页：演绎 ==== -->
+            <div id="details-pane-storyboard" class="details-pane" role="tabpanel"
+                aria-labelledby="details-tab-storyboard" data-details-pane="storyboard">
+                <form id="storyboard-form" class="requirement-body">
+                    <label class="requirement-label" for="storyboard-text">故事正文</label>
+                    <textarea id="storyboard-text" class="requirement-text"
+                        placeholder="输入一个故事；也可以只填下方资源句柄，从已有文档读取…（Enter 提交，Shift+Enter 换行）"></textarea>
+                    <label class="requirement-label" for="storyboard-handle">故事资源句柄（可选）</label>
+                    <div class="requirement-handle-row">
+                        <input id="storyboard-handle" class="requirement-input" type="text"
+                            placeholder="@D.020（与正文二选一）" autocomplete="off" spellcheck="false">
+                        <button id="storyboard-pick" class="btn-glass btn-sm" type="button"
+                            title="带入当前选中项的资源句柄">
+                            <i class="fas fa-arrow-down"></i><span>带入选中</span>
+                        </button>
+                    </div>
+                    <div class="storyboard-options">
+                        <input id="storyboard-title" class="requirement-input" type="text"
+                            placeholder="标题（可选）" autocomplete="off">
+                        <input id="storyboard-style" class="requirement-input" type="text"
+                            placeholder="统一画风（可选）" autocomplete="off">
+                        <input id="storyboard-ratio" class="requirement-input" type="text"
+                            placeholder="画幅（默认 16:9）" autocomplete="off">
+                    </div>
+                    <div id="storyboard-result" class="requirement-result hidden"></div>
+                    <div class="storyboard-controls">
+                        <button id="storyboard-review-open" class="btn-glass btn-sm hidden" type="button">
+                            <i class="fas fa-list-check"></i><span>打开审查</span>
+                        </button>
+                        <button id="storyboard-pause" class="btn-glass btn-sm hidden" type="button">
+                            <i class="fas fa-pause"></i><span>暂停</span>
+                        </button>
+                        <button id="storyboard-cancel" class="btn-glass btn-sm danger hidden" type="button">
+                            <i class="fas fa-stop"></i><span>终止</span>
+                        </button>
+                    </div>
+                    <div class="requirement-foot">
+                        <span id="storyboard-state" class="requirement-state" role="status"></span>
+                        <button id="storyboard-submit" class="btn-glass primary btn-sm" type="submit">
+                            <i class="fas fa-film"></i><span>开始演绎</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </aside>
 

@@ -5,10 +5,15 @@ package creation
 
 import (
 	"fmt"
+	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
+	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/fileflow"
 	"LunarSubsystem/LunarHarness/executors/ArchiveReader"
 )
@@ -17,6 +22,14 @@ import (
 func (s *session) fileCreate(args map[string]any) toolOutcome {
 	target := argString(args, "path")
 	content := argString(args, "content")
+	if strings.HasSuffix(strings.TrimSpace(target), "/") || strings.HasSuffix(strings.TrimSpace(target), "\\") {
+		return failure(toolFileCreate, fmt.Errorf("file_create 的 path 必须带具体文件名，不能以分隔符结尾（目录不会单独创建，父目录会随文件自动创建）"))
+	}
+	if !argBool(args, "allow_duplicate") {
+		if warning := duplicateNameWarning(target); warning != "" {
+			return failure(toolFileCreate, fmt.Errorf("%s", warning))
+		}
+	}
 	return s.mutate(fileflow.OpCreate, toolFileCreate, target, []string{target},
 		[]fileflow.Expect{expectExists(target, true)},
 		func() mutationResult { return fromFileEditor(FileEditor.CreateFile(target, content)) })
@@ -26,9 +39,71 @@ func (s *session) fileCreate(args map[string]any) toolOutcome {
 func (s *session) fileRewrite(args map[string]any) toolOutcome {
 	target := argString(args, "path")
 	content := argString(args, "content")
+	if !argBool(args, "allow_duplicate") {
+		if warning := duplicateNameWarning(target); warning != "" {
+			return failure(toolFileRewrite, fmt.Errorf("%s", warning))
+		}
+	}
 	return s.mutate(fileflow.OpWrite, toolFileRewrite, target, []string{target},
 		[]fileflow.Expect{expectExists(target, true)},
 		func() mutationResult { return fromFileEditor(FileEditor.WriteFile(target, content)) })
+}
+
+// duplicateNameWarning 新建前的同名检测：同名文件已在其它目录时返回带候选路径的提示。
+//
+// 目标已存在时交由「文件已存在」的既有逻辑处理；这里只拦「换个目录再建一份同名文件」，
+// 这是用户最初「文件被覆盖 / 目录混乱」痛点的硬性保证。
+func duplicateNameWarning(target string) string {
+	abs, rel, err := fileflow.Resolve(target)
+	if err != nil {
+		return ""
+	}
+	if _, statErr := os.Stat(abs); statErr == nil {
+		return ""
+	}
+	base := path.Base(rel)
+	if base == "" || base == "." || base == "/" {
+		return ""
+	}
+	candidates := sameNameFiles(base, rel)
+	if len(candidates) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("已存在同名文件：%s。请直接复用已有路径（file_rewrite / file_replace），不要换目录新建；确需新建到 %s，请传 allow_duplicate=true",
+		strings.Join(candidates, "、"), rel)
+}
+
+// sameNameFiles 在 documents / unknown 下按文件名查找候选（不读正文，最多 maxDuplicateCandidates 条）。
+func sameNameFiles(base, excludeRel string) []string {
+	found := make([]string, 0, maxDuplicateCandidates)
+	for _, root := range pathSnapshotRoots {
+		start := filepath.Join(config.LocalDir, filepath.FromSlash(root))
+		_ = filepath.WalkDir(start, func(current string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil || entry == nil || entry.IsDir() {
+				return nil
+			}
+			if !strings.EqualFold(entry.Name(), base) {
+				return nil
+			}
+			rel, relErr := filepath.Rel(config.LocalDir, current)
+			if relErr != nil {
+				return nil
+			}
+			relSlash := filepath.ToSlash(rel)
+			if relSlash == excludeRel {
+				return nil
+			}
+			found = append(found, relSlash)
+			if len(found) >= maxDuplicateCandidates {
+				return filepath.SkipAll
+			}
+			return nil
+		})
+		if len(found) >= maxDuplicateCandidates {
+			break
+		}
+	}
+	return found
 }
 
 // fileRemove 清空文件内容（保留文件）。

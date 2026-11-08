@@ -116,6 +116,8 @@ type StreamRequest struct {
 	Messages any
 	// Tools 工具定义数组（空或 nil 表示不启用工具）
 	Tools any
+	// ToolChoice 工具选择模式（空 = auto；可传 required / none 强制或禁用工具调用）
+	ToolChoice string
 	// Model 覆盖模型名（空 = 主多模态模型）
 	Model string
 	// Temperature 采样温度（nil = 服务端默认）
@@ -140,6 +142,9 @@ type StreamRequest struct {
 	Display func(text string) string
 	// DisplayAtEnd 为 true 时正文不逐段推送，流结束后统一规整再推送一次
 	DisplayAtEnd bool
+	// OnDelta 增量回调：kind 为 "content" 或 "think"，text 为本次新增原文。
+	// 仅用于调用方自行消费流式内容（如逐行解析结构化结果），不替代实况推送。
+	OnDelta func(kind, text string)
 	// HoldLease 调用方已持有模型切换租约
 	HoldLease bool
 	// InsecureTLS 跳过 TLS 校验（本地自签代理等场景）

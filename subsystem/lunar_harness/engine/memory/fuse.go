@@ -1,15 +1,10 @@
 package memory
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
-	"time"
 
-	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -182,73 +177,10 @@ func concatMemoryContents(contents []string) string {
 	return strings.Join(parts, "\n")
 }
 
-// mergeMemoryContentsWithModel 调用多模态/文本模型把多条记忆整合为一条完整记忆
+// mergeMemoryContentsWithModel 调用记忆融合智能体把多条记忆整合为一条完整记忆
 func (d *Store) mergeMemoryContentsWithModel(ctx context.Context, contents []string) (string, error) {
-	if strings.TrimSpace(config.AgentMultimodalURL) == "" {
-		return "", fmt.Errorf("LLM 服务地址未配置")
+	if MemoryMergeFunc == nil {
+		return "", fmt.Errorf("记忆融合智能体未装配")
 	}
-	clipped := make([]string, len(contents))
-	for i, content := range contents {
-		runes := []rune(content)
-		if len(runes) > FuseMaxContentChars {
-			runes = runes[:FuseMaxContentChars]
-		}
-		clipped[i] = fmt.Sprintf("%d. %s", i+1, string(runes))
-	}
-
-	const systemPrompt = "你是记忆整理助手。下面多条记忆在语义上高度相似，请把它们合并为一条完整、精炼、无重复的记忆。" +
-		"要求：保留全部关键事实（人名、时间、地点、数字、偏好、结论），删除重复表述，不要添加原文没有的信息，" +
-		"不要分点、不要标题、不要解释，只输出合并后的正文。"
-
-	reqBody := chatRequest{
-		Model: config.AgentMultimodalModel,
-		Messages: []chatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: "待合并的记忆：\n" + strings.Join(clipped, "\n\n")},
-		},
-		MaxTokens:   1024,
-		Temperature: 0.2,
-		// 与标签生成一致：显式关闭思考，避免推理模型把 token 预算耗在 reasoning 上
-		ChatTemplateKwargs: map[string]any{"enable_thinking": false},
-	}
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("序列化整合请求失败: %w", err)
-	}
-
-	apiURL := strings.TrimRight(config.AgentMultimodalURL, "/") + "/chat/completions"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return "", fmt.Errorf("创建整合请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := d.httpClient
-	if client == nil {
-		client = &http.Client{Timeout: 120 * time.Second}
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("调用整合模型失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var result chatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("解析整合响应失败: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		if result.Error != nil && result.Error.Message != "" {
-			return "", fmt.Errorf("整合模型返回错误: %s", result.Error.Message)
-		}
-		return "", fmt.Errorf("整合模型返回状态码: %d", resp.StatusCode)
-	}
-	if len(result.Choices) == 0 {
-		return "", fmt.Errorf("整合模型返回空结果")
-	}
-	content := strings.TrimSpace(result.Choices[0].Message.Content)
-	if content == "" {
-		return "", fmt.Errorf("整合模型返回空内容")
-	}
-	return content, nil
+	return MemoryMergeFunc(ctx, contents)
 }

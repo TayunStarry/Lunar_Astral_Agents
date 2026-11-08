@@ -4,6 +4,7 @@ package creation
 
 import (
 	"encoding/json"
+	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
@@ -29,6 +30,9 @@ func loadPlanState() planState {
 	if len(state.Parked) > maxParked {
 		state.Parked = state.Parked[len(state.Parked)-maxParked:]
 	}
+	if len(state.RecentTargets) > targetWindow {
+		state.RecentTargets = state.RecentTargets[len(state.RecentTargets)-targetWindow:]
+	}
 	return state
 }
 
@@ -52,6 +56,28 @@ func pushRecent(state *planState, kind ItemKind) {
 	if len(state.Recent) > recentWindow {
 		state.Recent = state.Recent[len(state.Recent)-recentWindow:]
 	}
+}
+
+// pushRecentTarget 记录本次选中的具体目标，只保留最近的排除窗口。
+func pushRecentTarget(state *planState, target string) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return
+	}
+	state.RecentTargets = append(state.RecentTargets, target)
+	if len(state.RecentTargets) > targetWindow {
+		state.RecentTargets = state.RecentTargets[len(state.RecentTargets)-targetWindow:]
+	}
+}
+
+// containsString 判断字符串切片是否包含指定值。
+func containsString(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 // parkItem 暂存未完成事项：同 ID 去重，超出上限时丢弃最早的一条。

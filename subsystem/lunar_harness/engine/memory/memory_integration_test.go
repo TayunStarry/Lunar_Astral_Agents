@@ -165,17 +165,17 @@ func TestAddImageDedupByContent(t *testing.T) {
 	isolateStorage(t)
 	origURL := config.AgentEmbeddingURL
 	origModel := config.AgentEmbeddingModel
-	origMMURL := config.AgentMultimodalURL
-	origMMModel := config.AgentMultimodalModel
+	origTag := TagGenerator
 	config.AgentEmbeddingURL = server.URL + "/v1"
 	config.AgentEmbeddingModel = "test-embedding"
-	config.AgentMultimodalURL = server.URL + "/v1"
-	config.AgentMultimodalModel = "test-multimodal"
+	// 标签生成由智能体实现，这里用固定标签桩隔离模型调用
+	TagGenerator = func(ctx context.Context, content string, isImage bool, orientation, custom string, mediaRefs []string) ([]string, error) {
+		return []string{"可爱", "猫"}, nil
+	}
 	t.Cleanup(func() {
 		config.AgentEmbeddingURL = origURL
 		config.AgentEmbeddingModel = origModel
-		config.AgentMultimodalURL = origMMURL
-		config.AgentMultimodalModel = origMMModel
+		TagGenerator = origTag
 	})
 
 	d := newStore(t.TempDir())

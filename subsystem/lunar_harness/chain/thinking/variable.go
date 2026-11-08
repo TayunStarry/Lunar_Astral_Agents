@@ -1,7 +1,6 @@
 package thinking
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +30,10 @@ const (
 	// maxRemoteImageBytes 远程图片回源上限（32 MiB）：
 	// 网页原图与聊天图片通常远小于此值，留足余量同时避免无上限读入内存。
 	maxRemoteImageBytes = 32 * 1024 * 1024
+	// maxPainterRefDocBytes 从文档片段解析参考图时最多读取的字节数
+	maxPainterRefDocBytes = 256 * 1024
+	// maxPainterReferences 单次绘图任务最多携带的参考图数量
+	maxPainterReferences = 4
 )
 
 // ==== 队列与思考状态 ====
@@ -75,11 +78,6 @@ var (
 	stopCh chan struct{}
 	// loopWG 循环退出等待
 	loopWG sync.WaitGroup
-	// responderCtx 响应者独立 Tick 的上下文（停止时取消，中止在跑的外部推理）
-	responderCtx context.Context
-	// responderCancel 取消响应者 Tick
-	responderCancel context.CancelFunc
-
 	// dialogueRole 对话者角色实例
 	dialogueRole *DialogueRole
 	// memorizerRole 记忆流程实例（不是独立智能体：只做记忆入库与检索摘要）

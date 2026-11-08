@@ -279,6 +279,9 @@ var urlTrackingParams = []string{
 }
 
 var (
+	// TranscribeAudioFunc 语音转写智能体（实现于 agents/AudioTranscriber），
+	// 由装配层注入，engine 不反向依赖 agents。
+	TranscribeAudioFunc func(wavBase64 string) (string, error)
 	// archiveInitMu 串行化资源目录初始化
 	archiveInitMu sync.Mutex
 	// archiveMu 串行化序号分配与目录写入

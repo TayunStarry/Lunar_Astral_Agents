@@ -50,7 +50,21 @@ func PlanNext(_ context.Context) (PlanItem, error) {
 // activateNew 从预设列表抽一个新事项并设为当前事项。
 func activateNew(state *planState, reason string) (PlanItem, error) {
 	rng := newRandHook()
-	item, ok := drawItem(rng, state.Recent)
+	var (
+		item PlanItem
+		ok   bool
+	)
+	// 具体目标（绘画题材）落在近期窗口内时重抽，最多尝试若干次，避免短时间内重复同一目标。
+	for attempt := 0; attempt < 8; attempt++ {
+		item, ok = drawItem(rng, state.Recent)
+		if !ok {
+			return PlanItem{}, errors.New("预设创作事项列表为空或全部不可用")
+		}
+		scene := paintSceneOf(item)
+		if scene == "" || !containsString(state.RecentTargets, scene) {
+			break
+		}
+	}
 	if !ok {
 		return PlanItem{}, errors.New("预设创作事项列表为空或全部不可用")
 	}
@@ -59,6 +73,7 @@ func activateNew(state *planState, reason string) (PlanItem, error) {
 	item.Reason = reason
 	state.Active = &item
 	pushRecent(state, item.Kind)
+	pushRecentTarget(state, paintSceneOf(item))
 	savePlanState(*state)
 	return item, nil
 }
@@ -117,6 +132,7 @@ func withPlanInstruction(instruction string, item PlanItem) string {
 	fmt.Fprintf(&b, "- 事项：%s\n", item.Title)
 	fmt.Fprintf(&b, "- 执行要求：%s\n", item.Task)
 	fmt.Fprintf(&b, "- 选择依据：%s\n", item.Reason)
+	b.WriteString("- 请在计划 memos 中原样保留上述选择依据，便于事后核对本轮为什么选这个目标。\n")
 	b.WriteString("- 优先级说明：本轮事项替代「对话者主动输入或指定」的来源；下文若出现心情建议或创作参考，只影响风格与表达，不改变本轮事项的类型、主题与目标对象。\n\n")
 	b.WriteString(instruction)
 	return b.String()

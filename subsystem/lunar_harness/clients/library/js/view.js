@@ -11,6 +11,7 @@ const OP_LABELS = {
 };
 
 // renderPreview 渲染文件预览（文本 / 图片 / 视频 / 音频 / 其他）。
+// 数据库与压缩包由 app.js 分发到专用视图，这里只保留保底提示。
 export async function renderPreview(container, entry, fileState) {
     container.replaceChildren();
     const kind = kindOf(entry.name);
@@ -18,11 +19,54 @@ export async function renderPreview(container, entry, fileState) {
         await renderText(container, entry, fileState);
         return;
     }
-    if (kind === 'image' || kind === 'video' || kind === 'audio') {
+    if (kind === 'image' || kind === 'audio') {
         renderMedia(container, entry, kind);
         return;
     }
+    if (kind === 'video') {
+        // 空文件没有可解码的数据，直接给出明确提示，避免播放器留下黑屏。
+        if (!entry.size) {
+            container.append(emptyState('fa-triangle-exclamation', '视频文件为空', '文件大小为 0 字节，无法播放'));
+            return;
+        }
+        // 扩展名与响应 Content-Type 双重判断：避免把伪装成视频的文本/错误页当视频播放。
+        const contentType = await probeContentType(fileURL(entry.path));
+        if (contentType && !isVideoContentType(contentType)) {
+            container.append(emptyState('fa-film', '该文件不是可播放的视频', `响应类型为 ${contentType}`));
+            return;
+        }
+        renderMedia(container, entry, 'video');
+        return;
+    }
+    if (kind === 'binary') {
+        // 扩展名未知时，Content-Type 明确指出视频也允许用原生播放器打开。
+        const contentType = await probeContentType(fileURL(entry.path));
+        if (contentType && contentType.startsWith('video/')) {
+            renderMedia(container, entry, 'video');
+            return;
+        }
+    }
     container.append(emptyState('fa-file-shield', '该类型暂不支持在线预览', '可在右侧详情查看元数据'));
+}
+
+// probeContentType 通过 Range 读 1 字节探测响应类型；后端不支持 HEAD，只走 GET。
+async function probeContentType(src) {
+    try {
+        const res = await fetch(src, { headers: { Range: 'bytes=0-0' } });
+        const contentType = (res.headers.get('Content-Type') || '').toLowerCase();
+        if (res.body && typeof res.body.cancel === 'function') {
+            void res.body.cancel().catch(() => {});
+        }
+        return contentType;
+    } catch {
+        return '';
+    }
+}
+
+function isVideoContentType(contentType) {
+    return contentType.startsWith('video/')
+        || contentType === 'application/octet-stream'
+        || contentType.startsWith('binary/');
 }
 
 // renderText 文本预览：带行号，最近一次新增区间用绿色标记。
@@ -89,7 +133,7 @@ function renderMedia(container, entry, kind) {
         video.controls = true;
         video.preload = 'metadata';
         video.playsInline = true;
-        video.addEventListener('error', () => mediaError(wrap, '当前内嵌环境无法播放该视频编码'));
+        video.addEventListener('error', () => void reportVideoError(wrap, video, src));
         wrap.append(video);
     } else {
         const audio = document.createElement('audio');
@@ -142,11 +186,11 @@ export function renderChanges(container, fileState) {
     container.append(noteLine('仅保留最近 10 次操作的视觉标记'));
 }
 
-// renderDetails 右侧详情：固定字段 + AI 状态 + 沙箱入口。
-export function renderDetails(container, entry, meta, fileState, onRun) {
+// renderDetails 右侧详情：管理入口 + 固定字段 + AI 状态 + 沙箱入口。
+export function renderDetails(container, entry, meta, fileState, onRun, actions) {
     container.replaceChildren();
     if (!entry) {
-        container.append(emptyState('fa-hand-pointer', '选择左侧文件查看详情', ''));
+        container.append(emptyState('fa-hand-pointer', '选择文件查看详情', ''));
         return;
     }
     const head = document.createElement('div');
@@ -163,6 +207,20 @@ export function renderDetails(container, entry, meta, fileState, onRun) {
     head.append(titleRow, path);
     container.append(head);
 
+    // 重命名 / 移动 / 删除从主显示区迁到这里，主显示区只保留浏览与刷新。
+    if (!entry.dir && actions) {
+        const manage = section('管理');
+        const bar = document.createElement('div');
+        bar.className = 'detail-actions';
+        bar.append(
+            actionButton('fa-pen', '重命名', actions.onRename),
+            actionButton('fa-folder-open', '移动', actions.onMove),
+            actionButton('fa-trash', '删除', actions.onDelete, true),
+        );
+        manage.append(bar);
+        container.append(manage);
+    }
+
     const info = section('文件信息');
     info.append(row('类型', entry.dir ? '文件夹' : (extLabel(entry.name) || '未知')));
     info.append(row('大小', humanSize(entry.size)));
@@ -178,12 +236,7 @@ export function renderDetails(container, entry, meta, fileState, onRun) {
         container.append(metaSection);
 
         const gcSection = section('回收状态');
-        gcSection.append(row('结算周期', `每 ${(meta && meta.gc_cycle_hours) || 12} 小时`));
         gcSection.append(gcStatusRow(meta));
-        const note = document.createElement('div');
-        note.className = 'detail-note';
-        note.textContent = '只有 multimedia 根媒体与哈希命名的临时音频参与结算；文档、子目录与命名音频永不被积分回收。未被取用时每次 -1，被取用时 +1，积分降到 -20 触发回收；在资源库打开或 AI 读取都算一次取用。';
-        gcSection.append(note);
         container.append(gcSection);
 
         const ai = section('AI 操作状态');
@@ -260,16 +313,17 @@ function descriptionRow(meta) {
     return wrap;
 }
 
-// gcStatusRow 用「还剩几次结算」替代裸积分，让用户能直接读懂回收时点。
+// gcStatusRow 回收预期：把剩余结算次数折算成小时，直接给出销毁时点。
 function gcStatusRow(meta) {
-    const wrap = row('回收预计', '');
+    const wrap = row('回收预期', '');
     const value = wrap.querySelector('.v');
     if (!meta) {
         value.textContent = '—';
         return wrap;
     }
+    // 不在回收范围的资源不会被积分回收，也就没有销毁时点。
     if (!meta.gc_tracked) {
-        value.textContent = '不在回收范围';
+        value.textContent = '永不销毁';
         return wrap;
     }
     if (meta.state === 'lost') {
@@ -278,11 +332,19 @@ function gcStatusRow(meta) {
         return wrap;
     }
     const cycles = Number(meta.gc_cycles_left || 0);
+    const cycleHours = Number(meta.gc_cycle_hours || 12);
     value.className = cycles <= 3 ? 'v bad' : cycles <= 8 ? 'v warn' : 'v';
-    value.textContent = meta.gc_protected
-        ? `持续未用约 ${cycles} 次结算后回收本体（描述保留）`
-        : `持续未用约 ${cycles} 次结算后回收`;
+    value.textContent = `预计 ${cycles * cycleHours} 小时后销毁`;
     return wrap;
+}
+
+// actionButton 详情里的管理操作按钮，样式沿用主显示区的玻璃按钮。
+function actionButton(icon, label, handler, danger = false) {
+    const btn = document.createElement('button');
+    btn.className = `btn-glass btn-sm${danger ? ' danger' : ''}`;
+    btn.innerHTML = `<i class="fas ${icon}"></i><span>${label}</span>`;
+    btn.addEventListener('click', () => handler && handler());
+    return btn;
 }
 
 function section(titleText) {
@@ -322,6 +384,51 @@ function changeLine(kind, text, language) {
     else code.textContent = text;
     line.append(mark, code);
     return line;
+}
+
+// 视频编码四字符码 → 可读名称（MP4 的 stsd 盒内会出现这些标识）。
+const VIDEO_CODEC_LABELS = {
+    hvc1: 'HEVC (H.265)',
+    hev1: 'HEVC (H.265)',
+    av01: 'AV1',
+    vp09: 'VP9',
+    vp08: 'VP8',
+    avc1: 'H.264 (AVC)',
+};
+
+// reportVideoError 播放失败时给出可读原因：媒体错误码 + 实际编码探测，
+// 避免静默黑屏；编码是否被内核支持由浏览器决定，这里只解释失败原因。
+async function reportVideoError(wrap, video, src) {
+    const error = video.error;
+    const code = error && error.code ? `媒体错误 ${error.code}` : '';
+    const message = error && error.message ? error.message : '';
+    const codec = await sniffVideoCodec(src);
+    const reason = codec
+        ? `检测到 ${codec} 编码，当前浏览器内核不支持该编码`
+        : '可能是 HEVC/H.265、AV1 编码或 MKV 封装，当前浏览器内核无法解码';
+    const detail = [code, message].filter(Boolean).join('，');
+    mediaError(wrap, detail ? `无法播放该视频（${detail}）：${reason}` : `无法播放该视频：${reason}`);
+}
+
+// sniffVideoCodec 读取文件首尾片段并查找 MP4 编码标识。
+// moov 盒可能位于文件头或文件尾，因此两段都探测；仅在播放失败时调用。
+async function sniffVideoCodec(src) {
+    const decoder = new TextDecoder('latin1');
+    const readRange = async (range) => {
+        try {
+            const res = await fetch(src, { headers: { Range: range } });
+            if (!res.ok) return '';
+            return decoder.decode(await res.arrayBuffer());
+        } catch {
+            return '';
+        }
+    };
+    const text = await readRange('bytes=0-262143') + await readRange('bytes=-262144');
+    for (const [fourcc, label] of Object.entries(VIDEO_CODEC_LABELS)) {
+        if (text.includes(fourcc)) return label;
+    }
+    if (text.includes('matroska')) return 'Matroska (MKV)';
+    return '';
 }
 
 // mediaError 解码失败时给出可读说明，而不是留一片空白。

@@ -2,17 +2,17 @@ package thinking
 
 // tick_runtime.go 月华接入引擎 Tick 运行时的声明层。
 //
-// 调度规则（忙让出、强制事件抢占、优先级排序、空闲冷却与状态持久化）全部由
-// chain/thinking/tickloop 提供；本文件只声明月华的快照来源与宿主钩子，不重复实现调度。
+// 调度规则（忙让出、特许响应、强制事件抢占、优先级排序、空闲冷却与状态持久化）
+// 全部由 chain/thinking/tickloop 提供；本文件只声明月华的快照来源与宿主钩子。
 
 import (
 	"fmt"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/Responder"
 	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/chain/life"
 	"LunarSubsystem/LunarHarness/chain/thinking/tickloop"
+	"LunarSubsystem/LunarHarness/engine/tickpermit"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
@@ -30,7 +30,7 @@ func newTickScheduler() *tickScheduler {
 				SalvagePending: Savior.Pending(),
 			}
 		},
-		Busy:          Responder.Busy,
+		Permit:        tickpermit.Default(),
 		Forced:        life.HasPendingEvent,
 		NotifyIdle:    func() { notifyIdleHook() },
 		IdleThreshold: life.IdleThreshold,

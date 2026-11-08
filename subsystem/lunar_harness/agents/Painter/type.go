@@ -31,11 +31,15 @@ type Result struct {
 	Handles []string
 }
 
-// Reference 对话者传给绘制者的参考图。
+// Reference 交给绘制者的参考图。
 type Reference struct {
 	Handle string
 	Source string
 	Desc   string
+	// Extras 附加参考图：仅用于视觉对照，图生图基座始终是第一张
+	Extras []Reference
+	// Explicit 显式请求：true 且没有可用参考图时禁止沿用运行时画作
+	Explicit bool
 }
 
 // ReferenceState 任务级参考图状态。
@@ -142,16 +146,19 @@ type chatCall struct {
 
 // session 单次绘制任务的编排状态。
 type session struct {
-	ctx         context.Context
-	env         Env
-	prompts     *PromptLibrary
-	custom      map[string]CustomCharacterProfile
-	reference   ReferenceState
-	fromRuntime bool
-	resultPath  string
-	runtime     []chatMessage
-	artwork     ReferenceState
-	task        any
+	ctx          context.Context
+	env          Env
+	prompts      *PromptLibrary
+	custom       map[string]CustomCharacterProfile
+	reference    ReferenceState
+	extras       []ReferenceState
+	textOnly     bool
+	forceImg2Img bool
+	fromRuntime  bool
+	resultPath   string
+	runtime      []chatMessage
+	artwork      ReferenceState
+	task         any
 }
 
 // runtimeState 跨任务保留的运行时画作与最近作品路径。

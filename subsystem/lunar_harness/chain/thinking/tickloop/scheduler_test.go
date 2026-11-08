@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/tickpermit"
 )
 
 type testSnapshot struct {
@@ -276,6 +278,53 @@ func TestSchedulerDialoguePreemptsViewingAcrossTicks(t *testing.T) {
 	if s.state.LastSystem != "viewing" || viewing.runCount() != 2 {
 		t.Fatalf("回应结束后观影应继续，实际 %s（%d 次）", s.state.LastSystem, viewing.runCount())
 	}
+}
+
+// TestSchedulerPermitAllowsResponseLane 单循环下的特许响应车道：
+// 对话步骤阻塞在工具等待时，只有持有特许才允许响应链并行，且生活链始终不得插入。
+func TestSchedulerPermitAllowsResponseLane(t *testing.T) {
+	permit := tickpermit.New()
+	s := New(Hooks[testSnapshot]{
+		StateFile: "",
+		Snapshot:  func(int) testSnapshot { return testSnapshot{} },
+		Permit:    permit,
+	})
+	dialogueStarted := make(chan struct{})
+	dialogueBlock := make(chan struct{})
+	dialogue := &fakeSystem{id: "dialogue", priority: 300, ready: true, reason: "unread", started: dialogueStarted, block: dialogueBlock}
+	response := &fakeSystem{id: "response", priority: 260, ready: true, reason: "pending"}
+	lifeSys := &fakeSystem{id: "life", priority: 100, ready: true, reason: "cooldown"}
+	s.Register(lifeSys)
+	s.Register(response)
+	s.Register(dialogue)
+
+	s.Tick()
+	<-dialogueStarted
+
+	// 没有特许时，对话步骤运行期间不允许任何其他链插入。
+	s.Tick()
+	if response.runCount() != 0 || lifeSys.runCount() != 0 {
+		t.Fatalf("无特许时不应插入其他链，response=%d life=%d", response.runCount(), lifeSys.runCount())
+	}
+
+	responseStarted := make(chan struct{})
+	response.started = responseStarted
+	permit.Begin("dialogue", time.Minute)
+	s.Tick()
+	select {
+	case <-responseStarted:
+	case <-time.After(time.Second):
+		t.Fatal("特许期间响应链未获得执行机会")
+	}
+	if lifeSys.runCount() != 0 {
+		t.Fatalf("特许期间只允许响应链，生活链却运行了 %d 次", lifeSys.runCount())
+	}
+
+	if !permit.End(time.Second) {
+		t.Fatal("End 应在响应步骤结束后返回")
+	}
+	close(dialogueBlock)
+	s.wg.Wait()
 }
 
 // TestSchedulerKeepIdleAdvancesCounter 接管空闲的体系（KeepIdle）运行后冷却 +1 而非重置。

@@ -8,7 +8,11 @@ async function getJSON(url) {
     if (!res.ok) {
         throw new Error(await textOfError(res));
     }
-    return res.json();
+    const data = await res.json();
+    if (data && data.ok === false) {
+        throw new Error(data.error || `请求失败（HTTP ${res.status}）`);
+    }
+    return data;
 }
 
 // postJSON 统一 POST 请求。
@@ -28,7 +32,15 @@ async function postJSON(url, body) {
 async function textOfError(res) {
     try {
         const text = (await res.text()).trim();
-        return text || `请求失败（HTTP ${res.status}）`;
+        if (!text) return `请求失败（HTTP ${res.status}）`;
+        // 后端错误响应多为 {ok:false,error}，优先取可读原因。
+        try {
+            const data = JSON.parse(text);
+            if (data && data.error) return data.error;
+        } catch {
+            // 非 JSON，按原文返回。
+        }
+        return text;
     } catch {
         return `请求失败（HTTP ${res.status}）`;
     }
@@ -75,6 +87,78 @@ export function moveFile(path, target) {
 // deleteFile 删除文件。
 export function deleteFile(path) {
     return postJSON(`${BASE}/delete`, { path });
+}
+
+// submitCreation 提交创作任务：mode=assigned 需要 description，mode=random 自主选题。
+// options: { mode, description, handle, handles }；返回 { ok, task }。
+export function submitCreation(options = {}) {
+    return postJSON(`${BASE}/create`, {
+        mode: options.mode || 'assigned',
+        description: options.description || '',
+        handle: options.handle || '',
+        handles: options.handles || [],
+    });
+}
+
+// fetchCreationTask 查询创作任务进度与结果。
+export function fetchCreationTask(taskId) {
+    return getJSON(`${BASE}/create/status?task_id=${encodeURIComponent(taskId)}`);
+}
+
+// fetchCreationTasks 最近创作任务列表。
+export function fetchCreationTasks(limit = 20) {
+    return getJSON(`${BASE}/create/list?limit=${encodeURIComponent(limit)}`);
+}
+
+// fetchDBTables 只读：数据库表 / 视图清单。
+export function fetchDBTables(path) {
+    return getJSON(`${BASE}/db/tables?path=${encodeURIComponent(path)}`);
+}
+
+// fetchDBSchema 只读：单表列结构。
+export function fetchDBSchema(path, table) {
+    return getJSON(`${BASE}/db/schema?path=${encodeURIComponent(path)}&table=${encodeURIComponent(table)}`);
+}
+
+// fetchDBRows 只读：单表分页行数据。
+// options: { offset, limit, sort, order }
+export function fetchDBRows(path, table, options = {}) {
+    const query = new URLSearchParams({ path, table });
+    if (options.offset) query.set('offset', String(options.offset));
+    if (options.limit) query.set('limit', String(options.limit));
+    if (options.sort) query.set('sort', options.sort);
+    if (options.order) query.set('order', options.order);
+    return getJSON(`${BASE}/db/rows?${query.toString()}`);
+}
+
+// runDBQuery 只读：执行一条 SELECT / PRAGMA 查询 / EXPLAIN，返回表格数据。
+export function runDBQuery(path, sql) {
+    return postJSON(`${BASE}/db/query`, { path, sql });
+}
+
+// generateDBSQL 只读：把自然语言需求翻译成一条只读 SQL（不执行）。
+export function generateDBSQL(path, question) {
+    return postJSON(`${BASE}/db/ai-sql`, { path, question });
+}
+
+// fetchArchive 只读：压缩包指定目录的条目分页。
+export function fetchArchive(path, dir = '', offset = 0, limit = 200) {
+    const query = new URLSearchParams({ path, limit: String(limit) });
+    if (dir) query.set('dir', dir);
+    if (offset) query.set('offset', String(offset));
+    return getJSON(`${BASE}/archive?${query.toString()}`);
+}
+
+// resolveHandle 按资源句柄解析资源目录条目（blob_path 相对 LocalDir）。
+export async function resolveHandle(handle) {
+    const res = await fetch(`/file/resource/resolve?handle=${encodeURIComponent(handle)}`, {
+        headers: { Accept: 'application/json' },
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || data.success === false || !data.resource) {
+        throw new Error((data && data.error) || `句柄解析失败（HTTP ${res.status}）`);
+    }
+    return data.resource;
 }
 
 // fileURL 生成内容读取地址（逐段编码，保留路径分隔符）。

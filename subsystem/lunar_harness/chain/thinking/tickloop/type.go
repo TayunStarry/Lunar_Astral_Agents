@@ -8,6 +8,24 @@ package tickloop
 import (
 	"context"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/tickpermit"
+)
+
+// Kind 体系类别，用于特许运行与优先级策略。
+type Kind int
+
+const (
+	// KindThinking 思维链：人格对话，优先级最高。
+	KindThinking Kind = iota
+	// KindMaintenance 后勤 / 故障修复。
+	KindMaintenance
+	// KindJob 用户发起的后台任务（演绎）。
+	KindJob
+	// KindResponse 外部响应链。
+	KindResponse
+	// KindLife 生活链。
+	KindLife
 )
 
 // System 可注册的 Tick 体系。
@@ -21,6 +39,28 @@ type System[S any] interface {
 	Ready(S) (bool, string)
 	IdleReset() int
 	Run(ctx context.Context) error
+}
+
+// kinded 可选能力：声明体系类别；未声明时按 ID 推断。
+type kinded interface {
+	Kind() Kind
+}
+
+// KindOf 返回体系类别；未显式声明时按 ID 推断。
+func KindOf[S any](system System[S]) Kind {
+	if item, ok := system.(kinded); ok {
+		return item.Kind()
+	}
+	switch system.ID() {
+	case "life":
+		return KindLife
+	case "logistics":
+		return KindMaintenance
+	case "response":
+		return KindResponse
+	default:
+		return KindThinking
+	}
 }
 
 // idleKeeper 可选能力：把本次运行当作一格空闲推进（冷却 +1 而不是重置）。
@@ -38,9 +78,9 @@ type Hooks[S any] struct {
 	PersistEveryN int
 	// Snapshot 按当前空闲进度构造体系判定所需的快照。
 	Snapshot func(idleTicks int) S
-	// Busy 报告宿主是否有独占模型的任务在跑（为 true 时本 Tick 让出）。
-	Busy func() bool
-	// Forced 报告是否存在需要抢占执行的强制事件（为 true 时只触发 ID 为 life 的体系）。
+	// Permit 特许运行控制器：思考链让出 Tick 期间只允许响应链并行。
+	Permit *tickpermit.Controller
+	// Forced 报告是否存在需要抢占执行的强制事件（为 true 时只允许 life 体系）。
 	Forced func() bool
 	// NotifyIdle 空闲 Tick 通知（不放行任何体系时调用）。
 	NotifyIdle func()

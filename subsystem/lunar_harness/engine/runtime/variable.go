@@ -19,5 +19,9 @@ const (
 // engine 层不得反向 import agents，故以函数钩子解耦；未注入时 agent.search 返回「能力未装配」。
 var AgentSearchFunc func(instruction string) (string, error)
 
+// AgentLLMFunc 进程内通用推理实现，由装配层（app）注入（agents/RuntimeChat）。
+// 返回正文与工具调用；engine 层不得反向 import agents，故以函数钩子解耦。
+var AgentLLMFunc func(messages []any, opts map[string]any) (string, []any, error)
+
 // nowNano 当前纳秒时间戳（运行时 id 生成用）。
 func nowNano() int64 { return time.Now().UnixNano() }

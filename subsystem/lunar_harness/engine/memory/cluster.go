@@ -135,15 +135,18 @@ func (d *Store) VerifyReplacementSimilarity(ctx context.Context, oldIDs []string
 	}
 
 	dimension := len(sources[0])
-	alignedSources := sources[:0]
+	if dimension == 0 {
+		return fmt.Errorf("来源记忆正文向量为空，无法校验")
+	}
+	// 维度不一致时不能静默跳过：跳过的来源仍会被 ReplaceTexts 删除，
+	// 等于「删了但没校验」。这里直接失败，让上层保留原条目。
+	alignedSources := make([][]float32, 0, len(sources))
 	for _, vec := range sources {
 		if len(vec) != dimension {
-			continue
+			return fmt.Errorf("来源记忆正文向量维度不一致（期望 %d，实际 %d），拒绝在未完整校验前删除旧记忆",
+				dimension, len(vec))
 		}
 		alignedSources = append(alignedSources, vec)
-	}
-	if len(alignedSources) == 0 {
-		return fmt.Errorf("来源记忆向量维度不一致，无法校验")
 	}
 	threshold = normalizeClusterThreshold(threshold)
 
@@ -200,6 +203,11 @@ func (d *Store) collectTextCandidates(collectionName string, ids []string) ([]Do
 			if documentType(doc) != TypeText || strings.TrimSpace(doc.Content) == "" || doc.URL != "" || doc.Base64 != "" {
 				skipped++
 				continue
+			}
+			// 聚类与整理校验统一用正文向量：带 tags 的条目 Embedding 是标签向量，
+			// 直接参与相似度计算会把不同正文但标签相近的记忆错误归组。
+			if len(doc.ContentEmbedding) > 0 {
+				doc.Embedding = doc.ContentEmbedding
 			}
 			out = append(out, doc)
 		}

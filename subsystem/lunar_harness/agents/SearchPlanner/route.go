@@ -1,11 +1,14 @@
 package SearchPlanner
 
-// route.go 结构化决策的解析与校验（管线注册表驱动，新增管线无需改解析逻辑）。
+// route.go 结构化决策的读取与校验（管线注册表驱动，新增管线无需改解析逻辑）。
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // routeCandidates 由注册表生成提示词里的候选管线列表
@@ -23,25 +26,49 @@ func routeCandidates() string {
 	return builder.String()
 }
 
-// parseDecision 解析并校验模型输出的 JSON 决策：
-// 未知管线或把握不足时回落检索管线，检索词统一截到上限。
-func parseDecision(raw string) (Decision, error) {
-	text := strings.TrimSpace(raw)
-	// 兼容模型把 JSON 包在 ```json 代码块或说明文字里
-	if start := strings.Index(text, "{"); start >= 0 {
-		if end := strings.LastIndex(text, "}"); end > start {
-			text = text[start : end+1]
+// decisionCall 从模型响应中取决策工具调用；正文输出、未知工具、未调用都返回明确错误。
+func decisionCall(reply agentbase.Reply) (agentbase.ToolCall, error) {
+	for _, call := range reply.ToolCalls {
+		if call.Function.Name == decisionToolName {
+			return call, nil
 		}
 	}
-	var decision Decision
-	if err := json.Unmarshal([]byte(text), &decision); err != nil {
-		return Decision{}, fmt.Errorf("不是合法的 JSON 决策: %w", err)
+	if len(reply.ToolCalls) > 0 {
+		return agentbase.ToolCall{}, fmt.Errorf("模型调用了未知工具 %q（期望 %s）", reply.ToolCalls[0].Function.Name, decisionToolName)
 	}
+	if strings.TrimSpace(reply.Text) != "" {
+		return agentbase.ToolCall{}, fmt.Errorf("模型未调用 %s 工具，而是用正文输出（正文已忽略）", decisionToolName)
+	}
+	return agentbase.ToolCall{}, fmt.Errorf("模型未调用 %s 工具", decisionToolName)
+}
+
+// decisionFromToolCall 解析并校验工具参数：
+// 未知管线或把握不足时回落检索管线，检索词统一截到上限。
+func decisionFromToolCall(call agentbase.ToolCall) (Decision, error) {
+	raw := strings.TrimSpace(call.Function.Arguments)
+	if raw == "" {
+		return Decision{}, fmt.Errorf("工具参数为空")
+	}
+	var decision Decision
+	if err := json.Unmarshal([]byte(raw), &decision); err != nil {
+		return Decision{}, fmt.Errorf("工具参数不是合法 JSON: %w", err)
+	}
+
 	decision.Pipeline = strings.ToLower(strings.TrimSpace(decision.Pipeline))
-	if !knownPipeline(decision.Pipeline) || decisionConfidence(decision) < routeConfidenceMin {
+	if decision.Pipeline == "" {
+		return Decision{}, fmt.Errorf("工具参数缺少 pipeline")
+	}
+	if !knownPipeline(decision.Pipeline) {
+		logger.Warn("CrystalAstral", "路由工具返回未知管线 %q，按检索管线处理", decision.Pipeline)
+		decision.Pipeline = PipelineSearch
+	} else if decisionConfidence(decision) < routeConfidenceMin {
 		decision.Pipeline = PipelineSearch
 	}
+
 	decision.Query = strings.Trim(strings.TrimSpace(decision.Query), "\"“”「」")
+	if decision.Query == "" {
+		logger.Warn("CrystalAstral", "路由工具未给出 query，将按用户指令检索")
+	}
 	if runes := []rune(decision.Query); len(runes) > routeQueryMaxRunes {
 		decision.Query = strings.TrimSpace(string(runes[:routeQueryMaxRunes]))
 	}

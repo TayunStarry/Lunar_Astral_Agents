@@ -7,8 +7,9 @@ package life
 // → 推理模型合并改写（输出一条或多条事实条目）→ 嵌入双向校验（新结果不跑偏、
 // 旧事实不丢失）→ 归档旧条目 → ReplaceTexts 事务替换。
 //
-// 没有任何待合并组时整轮不动作、不消耗额度；组内条目不会因为「够旧/够多」被挑选，
-// 也不存在基于条数或时间的强制淘汰兜底。
+// 没有任何待合并组时整轮不动作、不消耗额度；组内条目不会因为「够旧/够多」被挑选。
+// 整理失败不是唯一出口：同一批条目连续失败达到上限、或待处理状态超过隐身时长后，
+// 会解除待处理标记恢复检索可见（见 recordBatchFailure 与引擎 RecordPendingFailure）。
 //
 // 落库顺序必须是「先写新、再删旧」：任何一步失败都能保留原条目；
 // 引擎层 ReplaceTexts 负责写后校验（数量 + 内容指纹）与失败回滚，
@@ -213,24 +214,29 @@ func removeMemoryPlan() {
 
 // processMemoryBatch 整理一个待合并组。
 //
-// 保守处理：模型失败/空结果/没有实际合并/向量校验不通过/归档失败/替换失败时
-// 都只跳过本组，绝不删除旧条目；该组保持待处理状态等待下一轮重试，
-// 不存在基于条数或时间的强制淘汰兜底。
+// 保守处理：模型失败/空结果/向量校验不通过/归档失败/替换失败时都只跳过本组，
+// 绝不删除旧条目；该组保持待处理状态等待下一轮重试。
+// 重试不是无限隐身：失败次数与隐身时长由 recordBatchFailure 记账，
+// 达到上限或超时后由引擎解除待处理标记，让完整旧记忆重新对检索可见。
+// 模型原样返回（没有可合并内容）是合法终止态，直接解除待处理标记，不再等待下一轮。
 // 落库交给引擎 ReplaceTexts：先写新条目，校验通过后才删旧条目；失败自动回滚。
 func processMemoryBatch(ctx context.Context, planID string, index int, batch memoryBatch) error {
 	batchID := fmt.Sprintf("%s-%03d", planID, index)
 	newTexts, err := mergeBatch(ctx, batch)
 	if err != nil {
 		logger.Warn(Module, "[记忆整理] 批次 %s 合并模型不可用，保留原 %d 条记忆不动: %v", batchID, len(batch.Items), err)
+		recordBatchFailure(ctx, batchID, batch, "合并模型不可用")
 		return nil
 	}
 	if len(newTexts) == 0 {
 		logger.Warn(Module, "[记忆整理] 批次 %s 整理结果为空，保留原 %d 条记忆不动", batchID, len(batch.Items))
+		recordBatchFailure(ctx, batchID, batch, "整理结果为空")
 		return nil
 	}
 	oldTexts := batchContents(batch)
 	if sameTextSet(oldTexts, newTexts) {
-		logger.Info(Module, "[记忆整理] 批次 %s 没有可合并的相似内容，%d 条原样保留", batchID, len(batch.Items))
+		logger.Info(Module, "[记忆整理] 批次 %s 没有可合并的相似内容，%d 条原样保留并解除待处理标记", batchID, len(batch.Items))
+		releaseBatchPending(ctx, batchID, batch)
 		return nil
 	}
 	oldIDs := make([]string, 0, len(batch.Items))
@@ -240,11 +246,13 @@ func processMemoryBatch(ctx context.Context, planID string, index int, batch mem
 	// 嵌入模型校验：新条目不能跑偏，旧条目不能被丢事实；不通过就保留原条目。
 	if verifyErr := verifyHook(ctx, oldIDs, newTexts, memoryVerifyThreshold); verifyErr != nil {
 		logger.Warn(Module, "[记忆整理] 批次 %s 向量校验未通过，保留原 %d 条记忆不动: %v", batchID, len(batch.Items), verifyErr)
+		recordBatchFailure(ctx, batchID, batch, "向量校验未通过")
 		return nil
 	}
 	// 先归档旧条目再替换：归档失败就不删旧，避免淘汰后无法追溯。
 	if archiveErr := archiveMemoryBatch(batchID, batch); archiveErr != nil {
 		logger.Warn(Module, "[记忆整理] 批次 %s 归档旧条目失败，保留原记忆不动: %v", batchID, archiveErr)
+		recordBatchFailure(ctx, batchID, batch, "归档旧条目失败")
 		return nil
 	}
 	journal := memoryJournal{
@@ -257,11 +265,13 @@ func processMemoryBatch(ctx context.Context, planID string, index int, batch mem
 	}
 	if err := saveJournal(journal); err != nil {
 		logger.Warn(Module, "[记忆整理] 批次 %s 写入意图日志失败，保留原记忆不动: %v", batchID, err)
+		recordBatchFailure(ctx, batchID, batch, "意图日志写入失败")
 		return nil
 	}
 	result, err := applyReplace(ctx, &journal)
 	if err != nil {
 		// 替换失败已由引擎回滚（旧条目全部保留），本组留待下一轮重试。
+		recordBatchFailure(ctx, batchID, batch, "替换失败")
 		return nil
 	}
 	journal.Status = "done"
@@ -275,6 +285,48 @@ func processMemoryBatch(ctx context.Context, planID string, index int, batch mem
 	logger.Info(Module, "[记忆整理] 批次 %s 完成：旧 %d 条 → 新 %d 条（新建 %d、复用 %d、删除 %d）",
 		batchID, len(batch.Items), journal.AfterCount, len(result.CreatedIDs), len(result.ReusedIDs), len(result.DeletedIDs))
 	return nil
+}
+
+// pendingIDsOf 返回批次中仍处于待处理状态的条目 ID。
+func pendingIDsOf(batch memoryBatch) []string {
+	ids := make([]string, 0, len(batch.Items))
+	for _, item := range batch.Items {
+		if item.Pending {
+			ids = append(ids, item.ID)
+		}
+	}
+	return ids
+}
+
+// releaseBatchPending 整理合法终止时解除待处理标记，让原条目重新对检索可见。
+// 条目本身原样保留，不改写、不删除；伙伴条目本来可见，无需处理。
+func releaseBatchPending(ctx context.Context, batchID string, batch memoryBatch) {
+	for _, item := range batch.Items {
+		if !item.Pending {
+			continue
+		}
+		if err := pendingClearHook(ctx, item.ID); err != nil {
+			logger.Warn(Module, "[记忆整理] 批次 %s 解除待处理标记失败（保留待下轮）: ID=%s 原因=%v", batchID, item.ID, err)
+		}
+	}
+}
+
+// recordBatchFailure 为批次内的待处理条目累计一次失败。
+// 连续失败达到上限或隐身超时后，引擎会解除这些条目的待处理标记，恢复检索可见。
+// 放行的始终是完整旧记忆，不会把任何半成品整理结果暴露给检索。
+func recordBatchFailure(ctx context.Context, batchID string, batch memoryBatch, reason string) {
+	ids := pendingIDsOf(batch)
+	if len(ids) == 0 {
+		return
+	}
+	result, err := pendingFailureHook(ctx, ids, pendingMaxAttempts, pendingMaxAge)
+	if err != nil {
+		logger.Warn(Module, "[记忆整理] 批次 %s 记录失败状态出错（条目仍保持待处理）: %v", batchID, err)
+	}
+	if len(result.Released) > 0 {
+		logger.Warn(Module, "[记忆整理] 批次 %s %s，%d 条待处理记忆已放行可见（不再等待合并）: %v",
+			batchID, reason, len(result.Released), result.Released)
+	}
 }
 
 // applyReplace 调用引擎层的「先写后删」事务替换，并把校验结果记入日志。

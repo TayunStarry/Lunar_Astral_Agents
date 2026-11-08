@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/memory"
@@ -24,12 +25,17 @@ import (
 func setupConsolidateTest(t *testing.T) {
 	t.Helper()
 	resetLifeForTest(t)
-	oldMerge, oldVerify, oldReplace, oldClear := mergeHook, verifyHook, replaceHook, pendingClearHook
+	oldMerge, oldVerify, oldReplace := mergeHook, verifyHook, replaceHook
+	oldClear, oldFailure := pendingClearHook, pendingFailureHook
+	pendingFailureHook = func(context.Context, []string, int, time.Duration) (memory.PendingFailureResult, error) {
+		return memory.PendingFailureResult{}, nil
+	}
 	t.Cleanup(func() {
 		mergeHook = oldMerge
 		verifyHook = oldVerify
 		replaceHook = oldReplace
 		pendingClearHook = oldClear
+		pendingFailureHook = oldFailure
 	})
 }
 
@@ -43,6 +49,15 @@ func testBatch(ids ...string) memoryBatch {
 		})
 	}
 	return memoryBatch{Items: items}
+}
+
+// pendingTestBatch 构造带待处理标记的批次，用于验证「原样返回」终止态与失败兜底。
+func pendingTestBatch(ids ...string) memoryBatch {
+	batch := testBatch(ids...)
+	for i := range batch.Items {
+		batch.Items[i].Pending = true
+	}
+	return batch
 }
 
 // TestProcessMemoryBatchAcceptsMultipleNewEntries 一组旧条目可以输出多条整合结果，
@@ -79,12 +94,13 @@ func TestProcessMemoryBatchAcceptsMultipleNewEntries(t *testing.T) {
 	}
 }
 
-// TestProcessMemoryBatchKeepsOriginalWhenModelReturnsNothing 模型报错/空输出/
-// 无实际合并时一律保持原状：不校验、不归档、不替换、不清除待处理标记。
+// TestProcessMemoryBatchKeepsOriginalWhenModelReturnsNothing 模型报错/空输出保持待处理，
+// 「没有实际合并」（模型原样返回）则是合法终止态：解除待处理标记恢复检索可见。
 func TestProcessMemoryBatchKeepsOriginalWhenModelReturnsNothing(t *testing.T) {
 	cases := []struct {
-		name  string
-		merge func(context.Context, []string) ([]string, error)
+		name      string
+		merge     func(context.Context, []string) ([]string, error)
+		wantClear bool
 	}{
 		{
 			name: "模型调用失败",
@@ -103,17 +119,19 @@ func TestProcessMemoryBatchKeepsOriginalWhenModelReturnsNothing(t *testing.T) {
 			merge: func(_ context.Context, contents []string) ([]string, error) {
 				return append([]string(nil), contents...), nil
 			},
+			wantClear: true,
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			setupConsolidateTest(t)
-			batch := testBatch("a", "b")
+			batch := pendingTestBatch("a", "b")
 			mergeHook = c.merge
 
 			verifyCalled := false
 			replaceCalled := false
-			clearCalled := false
+			clearCount := 0
+			failureCount := 0
 			verifyHook = func(context.Context, []string, []string, float32) error {
 				verifyCalled = true
 				return nil
@@ -123,18 +141,37 @@ func TestProcessMemoryBatchKeepsOriginalWhenModelReturnsNothing(t *testing.T) {
 				return memory.ReplaceResult{}, nil
 			}
 			pendingClearHook = func(context.Context, string) error {
-				clearCalled = true
+				clearCount++
 				return nil
+			}
+			pendingFailureHook = func(context.Context, []string, int, time.Duration) (memory.PendingFailureResult, error) {
+				failureCount++
+				return memory.PendingFailureResult{}, nil
 			}
 
 			if err := processMemoryBatch(context.Background(), "mem-keep", 0, batch); err != nil {
 				t.Fatalf("保持原状不应返回错误: %v", err)
 			}
-			if verifyCalled || replaceCalled || clearCalled {
-				t.Fatalf("没有可合并内容时不应触发校验/替换/清除标记: verify=%v replace=%v clear=%v",
-					verifyCalled, replaceCalled, clearCalled)
+			if verifyCalled || replaceCalled {
+				t.Fatalf("没有可合并内容时不应触发校验/替换: verify=%v replace=%v",
+					verifyCalled, replaceCalled)
 			}
-			// 旧条目仍在归档之外的原位，且待处理组完整保留（供下轮重试）
+			if c.wantClear {
+				if clearCount != len(batch.Items) {
+					t.Fatalf("原样返回应解除全部待处理标记，期望 %d 次，实得 %d", len(batch.Items), clearCount)
+				}
+				if failureCount != 0 {
+					t.Fatalf("原样返回是合法终止态，不应记为失败，实得 %d 次", failureCount)
+				}
+			} else {
+				if clearCount != 0 {
+					t.Fatalf("失败时应保留待处理标记等待兜底，实得清除 %d 次", clearCount)
+				}
+				if failureCount != 1 {
+					t.Fatalf("失败应记账一次用于重试/超时兜底，实得 %d 次", failureCount)
+				}
+			}
+			// 旧条目仍在归档之外的原位，且待处理组完整保留
 			if len(batch.Items) != 2 {
 				t.Fatalf("原批次条目不应被改动，实得 %d", len(batch.Items))
 			}
@@ -143,11 +180,11 @@ func TestProcessMemoryBatchKeepsOriginalWhenModelReturnsNothing(t *testing.T) {
 }
 
 // TestProcessMemoryBatchKeepsOriginalWhenReplaceFails 写入失败时旧条目全部保留：
-// 事务由引擎 ReplaceTexts 负责回滚，链侧不得清除待处理标记或中断其它组；
-// 同时留下 failed 意图日志，供下一轮重放重试。
+// 事务由引擎 ReplaceTexts 负责回滚，链侧不得立即清除待处理标记或中断其它组，
+// 但要记账一次失败供重试上限/超时兜底；同时留下 failed 意图日志供下一轮重放重试。
 func TestProcessMemoryBatchKeepsOriginalWhenReplaceFails(t *testing.T) {
 	setupConsolidateTest(t)
-	batch := testBatch("a", "b")
+	batch := pendingTestBatch("a", "b")
 
 	mergeHook = func(_ context.Context, _ []string) ([]string, error) {
 		return []string{"整合后的记忆"}, nil
@@ -161,9 +198,14 @@ func TestProcessMemoryBatchKeepsOriginalWhenReplaceFails(t *testing.T) {
 		return memory.ReplaceResult{CreatedIDs: []string{"partial"}}, errors.New("写入失败")
 	}
 	clearCalled := false
+	failureCount := 0
 	pendingClearHook = func(context.Context, string) error {
 		clearCalled = true
 		return nil
+	}
+	pendingFailureHook = func(context.Context, []string, int, time.Duration) (memory.PendingFailureResult, error) {
+		failureCount++
+		return memory.PendingFailureResult{}, nil
 	}
 
 	if err := processMemoryBatch(context.Background(), "mem-fail", 0, batch); err != nil {
@@ -173,7 +215,10 @@ func TestProcessMemoryBatchKeepsOriginalWhenReplaceFails(t *testing.T) {
 		t.Fatalf("替换请求应包含组内全部旧条目，实得 %v", oldIDsSeen)
 	}
 	if clearCalled {
-		t.Fatal("替换失败时不得清除待处理标记")
+		t.Fatal("替换失败时不得立即清除待处理标记")
+	}
+	if failureCount != 1 {
+		t.Fatalf("替换失败应记账一次用于重试/超时兜底，实得 %d 次", failureCount)
 	}
 
 	// 失败日志必须保留，下一轮 recoverJournals 会重放（幂等：同文复用 + 缺失按已删）

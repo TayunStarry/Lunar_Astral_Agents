@@ -110,7 +110,11 @@ func Stream(ctx context.Context, req StreamRequest) (Reply, error) {
 	}
 	if !isNilValue(req.Tools) {
 		payload["tools"] = req.Tools
-		payload["tool_choice"] = "auto"
+		choice := strings.TrimSpace(req.ToolChoice)
+		if choice == "" {
+			choice = "auto"
+		}
+		payload["tool_choice"] = choice
 	}
 	if req.Temperature != nil {
 		payload["temperature"] = *req.Temperature
@@ -289,6 +293,7 @@ func readStreamReply(body io.Reader, role string, guard *loopguard.Guard, req St
 				reasoning.WriteString(think)
 				feedGuard(guard, loopguard.KindThink, think)
 				observeDelta(role, "think", think)
+				notifyDelta(req.OnDelta, "think", think)
 			}
 			if choice.FinishReason != nil && strings.TrimSpace(*choice.FinishReason) != "" {
 				finishReason = *choice.FinishReason
@@ -296,6 +301,7 @@ func readStreamReply(body io.Reader, role string, guard *loopguard.Guard, req St
 			if deltaContent != "" {
 				content.WriteString(deltaContent)
 				feedGuard(guard, loopguard.KindContent, deltaContent)
+				notifyDelta(req.OnDelta, "content", deltaContent)
 				if !req.DisplayAtEnd {
 					observeDelta(role, "content", displayText(req.Display, deltaContent))
 				}
@@ -441,6 +447,8 @@ func buildWholeReply(completion wholeResponse, role string, req StreamRequest) (
 	}
 	observeDelta(role, "think", reasoning)
 	observeDelta(role, "content", displayText(req.Display, text))
+	notifyDelta(req.OnDelta, "think", reasoning)
+	notifyDelta(req.OnDelta, "content", text)
 	if req.ReportTools {
 		reportToolCalls(role, message.ToolCalls)
 	}
@@ -476,6 +484,14 @@ func displayText(display func(string) string, text string) string {
 		return text
 	}
 	return display(text)
+}
+
+// notifyDelta 把增量原文交给调用方的解析回调（回调可为空）。
+func notifyDelta(onDelta func(kind, text string), kind, text string) {
+	if onDelta == nil || text == "" {
+		return
+	}
+	onDelta(kind, text)
 }
 
 // feedGuard 向循环监管送入一段增量（guard 可能为 nil）。

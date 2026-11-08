@@ -243,7 +243,7 @@ func readDocumentsFromDir(dir string) ([]Document, int, int, error) {
 		docChunks = i
 	}
 
-	embMap := make(map[string][]float32, len(allDocs))
+	embMap := make(map[string]embeddingRecord, len(allDocs))
 	embChunks := 0
 	for i := 1; ; i++ {
 		path := filepath.Join(dir, fmt.Sprintf("embeddings_%04d.json", i))
@@ -255,14 +255,15 @@ func readDocumentsFromDir(dir string) ([]Document, int, int, error) {
 			return nil, 0, 0, fmt.Errorf("读取 %s 失败: %w", path, err)
 		}
 		for _, rec := range records {
-			embMap[rec.ID] = rec.Embedding
+			embMap[rec.ID] = rec
 		}
 		embChunks = i
 	}
 
 	for j := range allDocs {
-		if vec, ok := embMap[allDocs[j].ID]; ok {
-			allDocs[j].Embedding = vec
+		if rec, ok := embMap[allDocs[j].ID]; ok {
+			allDocs[j].Embedding = rec.Embedding
+			allDocs[j].ContentEmbedding = rec.ContentEmbedding
 		}
 		// 旧数据没有 type 字段：按内容推断并回写，保证后续类型化查询可用
 		if allDocs[j].Type == "" {
@@ -390,7 +391,7 @@ func (c *Collection) saveDocumentsToFile() error {
 		embChunk := make([]embeddingRecord, end-start)
 		for j := range embChunk {
 			d := docChunk[j]
-			embChunk[j] = embeddingRecord{ID: d.ID, Embedding: d.Embedding}
+			embChunk[j] = embeddingRecord{ID: d.ID, Embedding: d.Embedding, ContentEmbedding: d.ContentEmbedding}
 		}
 		if err := atomicWriteJSON(c.embeddingsFilePath(chunkNum), embChunk); err != nil {
 			return err

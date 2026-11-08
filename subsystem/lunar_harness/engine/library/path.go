@@ -87,6 +87,49 @@ func resolveDir(rel string) (string, error) {
 	return full, nil
 }
 
+// isDBFile 是否为允许只读预览的数据库文件。
+func isDBFile(rel string) bool {
+	return dbExtensions[extOf(rel)]
+}
+
+// resolveDBPath 解析 database 目录下的数据库文件绝对路径。
+// 只接受 database/ 之下、扩展名在白名单内的普通文件；不参与句柄存储根判定。
+func resolveDBPath(rel string) (string, error) {
+	rel = normalizeRel(rel)
+	if rel == "" {
+		return "", fmt.Errorf("路径不能为空")
+	}
+	if rel != dbDirRel && !strings.HasPrefix(rel, dbDirRel+"/") {
+		return "", fmt.Errorf("只能查看 database 目录下的数据库文件")
+	}
+	if !isDBFile(rel) {
+		return "", fmt.Errorf("只支持 .db / .sqlite / .sqlite3 文件")
+	}
+	base := filepath.Join(localDir(), dbDirRel)
+	full := filepath.Clean(filepath.Join(localDir(), filepath.FromSlash(rel)))
+	if !strings.HasPrefix(full, base+string(os.PathSeparator)) {
+		return "", fmt.Errorf("路径越出数据库目录")
+	}
+	info, err := os.Stat(full)
+	if err != nil || info.IsDir() {
+		return "", fmt.Errorf("数据库文件不存在")
+	}
+	return full, nil
+}
+
+// resolveArchivePath 解析资源库内压缩包的绝对路径（必须已存在且是普通文件）。
+func resolveArchivePath(rel string) (string, error) {
+	full, err := resolve(rel)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(full)
+	if err != nil || info.IsDir() {
+		return "", fmt.Errorf("压缩包不存在")
+	}
+	return full, nil
+}
+
 // absOf 返回路径对应的绝对位置（不做存在性检查）。
 func absOf(rel string) string {
 	return filepath.Join(localDir(), filepath.FromSlash(normalizeRel(rel)))

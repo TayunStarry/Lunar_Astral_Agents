@@ -17,6 +17,10 @@ const (
 	planStateVersion = 1
 	// recentWindow 事项类型排除窗口：最近 N 次选中的类型不再立刻重抽
 	recentWindow = 2
+	// targetWindow 具体目标排除窗口：最近 N 个绘画题材不再立刻重抽
+	targetWindow = 3
+	// paintTargetsFile 绘图目标池的可选配置文件（相对 LocalDir）；存在时覆盖内置池
+	paintTargetsFile = "database/life/creation_targets.json"
 	// maxParked 暂存的未完成事项上限，超出时丢弃最早的一条
 	maxParked = 8
 )

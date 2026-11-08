@@ -49,9 +49,8 @@
             -webkit-user-drag: none;
         }
 
-        /* 视频模式由引擎切换显示；预取元素只用于提前拉取元数据 */
-        #gif-video,
-        #gif-prefetch {
+        /* 视频模式由引擎切换显示 */
+        #gif-video {
             display: none;
             background: transparent;
         }
@@ -101,7 +100,6 @@
         <div id="gif-layer">
             <img id="gif-frame" alt="" draggable="false">
             <video id="gif-video" muted playsinline preload="auto" disablepictureinpicture></video>
-            <video id="gif-prefetch" muted playsinline preload="metadata" disablepictureinpicture></video>
         </div>
     </div>
 

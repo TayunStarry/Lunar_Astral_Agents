@@ -67,6 +67,7 @@ var itemSpecs = []itemSpec{
 	{Kind: KindStory, Label: "创作小故事", Build: buildStory},
 	{Kind: KindTidy, Label: "整理本地文件夹", Build: buildTidy},
 	{Kind: KindJoke, Label: "向 QQ 推送小笑话", NeedsQQ: true, Build: buildJoke},
+	{Kind: KindPaint, Label: "自主绘制作画", Build: buildPaint},
 }
 
 // kindLabel 返回事项类型的中文名。

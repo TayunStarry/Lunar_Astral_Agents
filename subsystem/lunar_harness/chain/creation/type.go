@@ -33,10 +33,116 @@ type toolHandlerFunc func(name string, args map[string]any) (outcome toolOutcome
 
 // planStep 一个按严格顺序执行的调度项。
 type planStep struct {
-	Agent string `json:"agent"` // writer / engineer / researcher / runner
+	Agent string `json:"agent"` // writer / engineer / researcher / runner / painter
 	Task  string `json:"task"`  // 自然语言执行目标与操作要求
+	// Paint 图片绘制交接信息；agent=painter 时必填，避免把绘图退化成自然语言描述
+	Paint *paintBrief `json:"paint,omitempty"`
 	// Expect 规划预期：该步骤完成后应满足的客观事实，用于自动审查
 	Expect []fileflow.Expect `json:"expect,omitempty"`
+}
+
+// paintBrief 交给图片绘制智能体的结构化绘图需求。
+type paintBrief struct {
+	// Prompt 画面描述（主体、构图、光线、细节）
+	Prompt string `json:"prompt"`
+	// Ratio 尺寸 / 画幅（如 1:1、16:9、3:4）
+	Ratio string `json:"ratio,omitempty"`
+	// Style 风格约束
+	Style string `json:"style,omitempty"`
+	// References 参考资源（图片句柄 / 文档锚点 / 本机图片路径）；第一张作为图生图基座
+	References []string `json:"references,omitempty"`
+	// Change 基于参考图要改什么（如换背景、换服饰、改画风）；有参考图时必填
+	Change string `json:"change,omitempty"`
+	// Output 输出去向说明（资源目录或期望句柄），可空
+	Output string `json:"output,omitempty"`
+}
+
+// PaintRequest 创作链交给图片绘制智能体的完整需求。
+type PaintRequest struct {
+	// Prompt 画面描述
+	Prompt string
+	// Ratio 尺寸 / 画幅
+	Ratio string
+	// Style 风格约束
+	Style string
+	// References 参考资源（图片句柄 / 文档锚点 / 本机图片路径）
+	References []string
+	// Change 基于参考图要改什么
+	Change string
+	// Output 输出去向说明（资源目录或期望句柄），可空
+	Output string
+	// Task 调度者给出的原始任务描述，供图片绘制智能体理解上下文
+	Task string
+}
+
+// PaintResult 图片绘制的产出。
+type PaintResult struct {
+	// Summary 绘制过程或结果摘要
+	Summary string
+	// Handles 产出的图片资源句柄
+	Handles []string
+}
+
+// SubmitRequest 资源库提交的创作任务。
+type SubmitRequest struct {
+	// Mode assigned（有明确描述）或 random（随机目标池自主选题）
+	Mode string
+	// Description 自然语言描述；random 模式可空
+	Description string
+	// Handles 目标资源句柄
+	Handles []string
+}
+
+// TaskView 创作任务对外可见的状态与结果。
+type TaskView struct {
+	TaskID    string   `json:"task_id"`
+	Mode      string   `json:"mode"`
+	Status    string   `json:"status"`
+	Stage     string   `json:"stage,omitempty"`
+	Progress  int      `json:"progress"`
+	Summary   string   `json:"summary,omitempty"`
+	Handles   []string `json:"handles,omitempty"`
+	Error     string   `json:"error,omitempty"`
+	CreatedAt string   `json:"created_at"`
+	UpdatedAt string   `json:"updated_at"`
+}
+
+// taskState 内存中的任务记录。
+type taskState struct {
+	view TaskView
+}
+
+// ProgressEvent 创作流程进度事件（供任务管理与前端查询）。
+type ProgressEvent struct {
+	// Status queued / planning / executing / completed / failed
+	Status string
+	// Stage 当前阶段的可读说明
+	Stage string
+	// Progress 0-100
+	Progress int
+	// Summary 阶段结果摘要
+	Summary string
+	// Handles 当前已产出的资源句柄
+	Handles []string
+}
+
+// pathSnapshotNode 路径树快照中的一个条目（相对 LocalDir）。
+type pathSnapshotNode struct {
+	Rel string
+	Dir bool
+}
+
+// pathRootCount 单个根目录下的文件与目录数量。
+type pathRootCount struct {
+	Files int
+	Dirs  int
+}
+
+// pathSnapshotCache 路径树快照缓存：Key 为 LocalDir，BuiltAt 留零值即视为失效。
+type pathSnapshotCache struct {
+	Key     string
+	Text    string
+	BuiltAt time.Time
 }
 
 // planResult 调度者输出的本轮计划。
@@ -68,6 +174,8 @@ type stepResult struct {
 	Result  string `json:"result,omitempty"`
 	Skipped bool   `json:"skipped"`
 	Error   string `json:"error,omitempty"`
+	// Handles 本步骤产出的资源句柄（图片绘制步骤会回填）
+	Handles []string `json:"handles,omitempty"`
 	// ReviewFailures 本步骤内审查失败并回滚的上下文
 	ReviewFailures []string `json:"review_failures,omitempty"`
 }
@@ -93,6 +201,21 @@ type session struct {
 	flow      *fileflow.Context
 	current   *planStep
 	stepIndex int
+	// paintHandles 图片绘制智能体本轮产出的资源句柄
+	paintHandles []string
+	// observe 进度观察器；为空表示不对外推送进度
+	observe func(ProgressEvent)
+}
+
+// report 向进度观察器推送一次事件（观察器为空时忽略）。
+func (s *session) report(event ProgressEvent) {
+	if s.observe == nil {
+		return
+	}
+	if len(event.Handles) == 0 {
+		event.Handles = append([]string(nil), s.paintHandles...)
+	}
+	s.observe(event)
 }
 
 // ==== 路由与文件操作流程类型 ====

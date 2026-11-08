@@ -1,4 +1,4 @@
-// model.js 前端数据模型：类型判定、目录树组装、格式化。
+// model.js 前端数据模型：类型判定、目录子项筛选、格式化。
 
 const TEXT_EXTS = new Set([
     '.txt', '.md', '.markdown', '.json', '.jsonl', '.ndjson', '.log', '.csv', '.tsv',
@@ -11,6 +11,8 @@ const TEXT_EXTS = new Set([
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.ico', '.apng', '.tif', '.tiff', '.avif']);
 const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mkv', '.mov', '.avi', '.wmv', '.flv', '.m4v', '.mpg', '.mpeg']);
 const AUDIO_EXTS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac', '.opus', '.wma']);
+const DATABASE_EXTS = new Set(['.db', '.sqlite', '.sqlite3']);
+const ARCHIVE_SUFFIXES = ['.tar.gz', '.tgz', '.zip', '.tar', '.gz'];
 const RUNNABLE_EXTS = new Set(['.js', '.mjs', '.html', '.htm']);
 
 // extOf 小写扩展名。
@@ -19,9 +21,13 @@ export function extOf(name) {
     return idx >= 0 ? name.slice(idx).toLowerCase() : '';
 }
 
-// kindOf 预览类型：text / image / video / audio / binary。
+// kindOf 预览类型：text / image / video / audio / database / archive / binary。
 export function kindOf(name) {
+    const lower = String(name || '').toLowerCase();
+    // 复合扩展名优先：.tar.gz 的 extOf 只会得到 .gz。
+    if (ARCHIVE_SUFFIXES.some((suffix) => lower.endsWith(suffix))) return 'archive';
     const ext = extOf(name);
+    if (DATABASE_EXTS.has(ext)) return 'database';
     if (IMAGE_EXTS.has(ext)) return 'image';
     if (VIDEO_EXTS.has(ext)) return 'video';
     if (AUDIO_EXTS.has(ext)) return 'audio';
@@ -65,44 +71,40 @@ export function formatTime(seconds) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-// buildTree 扁平条目 → 按根组织的树。
-export function buildTree(entries, roots) {
-    const rootNodes = roots.map((root) => ({
-        name: root, path: root, dir: true, root: true, expanded: true, children: [],
-    }));
-    const byPath = new Map(rootNodes.map((node) => [node.path, node]));
-    for (const entry of entries) {
-        const node = {
-            name: entry.name,
-            path: entry.path,
-            dir: entry.dir,
-            root: false,
-            size: entry.size,
-            mtime: entry.mtime,
-            children: [],
-        };
-        byPath.set(node.path, node);
-        const slash = entry.path.lastIndexOf('/');
-        const parentPath = slash >= 0 ? entry.path.slice(0, slash) : entry.root;
-        const parent = byPath.get(parentPath) || byPath.get(entry.root);
-        if (parent) parent.children.push(node);
-    }
-    const sortNodes = (nodes) => {
-        nodes.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name, 'zh-Hans-CN') : a.dir ? -1 : 1));
-        nodes.forEach((node) => sortNodes(node.children));
-    };
-    sortNodes(rootNodes);
-    return rootNodes;
+// parentPathOf 条目的父目录路径（存储根本身不参与展示）。
+export function parentPathOf(entry) {
+    const slash = entry.path.lastIndexOf('/');
+    return slash >= 0 ? entry.path.slice(0, slash) : '';
 }
 
-// childrenOf 目录节点下的直接子项。
+// childrenOf 目录下的直接子项；dirPath 为空串时返回所有存储根的直接子项。
+// database 是扁平视图：直接返回其所有子目录中的库文件，不再保留中间层级。
 export function childrenOf(entries, dirPath) {
+    if (dirPath === 'database') {
+        return entries.filter((entry) => !entry.dir && entry.path.startsWith('database/'));
+    }
     return entries.filter((entry) => {
         if (entry.dir && entry.path === dirPath) return false;
-        const slash = entry.path.lastIndexOf('/');
-        const parent = slash >= 0 ? entry.path.slice(0, slash) : entry.root;
+        const parent = parentPathOf(entry);
+        if (dirPath === '') {
+            // 顶层目录（如 database）直接展示；4 个句柄存储根仍按原规则拍平。
+            if (parent === '') return entry.dir;
+            return parent !== 'database' && !parent.includes('/');
+        }
         return parent === dirPath;
     });
+}
+
+// rootLabel 存储根的中文名，用于在去掉存储根层后仍能区分资源归属。
+export function rootLabel(root) {
+    switch (root) {
+        case 'documents': return '文档';
+        case 'audios': return '音频';
+        case 'multimedia': return '多媒体';
+        case 'unknown': return '未知';
+        case 'database': return '数据库';
+        default: return root || '';
+    }
 }
 
 // parentOf 上级路径（根目录返回空串）。

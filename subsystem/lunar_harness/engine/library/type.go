@@ -146,3 +146,107 @@ type MetaResponse struct {
 	Meta  Metadata `json:"meta"`
 	Error string   `json:"error,omitempty"`
 }
+
+// DBTable 数据库中的一张表或视图。
+type DBTable struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// DBColumn 表结构中的一列。
+type DBColumn struct {
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	NotNull bool   `json:"not_null"`
+	PK      bool   `json:"pk"`
+	Default string `json:"default"`
+}
+
+// DBTablesResponse 数据库表清单回执。
+type DBTablesResponse struct {
+	OK     bool      `json:"ok"`
+	Path   string    `json:"path"`
+	Tables []DBTable `json:"tables"`
+	Error  string    `json:"error,omitempty"`
+}
+
+// DBSchemaResponse 表结构回执。
+type DBSchemaResponse struct {
+	OK      bool       `json:"ok"`
+	Path    string     `json:"path"`
+	Table   string     `json:"table"`
+	Columns []DBColumn `json:"columns"`
+	Error   string     `json:"error,omitempty"`
+}
+
+// DBRowsResponse 分页行数据回执。Rows 按 Columns 顺序排列，值已转为可 JSON 化的标量。
+type DBRowsResponse struct {
+	OK      bool     `json:"ok"`
+	Path    string   `json:"path"`
+	Table   string   `json:"table"`
+	Columns []string `json:"columns"`
+	Rows    [][]any  `json:"rows"`
+	Total   int      `json:"total"`
+	Offset  int      `json:"offset"`
+	Limit   int      `json:"limit"`
+	Sort    string   `json:"sort"`
+	Order   string   `json:"order"`
+	Error   string   `json:"error,omitempty"`
+}
+
+// DBQueryRequest 只读 SQL 执行请求。
+type DBQueryRequest struct {
+	Path string `json:"path"`
+	SQL  string `json:"sql"`
+}
+
+// DBQueryResponse 只读 SQL 执行回执。Rows 按 Columns 顺序排列，值已转为可 JSON 化的标量。
+type DBQueryResponse struct {
+	OK        bool     `json:"ok"`
+	Path      string   `json:"path"`
+	SQL       string   `json:"sql"`
+	Columns   []string `json:"columns"`
+	Rows      [][]any  `json:"rows"`
+	RowCount  int      `json:"row_count"`
+	Truncated bool     `json:"truncated"`
+	ElapsedMS int64    `json:"elapsed_ms"`
+	Error     string   `json:"error,omitempty"`
+}
+
+// DBSQLRequest 自然语言转 SQL 请求。
+type DBSQLRequest struct {
+	Path     string `json:"path"`
+	Question string `json:"question"`
+}
+
+// DBSQLResponse 自然语言转 SQL 回执：只返回一条只读 SQL，不执行。
+type DBSQLResponse struct {
+	OK    bool   `json:"ok"`
+	Path  string `json:"path"`
+	SQL   string `json:"sql"`
+	Error string `json:"error,omitempty"`
+}
+
+// ArchiveEntry 压缩包内一个条目（只读元数据，不解压内容）。
+type ArchiveEntry struct {
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	Type     string `json:"type"`
+	Size     int64  `json:"size"`
+	Modified int64  `json:"modified"`
+}
+
+// ArchiveResponse 压缩包条目分页回执。
+type ArchiveResponse struct {
+	OK        bool           `json:"ok"`
+	Path      string         `json:"path"`
+	Format    string         `json:"format"`
+	Dir       string         `json:"dir"`
+	Entries   []ArchiveEntry `json:"entries"`
+	Total     int            `json:"total"`
+	Offset    int            `json:"offset"`
+	Limit     int            `json:"limit"`
+	HasMore   bool           `json:"has_more"`
+	Truncated bool           `json:"truncated"`
+	Error     string         `json:"error,omitempty"`
+}

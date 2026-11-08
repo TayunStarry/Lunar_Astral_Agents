@@ -5,6 +5,7 @@ package library
 import (
 	"database/sql"
 	"sync"
+	"time"
 
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
@@ -32,7 +33,30 @@ const (
 	maxPageSize = 1000
 	// defaultHistoryPageSize 历史记录默认分页大小
 	defaultHistoryPageSize = 50
+	// defaultDBPageSize 数据库行数据默认每页条数
+	defaultDBPageSize = 100
+	// maxDBPageSize 数据库行数据单页上限
+	maxDBPageSize = 500
+	// maxDBCellBytes 二进制单元格转为十六进制时的最大展示字节数
+	maxDBCellBytes = 128
+	// maxDBQueryRows 只读 SQL 单次返回的最大行数
+	maxDBQueryRows = 500
+	// dbQueryTimeout 只读 SQL 的最长执行时间
+	dbQueryTimeout = 30 * time.Second
+	// maxDBSchemaPromptTables 自然语言转 SQL 时随提示词携带的最大表数
+	maxDBSchemaPromptTables = 80
+	// defaultArchivePageSize 压缩包条目默认分页大小
+	defaultArchivePageSize = 200
+	// maxArchivePageSize 压缩包条目单页上限
+	maxArchivePageSize = 1000
+	// maxArchiveEntries 单次压缩包扫描的条目上限
+	maxArchiveEntries = 50000
 )
+
+// dbExtensions 资源库允许只读预览的数据库扩展名。
+var dbExtensions = map[string]bool{
+	".db": true, ".sqlite": true, ".sqlite3": true,
+}
 
 // 资源库变更库的文件位置（相对 LocalDir）。
 const (

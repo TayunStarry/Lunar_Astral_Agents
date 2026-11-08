@@ -21,6 +21,8 @@ const (
 	routeConfidenceMin = 0.6
 	// routeQueryMaxRunes 检索词/城市参数的最大字符数
 	routeQueryMaxRunes = 512
+	// decisionToolName 结构化决策工具名
+	decisionToolName = "decide_search_plan"
 )
 
 // routePipelines 结构化路由注册表：新增直连能力只需在此加一条，

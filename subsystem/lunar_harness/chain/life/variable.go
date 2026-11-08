@@ -38,6 +38,10 @@ const (
 	memoryClusterThreshold float32 = 0.90
 	// memoryVerifyThreshold 整理结果与来源记忆的双向相似度校验门槛
 	memoryVerifyThreshold float32 = 0.80
+	// pendingMaxAttempts 同一批待合并条目连续整理失败的上限；达到后解除待处理标记
+	pendingMaxAttempts = 3
+	// pendingMaxAge 待处理条目最长隐身时长；超时后即使仍失败也放行可见
+	pendingMaxAge = 72 * time.Hour
 	// memoryArchiveFile 被整理替换掉的旧条目归档日志（相对 LocalDir）
 	memoryArchiveFile = "database/life/memory_archive.jsonl"
 	// viewerMemorySource 观影链写入来源；生活整理只按 Source 排除，不看正文前缀
@@ -115,8 +119,10 @@ var (
 
 	// pendingCountHook 待处理（待合并）条目计数：为 0 时固定步骤三直接空操作。
 	pendingCountHook = memory.PendingCount
-	// pendingClearHook 清除单条记忆的待处理标记（孤儿待处理条目回收使用）。
+	// pendingClearHook 清除单条记忆的待处理标记（整理终止与孤儿回收使用）。
 	pendingClearHook = memory.ClearPending
+	// pendingFailureHook 记录一次整理失败：累计尝试次数，达到上限或超时后解除待处理标记。
+	pendingFailureHook = memory.RecordPendingFailure
 	// mergeHook 待合并组的模型合并改写。
 	mergeHook = LifeMemorizer.Merge
 	// verifyHook 整理结果与来源记忆的双向语义校验。

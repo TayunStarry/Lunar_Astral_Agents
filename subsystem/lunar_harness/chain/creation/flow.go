@@ -63,6 +63,8 @@ func (s *session) mutate(op, tool, target string, snapshotPaths []string, defaul
 		})
 		return mutationFailure(op, result)
 	}
+	// 写入成功会让路径树变化：立即失效快照，下一轮规划不会拿到旧树。
+	invalidatePathSnapshot()
 
 	step := 0
 	if s.stepIndex >= 0 {
@@ -195,10 +197,13 @@ func remapExpects(expects []fileflow.Expect, fromPath, toRel string) []fileflow.
 	return out
 }
 
-// actualSnapshotPaths 把调用方给出的快照路径解析为实际实体路径，并建立「严格路径 → 实际路径」映射。
+// actualSnapshotPaths 把调用方给出的快照路径解析为相对 LocalDir 的规范路径，并建立「严格路径 → 实际路径」映射。
 //
 // 文件编辑在严格路径不存在时会做同名 / 后缀模糊定位；快照与审查必须对准同一个实际实体，
 // 否则会出现「改了 A、快照了 B、回滚落空」的隐蔽错误。
+//
+// 这里只回传 rel：绝对路径再次交给 Capture 解析时，若 LocalDir 是相对路径会被补上一层
+// documents/（历史上快照因此记成 documents/local_data/documents/…，回滚必然落空）。
 func actualSnapshotPaths(target string, decision routeDecision, paths []string) ([]string, map[string]string, error) {
 	actual := make([]string, 0, len(paths))
 	remaps := make(map[string]string, len(paths))
@@ -210,16 +215,16 @@ func actualSnapshotPaths(target string, decision routeDecision, paths []string) 
 			if _, rel, err := fileflow.Resolve(path); err == nil {
 				remaps[rel] = decision.Rel
 			}
-			actual = append(actual, decision.Abs)
+			actual = append(actual, decision.Rel)
 			continue
 		}
-		var abs, rel string
+		var rel string
 		var err error
 		if hasStorageRootPrefix(path) {
 			// 已写明存储根（压缩包产物 unknown/…）：按严格路径快照，不做模糊匹配
-			abs, rel, err = fileflow.Resolve(path)
+			_, rel, err = fileflow.Resolve(path)
 		} else {
-			abs, rel, err = resolveActualPath(path)
+			_, rel, err = resolveActualPath(path)
 		}
 		if err != nil {
 			return nil, nil, err
@@ -227,7 +232,7 @@ func actualSnapshotPaths(target string, decision routeDecision, paths []string) 
 		if _, strictRel, err := fileflow.Resolve(path); err == nil {
 			remaps[strictRel] = rel
 		}
-		actual = append(actual, abs)
+		actual = append(actual, rel)
 	}
 	return actual, remaps, nil
 }

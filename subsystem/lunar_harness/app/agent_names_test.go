@@ -1,14 +1,19 @@
 package app
 
 // agent_names_test.go 校验显示名唯一来源：
-// 全部名字唯一，「记忆整理」之外都是四个汉字，工具目录不得出现表外名字。
+// 普通智能体统一为四个汉字；「分镜规划-*」按「家族-阶段」格式登记；
+// 工具目录不得出现表外名字。
 
 import (
+	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
+
+// storyboardFamilyPrefix 演绎链分镜规划家族的角色名前缀。
+const storyboardFamilyPrefix = "分镜规划-"
 
 func TestAgentDisplayNames(t *testing.T) {
 	seen := make(map[string]string, len(agentinfo.DisplayNames))
@@ -21,6 +26,12 @@ func TestAgentDisplayNames(t *testing.T) {
 		}
 		seen[name] = id
 
+		if strings.HasPrefix(name, storyboardFamilyPrefix) {
+			if stage := strings.TrimPrefix(name, storyboardFamilyPrefix); stage == "" {
+				t.Fatalf("智能体 %s 的家族名缺少阶段：%q", id, name)
+			}
+			continue
+		}
 		// 「记忆整理」是用户点名的固定名，按汉字计为 4 个；其余同样统一为 4 个汉字。
 		if got := utf8.RuneCountInString(name); got != 4 {
 			t.Fatalf("智能体 %s 的显示名应为 4 个汉字，实际 %d：%q", id, got, name)

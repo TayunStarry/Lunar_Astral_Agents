@@ -1,9 +1,20 @@
 package memory
 
 import (
+	"context"
 	"errors"
 	"time"
 )
+
+// =============================================================================
+// 智能体装配钩子 — 模型调用统一由 agents 层实现，engine 不反向依赖 agents
+// =============================================================================
+
+// TagGenerator 标签生成智能体（实现于 agents/MemoryTagger）。
+var TagGenerator func(ctx context.Context, content string, isImage bool, orientation, custom string, mediaRefs []string) ([]string, error)
+
+// MemoryMergeFunc 记忆整合智能体（实现于 agents/MemoryFuser）。
+var MemoryMergeFunc func(ctx context.Context, contents []string) (string, error)
 
 // MediaSubdir 记忆库图片在 multimedia 下的专属子目录：
 // 图片实体统一落在 multimedia/memory/<条目ID>/，与生成图、背景图、截图等隔离，便于清理。
@@ -32,7 +43,6 @@ const (
 	DocumentsChunkSize = 100  // 文档分块大小（条/块，各类型统一；100 条一块）
 	DedupThreshold     = 0.98 // 判重阈值（余弦相似度）：≥ 0.98 算同一条记忆
 	DocRankThreshold   = 0.30 // 文档内容余弦得分门槛（低于此值不返回）
-	MaxTagRetries      = 3    // 图片多模态标签生成最大重试次数
 )
 
 // 阈值语义分开说明：
@@ -60,8 +70,7 @@ const (
 	FuseAutoModelChars = 600
 	// FuseMaxCandidates 单次融合允许扫描的文本条目上限（O(n²) 相似度比较的保护阈值）
 	FuseMaxCandidates = 2000
-	// FuseMaxContentChars 送入模型整合时单条内容的最大字符数
-	FuseMaxContentChars = 1500
+	// （记忆整合的单条内容截断长度由 agents/MemoryFuser 负责）
 )
 
 // 记忆整理候选聚类参数（chain/life 与 Fuse 管理端点共用同一套聚类原语）

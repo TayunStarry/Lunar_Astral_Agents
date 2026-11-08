@@ -16,6 +16,31 @@ func withTempLocalDir(t *testing.T) {
 	testenv.Isolate(t)
 }
 
+// TestCreateFileRejectsDirectoryPath 目录式路径必须以「只能写具体文件」失败，
+// 且不能在文档库根目录留下同名 0 字节文件（历史上就是这样把父级写入全部卡死的）。
+func TestCreateFileRejectsDirectoryPath(t *testing.T) {
+	withTempLocalDir(t)
+
+	created := CreateFile("项目/", "")
+	if created.OK {
+		t.Fatalf("目录式路径不应创建成功")
+	}
+	if !strings.Contains(created.Summary, "目录写法") {
+		t.Fatalf("错误提示应指出目录写法: %s", created.Summary)
+	}
+
+	listed := FileList("")
+	if !listed.OK {
+		t.Fatalf("列出根目录失败: %s", listed.Summary)
+	}
+	entries, _ := listed.Detail["entries"].([]fileEntry)
+	for _, entry := range entries {
+		if entry.Name == "项目" {
+			t.Fatalf("目录式创建不应留下同名文件条目")
+		}
+	}
+}
+
 func TestFileEditorFileLifecycle(t *testing.T) {
 	withTempLocalDir(t)
 

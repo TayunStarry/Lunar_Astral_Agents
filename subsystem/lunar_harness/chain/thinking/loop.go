@@ -10,6 +10,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/Painter"
 	"LunarSubsystem/LunarHarness/chain/life"
+	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/viewer"
 	"LunarSubsystem/LunarHarness/engine/affection"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
@@ -39,6 +40,9 @@ func Start() error {
 	})
 
 	life.Init()
+	// 演绎任务视图落盘后，启动时把上次进程遗留的未完成任务标记为中断并推送，
+	// 不做静默续跑（绘制现场与外部句柄在重启后不可恢复）。
+	storyboard.RecoverInterrupted()
 	life.SetPlanHooks(pushDueScheduleItems, upcomingPlanSummary)
 	life.SetLastUserTextProvider(latestUserUtterance)
 	life.SetDialogueRoundsProvider(recentAffectionRounds)
@@ -58,13 +62,10 @@ func Start() error {
 
 	agentReady.Store(true)
 	stopCh = make(chan struct{})
-	responderCtx, responderCancel = context.WithCancel(context.Background())
 	running.Store(true)
 	loopWG.Add(1)
 	go runLoop()
-	loopWG.Add(1)
-	go runResponderLoop()
-	logger.Info(lunarCoreModule, "月华智能体（统一 Tick 调度）已启动")
+	logger.Info(lunarCoreModule, "月华智能体（单 Tick 调度 + 特许响应车道）已启动")
 	return nil
 }
 
@@ -76,10 +77,6 @@ func Stop() {
 		return
 	}
 	close(stopCh)
-	if responderCancel != nil {
-		responderCancel()
-		responderCancel = nil
-	}
 	loopWG.Wait()
 	if tickSchedulerInstance != nil {
 		tickSchedulerInstance.Stop()
@@ -98,6 +95,10 @@ func buildTickScheduler() *tickScheduler {
 	scheduler := newTickScheduler()
 	scheduler.Register(dialogueSystem{})
 	scheduler.Register(logisticsSystem{})
+	// 外部响应链：无主链运行时按优先级调度；特许运行期间由调度器单独放行。
+	scheduler.Register(responseSystem{})
+	// 演绎链：用户发起的后台任务，按原子步骤推进，镜头之间立即让出 Tick。
+	scheduler.Register(storyboardSystem{})
 	scheduler.Register(lifeSystem{})
 	return scheduler
 }

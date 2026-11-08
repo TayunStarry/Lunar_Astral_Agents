@@ -27,13 +27,31 @@ func (s *session) executePlan(ctx context.Context, plan planResult) []stepResult
 				"请用工具完成本步骤；完成后用中文简要说明产出（文件路径与关键内容），不要臆造结果。",
 			i+1, len(plan.Steps), label, step.Task, prior,
 		)
+		s.report(ProgressEvent{
+			Status:   statusExecuting,
+			Stage:    fmt.Sprintf("第 %d/%d 步：%s", i+1, len(plan.Steps), label),
+			Progress: stepPercent(i, len(plan.Steps)),
+		})
 
-		text, err := s.runStep(ctx, step.Agent, instruction)
+		var (
+			text    string
+			handles []string
+			err     error
+		)
+		if step.Agent == agentPainter {
+			text, handles, err = s.runPaintStep(ctx, step)
+		} else {
+			text, err = s.runStep(ctx, step.Agent, instruction)
+		}
 		if retryable(err) {
 			s.addError(fmt.Errorf("第 %d 步首次执行失败: %w", i+1, err))
 			retryInstruction := instruction + "\n\n注意：上一次执行失败（" +
 				clipAtSentence(err.Error(), 300) + "）。请换一种方式完成，避免重复相同的工具调用与相同输出。"
-			text, err = s.runStep(ctx, step.Agent, retryInstruction)
+			if step.Agent == agentPainter {
+				text, handles, err = s.runPaintStep(ctx, step)
+			} else {
+				text, err = s.runStep(ctx, step.Agent, retryInstruction)
+			}
 		}
 		failures := s.stepReviewFailures(i + 1)
 		if err != nil {
@@ -59,6 +77,7 @@ func (s *session) executePlan(ctx context.Context, plan planResult) []stepResult
 			Agent:          step.Agent,
 			Task:           step.Task,
 			Result:         text,
+			Handles:        handles,
 			ReviewFailures: failures,
 		})
 		prior = fmt.Sprintf("第 %d 步（%s）完成：%s", i+1, label, clipAtSentence(text, 400))

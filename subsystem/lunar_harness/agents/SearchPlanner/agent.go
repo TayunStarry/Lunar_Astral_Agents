@@ -13,8 +13,8 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
-// Plan 调用规划模型产出结构化决策；调用或解析失败时返回检索管线兜底决策。
-// 返回值中的 error 表示模型/解析失败（调用方据此记日志），决策本身仍可用。
+// Plan 调用规划模型产出结构化决策；调用或工具参数失败时返回检索管线兜底决策。
+// 返回值中的 error 表示模型/工具失败（调用方据此记日志），决策本身仍可用。
 func Plan(ctx context.Context, instruction, model string) (decision Decision, err error) {
 	defer func() { agentbase.ReportRun(AgentID, err) }()
 	if ctx == nil {
@@ -27,16 +27,20 @@ func Plan(ctx context.Context, instruction, model string) (decision Decision, er
 		return fallback, fmt.Errorf("读取规划提示词失败")
 	}
 	system = renderPrompt(system, "{pipelines}", routeCandidates())
-	text, callErr := chat(ctx, []chatMessage{
+	reply, callErr := chat(ctx, []chatMessage{
 		{Role: "system", Content: system},
 		{Role: "user", Content: instruction},
 	}, model)
 	if callErr != nil {
 		return fallback, fmt.Errorf("路由模型调用失败，按检索管线处理: %w", callErr)
 	}
-	decision, parseErr := parseDecision(text)
+	call, callErr := decisionCall(reply)
+	if callErr != nil {
+		return fallback, fmt.Errorf("路由模型未按工具提交决策，按检索管线处理: %w", callErr)
+	}
+	decision, parseErr := decisionFromToolCall(call)
 	if parseErr != nil {
-		return fallback, fmt.Errorf("路由输出解析失败，按检索管线处理: %w", parseErr)
+		return fallback, fmt.Errorf("路由工具参数校验失败，按检索管线处理: %w", parseErr)
 	}
 	if strings.TrimSpace(decision.Query) == "" {
 		decision.Query = instruction
@@ -45,15 +49,18 @@ func Plan(ctx context.Context, instruction, model string) (decision Decision, er
 	return decision, nil
 }
 
-// chat 规划模型的单次调用：已在链路侧持有模型切换租约，故以 HoldLease 调用。
-func chat(ctx context.Context, messages []chatMessage, model string) (string, error) {
+// chat 规划模型的单次工具调用：已在链路侧持有模型切换租约，故以 HoldLease 调用。
+func chat(ctx context.Context, messages []chatMessage, model string) (agentbase.Reply, error) {
 	req := agentbase.StreamRequest{
-		Agent:     AgentID,
-		Role:      modelRole,
-		Messages:  messages,
-		Model:     model,
-		HoldLease: true,
-		Timeout:   120 * time.Second,
+		Agent:       AgentID,
+		Role:        modelRole,
+		Messages:    messages,
+		Model:       model,
+		Tools:       []agentbase.ToolDefinition{decisionTool()},
+		ToolChoice:  "required",
+		ReportTools: true,
+		HoldLease:   true,
+		Timeout:     120 * time.Second,
 	}
 	if strings.TrimSpace(model) != "" {
 		temperature, topP, repeatPenalty := 0.2, 0.9, 1.05
@@ -69,10 +76,10 @@ func chat(ctx context.Context, messages []chatMessage, model string) (string, er
 		},
 	})
 	if err != nil {
-		return "", err
+		return agentbase.Reply{}, err
 	}
-	if strings.TrimSpace(reply.Text) == "" {
-		return "", fmt.Errorf("模型 API 返回空响应")
+	if len(reply.ToolCalls) == 0 && strings.TrimSpace(reply.Text) == "" && strings.TrimSpace(reply.Reasoning) == "" {
+		return reply, fmt.Errorf("模型 API 返回空响应")
 	}
-	return reply.Text, nil
+	return reply, nil
 }

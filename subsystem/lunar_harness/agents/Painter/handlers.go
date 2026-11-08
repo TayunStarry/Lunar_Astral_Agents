@@ -75,6 +75,9 @@ func (s *session) paint(params GenerateImageParams, label string) string {
 }
 
 func (s *session) handleDiffusionGeneration(args map[string]any) string {
+	if s.forceImg2Img {
+		return "扩散生成失败：本次任务带参考图，必须使用 image_to_image 以参考图为基座；不能改成纯文生图重画"
+	}
 	prompt := stringArg(args, "prompt")
 	if strings.TrimSpace(prompt) == "" {
 		return "扩散生成失败：正向提示词不能为空"
@@ -102,6 +105,9 @@ func (s *session) handleImageToImage(args map[string]any) string {
 		return "图生图失败：正向提示词不能为空"
 	}
 	if s.reference.Image == "" {
+		if s.textOnly {
+			return "图生图失败：本次任务明确要求纯文生图，没有参考图；请改用 diffusion_generation 进行文生图"
+		}
 		return "图生图失败：" + s.referenceStatus() + "。图生图基座优先沿用本次任务指定的 reference_tag，其次自动沿用最近一次生成的画作；两者都没有时请改用 diffusion_generation 进行文生图"
 	}
 	strength := normalizeStrength(numberArg(args, "strength"), "图生图")
@@ -143,6 +149,9 @@ func resolveImg2ImgCfg(value float64) float64 {
 }
 
 func (s *session) handlePortrait(args map[string]any) string {
+	if s.forceImg2Img {
+		return "立绘生成失败：本次任务带参考图，请改用 image_to_image 以参考图为基座进行修改"
+	}
 	preset := s.portraitPreset(args)
 	plan := resolveDimensionPlan(defaultString(stringArg(args, "ratio"), preset.DefaultRatio), nil)
 	steps := normalizeSteps(numberArg(args, "steps"))
@@ -345,11 +354,16 @@ func (s *session) handleUpscaleImage(args map[string]any) string {
 		source = resolvedSource
 		label = handle
 	} else {
-		if s.resultPath == "" {
-			return "超分失败：还没有生成过作品，请通过 image_tag 指定图片句柄，或先完成一次图像生成"
+		if s.forceImg2Img && s.reference.Image != "" {
+			source = s.reference.Image
+			label = referenceLabel(Reference{Handle: s.reference.Handle, Source: s.reference.Image})
+		} else {
+			if s.resultPath == "" {
+				return "超分失败：还没有生成过作品，请通过 image_tag 指定图片句柄，或先完成一次图像生成"
+			}
+			source = s.resultPath
+			label = "最近作品"
 		}
-		source = s.resultPath
-		label = "最近作品"
 	}
 	data, err := s.env.ReadImageBytes(source)
 	if err != nil {

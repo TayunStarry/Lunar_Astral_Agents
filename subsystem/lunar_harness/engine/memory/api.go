@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // =============================================================================
@@ -127,6 +128,15 @@ func ClearPending(ctx context.Context, id string) error {
 		return fmt.Errorf("全局记忆库未初始化")
 	}
 	return globalStore.ClearPending(ctx, id)
+}
+
+// RecordPendingFailure 全局记录一次整理失败：累计尝试次数，
+// 达到上限或隐身超时后解除待处理标记，让条目重新对检索可见。
+func RecordPendingFailure(ctx context.Context, ids []string, maxAttempts int, maxAge time.Duration) (PendingFailureResult, error) {
+	if globalStore == nil {
+		return PendingFailureResult{}, fmt.Errorf("全局记忆库未初始化")
+	}
+	return globalStore.RecordPendingFailure(ctx, ids, maxAttempts, maxAge)
 }
 
 // PendingCount 全局返回待处理（待合并）条目数量

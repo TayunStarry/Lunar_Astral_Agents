@@ -106,6 +106,138 @@ type AgentResult struct {
 	Err          error
 }
 
+// LibraryCreationRequest /library/api/create 请求体：资源句柄 + 自然语言描述。
+type LibraryCreationRequest struct {
+	// Mode assigned（默认，需要 description）或 random（随机目标池自主选题）
+	Mode string `json:"mode"`
+	// Description 自然语言描述
+	Description string `json:"description"`
+	// Handle 单个目标资源句柄
+	Handle string `json:"handle"`
+	// Handles 多个目标资源句柄
+	Handles []string `json:"handles"`
+}
+
+// LibraryCreationTask 创作任务对外状态（提交、查询、推送共用同一结构）。
+type LibraryCreationTask struct {
+	TaskID    string   `json:"task_id"`
+	Mode      string   `json:"mode"`
+	Status    string   `json:"status"`
+	Stage     string   `json:"stage,omitempty"`
+	Progress  int      `json:"progress"`
+	Summary   string   `json:"summary,omitempty"`
+	Handles   []string `json:"handles,omitempty"`
+	Error     string   `json:"error,omitempty"`
+	CreatedAt string   `json:"created_at"`
+	UpdatedAt string   `json:"updated_at"`
+}
+
+// LibraryCreationResponse 提交 / 查询单个任务的响应。
+type LibraryCreationResponse struct {
+	OK    bool                 `json:"ok"`
+	Task  *LibraryCreationTask `json:"task,omitempty"`
+	Error string               `json:"error,omitempty"`
+}
+
+// LibraryCreationListResponse 最近任务列表响应。
+type LibraryCreationListResponse struct {
+	OK    bool                  `json:"ok"`
+	Tasks []LibraryCreationTask `json:"tasks,omitempty"`
+	Error string                `json:"error,omitempty"`
+}
+
+// LibraryStoryboardRequest /library/api/storyboard 请求体：故事文本或资源句柄。
+type LibraryStoryboardRequest struct {
+	// Text 故事正文
+	Text string `json:"text"`
+	// Handle 故事正文所在的资源句柄（如 @D.001）
+	Handle string `json:"handle"`
+	// Title 作品标题（可空）
+	Title string `json:"title"`
+	// Style 统一画风约束（可空）
+	Style string `json:"style"`
+	// Ratio 统一画幅（可空，默认 16:9）
+	Ratio string `json:"ratio"`
+}
+
+// LibraryStoryboardShot 分镜执行结果。
+type LibraryStoryboardShot struct {
+	Index     int    `json:"index"`
+	Act       string `json:"act,omitempty"`
+	Scene     string `json:"scene"`
+	Narration string `json:"narration"`
+	Prompt    string `json:"prompt"`
+	Ratio     string `json:"ratio,omitempty"`
+	Status    string `json:"status"`
+	Handle    string `json:"handle,omitempty"`
+	File      string `json:"file,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// LibraryStoryboardShotInput 审查稿中的单镜输入（确认接口回传）。
+type LibraryStoryboardShotInput struct {
+	// Index 原稿镜头序号；新增镜头填 0
+	Index int `json:"index"`
+	// Act 幕名
+	Act string `json:"act,omitempty"`
+	// Scene 镜次
+	Scene string `json:"scene,omitempty"`
+	// Narration 本镜叙事
+	Narration string `json:"narration,omitempty"`
+	// Prompt 画面描述（为空时按叙事重新拼装）
+	Prompt string `json:"prompt,omitempty"`
+	// Ratio 单镜画幅（为空时用任务默认画幅）
+	Ratio string `json:"ratio,omitempty"`
+}
+
+// LibraryStoryboardActionRequest 演绎任务控制请求（确认 / 暂停 / 继续 / 终止）。
+type LibraryStoryboardActionRequest struct {
+	// TaskID 任务标识
+	TaskID string `json:"task_id"`
+	// Reason 终止原因（可空）
+	Reason string `json:"reason,omitempty"`
+	// Title 确认时覆盖作品标题（可空）
+	Title string `json:"title,omitempty"`
+	// Shots 确认时的完整审查稿
+	Shots []LibraryStoryboardShotInput `json:"shots,omitempty"`
+}
+
+// LibraryStoryboardTask 演绎任务对外状态。
+type LibraryStoryboardTask struct {
+	TaskID    string                  `json:"task_id"`
+	Status    string                  `json:"status"`
+	Stage     string                  `json:"stage,omitempty"`
+	Progress  int                     `json:"progress"`
+	Summary   string                  `json:"summary,omitempty"`
+	Title     string                  `json:"title,omitempty"`
+	DocPath   string                  `json:"doc_path,omitempty"`
+	DocHandle string                  `json:"doc_handle,omitempty"`
+	Shots     []LibraryStoryboardShot `json:"shots,omitempty"`
+	Handles   []string                `json:"handles,omitempty"`
+	Error     string                  `json:"error,omitempty"`
+	// Event 最近一次增量事件名，ShotIndex 该事件对应的镜头序号（0 表示不指向具体镜头）。
+	Event     string `json:"event,omitempty"`
+	ShotIndex int    `json:"shot_index,omitempty"`
+	// Thought 规划阶段主智能体的累计可读过程文本（轮询兜底用）。
+	Thought   string `json:"thought,omitempty"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// LibraryStoryboardResponse 提交 / 查询单个任务的响应。
+type LibraryStoryboardResponse struct {
+	OK    bool                   `json:"ok"`
+	Task  *LibraryStoryboardTask `json:"task,omitempty"`
+	Error string                 `json:"error,omitempty"`
+}
+
+// LibraryStoryboardListResponse 最近演绎任务列表响应。
+type LibraryStoryboardListResponse struct {
+	OK    bool                    `json:"ok"`
+	Tasks []LibraryStoryboardTask `json:"tasks,omitempty"`
+	Error string                  `json:"error,omitempty"`
+}
+
 // DataDumpKind 数据导出类型
 type DataDumpKind string
 

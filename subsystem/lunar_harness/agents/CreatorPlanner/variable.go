@@ -25,6 +25,8 @@ const (
 	AgentResearcher = "researcher"
 	// AgentRunner 脚本运行者角色。
 	AgentRunner = "runner"
+	// AgentPainter 图片绘制者角色：由创作链把绘图需求交给现有图片绘制智能体执行。
+	AgentPainter = "painter"
 
 	// MaxPlannerRounds 调度者推理轮次上限。
 	//
@@ -62,7 +64,7 @@ const (
 // ==== 提示词文件 ====
 
 const (
-	// promptPlanner 调度者系统提示模板（含 {directives} / {mode} / {journal-hint} 占位）。
+	// promptPlanner 调度者系统提示模板（含 {directives} / {mode} / {journal-hint} / {path-snapshot} 占位）。
 	promptPlanner = "creatorPlanner.md"
 	// promptExecutor 专属智能体共用系统提示。
 	promptExecutor = "creatorExecutor.md"

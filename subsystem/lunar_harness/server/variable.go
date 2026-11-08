@@ -53,6 +53,22 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/library/api/rename", Handler: library.RenameHandler, Method: "POST", Description: "资源库重命名（限 4 个存储根）"},
 	{Path: "/library/api/move", Handler: library.MoveHandler, Method: "POST", Description: "资源库移动（限 4 个存储根）"},
 	{Path: "/library/api/delete", Handler: library.DeleteHandler, Method: "POST", Description: "资源库删除文件（同步清理句柄）"},
+	{Path: "/library/api/create", Handler: libraryCreateHandler, Method: "POST", Description: "资源库创作提交（资源句柄 + 自然语言描述；mode=assigned/random，后台自动规划执行）"},
+	{Path: "/library/api/create/status", Handler: libraryCreateStatusHandler, Method: "GET", Description: "资源库创作任务状态与结果（task_id）"},
+	{Path: "/library/api/create/list", Handler: libraryCreateListHandler, Method: "GET", Description: "资源库最近创作任务列表（limit）"},
+	{Path: "/library/api/storyboard", Handler: libraryStoryboardHandler, Method: "POST", Description: "资源库演绎提交（故事文本或资源句柄，≤4000 字；后台补资料、拆分镜并等待审查）"},
+	{Path: "/library/api/storyboard/status", Handler: libraryStoryboardStatusHandler, Method: "GET", Description: "资源库演绎任务状态与结果（task_id）"},
+	{Path: "/library/api/storyboard/list", Handler: libraryStoryboardListHandler, Method: "GET", Description: "资源库最近演绎任务列表（limit）"},
+	{Path: "/library/api/storyboard/confirm", Handler: libraryStoryboardConfirmHandler, Method: "POST", Description: "确认审查后的分镜稿并开始逐镜绘制（task_id + shots）"},
+	{Path: "/library/api/storyboard/pause", Handler: libraryStoryboardPauseHandler, Method: "POST", Description: "暂停演绎任务（已绘镜头保留，续跑从下一镜继续）"},
+	{Path: "/library/api/storyboard/resume", Handler: libraryStoryboardResumeHandler, Method: "POST", Description: "继续已暂停的演绎任务"},
+	{Path: "/library/api/storyboard/cancel", Handler: libraryStoryboardCancelHandler, Method: "POST", Description: "终止演绎任务并保留已产出镜头"},
+	{Path: "/library/api/db/tables", Handler: library.DBTablesHandler, Method: "GET", Description: "资源库数据库表清单（只读，path=database/*.db）"},
+	{Path: "/library/api/db/schema", Handler: library.DBSchemaHandler, Method: "GET", Description: "资源库数据库表结构（只读，PRAGMA table_info）"},
+	{Path: "/library/api/db/rows", Handler: library.DBRowsHandler, Method: "GET", Description: "资源库数据库行数据分页（只读，支持 sort / order / offset / limit）"},
+	{Path: "/library/api/db/query", Handler: library.DBQueryHandler, Method: "POST", Description: "资源库数据库只读 SQL（仅 SELECT / PRAGMA 查询 / EXPLAIN，多语句与写操作后端拦截）"},
+	{Path: "/library/api/db/ai-sql", Handler: library.DBAISQLHandler, Method: "POST", Description: "资源库自然语言转 SQL（携带当前库表结构，只生成一条只读语句）"},
+	{Path: "/library/api/archive", Handler: library.ArchiveHandler, Method: "GET", Description: "资源库压缩包条目分页（只读元数据，支持 zip / tar / tar.gz / gz）"},
 
 	// ==================== 文件归档（ZIP） ====================
 	{Path: "/file/archive", Handler: file.ArchiveHandler, Method: "POST", Description: "文件归档"},
@@ -144,6 +160,36 @@ var MessageBatchHandlerFunc http.HandlerFunc
 
 // ProxyHandlerFunc 代理访问处理器（装配层注入 chain/thinking.ProxyHandler）
 var ProxyHandlerFunc http.HandlerFunc
+
+// LibraryCreationSubmitFunc 资源库创作任务受理（装配层注入 chain/creation.SubmitTask）
+var LibraryCreationSubmitFunc func(req LibraryCreationRequest) (LibraryCreationTask, error)
+
+// LibraryCreationStatusFunc 资源库创作任务状态查询（装配层注入 chain/creation.TaskStatus）
+var LibraryCreationStatusFunc func(taskID string) (LibraryCreationTask, bool)
+
+// LibraryCreationListFunc 资源库创作任务列表（装配层注入 chain/creation.TaskList）
+var LibraryCreationListFunc func(limit int) []LibraryCreationTask
+
+// LibraryStoryboardSubmitFunc 演绎任务受理（装配层注入 chain/storyboard.SubmitTask）
+var LibraryStoryboardSubmitFunc func(req LibraryStoryboardRequest) (LibraryStoryboardTask, error)
+
+// LibraryStoryboardStatusFunc 演绎任务状态查询（装配层注入 chain/storyboard.TaskStatus）
+var LibraryStoryboardStatusFunc func(taskID string) (LibraryStoryboardTask, bool)
+
+// LibraryStoryboardListFunc 演绎任务列表（装配层注入 chain/storyboard.TaskList）
+var LibraryStoryboardListFunc func(limit int) []LibraryStoryboardTask
+
+// LibraryStoryboardConfirmFunc 审查稿确认（装配层注入 chain/storyboard.ConfirmTask）
+var LibraryStoryboardConfirmFunc func(taskID, title string, shots []LibraryStoryboardShotInput) (LibraryStoryboardTask, error)
+
+// LibraryStoryboardPauseFunc 暂停演绎任务（装配层注入 chain/storyboard.PauseTask）
+var LibraryStoryboardPauseFunc func(taskID string) (LibraryStoryboardTask, error)
+
+// LibraryStoryboardResumeFunc 继续演绎任务（装配层注入 chain/storyboard.ResumeTask）
+var LibraryStoryboardResumeFunc func(taskID string) (LibraryStoryboardTask, error)
+
+// LibraryStoryboardCancelFunc 终止演绎任务（装配层注入 chain/storyboard.CancelTask）
+var LibraryStoryboardCancelFunc func(taskID, reason string) (LibraryStoryboardTask, error)
 
 // ==== 数据导出类型常量 ====
 

@@ -26,6 +26,10 @@ type Options struct {
 	// NoDSNParams 为 true 时完全不写 DSN 参数，忽略 BusyTimeoutMS / JournalMode / ForeignKeys。
 	// 仅用于历史上裸开库、后续自行执行 PRAGMA 的站点。
 	NoDSNParams bool
+	// ReadOnly 为 true 时以 SQLite 只读模式打开：URI + mode=ro + _query_only=1，
+	// 连接层直接拒绝任何写入语句，也不再设置 journal_mode 等会碰库的参数。
+	// 只读连接默认限制为单连接（未显式设置 MaxOpenConns 时）。
+	ReadOnly bool
 }
 
 // DirError 父目录创建失败。调用方可用 DirCause 取回底层错误并保留自己的文案。

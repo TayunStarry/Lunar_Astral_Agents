@@ -256,6 +256,8 @@ func (d *Store) Rebuild(ctx context.Context, collectionName, modelName string, p
 		for j := range c.Documents {
 			if c.Documents[j].ID == doc.ID {
 				c.Documents[j].Embedding = contentVec
+				// 重建后检索向量即正文向量，旧的标签正文向量不再需要
+				c.Documents[j].ContentEmbedding = nil
 				break
 			}
 		}

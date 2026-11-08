@@ -139,27 +139,6 @@ func getResourceEntry(handle string) *ResourceEntry {
 	return &entry
 }
 
-// resolveImageRef 把图片句柄解析为可取用来源
-func resolveImageRef(raw string) (handle, source, desc string, ok bool) {
-	parsed := parseHandle(raw)
-	if parsed == nil || parsed.Kind != "I" {
-		return "", "", "", false
-	}
-	normalized := formatHandle(*parsed)
-	entry := getResourceEntry(normalized)
-	if entry == nil {
-		return "", "", "", false
-	}
-	if entry.State == "lost" {
-		deleteResource(normalized)
-		return "", "", "", false
-	}
-	if entry.State == "active" && entry.BlobPath != "" {
-		source = entry.BlobPath
-	}
-	return normalized, source, entry.Summary, true
-}
-
 // persistenceSaveBytes 以字节写入文件
 func persistenceSaveBytes(name string, data []byte) (string, error) {
 	result, err := persistence.SaveFileEx(name, persistence.SaveOptions{Overwrite: true}, bytes.NewReader(data))

@@ -22,7 +22,7 @@ func TestToolSchemasRegistered(t *testing.T) {
 }
 
 func TestPlannerPromptComposesModeAndHistory(t *testing.T) {
-	prompt := PlannerPrompt(false, []string{"写一首短诗"}, 2, 1, 1, 3)
+	prompt := PlannerPrompt(false, []string{"写一首短诗"}, 2, 1, 1, 3, "")
 	for _, want := range []string{
 		"你是「创作调度」",
 		"【本轮创作参考（来自对话者给出的期望",
@@ -35,12 +35,26 @@ func TestPlannerPromptComposesModeAndHistory(t *testing.T) {
 		}
 	}
 
-	assigned := PlannerPrompt(true, nil, 0, 0, 0, 0)
+	assigned := PlannerPrompt(true, nil, 0, 0, 0, 0, "")
 	if !strings.Contains(assigned, "【本次为对话者指派的任务】") {
 		t.Fatalf("指派模式提示缺少模式说明")
 	}
 	if !strings.Contains(assigned, "这是第一次指派任务") {
 		t.Fatalf("指派模式提示缺少首次历史说明")
+	}
+}
+
+func TestPlannerPromptInjectsPathSnapshot(t *testing.T) {
+	snapshot := "documents：1 个文件 / 1 个目录\nunknown：0 个文件 / 0 个目录\n--- 相对路径 ---\ndocuments/\n  a.md"
+	prompt := PlannerPrompt(false, nil, 0, 0, 0, 0, snapshot)
+	if !strings.Contains(prompt, "【已有文件路径快照") {
+		t.Fatalf("调度者提示缺少路径快照标题")
+	}
+	if !strings.Contains(prompt, snapshot) {
+		t.Fatalf("调度者提示缺少路径快照正文")
+	}
+	if empty := PlannerPrompt(false, nil, 0, 0, 0, 0, "  "); strings.Contains(empty, "【已有文件路径快照") {
+		t.Fatalf("快照为空时不应注入标题")
 	}
 }
 

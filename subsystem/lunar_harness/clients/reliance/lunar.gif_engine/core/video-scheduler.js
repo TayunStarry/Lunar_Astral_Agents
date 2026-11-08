@@ -3,7 +3,7 @@
 // 与 GifScheduler 同一套规则，但由 <video> 的 ended 事件驱动，不估算时长：
 //   播完 → 随机 1–3 秒 → 下一张；选下一张时排除刚播过的那张（只有一张除外）。
 //   外部（嵌入匹配 / action 指令）可 play(name) 打断排程，播完仍回到随机序列。
-// 内存：全页面只复用两个 <video>（当前播放 + 下一条 preload=metadata），
+// 内存：全页面只复用一个 <video>，每条只读取一次，不额外预取；
 //       不按文件数量创建元素；停止时清空 src 释放解码器。
 
 const DEFAULT_GAP_MIN = 1000;
@@ -18,7 +18,6 @@ export class VideoScheduler {
     #baseUrl;
     #files;
     #video;
-    #prefetchEl;
     #onPlay;
     #onFatal;
     #gapMin;
@@ -38,18 +37,16 @@ export class VideoScheduler {
      * @param {string} options.baseUrl 资源基址（含尾部斜杠）
      * @param {Map<string, string>} options.files 动画名 → 文件名
      * @param {HTMLVideoElement} options.video 复用的播放元素
-     * @param {HTMLVideoElement} [options.prefetchEl] 预取下一条元数据的隐藏元素
      * @param {(name: string) => void} [options.onPlay] 开始播放回调
      * @param {(err: Error) => void} [options.onError] 连续失败回调
      * @param {number} [options.gapMin] 间隔下限（毫秒）
      * @param {number} [options.gapMax] 间隔上限（毫秒）
      */
-    constructor({ names, baseUrl, files, video, prefetchEl, onPlay, onError, gapMin, gapMax }) {
+    constructor({ names, baseUrl, files, video, onPlay, onError, gapMin, gapMax }) {
         this.#names = Array.isArray(names) ? names : [];
         this.#baseUrl = baseUrl;
         this.#files = files instanceof Map ? files : new Map();
         this.#video = video;
-        this.#prefetchEl = prefetchEl || null;
         this.#onPlay = onPlay;
         this.#onFatal = onError;
         this.#gapMin = Number.isFinite(gapMin) ? gapMin : DEFAULT_GAP_MIN;
@@ -82,7 +79,6 @@ export class VideoScheduler {
             this.#video.removeAttribute('src');
             this.#video.load();
         }
-        if (this.#prefetchEl) this.#prefetchEl.removeAttribute('src');
     }
 
     /**
@@ -101,16 +97,13 @@ export class VideoScheduler {
         return true;
     }
 
-    /** 选定下一条并预取元数据，间隔结束后播放 */
+    /** 选定下一条，间隔结束后播放 */
     #queue(delay) {
         if (this.#stopped) return;
         if (this.#timer) clearTimeout(this.#timer);
         const next = this.#pick();
         if (!next) return;
         this.#pending = next;
-        if (this.#prefetchEl && this.#prefetchEl.getAttribute('src') !== this.#url(next)) {
-            this.#prefetchEl.src = this.#url(next);
-        }
         this.#timer = setTimeout(() => {
             this.#timer = null;
             this.#show(this.#pending);

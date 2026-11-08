@@ -3,6 +3,7 @@ package creation
 // variable.go 创作体系的常量、工具目录与全局变量。
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -21,6 +22,17 @@ const (
 
 	// runTimeout 整轮创作的总超时
 	runTimeout = 20 * time.Minute
+	// ==== 创作任务状态 ====
+	// statusQueued 已受理，等待创作队列
+	statusQueued = "queued"
+	// statusPlanning 调度者正在生成计划
+	statusPlanning = "planning"
+	// statusExecuting 正在按计划执行
+	statusExecuting = "executing"
+	// statusCompleted 已完成
+	statusCompleted = "completed"
+	// statusFailed 执行失败
+	statusFailed = "failed"
 	// maxReferences 规划日志保留的参考资料条数
 	maxReferences = 40
 	// maxErrors 规划日志保留的错误条数
@@ -41,6 +53,32 @@ const (
 	maxMemoRunes = 512
 	// maxFileReadBytes 单次文件读取上限
 	maxFileReadBytes = 256 << 10
+	// maxPaintPromptRunes 交给图片绘制的画面描述最大字符数
+	maxPaintPromptRunes = 1200
+	// maxPaintMetaRunes 画幅 / 风格 / 输出去向等附加约束最大字符数
+	maxPaintMetaRunes = 200
+	// maxPaintChangeRunes 基于参考图的修改要求最大字符数
+	maxPaintChangeRunes = 600
+	// maxPaintReferences 单张绘图最多携带的参考图数量
+	maxPaintReferences = 4
+
+	// ==== 调度者路径树快照 ====
+	// pathSnapshotMaxRunes 单次注入规划提示的路径树正文字符上限（含统计头与截断标注）
+	pathSnapshotMaxRunes = 4000
+	// pathSnapshotMaxEntries 单次扫描的条目上限；超出即停止，避免超大目录拖慢规划
+	pathSnapshotMaxEntries = 2000
+	// pathSnapshotTTL 路径快照缓存有效期；写入后会立即失效，这里只兜底外部改动
+	pathSnapshotTTL = 30 * time.Second
+	// pathSnapshotTruncated 快照超限时的显式标注，避免模型误以为列表完整
+	pathSnapshotTruncated = "\n（已截断，其余需用工具查询）"
+	// maxDuplicateCandidates 同名检测回传的候选路径上限
+	maxDuplicateCandidates = 5
+	// paintTimeout 单张图片绘制调用的超时（图片绘制智能体内部还有模型超时）
+	paintTimeout = 8 * time.Minute
+	// maxTasks 内存中保留的创作任务上限
+	maxTasks = 64
+	// maxTaskList 单次任务列表查询上限
+	maxTaskList = 50
 	// fileReadChunkRunes 单次 file_read 返回给模型的默认字符数（可用 offset 分批翻页）
 	fileReadChunkRunes = 4000
 	// fileReadChunkLimit 单次 file_read 允许的最大字符数
@@ -81,6 +119,8 @@ const (
 	agentEngineer   = "engineer"
 	agentResearcher = "researcher"
 	agentRunner     = "runner"
+	// agentPainter 图片绘制：由创作链把绘图需求显式交给现有图片绘制智能体执行
+	agentPainter = "painter"
 )
 
 // agentLabels 智能体名称 → 中文角色名。
@@ -89,6 +129,7 @@ var agentLabels = map[string]string{
 	agentEngineer:   "工程创作",
 	agentResearcher: "资料查阅",
 	agentRunner:     "脚本运行",
+	agentPainter:    "图片绘制",
 }
 
 // ==== 工具名 ====
@@ -126,6 +167,9 @@ var plannerTools = []string{
 	toolCodeIndex, toolReadDTS, toolChangeQuery, toolSubmitPlan,
 }
 
+// pathSnapshotRoots 注入调度者的路径树根目录（相对 LocalDir）；用户明确只要这两个根。
+var pathSnapshotRoots = []string{"documents", "unknown"}
+
 // writerTools 文字创作者：文档与文学创作、素材查阅、内容调度。
 var writerTools = []string{
 	toolWebSearch, toolFetchResources,
@@ -162,12 +206,32 @@ var (
 	// WebSearchHook 联网搜索实现，由装配层注入（避免创作链直接依赖检索链）
 	WebSearchHook func(query string) (string, error)
 
+	// PaintHook 图片绘制实现，由装配层注入现有图片绘制智能体
+	PaintHook func(ctx context.Context, req PaintRequest) (PaintResult, error)
+
+	// TaskEventHook 创作任务状态变化回调，由装配层注入（推送到资源库 WebSocket）
+	TaskEventHook func(TaskView)
+
 	// runMu 串行化创作事件，避免同一管线并发运行
 	runMu sync.Mutex
+
+	// taskMu 保护资源库提交的创作任务表
+	taskMu sync.Mutex
+	// tasks 任务 ID → 任务状态
+	tasks = map[string]*taskState{}
+	// taskOrder 按创建顺序保存的任务 ID，便于清理与列表
+	taskOrder []string
+	// taskSeq 任务序号
+	taskSeq uint64
 
 	// lastRunMeta 最近一次脚本运行摘要（供 script_status 汇报）
 	lastRunMu   sync.Mutex
 	lastRunMeta = map[string]any{}
+
+	// pathSnapshotMu 保护路径树快照缓存
+	pathSnapshotMu sync.Mutex
+	// pathSnapshotMemo 最近一次路径树扫描结果
+	pathSnapshotMemo pathSnapshotCache
 )
 
 // toolsFor 返回指定智能体的工具名清单。

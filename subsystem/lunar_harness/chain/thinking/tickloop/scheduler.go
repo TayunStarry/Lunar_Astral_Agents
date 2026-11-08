@@ -1,15 +1,17 @@
 package tickloop
 
-// scheduler.go 通用 Tick 调度器。
+// scheduler.go 通用 Tick 调度器（单循环 + 特许响应车道）。
 //
-// 规则（与月华原调度器一致）：
-//  1. 任一体系运行中（busy=true）→ 当前 Tick 直接跳过，不计数；
-//  2. 存在强制事件 → 跳过其他体系，只允许 life 体系；
-//  3. 无就绪体系 → 空闲 Tick：生活冷却 +1，并通知空闲钩子；
-//  4. 按 Priority 降序取第一个就绪体系，空闲进度按该体系的 IdleReset 回写；
-//  5. 实现在独立 goroutine 中执行，返回即释放 Tick。
+// 规则：
+//  1. 任一主链运行中（busy=true）→ 当前 Tick 不再触发其他主链，也不推进空闲计数；
+//  2. 特许运行有效（思考链阻塞在 LTPX 工具等待）→ 只允许响应链并行，其他主链一律不选；
+//  3. 存在强制事件 → 只允许 life 体系；
+//  4. 无就绪体系 → 空闲 Tick：生活冷却 +1，并通知空闲钩子；
+//  5. 按 Priority 降序取第一个就绪体系，空闲进度按该体系的 IdleReset 回写；
+//  6. 实现在独立 goroutine 中执行，返回即释放 Tick。
 //
-// 具体体系由宿主注册，调度逻辑不感知实现。
+// 同一时刻最多一个主链步骤；唯一例外是特许运行期间的响应步骤，由 EndPermit 的
+// 返回屏障保证对话恢复前响应步骤已经结束。
 
 import (
 	"context"
@@ -20,6 +22,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
+	"LunarSubsystem/LunarHarness/engine/tickpermit"
 )
 
 // Scheduler 通用 Tick 调度器（S 为宿主定义的快照类型）。
@@ -29,6 +32,8 @@ type Scheduler[S any] struct {
 	systems []System[S]
 	state   State
 	busy    bool
+	// responseBusy 特许响应步骤是否在途
+	responseBusy bool
 	// paused 维护态：为 true 时 Tick 不再触发任何体系
 	paused  bool
 	ctx     context.Context
@@ -76,28 +81,55 @@ func (s *Scheduler[S]) Tick() {
 	}
 	s.mu.Unlock()
 
-	// 宿主有独占模型的任务在跑：本轮让出模型
-	if s.hooks.Busy != nil && s.hooks.Busy() {
-		return
+	permit := s.hooks.Permit
+	if permit != nil {
+		if expired, owner := permit.ExpireIfNeeded(time.Now()); expired {
+			logger.Error(s.hooks.Module, "[Tick] 特许运行超时，已强制回收（owner=%s）", owner)
+		}
 	}
 
 	forced := s.hooks.Forced != nil && s.hooks.Forced()
+
 	s.mu.Lock()
 	if s.busy {
+		// 特许期间：对话步骤阻塞在工具等待上，只允许响应链并行
+		if permit != nil && permit.Active() && !s.responseBusy {
+			s.tryResponseLocked(permit)
+		}
 		s.mu.Unlock()
 		return
 	}
+	if s.responseBusy {
+		s.mu.Unlock()
+		return
+	}
+	if permit != nil && permit.Active() {
+		// 没有主步骤却仍有特许：视为泄漏，回收后按正常流程继续
+		permit.ForceClear()
+		logger.Warn(s.hooks.Module, "[Tick] 检测到无主特许运行，已回收")
+	}
+
 	var snap S
 	if s.hooks.Snapshot != nil {
 		snap = s.hooks.Snapshot(s.state.IdleTicks)
 	}
 	for _, system := range s.systems {
-		if forced && system.ID() != "life" {
+		kind := KindOf(system)
+		if forced && kind != KindLife {
 			continue
 		}
 		ready, reason := system.Ready(snap)
 		if !ready {
 			continue
+		}
+		if kind == KindResponse {
+			// 正常空档期的响应步骤：同步标记在途，使后续特许 End 的屏障能等待它结束。
+			if s.hooks.Permit != nil {
+				s.hooks.Permit.MarkResponse(true)
+			}
+			s.startResponseLocked(system, reason)
+			s.mu.Unlock()
+			return
 		}
 		s.busy = true
 		if keeper, ok := system.(idleKeeper); ok && keeper.KeepIdle() {
@@ -113,8 +145,9 @@ func (s *Scheduler[S]) Tick() {
 		s.tickSeq++
 		seq := s.tickSeq
 		s.persistLocked()
+		idle := s.state.IdleTicks
 		s.mu.Unlock()
-		logger.Info(s.hooks.Module, "[Tick#%d] 触发 %s（%s），空闲进度为 %d", seq, system.ID(), reason, s.state.IdleTicks)
+		logger.Info(s.hooks.Module, "[Tick#%d] 触发 %s（%s），空闲进度为 %d", seq, system.ID(), reason, idle)
 		s.run(seq, system)
 		return
 	}
@@ -130,7 +163,45 @@ func (s *Scheduler[S]) Tick() {
 	}
 }
 
-// run 在独立 goroutine 中执行体系，结束后释放 Tick。
+// tryResponseLocked 特许期间尝试启动一个响应步骤；调用方必须持有锁。
+func (s *Scheduler[S]) tryResponseLocked(_ *tickpermit.Controller) {
+	var snap S
+	if s.hooks.Snapshot != nil {
+		snap = s.hooks.Snapshot(s.state.IdleTicks)
+	}
+	for _, system := range s.systems {
+		if KindOf(system) != KindResponse {
+			continue
+		}
+		ready, reason := system.Ready(snap)
+		if !ready {
+			return
+		}
+		// 与 End 的撤销在同一把锁内完成：特许已撤销则不再启动新的响应步骤。
+		if s.hooks.Permit != nil && !s.hooks.Permit.TryBeginResponse() {
+			return
+		}
+		s.startResponseLocked(system, reason)
+		return
+	}
+}
+
+// startResponseLocked 置响应忙、记录状态并启动 goroutine；调用方必须持有锁。
+// 响应在途标记由调用方在启动前完成（特许路径走 TryBeginResponse）。
+func (s *Scheduler[S]) startResponseLocked(system System[S], reason string) {
+	s.responseBusy = true
+	s.state.LastSystem = system.ID()
+	s.state.LastReason = reason
+	s.state.LastTriggerAt = nowUnix()
+	s.state.UpdatedAt = nowUnix()
+	s.tickSeq++
+	seq := s.tickSeq
+	s.persistLocked()
+	logger.Info(s.hooks.Module, "[Tick#%d] 触发响应步骤 %s（%s）", seq, system.ID(), reason)
+	s.runResponse(seq, system)
+}
+
+// run 在独立 goroutine 中执行主链体系，结束后释放 Tick。
 func (s *Scheduler[S]) run(seq int64, system System[S]) {
 	started := time.Now()
 	s.wg.Go(func() {
@@ -154,18 +225,46 @@ func (s *Scheduler[S]) run(seq int64, system System[S]) {
 	})
 }
 
+// runResponse 在独立 goroutine 中执行响应链，结束后清除响应忙与许可屏障。
+func (s *Scheduler[S]) runResponse(seq int64, system System[S]) {
+	started := time.Now()
+	s.wg.Go(func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logger.Error(s.hooks.Module, "[Tick#%d] %s 执行异常: %v", seq, system.ID(), recovered)
+			}
+			// 先清调度器忙标记，再清许可屏障：后者唤醒对话继续时，响应步骤已完全返回。
+			s.mu.Lock()
+			s.responseBusy = false
+			s.state.UpdatedAt = nowUnix()
+			s.persistLocked()
+			s.mu.Unlock()
+			if s.hooks.Permit != nil {
+				s.hooks.Permit.MarkResponse(false)
+			}
+			logger.Info(s.hooks.Module, "[Tick#%d] 释放响应步骤 %s，耗时 %v", seq, system.ID(), time.Since(started).Round(time.Millisecond))
+		}()
+		if err := system.Run(s.ctx); err != nil {
+			logger.Warn(s.hooks.Module, "[Tick#%d] %s 执行失败: %v", seq, system.ID(), err)
+			if s.hooks.OnError != nil {
+				s.hooks.OnError(system.ID(), err)
+			}
+		}
+	})
+}
+
 // Status 返回调度状态快照与当前是否忙碌（只读观测用）。
 func (s *Scheduler[S]) Status() (State, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state, s.busy
+	return s.state, s.busy || s.responseBusy
 }
 
-// Available 报告调度器是否处于空档期（可承接外部推理）。
+// Available 报告调度器是否处于空档期。
 func (s *Scheduler[S]) Available() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return !s.busy && !s.paused
+	return !s.busy && !s.responseBusy && !s.paused
 }
 
 // Paused 报告调度器是否处于维护暂停态。
@@ -189,12 +288,12 @@ func (s *Scheduler[S]) Resume() {
 	s.mu.Unlock()
 }
 
-// WaitIdle 等待当前运行中的一轮结束；超时返回 false。
+// WaitIdle 等待当前运行中的一轮（含特许响应）结束；超时返回 false。
 func (s *Scheduler[S]) WaitIdle(timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for {
 		s.mu.Lock()
-		busy := s.busy
+		busy := s.busy || s.responseBusy
 		s.mu.Unlock()
 		if !busy {
 			return true

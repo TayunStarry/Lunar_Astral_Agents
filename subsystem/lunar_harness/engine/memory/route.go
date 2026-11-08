@@ -97,7 +97,17 @@ func resultOf(c *Collection, doc *Document, similarity float32) Entry {
 	}
 }
 
-// findDuplicateText 跨全部簇查找与内容向量高度相似的文本记忆。
+// contentVectorOf 返回用于判重/聚类/整理校验的正文向量。
+// 带 tags 写入时 Embedding 是标签向量，正文向量单独保存在 ContentEmbedding；
+// 无标签写入与旧数据没有 ContentEmbedding，此时 Embedding 本身就是正文向量。
+func contentVectorOf(doc *Document) []float32 {
+	if len(doc.ContentEmbedding) > 0 {
+		return doc.ContentEmbedding
+	}
+	return doc.Embedding
+}
+
+// findDuplicateText 跨全部簇查找与正文向量高度相似的文本记忆。
 // 余弦相似度 ≥ DedupThreshold 视为重复，返回最相似的条目 ID；否则返回空。
 func (d *Store) findDuplicateText(vec []float32) string {
 	if len(vec) == 0 {
@@ -109,10 +119,14 @@ func (d *Store) findDuplicateText(vec []float32) string {
 		c.mu.RLock()
 		for i := range c.Documents {
 			doc := &c.Documents[i]
-			if documentType(*doc) != TypeText || len(doc.Embedding) != len(vec) {
+			if documentType(*doc) != TypeText {
 				continue
 			}
-			sim := cosineSimilarity(vec, doc.Embedding)
+			docVec := contentVectorOf(doc)
+			if len(docVec) != len(vec) {
+				continue
+			}
+			sim := cosineSimilarity(vec, docVec)
 			if sim >= DedupThreshold && sim > bestSim {
 				bestSim = sim
 				bestID = doc.ID

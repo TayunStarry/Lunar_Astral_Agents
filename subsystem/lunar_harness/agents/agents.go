@@ -14,6 +14,7 @@
 //	agents/MutualForum/      互助论坛智能体（Go：论坛浏览/发帖/回复的多轮工具执行）
 //	agents/FileEditor/       文件编辑智能体（Go：/document 文档库读写与项目运行）
 //	agents/PlanManager/      计划管理智能体（Go：计划表新增 / 删除 / 改写 / 查询）
+//	agents/SQLWriter/        语句生成智能体（Go：自然语言 → 一条只读 SQL，不执行）
 //	agents/*.js            页面注入型智能体（JS：Mini-LTP / Self-LTP / SharedInput）
 //
 // 跨多轮 / 跨多智能体的系统级链路编排不在本目录，统一收纳于 chain/：

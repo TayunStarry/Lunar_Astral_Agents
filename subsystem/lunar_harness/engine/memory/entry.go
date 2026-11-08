@@ -23,22 +23,31 @@ func (d *Store) AddTextWithTags(ctx context.Context, role, content string, tags 
 		return "", fmt.Errorf("消息内容不能为空")
 	}
 
-	// 1. 确定用于嵌入与归组的文本：有预设标签用标签拼接文本，否则用正文全文
+	// 1. 检索向量：有预设标签用标签拼接文本，否则用正文全文
 	embeddingText := content
-	if len(tags) > 0 {
+	hasTags := len(tags) > 0
+	if hasTags {
 		embeddingText = formatTagsText(tags)
 	}
 
-	// 2. 计算内容向量（归簇与判重都用它）
-	contentVec, err := d.embedText(ctx, currentEmbeddingModel(), embeddingText)
+	// 2. 检索向量用于语义检索与归组；正文向量始终由正文生成。
+	//    带标签时两者不同：判重、聚类、整理校验必须用正文向量，避免标签向量污染。
+	retrievalVec, err := d.embedText(ctx, currentEmbeddingModel(), embeddingText)
 	if err != nil {
 		return "", fmt.Errorf("内容嵌入失败: %w", err)
+	}
+	contentVec := retrievalVec
+	if hasTags {
+		contentVec, err = d.embedText(ctx, currentEmbeddingModel(), content)
+		if err != nil {
+			return "", fmt.Errorf("正文嵌入失败: %w", err)
+		}
 	}
 
 	// 3. 高度相似条目不再丢弃新措辞：新条目照常写入并标记为待处理，
 	//    由整理流程聚类后合并。队列超过写入上限时仍照常写入，只是不再入队，
 	//    保证任何情况下都不会先丢数据。
-	// 判重：跨总库 + 全部正式簇扫描（DedupThreshold=0.98）。
+	// 判重：跨总库 + 全部正式簇扫描正文向量（DedupThreshold=0.98）。
 	duplicateID := d.findDuplicateText(contentVec)
 	pending := duplicateID != ""
 	if pending && d.pendingCount() >= PendingMaxEntries {
@@ -50,7 +59,7 @@ func (d *Store) AddTextWithTags(ctx context.Context, role, content string, tags 
 
 	// 4. 新条目统一写入总库；正式簇只在迁移/重建时从总库中升级产生
 	id := generateUUID()
-	if err := d.assignToStore(id, contentVec); err != nil {
+	if err := d.assignToStore(id, retrievalVec); err != nil {
 		return "", fmt.Errorf("写入总库失败: %w", err)
 	}
 	c, err := d.storeCollection()
@@ -64,12 +73,16 @@ func (d *Store) AddTextWithTags(ctx context.Context, role, content string, tags 
 		Role:      role,
 		Content:   content,
 		Source:    source,
-		Embedding: contentVec,
+		Embedding: retrievalVec,
 		Timestamp: time.Now().Unix(),
+	}
+	if hasTags {
+		doc.ContentEmbedding = contentVec
 	}
 	if pending {
 		doc.Pending = true
 		doc.PendingPartner = duplicateID
+		doc.PendingSince = time.Now().Unix()
 	}
 	if err := c.appendDocument(doc); err != nil {
 		d.detachCluster(id)
@@ -343,9 +356,12 @@ func (d *Store) ClearPending(ctx context.Context, id string) error {
 				continue
 			}
 			found = true
-			if c.Documents[i].Pending || c.Documents[i].PendingPartner != "" {
+			if c.Documents[i].Pending || c.Documents[i].PendingPartner != "" ||
+				c.Documents[i].PendingAttempts != 0 || c.Documents[i].PendingSince != 0 {
 				c.Documents[i].Pending = false
 				c.Documents[i].PendingPartner = ""
+				c.Documents[i].PendingAttempts = 0
+				c.Documents[i].PendingSince = 0
 				changed = true
 			}
 			break
@@ -442,7 +458,9 @@ func (d *Store) Update(ctx context.Context, id, content string) error {
 		for i := range c.Documents {
 			if c.Documents[i].ID == id {
 				c.Documents[i].Content = content
+				// 正文已重建向量：检索向量此时就是正文向量，无需再单独保存
 				c.Documents[i].Embedding = vec
+				c.Documents[i].ContentEmbedding = nil
 				updated = c.Documents[i]
 				break
 			}

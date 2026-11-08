@@ -1,9 +1,0 @@
-{
-	"id": "lunar.knowledge-studio",
-	"icon": "icon.webp",
-	"title": "知识库",
-	"description": "SQLite 知识数据库可视化管理",
-	"tags": [
-		"Zero-LTP"
-	]
-}

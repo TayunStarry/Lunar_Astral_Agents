@@ -89,11 +89,11 @@ export class GifMediaCache {
         if (!file) throw new Error(`动画不存在：${name}`);
         const resp = await fetch(this.#baseUrl + encodeURIComponent(file));
         if (!resp.ok) throw new Error(`动画读取失败：${file}（HTTP ${resp.status}）`);
-        const blob = await resp.blob();
+        // 一次读入字节：解析时长与建 Blob 共用同一份，避免 blob() 后再 arrayBuffer() 整文件回读
+        const buffer = await resp.arrayBuffer();
         const ext = file.slice(file.lastIndexOf('.') + 1).toLowerCase();
-        const duration = ext === 'gif'
-            ? readGifDuration(new Uint8Array(await blob.arrayBuffer()))
-            : 0;
+        const duration = ext === 'gif' ? readGifDuration(new Uint8Array(buffer)) : 0;
+        const blob = new Blob([buffer], { type: MIME_BY_EXT[ext] || 'application/octet-stream' });
         const entry = {
             url: URL.createObjectURL(blob),
             duration: duration || FALLBACK_DURATION,

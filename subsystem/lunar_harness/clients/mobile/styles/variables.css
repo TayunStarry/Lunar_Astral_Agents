@@ -33,6 +33,14 @@
 	--glass-border: rgba(255, 255, 255, 0.25);
 	--glass-blur: blur(5px);
 
+	/* 聊天气泡：仅移动端使用，实心填充，不依赖背景模糊。
+	 * 颜色取自现有深色底与强调紫（--accent-color / --status-9d6bff），
+	 * 保证与现有令牌同一色系；桌面端不加载本文件。 */
+	--chat-bubble-bg: #23262f;
+	--chat-bubble-border: rgba(255, 255, 255, 0.09);
+	--chat-bubble-user-bg: #3a2c5b;
+	--chat-bubble-user-border: rgba(157, 107, 255, 0.38);
+
 	/* 玻璃按钮变量 */
 	--btn-glass-bg: rgba(0, 0, 0, 0.25);
 	--btn-glass-border: rgba(255, 255, 255, 0.25);

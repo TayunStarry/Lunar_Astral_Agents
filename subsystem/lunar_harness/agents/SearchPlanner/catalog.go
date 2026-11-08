@@ -9,14 +9,14 @@ import (
 
 func init() {
 	toolreg.Register(AgentID, toolreg.Schema{
-		Name:        "plan_search",
-		Description: "一次调用同时输出 pipeline / query / args / confidence；未知管线或把握不足时回落联网检索。",
+		Name:        decisionToolName,
+		Description: "通过 function calling 提交 pipeline / query / args / confidence；未知管线或把握不足时回落联网检索。",
 	})
 }
 
 // ToolCatalog 返回搜索者-规划的阶段能力。
 //
-// 规划智能体不使用 function calling；这里展示它在搜索链中实际承担的一步决策。
+// 规划智能体通过 decide_search_plan 工具提交决策，不再从正文解析参数。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
 		ID: AgentID, Name: modelRole,

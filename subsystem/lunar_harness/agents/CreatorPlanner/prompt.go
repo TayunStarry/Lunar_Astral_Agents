@@ -12,13 +12,15 @@ import (
 
 // PlannerPrompt 调度者系统提示。
 // assigned 为 true 表示对话者指派的单次任务；directives 为本轮创作参考；
-// 其余四个计数为上一轮规划日志的规模（计划、备忘、错误、内容级变更）。
-func PlannerPrompt(assigned bool, directives []string, lastPlans, memos, errors, changes int) string {
+// 其余四个计数为上一轮规划日志的规模（计划、备忘、错误、内容级变更）；
+// pathSnapshot 为已有路径树快照，只注入规划阶段，执行体不携带。
+func PlannerPrompt(assigned bool, directives []string, lastPlans, memos, errors, changes int, pathSnapshot string) string {
 	return agentbase.RenderPrompt(
 		promptText(promptPlanner),
 		"{directives}", directiveBlock(assigned, directives),
 		"{mode}", modeBlock(assigned),
 		"{journal-hint}", journalHint(assigned, lastPlans, memos, errors, changes),
+		"{path-snapshot}", pathSnapshotBlock(pathSnapshot),
 	)
 }
 
@@ -88,6 +90,15 @@ func journalHint(assigned bool, lastPlans, memos, errors, changes int) string {
 	}
 	return fmt.Sprintf("\n\n历史概况：上一轮 %d 步规划、%d 条备忘、%d 条错误、%d 条内容级变更。",
 		lastPlans, memos, errors, changes)
+}
+
+// pathSnapshotBlock 注入规划阶段的已有路径树快照；为空时不占用提示体积。
+func pathSnapshotBlock(snapshot string) string {
+	snapshot = strings.TrimSpace(snapshot)
+	if snapshot == "" {
+		return ""
+	}
+	return "\n\n【已有文件路径快照（/document 与 unknown；路径可直接用作工具参数，不含大小、时间、正文与句柄）】\n" + snapshot
 }
 
 // joinPrompt 拼接主提示与角色附加提示，避免空段落。

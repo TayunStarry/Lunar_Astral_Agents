@@ -37,7 +37,7 @@ var toolDefinitions = map[string]toolDefinition{
 			"content": strProp("完整文件内容"),
 		}, []string{"path", "content"}),
 	ToolCreate: toolDef(ToolCreate,
-		"新建 /document 下的文件（已存在时报错，请改用 file_write）。",
+		"新建 /document 下的文件（已存在时报错，请改用 file_write）。path 必须带具体文件名，不能以 / 结尾；父目录自动创建。",
 		map[string]any{
 			"path":    strProp("相对 /document 的文件路径（也可写完整路径或纯文件名）"),
 			"content": strProp("文件完整内容"),

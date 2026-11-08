@@ -82,7 +82,6 @@ async function applySource(type) {
         type,
         bases: BASES,
         video: document.getElementById('gif-video'),
-        prefetchEl: document.getElementById('gif-prefetch'),
         image: document.getElementById('gif-frame'),
         capacity: pickCapacity(),
         onFatal: err => fallbackToImage(err),

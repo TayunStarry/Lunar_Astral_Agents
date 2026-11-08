@@ -26,6 +26,7 @@ func (d *Store) snapshotTextDocs(ids map[string]struct{}) []docSnapshot {
 			}
 			cp := doc
 			cp.Embedding = append([]float32(nil), doc.Embedding...)
+			cp.ContentEmbedding = append([]float32(nil), doc.ContentEmbedding...)
 			out = append(out, docSnapshot{Doc: cp, Collection: c.Name})
 		}
 		c.mu.RUnlock()
@@ -128,6 +129,8 @@ func (d *Store) restoreTextDoc(ctx context.Context, snap docSnapshot) error {
 	switch {
 	case len(vec) > 0:
 		doc.Embedding = vec
+		// 恢复时从正文重建向量：此时检索向量就是正文向量，无需再单独保存
+		doc.ContentEmbedding = nil
 		// 原簇可能已因条目删空而消失，按当前向量重新写入总库，保证目录与索引一致
 		if err := d.assignToStore(doc.ID, vec); err == nil {
 			clusterID = StoreCollectionID
@@ -145,6 +148,7 @@ func (d *Store) restoreTextDoc(ctx context.Context, snap docSnapshot) error {
 	}
 	if len(vec) == 0 && target.Name == snap.Collection {
 		doc.Embedding = append([]float32(nil), snap.Doc.Embedding...)
+		doc.ContentEmbedding = append([]float32(nil), snap.Doc.ContentEmbedding...)
 	}
 	if err := target.appendDocument(doc); err != nil {
 		return err

@@ -36,7 +36,7 @@ func Run(ctx context.Context, instruction string, userTexts []string) (string, e
 
 // RunWithReference 执行一轮自由创作，reference 为本轮创作参考（来自 life_planning）。
 func RunWithReference(ctx context.Context, instruction, reference string) (string, error) {
-	result, err := runFlow(ctx, fileflow.ModeCreator, instruction, reference, nil)
+	result, err := runFlow(ctx, fileflow.ModeCreator, instruction, reference, nil, nil)
 	if err != nil {
 		return "", err
 	}
@@ -46,11 +46,22 @@ func RunWithReference(ctx context.Context, instruction, reference string) (strin
 // RunAssigned 执行一次对话者指派的任务：只带入历史操作记录，其余上下文不进入本轮。
 // handles 为对话者消息中真实出现的资源句柄，会附在指令中供流程节点定位目标。
 func RunAssigned(ctx context.Context, instruction string, handles []string) (TaskResult, error) {
-	return runFlow(ctx, fileflow.ModeAssigned, instruction, "", handles)
+	return runFlow(ctx, fileflow.ModeAssigned, instruction, "", handles, nil)
+}
+
+// RunAssignedWithProgress 执行一次指派任务，并把规划 / 执行进度回调给调用方。
+func RunAssignedWithProgress(ctx context.Context, instruction string, handles []string, observe func(ProgressEvent)) (TaskResult, error) {
+	return runFlow(ctx, fileflow.ModeAssigned, instruction, "", handles, observe)
+}
+
+// RunFreeWithProgress 执行一轮自由创作（随机目标池自主选题），并回调节奏进度。
+func RunFreeWithProgress(ctx context.Context, observe func(ProgressEvent)) (TaskResult, error) {
+	return runFlow(ctx, fileflow.ModeCreator,
+		"本轮没有对话者指派的具体任务，请按系统选定的创作事项完成一次完整创作。", "", nil, observe)
 }
 
 // runFlow 两种模式共用的流程执行主体。
-func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference string, handles []string) (TaskResult, error) {
+func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference string, handles []string, observe func(ProgressEvent)) (TaskResult, error) {
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
 		return TaskResult{}, errors.New("请用自然语言说明本次要做什么")
@@ -110,7 +121,9 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 		flowID:    flowID,
 		flow:      fileflow.NewContext(mode, flowID),
 		stepIndex: -1,
+		observe:   observe,
 	}
+	runSession.report(ProgressEvent{Status: statusPlanning, Stage: "调度者正在生成计划", Progress: 5})
 	plan, err := runSession.planRound(runCtx, instruction, history)
 	if err != nil {
 		runSession.addError(err)
@@ -119,6 +132,11 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 		// 失败上报由创作规划者智能体内部完成（归属 ID：creator）
 		return TaskResult{}, err
 	}
+	runSession.report(ProgressEvent{
+		Status:   statusExecuting,
+		Stage:    fmt.Sprintf("计划已生成：%d 步", len(plan.Steps)),
+		Progress: 20,
+	})
 
 	results := runSession.executePlan(runCtx, plan)
 	summary := summarizeSteps(results, plan)
@@ -142,7 +160,8 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 	}
 	logger.Info(Module, "[%s] 本轮完成：%d 步规划，%d 条操作记录，%d 个错误",
 		flowLabel, len(plan.Steps), len(runSession.flowRecords()), len(runSession.errs))
-	return runSession.taskResult(summary), nil
+	result := runSession.taskResult(summary)
+	return result, nil
 }
 
 // flowRecords 返回本次流程的操作记录。
@@ -157,6 +176,12 @@ func (s *session) flowRecords() []fileflow.Record {
 func (s *session) taskResult(summary string) TaskResult {
 	result := TaskResult{Summary: clipAtSentence(summary, maxAssignedSummaryRunes)}
 	seen := map[string]bool{}
+	for _, handle := range s.paintHandles {
+		if handle != "" && !seen[handle] {
+			seen[handle] = true
+			result.Handles = append(result.Handles, handle)
+		}
+	}
 	for _, record := range s.flowRecords() {
 		for _, handle := range record.Handles {
 			if handle != "" && !seen[handle] {

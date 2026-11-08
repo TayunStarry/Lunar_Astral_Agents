@@ -78,23 +78,24 @@
 	gap: 10px;
 }
 
-/* ===== 历史消息气泡 ===== */
+/* ===== 历史消息气泡 =====
+ * 移动端使用近实心填充，不再叠加 backdrop-filter 模糊：
+ * 深色背景下文字对比更稳定，滚动时也不会出现背景透色。
+ * 圆角 / 阴影 / 内边距沿用现有令牌。 */
 .history-item {
 	max-width: 92%;
 	padding: 9px 12px;
 	border-radius: var(--btn-glass-radius, 14px);
-	background: var(--btn-glass-bg);
-	border: 1px solid var(--glass-border);
+	background: var(--chat-bubble-bg);
+	border: 1px solid var(--chat-bubble-border);
 	box-shadow: var(--btn-glass-shadow);
-	backdrop-filter: var(--glass-blur);
-	-webkit-backdrop-filter: var(--glass-blur);
 	color: #f2f2f5;
 }
 
 .history-item.is-user {
 	align-self: flex-end;
-	background: rgba(157, 107, 255, 0.18);
-	border-color: rgba(157, 107, 255, 0.32);
+	background: var(--chat-bubble-user-bg);
+	border-color: var(--chat-bubble-user-border);
 }
 
 .history-item.is-assistant {

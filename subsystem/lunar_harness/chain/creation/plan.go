@@ -14,7 +14,7 @@ import (
 
 // planRound 调用调度者生成本轮计划；history 为统一库中上一轮调用的可见信息。
 func (s *session) planRound(ctx context.Context, instruction string, history journal) (planResult, error) {
-	prompt := plannerPrompt(s.mode, history)
+	prompt := plannerPrompt(s.mode, history, pathSnapshotText())
 	user := instruction + "\n\n" + formatJournal(history)
 	handler := func(name string, args map[string]any) (toolOutcome, bool, error) {
 		if name == toolSubmitPlan {
@@ -60,12 +60,13 @@ func plannerToolAllowed(name string) bool {
 }
 
 // plannerPrompt 调度者的系统提示：固定文案与运行模式说明由创作规划者智能体持有，
-// 链侧只把本轮模式、创作参考与历史日志规模传过去。
-func plannerPrompt(mode fileflow.Mode, history journal) string {
+// 链侧只把本轮模式、创作参考、历史日志规模与已有路径快照传过去。
+func plannerPrompt(mode fileflow.Mode, history journal, pathSnapshot string) string {
 	return CreatorPlanner.PlannerPrompt(
 		mode == fileflow.ModeAssigned,
 		history.Directives,
 		len(history.LastPlans), len(history.Memos), len(history.Errors), len(history.Changes),
+		pathSnapshot,
 	)
 }
 
@@ -92,9 +93,17 @@ func parsePlan(args map[string]any) (planResult, error) {
 		if task == "" {
 			return planResult{}, fmt.Errorf("第 %d 步缺少 task 描述", i+1)
 		}
+		paint := parsePaint(item["paint"])
+		if agent == agentPainter && (paint == nil || strings.TrimSpace(paint.Prompt) == "") {
+			return planResult{}, fmt.Errorf("第 %d 步交给图片绘制时必须提供 paint.prompt（画面描述），不能只用 task 文字代替", i+1)
+		}
+		if agent == agentPainter && paint != nil && len(paint.References) > 0 && strings.TrimSpace(paint.Change) == "" {
+			return planResult{}, fmt.Errorf("第 %d 步带参考图时必须提供 paint.change（基于参考图要改什么）", i+1)
+		}
 		steps = append(steps, planStep{
 			Agent:  agent,
 			Task:   task,
+			Paint:  paint,
 			Expect: parseExpects(item["expect"]),
 		})
 	}
@@ -111,6 +120,38 @@ func parsePlan(args map[string]any) (planResult, error) {
 		}
 	}
 	return planResult{Steps: steps, Memos: memos}, nil
+}
+
+// parsePaint 解析交给图片绘制智能体的结构化绘图需求；缺省或格式不对时返回 nil。
+func parsePaint(raw any) *paintBrief {
+	fields, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	prompt := strings.TrimSpace(argString(fields, "prompt"))
+	if prompt == "" {
+		return nil
+	}
+	references := make([]string, 0, 2)
+	if single := strings.TrimSpace(argString(fields, "reference")); single != "" {
+		references = append(references, single)
+	}
+	for _, item := range argStringSlice(fields, "references") {
+		if reference := strings.TrimSpace(item); reference != "" && !containsString(references, reference) {
+			references = append(references, reference)
+		}
+	}
+	if len(references) > maxPaintReferences {
+		references = references[:maxPaintReferences]
+	}
+	return &paintBrief{
+		Prompt:     clipAtSentence(prompt, maxPaintPromptRunes),
+		Ratio:      clipAtSentence(strings.TrimSpace(argString(fields, "ratio")), maxPaintMetaRunes),
+		Style:      clipAtSentence(strings.TrimSpace(argString(fields, "style")), maxPaintMetaRunes),
+		References: references,
+		Change:     clipAtSentence(strings.TrimSpace(argString(fields, "change")), maxPaintChangeRunes),
+		Output:     clipAtSentence(strings.TrimSpace(argString(fields, "output")), maxPaintMetaRunes),
+	}
 }
 
 // parseExpects 解析步骤声明的规划预期。

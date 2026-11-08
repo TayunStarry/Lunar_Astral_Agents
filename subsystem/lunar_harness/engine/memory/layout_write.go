@@ -43,7 +43,11 @@ func writeClusterDirCommon(dir string, dimension int, docs []Document) (int, err
 		}
 		embChunk := make([]embeddingRecord, len(docChunk))
 		for j := range docChunk {
-			embChunk[j] = embeddingRecord{ID: docChunk[j].ID, Embedding: docChunk[j].Embedding}
+			embChunk[j] = embeddingRecord{
+				ID:               docChunk[j].ID,
+				Embedding:        docChunk[j].Embedding,
+				ContentEmbedding: docChunk[j].ContentEmbedding,
+			}
 		}
 		if err := atomicWriteJSON(filepath.Join(dir, fmt.Sprintf("embeddings_%04d.json", chunkNum)), embChunk); err != nil {
 			return written, err

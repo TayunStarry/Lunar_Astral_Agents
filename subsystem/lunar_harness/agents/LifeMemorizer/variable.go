@@ -14,7 +14,7 @@ const (
 	// RoleName 实况角色标签（记忆整理按次执行，每次模型调用各自一条实况）。
 	RoleName = agentinfo.NameLifeMemorizer
 
-	// MaxTextRunes 单条整理后记忆的最大字符数（超出时在句读处结束，不硬切半句）。
+	// MaxTextRunes 单条整理后记忆的最大字符数（优先在句读处结束，句读过早时硬切并补省略号）。
 	MaxTextRunes = 512
 	// KeepPercent 整理后保留下限占输入条数的百分比（防止模型把整批压成寥寥几条）。
 	// 从 25 提高到 50：整理只允许温和合并，宁可条目多、每条短，也不丢事实。

@@ -3,7 +3,8 @@ package agentinfo
 // names.go 全部 Go 智能体显示名的唯一来源。
 //
 // 工具目录、数据导出、故障诊断与推理实况都从这里取名字，禁止在业务包内
-// 再写中文显示名。唯一例外是「记忆整理」为三个字，其余均为四个汉字。
+// 再写中文显示名。多数名字为四个汉字；「记忆整理」为三字，「分镜规划-*」
+// 为同一智能体家族的分阶段角色名，统一使用「家族-阶段」格式。
 
 const (
 	// NameVision 视觉理解
@@ -52,6 +53,22 @@ const (
 	NameLifeMemorizer = "记忆整理"
 	// NameDesktopOperator 桌面操作
 	NameDesktopOperator = "桌面操作"
+	// NameSQLWriter 语句生成
+	NameSQLWriter = "语句生成"
+	// NameStoryboardResearch 分镜规划-资料
+	NameStoryboardResearch = "分镜规划-资料"
+	// NameStoryboardPlan 分镜规划-拆解
+	NameStoryboardPlan = "分镜规划-拆解"
+	// NameStoryboardRevise 分镜规划-修订
+	NameStoryboardRevise = "分镜规划-修订"
+	// NameMemoryTagger 记忆标签
+	NameMemoryTagger = "记忆标签"
+	// NameMemoryFuser 记忆融合
+	NameMemoryFuser = "记忆融合"
+	// NameAudioTranscriber 语音转写
+	NameAudioTranscriber = "语音转写"
+	// NameRuntimeChat 插件对话
+	NameRuntimeChat = "插件对话"
 )
 
 // DisplayNames 智能体 ID → 显示名。
@@ -79,6 +96,16 @@ var DisplayNames = map[string]string{
 	"creator":           NameCreator,
 	"life_memorizer":    NameLifeMemorizer,
 	"desktop_operator":  NameDesktopOperator,
+	"sql_writer":        NameSQLWriter,
+
+	"storyboard_research": NameStoryboardResearch,
+	"storyboard_planner":  NameStoryboardPlan,
+	"storyboard_revise":   NameStoryboardRevise,
+
+	"memory_tagger":     NameMemoryTagger,
+	"memory_fuser":      NameMemoryFuser,
+	"audio_transcriber": NameAudioTranscriber,
+	"runtime_chat":      NameRuntimeChat,
 }
 
 // Name 返回智能体显示名；未登记的 ID 原样返回，便于调用方暴露真实 ID 排查。

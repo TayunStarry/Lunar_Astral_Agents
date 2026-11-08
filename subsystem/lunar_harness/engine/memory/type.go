@@ -289,9 +289,17 @@ type Document struct {
 	Pending bool `json:"pending,omitempty"`
 	// PendingPartner 待合并组中的高度相似既有条目 ID（仅 Pending 为 true 时有值）
 	PendingPartner string `json:"pending_partner,omitempty"`
+	// PendingAttempts 该条目在待合并状态下连续失败的次数；达到上限后解除待处理标记。
+	PendingAttempts int `json:"pending_attempts,omitempty"`
+	// PendingSince 条目首次进入待合并状态的时间（Unix 秒）；用于超时放行，避免无限隐身。
+	PendingSince int64 `json:"pending_since,omitempty"`
 	// Embedding 文档内容嵌入向量，json:"-" 使其不随文档持久化，
-	// 单独存储于 embeddings_NNNN.json 切片文件（见 embeddingRecord）
+	// 单独存储于 embeddings_NNNN.json 切片文件（见 embeddingRecord）。
+	// 带 tags 写入时该字段是标签向量（检索用），正文向量见 ContentEmbedding。
 	Embedding []float32 `json:"-"`
+	// ContentEmbedding 正文嵌入向量；仅带 tags 写入的文本记忆会单独保存。
+	// 判重、聚类与整理结果校验一律以正文向量为准，避免标签向量污染。
+	ContentEmbedding []float32 `json:"-"`
 }
 
 // embeddingRecord 嵌入向量切片条目 — 与文档切片一一对应（按相同索引对齐）
@@ -299,7 +307,17 @@ type Document struct {
 // 避免文档切片文件体积过大。
 type embeddingRecord struct {
 	ID        string    `json:"id"`        // 对应文档的 UUID
-	Embedding []float32 `json:"embedding"` // 文档内容嵌入向量
+	Embedding []float32 `json:"embedding"` // 检索用嵌入向量（有 tags 时为标签向量）
+	// ContentEmbedding 正文嵌入向量；无标签写入时为空（正文向量即 Embedding）
+	ContentEmbedding []float32 `json:"content_embedding,omitempty"`
+}
+
+// PendingFailureResult 一次整理失败后的待处理状态变化。
+type PendingFailureResult struct {
+	// Released 达到重试上限或隐身超时，已解除待处理标记并恢复检索可见的条目
+	Released []string
+	// Retained 仍保持待处理状态、等待下一轮重试的条目
+	Retained []string
 }
 
 // collectionMeta 集合元数据，持久化到 metadata.json
@@ -448,50 +466,4 @@ type embeddingResponse struct {
 	Error *struct {
 		Message string `json:"message"` // 错误描述
 	} `json:"error,omitempty"` // 错误响应载荷
-}
-
-// chatRequest OpenAI 兼容 /v1/chat/completions 请求体
-type chatRequest struct {
-	Model              string         `json:"model"`
-	Messages           []chatMessage  `json:"messages"`
-	MaxTokens          int            `json:"max_tokens,omitempty"`
-	Temperature        float32        `json:"temperature,omitempty"`
-	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
-}
-
-// chatMessage 聊天消息
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content any    `json:"content"` // string 或 []chatContentPart
-}
-
-// chatContentPart 多模态消息内容部分
-type chatContentPart struct {
-	Type     string    `json:"type"`
-	Text     string    `json:"text,omitempty"`
-	ImageURL *imageURL `json:"image_url,omitempty"`
-}
-
-// imageURL 图片 URL 引用
-type imageURL struct {
-	URL string `json:"url"`
-}
-
-// chatResponse OpenAI 兼容 /v1/chat/completions 响应体
-type chatResponse struct {
-	Choices []chatChoice `json:"choices"`
-	Error   *struct {
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
-}
-
-// chatChoice 聊天响应选择
-type chatChoice struct {
-	Message chatMessageResp `json:"message"`
-}
-
-// chatMessageResp 聊天响应消息
-type chatMessageResp struct {
-	Content          string `json:"content"`
-	ReasoningContent string `json:"reasoning_content,omitempty"`
 }

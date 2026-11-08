@@ -16,13 +16,8 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
-	"time"
-
-	"LunarSubsystem/LunarHarness/engine/config"
 )
 
 // ==== JWT 签名（hash.signJWT） ====
@@ -208,79 +203,21 @@ func engineImageLoadValid(p *plugin, path string) (any, error) {
 	return rwResult{Success: true, Text: base64.StdEncoding.EncodeToString(b)}, nil
 }
 
-// ==== LLM agent.chat（本地固定模型路由） ====
+// ==== LLM agent.chat（智能体实现，装配层注入） ====
 
-// engineLLMChat 调用 OpenAI 兼容 v1/chat/completions，返回首个 choice 的文本内容。
-// 模型路由使用本地部署固定值（config.AgentMultimodal*）。
+// engineLLMChat 调用通用推理智能体（实现于 agents/RuntimeChat），返回正文与工具调用。
 func engineLLMChat(messages []any, opts map[string]any) (any, error) {
-	model := config.AgentMultimodalModel
-	baseURL := config.AgentMultimodalURL
-	payload := map[string]any{"model": model, "messages": messages, "stream": false}
-	if t, ok := opts["temperature"].(float64); ok {
-		payload["temperature"] = t
+	if AgentLLMFunc == nil {
+		return rwResult{Success: false, Error: "LLM 智能体未装配"}, nil
 	}
-	if topt, ok := opts["max_tokens"].(int64); ok {
-		payload["max_tokens"] = topt
+	text, toolCalls, err := AgentLLMFunc(messages, opts)
+	if err != nil {
+		return rwResult{Success: false, Error: "LLM 请求失败: " + err.Error()}, nil
 	}
-	// 系统提示词：以 opts.system 传入时前置为一条 system 消息（不改动原 messages）
-	if sys, ok := opts["system"].(string); ok && sys != "" {
-		prepended := make([]any, 0, len(messages)+1)
-		prepended = append(prepended, map[string]any{"role": "system", "content": sys})
-		prepended = append(prepended, messages...)
-		payload["messages"] = prepended
-	}
-	// tools：支持给 LLM 提供函数/工具定义（AtoA 智能体需要给模型接头）
-	if tools, ok := opts["tools"].([]any); ok && len(tools) > 0 {
-		payload["tools"] = tools
-	}
-	body, _ := json.Marshal(payload)
-	// 本地固定端点已含 /v1，作为服务根拼出 chat/completions 路径
-	base := strings.TrimRight(baseURL, "/")
-	if !strings.HasSuffix(base, "/v1") {
-		base += "/v1"
-	}
-	req, rerr := http.NewRequest("POST", base+"/chat/completions", bytes.NewReader(body))
-	if rerr != nil {
-		return rwResult{Success: false, Error: rerr.Error()}, nil
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, rerr := client.Do(req)
-	if rerr != nil {
-		return rwResult{Success: false, Error: "LLM 请求失败: " + rerr.Error()}, nil
-	}
-	defer resp.Body.Close()
-	rb, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return rwResult{Success: false, Error: fmt.Sprintf("LLM 状态 %d: %s", resp.StatusCode, previewStr(rb, 300))}, nil
-	}
-	var out struct {
-		Choices []struct {
-			Message struct {
-				Content   string `json:"content"`
-				ToolCalls []any  `json:"tool_calls"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if json.Unmarshal(rb, &out) != nil {
-		return rwResult{Success: false, Error: "LLM 响应解析失败"}, nil
-	}
-	if len(out.Choices) == 0 {
-		return rwResult{Success: false, Error: "LLM 无输出"}, nil
-	}
-	res := rwResult{Success: true, Text: out.Choices[0].Message.Content}
+	res := rwResult{Success: true, Text: text}
 	// 模型走函数调用（tool_calls）时 content 为空，把 tool_calls 原样回传供 AtoA 智能体继续执行
-	if len(out.Choices[0].Message.ToolCalls) > 0 {
-		res.ToolCalls = out.Choices[0].Message.ToolCalls
+	if len(toolCalls) > 0 {
+		res.ToolCalls = toolCalls
 	}
 	return res, nil
-}
-
-// previewStr 把字节串截断为最多 n 字符的预览（超长以 ... 结尾）。
-func previewStr(b []byte, n int) string {
-	s := string(b)
-	if len(s) > n {
-		return s[:n] + "..."
-	}
-	return s
 }

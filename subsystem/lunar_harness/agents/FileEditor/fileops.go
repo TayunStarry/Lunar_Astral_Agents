@@ -242,7 +242,14 @@ func readDocument(rel string) (string, error) {
 // ==== 写入类操作 ====
 
 // writeDocument 写入文件（upsert）；mustCreate 为 true 时目标已存在则报错。
+//
+// 路径以分隔符结尾时按目录写法直接拒绝：file_create / file_rewrite 只能写具体文件，
+// 父目录本来就会自动创建，否则会产出一个与目录同名的 0 字节文件，后续写入全部失败。
 func writeDocument(rel, content string, mustCreate bool) (string, string, error) {
+	raw := strings.TrimSpace(rel)
+	if strings.HasSuffix(raw, "/") || strings.HasSuffix(raw, "\\") {
+		return "", "", fmt.Errorf("路径 %q 以分隔符结尾，是目录写法；只能写入具体文件，父目录会自动创建，请补上文件名（如 项目/index.html）", raw)
+	}
 	full, localRel, err := documentPath(rel)
 	if err != nil {
 		return "", "", err

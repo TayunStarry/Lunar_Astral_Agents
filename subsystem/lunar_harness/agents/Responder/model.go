@@ -31,10 +31,19 @@ func retryable(err error) bool {
 
 // completeOnce 发起一次流式补全，边收边推送实况，最后拼成完整结果。
 func completeOnce(ctx context.Context, req *Request) (Result, error) {
+	var tools any
 	extra := make(map[string]any, len(req.Params))
 	for key, raw := range req.Params {
 		switch strings.ToLower(strings.TrimSpace(key)) {
 		case "model", "stream", "stream_options", "messages":
+			continue
+		case "tools":
+			// 工具定义必须走 StreamRequest.Tools 下发：agentbase.Stream 为了不让
+			// Extra 覆盖显式字段，会跳过 Extra 里的 tools 键。混在 Extra 里会被静默丢弃，
+			// 模型收不到任何工具 schema，只能把工具调用写成正文（如 <tool_call> 或 JSON 文本）。
+			if err := json.Unmarshal(raw, &tools); err != nil {
+				return Result{}, fmt.Errorf("tools 解析失败: %w", err)
+			}
 			continue
 		}
 		var value any
@@ -47,6 +56,7 @@ func completeOnce(ctx context.Context, req *Request) (Result, error) {
 		Agent:       "responder",
 		Role:        roleLabel,
 		Messages:    req.Messages,
+		Tools:       tools,
 		Extra:       extra,
 		Timeout:     requestTimeout,
 		ReportTools: true,

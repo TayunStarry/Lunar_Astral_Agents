@@ -20,6 +20,8 @@ const (
 	KindTidy ItemKind = "tidy"
 	// KindJoke 向随机 QQ 用户或群聊推送小笑话
 	KindJoke ItemKind = "joke"
+	// KindPaint 自主创作一组图片
+	KindPaint ItemKind = "paint"
 )
 
 // PlanItem 本轮自主选定的创作事项：类型 + 具体参数 + 可执行指令。
@@ -51,6 +53,8 @@ type planState struct {
 	Parked []PlanItem `json:"parked,omitempty"`
 	// Recent 最近选中的事项类型（排除窗口，避免马上重抽到同一类）
 	Recent []string `json:"recent,omitempty"`
+	// RecentTargets 最近选中的具体目标（如绘画题材），避免短时间内重复同一目标
+	RecentTargets []string `json:"recent_targets,omitempty"`
 	// UpdatedAt 最后写入时间
 	UpdatedAt int64 `json:"updated_at"`
 }

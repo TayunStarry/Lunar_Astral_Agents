@@ -111,6 +111,7 @@ func TestEveryItemKindBuildsExecutableParams(t *testing.T) {
 		KindStory:    {"基调", "篇幅", "主角"},
 		KindTidy:     {"目录", "整理动作"},
 		KindJoke:     {"对象类型", "对象", "对象ID", "风格"},
+		KindPaint:    {"题材", "风格", "画幅", "批次"},
 	}
 
 	for _, spec := range itemSpecs {
@@ -130,9 +131,13 @@ func TestEveryItemKindBuildsExecutableParams(t *testing.T) {
 	}
 
 	// QQ 不可用时，笑话事项必须拒绝生成而不是产出不可执行的任务
-	jokeSpec := itemSpecs[len(itemSpecs)-1]
-	if _, ok := jokeSpec.Build(rng, qqTargets{}); ok {
-		t.Fatal("QQ 适配器不可用时不应生成笑话事项")
+	for _, spec := range itemSpecs {
+		if spec.Kind != KindJoke {
+			continue
+		}
+		if _, ok := spec.Build(rng, qqTargets{}); ok {
+			t.Fatal("QQ 适配器不可用时不应生成笑话事项")
+		}
 	}
 }
 

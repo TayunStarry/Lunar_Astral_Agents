@@ -38,14 +38,13 @@ export function resolveBases(params) {
  * @param {'video'|'image'} options.type 资源类型
  * @param {{video: string, image: string}} options.bases 两套基址
  * @param {HTMLVideoElement} options.video 播放元素
- * @param {HTMLVideoElement} [options.prefetchEl] 预取元素
  * @param {HTMLImageElement} options.image 动图元素
  * @param {number} options.capacity GIF 字节缓存容量
  * @param {(err: Error) => void} options.onFatal WebM 连续失败
  * @param {(err: Error) => void} options.onImageError GIF 加载失败
  * @returns {Promise<{mode: string, library: Array, names: string[], files: Map, cache: GifMediaCache|null, scheduler: object}>}
  */
-export async function loadSource({ type, bases, video, prefetchEl, image, capacity, onFatal, onImageError }) {
+export async function loadSource({ type, bases, video, image, capacity, onFatal, onImageError }) {
     const isVideo = type === 'video';
     const library = await discoverAnimations(isVideo ? bases.video : bases.image, isVideo ? 'video' : 'image');
     if (library.length === 0) throw new Error(isVideo ? 'WebM 目录为空' : 'GIF 回退目录为空');
@@ -60,7 +59,6 @@ export async function loadSource({ type, bases, video, prefetchEl, image, capaci
             baseUrl: bases.video,
             files,
             video,
-            prefetchEl,
             onError: onFatal,
         });
         scheduler.start();

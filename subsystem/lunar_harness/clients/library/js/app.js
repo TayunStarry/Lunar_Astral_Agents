@@ -1,12 +1,41 @@
 // app.js 资源库前端主控：状态、渲染、键鼠交互与 WebSocket 实时刷新。
 
-import { fetchTree, fetchEdits, fetchMeta, renameFile, moveFile, deleteFile } from './api.js';
-import { buildTree, childrenOf, parentOf, nameOf, humanSize, kindOf, statusClass, isRunnable } from './model.js';
+import { fetchTree, fetchEdits, fetchMeta, renameFile, moveFile, deleteFile, resolveHandle } from './api.js';
+import { childrenOf, parentOf, nameOf, humanSize, kindOf, statusClass, isRunnable, rootLabel } from './model.js';
 import { renderPreview, renderChanges, renderDetails } from './view.js';
+import {
+    isDatabaseFile, openDatabase, renderDatabasePreview, renderDatabasePanel,
+    resetDatabase, databasePath, setDatabaseChangeHandler,
+} from './dbview.js';
+import { isArchiveFile, openArchive, renderArchivePreview, resetArchive } from './archiveview.js';
+import { prepareRequirement, submitRequirement, watchRequirement, handleCreationEvent, setPushConnected, setRequirementObserver } from './requirement.js';
+import {
+    prepareStoryboard, submitStoryboard, watchStoryboard, handleStoryboardEvent,
+    setStoryboardPushConnected, setStoryboardObserver,
+    confirmStoryboard, pauseStoryboard, resumeStoryboard, cancelStoryboard,
+} from './storyboard.js';
 import { toast, confirmDialog, promptDialog, folderDialog, helpDialog } from './dialog.js';
 import { runInSandbox, hideSandbox } from './sandbox.js';
 
 const THEME_KEY = 'libraryTheme';
+const TASK_STATUS_LABELS = {
+    queued: '排队中',
+    researching: '资料准备',
+    planning: '规划中',
+    reviewing: '待审查',
+    revising: '分镜修订',
+    painting: '绘制中',
+    writing: '生成文档',
+    paused: '已暂停',
+    canceled: '已终止',
+    executing: '执行中',
+    completed: '已完成',
+    failed: '失败',
+};
+const TASK_MODE_LABELS = {
+    assigned: '指定句柄',
+    random: '随机选题',
+};
 const state = {
     entries: [],
     roots: [],
@@ -14,14 +43,42 @@ const state = {
     version: 0,
     currentPath: '',
     selectedPath: '',
-    expanded: new Set(),
     query: '',
     tab: 'preview',
+    detailsTab: 'detail',
     meta: new Map(),
     truncated: false,
 };
 
 const els = {};
+
+// 创作产出自动跳转：只对本次会话提交的任务生效，并记录提交时的选中路径作为基线。
+const creationBaselines = new Map();
+const jumpedTasks = new Set();
+// 演绎产出自动跳转：同样只对本次会话提交的任务生效。
+const storyboardBaselines = new Map();
+const storyboardJumped = new Set();
+// 演绎进度视图：按镜头逐条追加，避免每次推送整块重建。
+const storyboardView = {
+    taskId: '',
+    task: null,
+    titleEl: null,
+    idEl: null,
+    stageEl: null,
+    thoughtEl: null,
+    docEl: null,
+    listEl: null,
+    rows: new Map(),
+};
+
+// 分镜审查面板：只在任务进入 reviewing 时出现，编辑内容以本地状态为准。
+const storyboardReview = {
+    taskId: '',
+    title: '',
+    shots: [],
+    busy: false,
+    root: null,
+};
 
 // 窄窗（详情以抽屉形式覆盖显示）判定，与 styles.css 的断点保持一致
 const narrowQuery = window.matchMedia('(max-width: 1120px)');
@@ -33,6 +90,15 @@ async function init() {
     cacheElements();
     applyTheme(localStorage.getItem(THEME_KEY) === 'dark');
     bindEvents();
+    setRequirementObserver(onRequirementEvent);
+    setStoryboardObserver(onStoryboardEvent);
+    // 数据库视图的数据变化（选表 / 翻页 / 排序）回写主显示区与右侧标签页。
+    setDatabaseChangeHandler(() => {
+        const entry = currentEntry();
+        if (!entry || !isDatabaseFile(entry)) return;
+        if (state.tab === 'preview') renderDatabasePreview(els.grid, entry);
+        renderDatabasePanel(els.dbPane, entry);
+    });
     await refreshAll();
     connectSocket();
     await autoRunFromQuery();
@@ -62,31 +128,46 @@ async function autoRunFromQuery() {
 }
 
 function cacheElements() {
-    els.tree = document.getElementById('tree');
     els.grid = document.getElementById('view-preview');
     els.changes = document.getElementById('view-changes');
     els.details = document.getElementById('details');
     els.detailsPanel = document.getElementById('details-panel');
     els.detailsBackdrop = document.getElementById('details-backdrop');
     els.crumbs = document.getElementById('crumbs');
+    els.backBtn = document.getElementById('back-btn');
     els.search = document.getElementById('search-input');
-    els.entryCount = document.getElementById('entry-count');
-    els.truncate = document.getElementById('truncate-hint');
     els.tabs = document.getElementById('view-tabs');
     els.summary = document.getElementById('content-summary');
-    els.renameBtn = document.getElementById('rename-btn');
-    els.moveBtn = document.getElementById('move-btn');
-    els.deleteBtn = document.getElementById('delete-btn');
+    els.reqForm = document.getElementById('requirement-form');
+    els.reqHandle = document.getElementById('requirement-handle');
+    els.reqText = document.getElementById('requirement-text');
+    els.reqPick = document.getElementById('requirement-pick');
+    els.reqSubmit = document.getElementById('requirement-submit');
+    els.reqState = document.getElementById('requirement-state');
+    els.reqResult = document.getElementById('requirement-result');
+    els.storyForm = document.getElementById('storyboard-form');
+    els.storyText = document.getElementById('storyboard-text');
+    els.storyHandle = document.getElementById('storyboard-handle');
+    els.storyPick = document.getElementById('storyboard-pick');
+    els.storyTitle = document.getElementById('storyboard-title');
+    els.storyStyle = document.getElementById('storyboard-style');
+    els.storyRatio = document.getElementById('storyboard-ratio');
+    els.storySubmit = document.getElementById('storyboard-submit');
+    els.storyState = document.getElementById('storyboard-state');
+    els.storyResult = document.getElementById('storyboard-result');
+    els.storyPause = document.getElementById('storyboard-pause');
+    els.storyCancel = document.getElementById('storyboard-cancel');
+    els.storyReviewOpen = document.getElementById('storyboard-review-open');
+    els.storyReview = document.getElementById('storyboard-review');
+    els.dbTab = document.getElementById('details-tab-database');
+    els.dbPane = document.getElementById('database-pane');
 }
 
 function bindEvents() {
     document.getElementById('refresh-btn').addEventListener('click', () => refreshAll(true));
     document.getElementById('theme-btn').addEventListener('click', toggleTheme);
     document.getElementById('help-btn').addEventListener('click', showHelp);
-    document.getElementById('back-btn').addEventListener('click', goBack);
-    els.renameBtn.addEventListener('click', doRename);
-    els.moveBtn.addEventListener('click', doMove);
-    els.deleteBtn.addEventListener('click', doDelete);
+    els.backBtn.addEventListener('click', goBack);
     document.getElementById('search-clear').addEventListener('click', clearSearch);
     document.getElementById('details-btn').addEventListener('click', toggleDetails);
     document.getElementById('details-close').addEventListener('click', closeDetails);
@@ -112,6 +193,28 @@ function bindEvents() {
             renderContent();
         });
     });
+    document.querySelectorAll('.details-tab').forEach((tab) => {
+        tab.addEventListener('click', () => switchDetailsTab(tab.dataset.detailsTab));
+    });
+    els.reqForm.addEventListener('submit', onSubmitRequirement);
+    els.reqPick.addEventListener('click', () => pickRequirementHandle(true));
+    els.reqText.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            els.reqForm.requestSubmit();
+        }
+    });
+    els.storyForm.addEventListener('submit', onSubmitStoryboard);
+    els.storyPick.addEventListener('click', () => pickStoryboardHandle(true));
+    els.storyPause.addEventListener('click', onStoryboardPause);
+    els.storyCancel.addEventListener('click', onStoryboardCancel);
+    els.storyReviewOpen.addEventListener('click', () => openStoryboardReview());
+    els.storyText.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            els.storyForm.requestSubmit();
+        }
+    });
     document.addEventListener('keydown', onKeyDown);
 }
 
@@ -125,13 +228,15 @@ async function refreshAll(notify = false) {
         state.edits = new Map((edits.files || []).map((file) => [file.path, file]));
         state.version = edits.version || 0;
         state.meta.clear();
-        if (!state.currentPath || !state.roots.includes(state.currentPath.split('/')[0])) {
-            state.currentPath = state.roots[0] || '';
+        // 空路径代表虚拟根：直接展示所有存储根下的句柄根目录。
+        // 存储根本身不再作为可停留层级，因此停在其中时回退到虚拟根。
+        if (!state.currentPath || state.roots.includes(state.currentPath)
+            || !isValidTopLevel(state.currentPath.split('/')[0])) {
+            state.currentPath = '';
         }
         if (state.selectedPath && !state.entries.some((entry) => entry.path === state.selectedPath)) {
             state.selectedPath = '';
         }
-        state.roots.forEach((root) => state.expanded.add(root));
         renderAll();
         if (notify) toast('已刷新', 'success');
     } catch (err) {
@@ -201,12 +306,11 @@ async function syncEdits() {
 
 // ===== 渲染 =====
 function renderAll() {
-    renderTree();
     renderContent();
+    updateDatabaseTab();
     renderDetailsPane();
-    updateActions();
-    els.entryCount.textContent = String(state.entries.length);
-    els.truncate.classList.toggle('hidden', !state.truncated);
+    // 虚拟根且未选中文件时没有上级可回退，禁用返回按钮避免出现无反应层级。
+    els.backBtn.disabled = !state.currentPath && !state.selectedPath;
     renderCrumbs();
     renderSummary();
 }
@@ -245,56 +349,8 @@ function renderSummary() {
     const folders = visible.filter((item) => item.dir).length;
     const files = visible.length - folders;
     els.summary.textContent = state.query
-        ? `匹配 ${visible.length} 项`
-        : `共 ${visible.length} 项 · ${folders} 个文件夹 · ${files} 个文件`;
-}
-
-function renderTree() {
-    const tree = buildTree(state.entries.filter((entry) => entry.dir), state.roots);
-    els.tree.replaceChildren();
-    tree.forEach((node) => els.tree.append(treeRow(node, 0)));
-}
-
-function treeRow(node, depth) {
-    const wrap = document.createElement('div');
-    wrap.className = 'tree-root';
-    const row = document.createElement('button');
-    row.className = 'tree-node root-node';
-    row.style.paddingLeft = `${8 + depth * 14}px`;
-    row.dataset.path = node.path;
-    const twisty = document.createElement('span');
-    twisty.className = 'twisty';
-    twisty.innerHTML = node.children.length
-        ? `<i class="fas fa-chevron-${state.expanded.has(node.path) ? 'down' : 'right'}"></i>`
-        : '';
-    const icon = document.createElement('i');
-    icon.className = `fas ${state.expanded.has(node.path) ? 'fa-folder-open' : 'fa-folder'} root-icon`;
-    const name = document.createElement('span');
-    name.className = 'name';
-    name.textContent = node.name;
-    row.append(twisty, icon, name);
-    // 仅当前所在层级做选中标记，祖先节点不再叠加第二个选择框
-    if (node.path === state.currentPath) {
-        row.classList.add('active');
-    }
-    row.addEventListener('click', (event) => {
-        if (event.target.closest('.twisty')) {
-            toggleExpand(node.path);
-            return;
-        }
-        navigate(node.path);
-    });
-    wrap.append(row);
-    if (state.expanded.has(node.path)) {
-        node.children.forEach((child) => wrap.append(treeRow(child, depth + 1)));
-    }
-    return wrap;
-}
-
-function toggleExpand(path) {
-    if (state.expanded.has(path)) state.expanded.delete(path);
-    else state.expanded.add(path);
-    renderTree();
+        ? `匹配 ${visible.length} 项${state.truncated ? ' · 仅展示前 2 万项' : ''}`
+        : `共 ${visible.length} 项 · ${folders} 个文件夹 · ${files} 个文件${state.truncated ? ' · 仅展示前 2 万项' : ''}`;
 }
 
 function renderContent() {
@@ -312,9 +368,43 @@ function renderContent() {
     }
     if (showChanges) {
         renderChanges(els.changes, state.edits.get(entry.path));
-    } else {
-        renderPreview(els.grid, entry, state.edits.get(entry.path));
+        return;
     }
+    if (isDatabaseFile(entry)) {
+        renderDatabasePreview(els.grid, entry);
+        if (databasePath() !== entry.path) void openDatabase(entry);
+        return;
+    }
+    if (isArchiveFile(entry)) {
+        renderArchivePreview(els.grid, entry);
+        void openArchive(entry);
+        return;
+    }
+    renderPreview(els.grid, entry, state.edits.get(entry.path));
+}
+
+// isValidTopLevel 虚拟根下的首段路径是否可停留：4 个存储根，或 database 这类顶层目录条目。
+function isValidTopLevel(segment) {
+    return state.roots.includes(segment)
+        || state.entries.some((entry) => entry.dir && entry.path === segment);
+}
+
+// currentEntry 当前选中的条目（不存在时返回 null）。
+function currentEntry() {
+    return state.entries.find((item) => item.path === state.selectedPath) || null;
+}
+
+// updateDatabaseTab 「数据库」标签只在当前预览为数据库文件时出现；
+// 不可用时若正停在该标签，回退到详情页。
+function updateDatabaseTab() {
+    const entry = currentEntry();
+    const available = Boolean(entry && !entry.dir && isDatabaseFile(entry));
+    els.dbTab.classList.toggle('hidden', !available);
+    if (!available) {
+        if (state.detailsTab === 'database') switchDetailsTab('detail');
+        return;
+    }
+    if (state.detailsTab === 'database') renderDatabasePanel(els.dbPane, entry);
 }
 
 function renderGrid() {
@@ -348,7 +438,7 @@ function fileCard(entry) {
     const sub = document.createElement('span');
     sub.className = 'file-card-sub';
     if (entry.dir) {
-        sub.append(textSpan('文件夹'));
+        sub.append(textSpan(state.currentPath === '' ? rootLabel(entry.root) : '文件夹'));
     } else {
         const fileState = state.edits.get(entry.path);
         const status = statusClass(fileState && fileState.status);
@@ -384,32 +474,43 @@ function textSpan(text) {
 
 function renderCrumbs() {
     els.crumbs.replaceChildren();
-    if (!state.currentPath) return;
-    const parts = state.currentPath.split('/');
-    parts.forEach((part, index) => {
-        const path = parts.slice(0, index + 1).join('/');
+    const home = document.createElement(state.currentPath ? 'button' : 'span');
+    home.className = 'crumb';
+    home.textContent = '全部资源';
+    if (state.currentPath) {
+        home.addEventListener('click', () => navigate(''));
+    } else {
+        home.classList.add('current');
+    }
+    els.crumbs.append(home);
+    // parts[0] 是存储根时从层级中移除；database 是普通顶层目录，需保留自身面包屑。
+    const parts = state.currentPath ? state.currentPath.split('/') : [];
+    const rootSegment = parts.length > 0 && state.roots.includes(parts[0]);
+    const visible = rootSegment ? parts.slice(1) : parts;
+    visible.forEach((part, index) => {
+        appendCrumbSep('/');
+        const path = parts.slice(0, index + (rootSegment ? 2 : 1)).join('/');
         const btn = document.createElement('button');
         btn.className = 'crumb';
-        if (index === parts.length - 1) btn.classList.add('current');
+        if (index === visible.length - 1) btn.classList.add('current');
         btn.textContent = part;
         btn.addEventListener('click', () => navigate(path));
         els.crumbs.append(btn);
-        if (index < parts.length - 1) {
-            const sep = document.createElement('span');
-            sep.className = 'crumb sep';
-            sep.textContent = '/';
-            els.crumbs.append(sep);
-        }
     });
     if (state.selectedPath) {
-        const sep = document.createElement('span');
-        sep.className = 'crumb sep';
-        sep.textContent = '›';
+        appendCrumbSep('›');
         const current = document.createElement('span');
         current.className = 'crumb current';
         current.textContent = nameOf(state.selectedPath);
-        els.crumbs.append(sep, current);
+        els.crumbs.append(current);
     }
+}
+
+function appendCrumbSep(text) {
+    const sep = document.createElement('span');
+    sep.className = 'crumb sep';
+    sep.textContent = text;
+    els.crumbs.append(sep);
 }
 
 async function renderDetailsPane() {
@@ -419,8 +520,10 @@ async function renderDetailsPane() {
     }
     const entry = state.entries.find((item) => item.path === state.selectedPath);
     if (!entry) return;
-    let meta = state.meta.get(entry.path);
-    if (!meta) {
+    // database 等非句柄存储根没有资源元数据，跳过请求避免每次渲染都打一次 4xx。
+    const metaEligible = state.roots.includes(entry.path.split('/')[0]);
+    let meta = metaEligible ? state.meta.get(entry.path) : null;
+    if (metaEligible && !meta) {
         try {
             const res = await fetchMeta(entry.path);
             meta = res.meta;
@@ -429,7 +532,11 @@ async function renderDetailsPane() {
             meta = null;
         }
     }
-    renderDetails(els.details, entry, meta, state.edits.get(entry.path), runFile);
+    renderDetails(els.details, entry, meta, state.edits.get(entry.path), runFile, {
+        onRename: doRename,
+        onMove: doMove,
+        onDelete: doDelete,
+    });
 }
 
 // ===== 详情抽屉（窄窗为覆盖式，宽窗为常驻栏） =====
@@ -455,15 +562,22 @@ function toggleDetails() {
 
 // ===== 导航 =====
 function navigate(path) {
-    state.currentPath = path;
+    // 存储根不再是可停留层级，直接回落到虚拟根。
+    state.currentPath = state.roots.includes(path) ? '' : path;
     state.selectedPath = '';
     state.tab = 'preview';
+    resetDatabase();
+    resetArchive();
     switchTab('preview');
     closeDetails();
     renderAll();
 }
 
 function selectFile(path) {
+    const next = state.entries.find((item) => item.path === path) || null;
+    // 离开数据库 / 压缩包时释放对应状态，避免下一个文件沿用旧的表或目录层级。
+    if (!isDatabaseFile(next)) resetDatabase();
+    if (!isArchiveFile(next)) resetArchive();
     state.selectedPath = path;
     state.tab = 'preview';
     switchTab('preview');
@@ -474,12 +588,15 @@ function selectFile(path) {
 function goBack() {
     if (state.selectedPath) {
         state.selectedPath = '';
+        resetDatabase();
+        resetArchive();
         if (isNarrow()) closeDetails();
         renderAll();
         return;
     }
+    if (!state.currentPath) return;
     const parent = parentOf(state.currentPath);
-    if (parent) navigate(parent);
+    navigate(!parent || state.roots.includes(parent) ? '' : parent);
 }
 
 function switchTab(tab) {
@@ -487,11 +604,28 @@ function switchTab(tab) {
     document.querySelectorAll('.view-tab').forEach((el) => el.classList.toggle('active', el.dataset.tab === tab));
 }
 
-function updateActions() {
-    const hasFile = Boolean(state.selectedPath);
-    els.renameBtn.disabled = !hasFile;
-    els.moveBtn.disabled = !hasFile;
-    els.deleteBtn.disabled = !hasFile;
+// switchDetailsTab 右侧「详情 / 数据库 / 创作 / 演绎」互斥切换。
+// 只改显示状态，不重建内容：选中文件与两条链路的任务跟踪都保持原状。
+function switchDetailsTab(tab) {
+    const wanted = tab === 'create' || tab === 'database' || tab === 'storyboard' ? tab : 'detail';
+    // 数据库标签仅在当前文件可用时允许停留；否则回退详情。
+    state.detailsTab = wanted === 'database' && els.dbTab.classList.contains('hidden') ? 'detail' : wanted;
+    document.querySelectorAll('.details-tab').forEach((el) => {
+        const active = el.dataset.detailsTab === state.detailsTab;
+        el.classList.toggle('active', active);
+        el.setAttribute('aria-selected', String(active));
+    });
+    document.querySelectorAll('.details-pane').forEach((el) => {
+        el.classList.toggle('active', el.dataset.detailsPane === state.detailsTab);
+    });
+    if (state.detailsTab === 'database') {
+        const entry = currentEntry();
+        if (entry) renderDatabasePanel(els.dbPane, entry);
+        return;
+    }
+    if (state.detailsTab === 'create' && !els.reqHandle.value) {
+        void pickRequirementHandle(false);
+    }
 }
 
 // ===== 文件管理 =====
@@ -511,14 +645,17 @@ async function doRename() {
 
 async function doMove() {
     if (!state.selectedPath) return;
-    const dirs = [state.roots, ...state.entries.filter((entry) => entry.dir).map((entry) => entry.path)]
+    // database 目录不在 4 个句柄存储根内，不作为移动目标，避免必然失败的操作。
+    const dirs = [state.roots, ...state.entries
+        .filter((entry) => entry.dir && entry.root !== 'database')
+        .map((entry) => entry.path)]
         .reduce((list, item) => list.concat(item), []);
     const target = await folderDialog(dirs, state.currentPath);
     if (!target) return;
     try {
         const res = await moveFile(state.selectedPath, target);
         state.selectedPath = res.path;
-        state.currentPath = target;
+        state.currentPath = state.roots.includes(target) ? '' : target;
         await refreshAll();
         toast('已移动', 'success');
     } catch (err) {
@@ -550,10 +687,773 @@ async function runFile(entry) {
     }
 }
 
+// ===== 需求输入 =====
+// pickRequirementHandle 把当前选中文件的资源句柄带入输入框。
+async function pickRequirementHandle(notify) {
+    if (!state.selectedPath) {
+        if (notify) toast('请先在主显示区选择一个文件', 'error');
+        return;
+    }
+    const entry = state.entries.find((item) => item.path === state.selectedPath);
+    if (!entry || entry.dir) {
+        if (notify) toast('目录没有资源句柄', 'error');
+        return;
+    }
+    const known = handleOf(entry);
+    if (known) {
+        els.reqHandle.value = known;
+        renderRequirement('idle', `已带入 ${known}`);
+        return;
+    }
+    renderRequirement('idle', '正在读取资源句柄…');
+    try {
+        const res = await fetchMeta(entry.path);
+        state.meta.set(entry.path, res.meta);
+        const handle = handleOf(entry);
+        if (handle) {
+            els.reqHandle.value = handle;
+            renderRequirement('idle', `已带入 ${handle}`);
+        } else {
+            renderRequirement('idle', '该文件尚未登记资源句柄，可手动填写');
+        }
+    } catch (err) {
+        renderRequirement('idle', `读取句柄失败，可手动填写：${err.message}`);
+    }
+}
+
+function handleOf(entry) {
+    const meta = state.meta.get(entry.path);
+    const fileState = state.edits.get(entry.path);
+    return (meta && meta.handle) || (fileState && fileState.handle) || '';
+}
+
+async function onSubmitRequirement(event) {
+    event.preventDefault();
+    if (els.reqSubmit.disabled) return;
+    const handle = els.reqHandle.value.trim();
+    const description = els.reqText.value.trim();
+    try {
+        prepareRequirement(handle, description);
+    } catch (err) {
+        renderRequirement('failed', err.message);
+        return;
+    }
+    renderRequirement('submitting', '正在提交到创作系统…');
+    // 记录提交瞬间的选中项，用于判断任务完成时是否适合自动跳转。
+    const baseline = state.selectedPath;
+    try {
+        const task = await submitRequirement({ handle, description });
+        if (task && task.taskId) creationBaselines.set(task.taskId, baseline);
+        renderCreationTask(task);
+        watchRequirement(task);
+        void maybeJumpToOutput(task);
+    } catch (err) {
+        renderRequirement('failed', err.message || String(err));
+    }
+}
+
+function renderRequirement(status, text) {
+    els.reqState.className = `requirement-state${status === 'idle' ? '' : ` is-${status}`}`;
+    els.reqState.textContent = text || '';
+    els.reqResult.classList.add('hidden');
+    els.reqResult.replaceChildren();
+    els.reqSubmit.disabled = status === 'submitting';
+    setRequirementButtonLabel(status === 'failed' ? '重试' : '提交需求');
+}
+
+function renderCreationTask(task) {
+    if (!task) return;
+    els.reqState.className = `requirement-state ${taskStateClass(task.status)}`;
+    els.reqState.textContent = taskStatusText(task);
+    els.reqSubmit.disabled = false;
+    setRequirementButtonLabel(task.status === 'failed' ? '重试' : '提交需求');
+    els.reqResult.replaceChildren();
+    els.reqResult.classList.remove('hidden');
+    if (task.taskId) {
+        els.reqResult.append(textSpan('任务标识'));
+        const code = document.createElement('code');
+        code.textContent = task.taskId;
+        els.reqResult.append(code);
+    }
+    if (task.mode) {
+        els.reqResult.append(textSpan(TASK_MODE_LABELS[task.mode] || task.mode));
+    }
+}
+
+function taskStateClass(status) {
+    if (status === 'failed') return 'is-failed';
+    if (status === 'planning' || status === 'painting' || status === 'writing' || status === 'executing') {
+        return 'is-submitting';
+    }
+    return 'is-accepted';
+}
+
+function taskStatusText(task) {
+    const label = TASK_STATUS_LABELS[task.status] || task.status || '已受理';
+    const parts = [label, `${task.progress}%`];
+    if (task.status === 'failed') {
+        const reason = task.error || task.summary;
+        if (reason) parts.push(reason);
+        return parts.join(' · ');
+    }
+    if (task.stage) parts.push(task.stage);
+    if (task.status === 'completed' && task.summary) parts.push(task.summary);
+    if (task.handles && task.handles.length) parts.push(`产出 ${task.handles.join(' ')}`);
+    return parts.join(' · ');
+}
+
+// onRequirementEvent 接收 requirement.js 的推送/轮询结果。
+function onRequirementEvent(event) {
+    if (event && event.kind === 'task' && event.task) {
+        renderCreationTask(event.task);
+        if (event.task.status === 'completed') void maybeJumpToOutput(event.task);
+    }
+}
+
+// maybeJumpToOutput 创作完成且产出新文件时自动选中并预览。
+// 仅在任务属于本次会话提交、且用户仍停留在提交前的选中项时跳转，避免打断浏览。
+async function maybeJumpToOutput(task) {
+    if (!task || task.status !== 'completed' || !task.taskId) return;
+    if (!creationBaselines.has(task.taskId) || jumpedTasks.has(task.taskId)) return;
+    const baseline = creationBaselines.get(task.taskId) || '';
+    if ((state.selectedPath || '') !== baseline) {
+        creationBaselines.delete(task.taskId);
+        return;
+    }
+    const handles = (task.handles || [])
+        .map((item) => (typeof item === 'string' ? item : item && item.handle))
+        .filter(Boolean);
+    if (handles.length === 0) return;
+    jumpedTasks.add(task.taskId);
+    creationBaselines.delete(task.taskId);
+    try {
+        const resource = await resolveHandle(handles[0]);
+        const target = String((resource && (resource.blob_path || resource.path)) || '').replace(/\\/g, '/');
+        if (!target) return;
+        if (!state.entries.some((entry) => entry.path === target && !entry.dir)) {
+            await refreshAll();
+        }
+        const entry = state.entries.find((item) => item.path === target && !item.dir);
+        if (!entry) return;
+        navigate(parentOf(entry.path));
+        selectFile(entry.path);
+        toast(`已定位创作产出：${entry.name}`, 'success');
+    } catch {
+        // 句柄解析失败时保持当前浏览位置，不打断用户。
+    }
+}
+
+function setRequirementButtonLabel(label) {
+    const span = els.reqSubmit.querySelector('span');
+    if (span) span.textContent = label;
+}
+
+// ===== 演绎输入 =====
+// pickStoryboardHandle 把当前选中文件的资源句柄带入演绎输入框。
+async function pickStoryboardHandle(notify) {
+    if (!state.selectedPath) {
+        if (notify) toast('请先在主显示区选择一个文件', 'error');
+        return;
+    }
+    const entry = state.entries.find((item) => item.path === state.selectedPath);
+    if (!entry || entry.dir) {
+        if (notify) toast('目录没有资源句柄', 'error');
+        return;
+    }
+    const known = handleOf(entry);
+    if (known) {
+        els.storyHandle.value = known;
+        renderStoryboard('idle', `已带入 ${known}`);
+        return;
+    }
+    renderStoryboard('idle', '正在读取资源句柄…');
+    try {
+        const res = await fetchMeta(entry.path);
+        state.meta.set(entry.path, res.meta);
+        const handle = handleOf(entry);
+        if (handle) {
+            els.storyHandle.value = handle;
+            renderStoryboard('idle', `已带入 ${handle}`);
+        } else {
+            renderStoryboard('idle', '该文件尚未登记资源句柄，可手动填写');
+        }
+    } catch (err) {
+        renderStoryboard('idle', `读取句柄失败，可手动填写：${err.message}`);
+    }
+}
+
+async function onSubmitStoryboard(event) {
+    event.preventDefault();
+    if (els.storySubmit.disabled) return;
+    const input = {
+        text: els.storyText.value.trim(),
+        handle: els.storyHandle.value.trim(),
+        title: els.storyTitle.value.trim(),
+        style: els.storyStyle.value.trim(),
+        ratio: els.storyRatio.value.trim(),
+    };
+    try {
+        prepareStoryboard(input);
+    } catch (err) {
+        renderStoryboard('failed', err.message);
+        return;
+    }
+    renderStoryboard('submitting', '正在提交到演绎系统…');
+    // 记录提交瞬间的选中项，用于判断任务完成时是否适合自动跳转。
+    const baseline = state.selectedPath;
+    try {
+        const task = await submitStoryboard(input);
+        if (task && task.taskId) storyboardBaselines.set(task.taskId, baseline);
+        renderStoryboardTask(task);
+        watchStoryboard(task);
+        void maybeJumpToStoryboardDoc(task);
+    } catch (err) {
+        renderStoryboard('failed', err.message || String(err));
+    }
+}
+
+function renderStoryboard(status, text) {
+    els.storyState.className = `requirement-state${status === 'idle' ? '' : ` is-${status}`}`;
+    els.storyState.textContent = text || '';
+    resetStoryboardView();
+    resetStoryboardReview();
+    els.storyResult.classList.add('hidden');
+    els.storyResult.replaceChildren();
+    els.storySubmit.disabled = status === 'submitting';
+    setStoryboardButtonLabel(status === 'failed' ? '重试' : '开始演绎');
+}
+
+// resetStoryboardView 清空增量视图引用，下一次渲染重建容器。
+function resetStoryboardView() {
+    storyboardView.taskId = '';
+    storyboardView.task = null;
+    storyboardView.titleEl = null;
+    storyboardView.idEl = null;
+    storyboardView.stageEl = null;
+    storyboardView.thoughtEl = null;
+    storyboardView.docEl = null;
+    storyboardView.listEl = null;
+    storyboardView.rows.clear();
+}
+
+// ensureStoryboardView 为任务创建稳定的头部、过程输出与镜头列表容器。
+function ensureStoryboardView(task) {
+    const taskId = task.taskId || '';
+    if (storyboardView.taskId === taskId && storyboardView.listEl) return;
+    resetStoryboardView();
+    storyboardView.taskId = taskId;
+    els.storyResult.replaceChildren();
+    els.storyResult.classList.remove('hidden');
+
+    storyboardView.titleEl = textSpan('');
+    storyboardView.titleEl.classList.add('hidden');
+    storyboardView.idEl = textSpan('');
+    storyboardView.idEl.classList.add('hidden');
+    storyboardView.stageEl = document.createElement('div');
+    storyboardView.stageEl.className = 'storyboard-stage';
+    storyboardView.stageEl.classList.add('hidden');
+    storyboardView.thoughtEl = document.createElement('div');
+    storyboardView.thoughtEl.className = 'storyboard-thought';
+    storyboardView.thoughtEl.classList.add('hidden');
+    storyboardView.docEl = textSpan('');
+    storyboardView.docEl.classList.add('hidden');
+    storyboardView.listEl = document.createElement('div');
+    storyboardView.listEl.className = 'storyboard-shots';
+    storyboardView.listEl.classList.add('hidden');
+    els.storyResult.append(
+        storyboardView.titleEl,
+        storyboardView.idEl,
+        storyboardView.stageEl,
+        storyboardView.thoughtEl,
+        storyboardView.docEl,
+        storyboardView.listEl,
+    );
+}
+
+// setViewText 写入文本并按空值隐藏。
+function setViewText(el, text) {
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.toggle('hidden', !text);
+}
+
+// storyboardShotText 生成单镜进度行文案。
+function storyboardShotText(shot) {
+    const label = `第 ${shot.index} 镜 · ${shot.scene || '未编号'}`;
+    let detail = '待绘制';
+    if (shot.status === 'drawing') {
+        detail = '绘制中…';
+    } else if (shot.status === 'failed') {
+        detail = `失败：${shot.error || '未产出图片'}`;
+    } else if (shot.status === 'pending') {
+        detail = '待确认';
+    } else if (shot.status === 'planned') {
+        detail = '待绘制';
+    } else if (shot.file) {
+        detail = `已生成 ${shot.file}`;
+    } else if (shot.status === 'painted') {
+        detail = '已生成';
+    }
+    return `${label} · ${detail}`;
+}
+
+function renderStoryboardTask(task) {
+    if (!task) return;
+    ensureStoryboardView(task);
+    storyboardView.task = task;
+    els.storyState.className = `requirement-state ${taskStateClass(task.status)}`;
+    els.storyState.textContent = storyboardTaskText(task);
+    els.storySubmit.disabled = false;
+    setStoryboardButtonLabel(task.status === 'failed' ? '重试' : '开始演绎');
+    els.storyResult.classList.remove('hidden');
+    renderStoryboardControls(task);
+
+    setViewText(storyboardView.titleEl, task.title ? `《${task.title}》` : '');
+    setViewText(storyboardView.idEl, task.taskId ? `任务标识：${task.taskId}` : '');
+    setViewText(storyboardView.stageEl, task.stage || '');
+    renderStoryboardThought(task);
+    setViewText(storyboardView.docEl, task.docPath ? `分镜文档：${task.docPath}` : '');
+    renderStoryboardReviewTask(task);
+
+    const shots = task.shots || [];
+    if (!shots.length) {
+        storyboardView.listEl.classList.add('hidden');
+        return;
+    }
+    storyboardView.listEl.classList.remove('hidden');
+    shots.forEach((shot) => {
+        let row = storyboardView.rows.get(shot.index);
+        if (!row) {
+            row = document.createElement('div');
+            row.className = 'storyboard-shot';
+            storyboardView.rows.set(shot.index, row);
+            storyboardView.listEl.append(row);
+        }
+        row.className = `storyboard-shot${shot.status === 'failed' ? ' is-failed' : ''}`;
+        row.textContent = storyboardShotText(shot);
+    });
+}
+
+// renderStoryboardThought 追加规划阶段的可读过程文本。
+// 推送事件携带 delta 时逐段追加；轮询兜底没有 delta 时用累计 thought 对齐。
+function renderStoryboardThought(task) {
+    const el = storyboardView.thoughtEl;
+    if (!el) return;
+    if (task.thoughtReset) {
+        el.textContent = '';
+    }
+    if (task.delta) {
+        el.textContent += task.delta;
+    } else if (task.thought && task.thought.length > el.textContent.length) {
+        // 过程文本只增不减：仅当累计文本更长时对齐，避免过期的轮询响应把
+        // 已经追加的内容回退。
+        el.textContent = task.thought;
+    }
+    const hasText = el.textContent.trim() !== '';
+    el.classList.toggle('hidden', !hasText);
+    if (hasText) el.scrollTop = el.scrollHeight;
+}
+
+function storyboardTaskText(task) {
+    const label = TASK_STATUS_LABELS[task.status] || task.status || '已受理';
+    const parts = [label, `${task.progress}%`];
+    if (task.status === 'failed') {
+        const reason = task.error || task.summary;
+        if (reason) parts.push(reason);
+        return parts.join(' · ');
+    }
+    if (task.status === 'canceled' && task.summary) {
+        parts.push(task.summary);
+        return parts.join(' · ');
+    }
+    if (task.status === 'completed' && task.summary) parts.push(task.summary);
+    return parts.join(' · ');
+}
+
+// onStoryboardEvent 接收 storyboard.js 的推送/轮询结果。
+function onStoryboardEvent(event) {
+    if (event && event.kind === 'task' && event.task) {
+        renderStoryboardTask(event.task);
+        if (event.task.status === 'completed') void maybeJumpToStoryboardDoc(event.task);
+    }
+}
+
+// maybeJumpToStoryboardDoc 演绎完成且产出文档时，自动打开分镜文档。
+async function maybeJumpToStoryboardDoc(task) {
+    if (!task || task.status !== 'completed' || !task.taskId || !task.docPath) return;
+    if (!storyboardBaselines.has(task.taskId) || storyboardJumped.has(task.taskId)) return;
+    const baseline = storyboardBaselines.get(task.taskId) || '';
+    if ((state.selectedPath || '') !== baseline) {
+        storyboardBaselines.delete(task.taskId);
+        return;
+    }
+    storyboardJumped.add(task.taskId);
+    storyboardBaselines.delete(task.taskId);
+    const target = String(task.docPath).replace(/\\/g, '/');
+    try {
+        if (!state.entries.some((entry) => entry.path === target && !entry.dir)) {
+            await refreshAll();
+        }
+        const entry = state.entries.find((item) => item.path === target && !item.dir);
+        if (!entry) return;
+        navigate(parentOf(entry.path));
+        selectFile(entry.path);
+        toast(`已打开分镜文档：${entry.name}`, 'success');
+    } catch {
+        // 文档尚未进入资源库时保持当前浏览位置，不打断用户。
+    }
+}
+
+// ===== 演绎任务控制与审查 =====
+const REVIEW_STATUS_LABELS = {
+    pending: '待确认',
+    planned: '待绘制',
+    drawing: '绘制中',
+    painted: '已完成',
+    failed: '失败',
+};
+let reviewKeySeq = 0;
+
+// renderStoryboardControls 按任务状态切换暂停 / 终止 / 审查入口。
+function renderStoryboardControls(task) {
+    const status = task.status || '';
+    const terminal = status === 'completed' || status === 'failed' || status === 'canceled';
+    const canPause = status === 'researching' || status === 'planning' ||
+        status === 'revising' || status === 'painting' || status === 'paused';
+    els.storyPause.classList.toggle('hidden', !canPause);
+    els.storyPause.querySelector('span').textContent = status === 'paused' ? '继续' : '暂停';
+    els.storyCancel.classList.toggle('hidden', terminal);
+    const hasShots = (task.shots || []).length > 0;
+    els.storyReviewOpen.classList.toggle('hidden', !hasShots);
+    els.storyReviewOpen.querySelector('span').textContent = status === 'reviewing' ? '打开审查' : '查看分镜';
+}
+
+async function onStoryboardPause() {
+    const task = storyboardView.task;
+    if (!task || !task.taskId) return;
+    const paused = task.status === 'paused';
+    els.storyPause.disabled = true;
+    try {
+        if (paused) {
+            await resumeStoryboard(task.taskId);
+            toast('已继续演绎', 'success');
+        } else {
+            await pauseStoryboard(task.taskId);
+            toast('已暂停，继续时从下一镜接着画', 'success');
+        }
+    } catch (err) {
+        toast(`操作失败：${err.message}`, 'error');
+    } finally {
+        els.storyPause.disabled = false;
+    }
+}
+
+async function onStoryboardCancel() {
+    const task = storyboardView.task;
+    if (!task || !task.taskId) return;
+    const ok = await confirmDialog(
+        '终止演绎',
+        '终止后已产出的镜头会保留，未完成的镜头不再继续。确定终止吗？',
+        '终止',
+    );
+    if (!ok) return;
+    els.storyCancel.disabled = true;
+    try {
+        await cancelStoryboard(task.taskId, '用户终止了演绎任务');
+        toast('已终止演绎', 'success');
+    } catch (err) {
+        toast(`终止失败：${err.message}`, 'error');
+    } finally {
+        els.storyCancel.disabled = false;
+    }
+}
+
+// renderStoryboardReviewTask 维护主预览区审查面板：审查态可编辑，确认后转为只读进度。
+function renderStoryboardReviewTask(task) {
+    const shots = task.shots || [];
+    const active = task.status === 'reviewing' || task.status === 'revising' ||
+        task.status === 'painting' || task.status === 'paused' ||
+        task.status === 'writing' || task.status === 'completed' ||
+        task.status === 'failed' || task.status === 'canceled';
+    if (!active || !shots.length) {
+        closeStoryboardReview();
+        return;
+    }
+    const editing = task.status === 'reviewing';
+    if (storyboardReview.taskId !== task.taskId) {
+        storyboardReview.taskId = task.taskId;
+        storyboardReview.title = task.title || '';
+        storyboardReview.mode = editing ? 'edit' : 'read';
+        storyboardReview.shots = shots.map(toReviewShot);
+        buildStoryboardReview();
+        if (editing) openStoryboardReview();
+        return;
+    }
+    if (editing && storyboardReview.mode !== 'edit') {
+        storyboardReview.mode = 'edit';
+        storyboardReview.shots = shots.map(toReviewShot);
+        buildStoryboardReview();
+        openStoryboardReview();
+        return;
+    }
+    if (!editing && storyboardReview.mode === 'edit') {
+        storyboardReview.mode = 'read';
+        storyboardReview.shots = shots.map(toReviewShot);
+        buildStoryboardReview();
+        return;
+    }
+    if (!editing) updateReviewBadges(shots);
+}
+
+// toReviewShot 把服务端镜头转成审查面板的本地可编辑结构。
+function toReviewShot(shot) {
+    reviewKeySeq += 1;
+    return {
+        key: `shot-${reviewKeySeq}`,
+        index: shot.index || 0,
+        act: shot.act || '',
+        scene: shot.scene || '',
+        narration: shot.narration || '',
+        prompt: shot.prompt || '',
+        ratio: shot.ratio || '',
+        status: shot.status || 'pending',
+    };
+}
+
+function openStoryboardReview() {
+    if (!storyboardReview.taskId || storyboardReview.shots.length === 0) return;
+    els.storyReview.classList.remove('hidden');
+}
+
+function closeStoryboardReview() {
+    els.storyReview.classList.add('hidden');
+}
+
+function resetStoryboardReview() {
+    storyboardReview.taskId = '';
+    storyboardReview.title = '';
+    storyboardReview.shots = [];
+    storyboardReview.busy = false;
+    storyboardReview.mode = 'read';
+    closeStoryboardReview();
+}
+
+// buildStoryboardReview 重建审查面板 DOM（仅在结构变化或模式切换时调用）。
+function buildStoryboardReview() {
+    const root = els.storyReview;
+    root.replaceChildren();
+    const editing = storyboardReview.mode === 'edit';
+    const header = document.createElement('div');
+    header.className = 'sb-review-head';
+    const heading = document.createElement('div');
+    heading.className = 'sb-review-title';
+    heading.append(makeIcon('fas fa-list-check'));
+    heading.append(document.createTextNode(` 分镜审查（${storyboardReview.shots.length} 镜）`));
+    const hint = document.createElement('span');
+    hint.className = 'sb-review-hint';
+    hint.textContent = editing ? '确认前不会开始绘制，可直接改写、删除或新增分镜' : '绘制进度';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'icon-btn';
+    close.dataset.action = 'close';
+    close.setAttribute('aria-label', '关闭审查');
+    close.append(makeIcon('fas fa-xmark'));
+    close.addEventListener('click', closeStoryboardReview);
+    header.append(heading, hint, close);
+
+    const list = document.createElement('div');
+    list.className = 'sb-review-list';
+    storyboardReview.shots.forEach((shot, index) => {
+        list.append(buildReviewShotCard(shot, index, editing));
+    });
+    list.addEventListener('input', onReviewShotInput);
+    list.addEventListener('click', onReviewShotClick);
+
+    root.append(header, list);
+
+    if (editing) {
+        const foot = document.createElement('div');
+        foot.className = 'sb-review-foot';
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'btn-glass btn-sm';
+        add.dataset.action = 'add';
+        add.append(makeIcon('fas fa-plus'));
+        add.append(document.createTextNode(' 新增分镜'));
+        add.addEventListener('click', onReviewAddShot);
+        const count = document.createElement('span');
+        count.className = 'sb-review-count';
+        count.textContent = `共 ${storyboardReview.shots.length} 镜`;
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.className = 'btn-glass primary btn-sm';
+        confirm.dataset.action = 'confirm';
+        confirm.append(makeIcon('fas fa-play'));
+        confirm.append(document.createTextNode(' 确认并开始绘制'));
+        confirm.addEventListener('click', onStoryboardConfirm);
+        foot.append(add, count, confirm);
+        root.append(foot);
+    }
+    root.classList.remove('hidden');
+}
+
+function buildReviewShotCard(shot, index, editing) {
+    const card = document.createElement('article');
+    card.className = 'sb-review-shot';
+    card.dataset.key = shot.key;
+
+    const head = document.createElement('div');
+    head.className = 'sb-review-shot-head';
+    const no = document.createElement('span');
+    no.className = 'sb-review-index';
+    no.textContent = `第 ${index + 1} 镜`;
+    const badge = document.createElement('span');
+    badge.className = `sb-review-badge is-${shot.status || 'pending'}`;
+    badge.dataset.role = 'status';
+    badge.textContent = REVIEW_STATUS_LABELS[shot.status] || '待确认';
+    head.append(no, badge);
+    if (editing) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'sb-review-delete';
+        del.dataset.action = 'delete';
+        del.textContent = '删除';
+        head.append(del);
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'sb-review-fields';
+    grid.append(
+        reviewInput('act', '幕名', shot.act, editing),
+        reviewInput('scene', '镜次', shot.scene, editing),
+        reviewInput('ratio', '画幅（可选）', shot.ratio, editing),
+        reviewTextArea('narration', '本镜叙事', shot.narration, editing),
+        reviewTextArea('prompt', '画面描述（留空则按叙事自动生成）', shot.prompt, editing),
+    );
+    card.append(head, grid);
+    return card;
+}
+
+function reviewInput(field, placeholder, value, editing) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'sb-review-input';
+    input.dataset.field = field;
+    input.placeholder = placeholder;
+    input.value = value || '';
+    input.disabled = !editing;
+    return input;
+}
+
+function reviewTextArea(field, placeholder, value, editing) {
+    const area = document.createElement('textarea');
+    area.className = `sb-review-input sb-review-textarea ${field === 'prompt' ? 'is-prompt' : ''}`;
+    area.dataset.field = field;
+    area.placeholder = placeholder;
+    area.value = value || '';
+    area.rows = field === 'prompt' ? 3 : 2;
+    area.disabled = !editing;
+    return area;
+}
+
+function onReviewShotInput(event) {
+    const field = event.target.closest('[data-field]');
+    if (!field) return;
+    const card = field.closest('.sb-review-shot');
+    if (!card) return;
+    const shot = storyboardReview.shots.find((item) => item.key === card.dataset.key);
+    if (shot) shot[field.dataset.field] = field.value;
+}
+
+function onReviewShotClick(event) {
+    const button = event.target.closest('button[data-action="delete"]');
+    if (!button) return;
+    const card = button.closest('.sb-review-shot');
+    if (!card) return;
+    storyboardReview.shots = storyboardReview.shots.filter((item) => item.key !== card.dataset.key);
+    buildStoryboardReview();
+}
+
+function onReviewAddShot() {
+    reviewKeySeq += 1;
+    storyboardReview.shots.push({
+        key: `shot-${reviewKeySeq}`,
+        index: 0,
+        act: '',
+        scene: '',
+        narration: '',
+        prompt: '',
+        ratio: '',
+        status: 'pending',
+    });
+    buildStoryboardReview();
+    const cards = els.storyReview.querySelectorAll('.sb-review-shot');
+    const last = cards[cards.length - 1];
+    if (last) {
+        const narration = last.querySelector('[data-field="narration"]');
+        if (narration) narration.focus();
+    }
+}
+
+async function onStoryboardConfirm() {
+    if (storyboardReview.busy || storyboardReview.mode !== 'edit') return;
+    const shots = storyboardReview.shots;
+    if (shots.length === 0) {
+        toast('至少保留一个分镜', 'error');
+        return;
+    }
+    const meaningful = shots.some((shot) => (shot.narration || '').trim() || (shot.prompt || '').trim());
+    if (!meaningful) {
+        toast('请至少给一个分镜填写叙事或画面描述', 'error');
+        return;
+    }
+    storyboardReview.busy = true;
+    try {
+        await confirmStoryboard(storyboardReview.taskId, shots, storyboardReview.title);
+        toast('已确认分镜，开始逐镜绘制', 'success');
+    } catch (err) {
+        toast(`确认失败：${err.message}`, 'error');
+    } finally {
+        storyboardReview.busy = false;
+    }
+}
+
+// updateReviewBadges 只读模式下把服务端镜头状态同步到徽标。
+function updateReviewBadges(shots) {
+    const cards = els.storyReview.querySelectorAll('.sb-review-shot');
+    cards.forEach((card, index) => {
+        const shot = shots[index];
+        const badge = card.querySelector('[data-role="status"]');
+        if (!shot || !badge) return;
+        badge.className = `sb-review-badge is-${shot.status || 'pending'}`;
+        badge.textContent = REVIEW_STATUS_LABELS[shot.status] || '待确认';
+    });
+}
+
+function makeIcon(className) {
+    const icon = document.createElement('i');
+    icon.className = className;
+    return icon;
+}
+
+function setStoryboardButtonLabel(label) {
+    const span = els.storySubmit.querySelector('span');
+    if (span) span.textContent = label;
+}
+
 // ===== 键鼠 =====
+// 键盘语义（2026-11 重排）：
+//   ← / →  在当前目录的文件间循环切换预览（不进入文件夹）
+//   ↑      返回上级目录（虚拟根时清空选中）
+//   ↓      进入选中的文件夹；未选中时进入第一项文件夹
+//   Enter  未选中时打开第一项；Esc 保持原有的关闭/返回语义
+// 输入框、文本域、下拉框、可编辑区域、音视频控件内的方向键不被拦截；
+// 数据库 / 压缩包预览内部（data-key-scope="local"）也不拦截，避免与表格操作冲突。
 function onKeyDown(event) {
     if (document.getElementById('modal-root').firstChild) return;
-    const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement && document.activeElement.tagName);
+    const target = document.activeElement;
+    const typing = isTypingTarget(target);
+    const local = inLocalKeyScope(target);
     switch (event.key) {
         case 'F1':
             event.preventDefault();
@@ -572,10 +1472,10 @@ function onKeyDown(event) {
             if (!typing) goBack();
             return;
         case 'F2':
-            if (!typing) doRename();
+            if (!typing && !local) doRename();
             return;
         case 'Delete':
-            if (!typing) doDelete();
+            if (!typing && !local) doDelete();
             return;
         case 'Enter':
             if (!typing) openSelected();
@@ -593,17 +1493,72 @@ function onKeyDown(event) {
         doMove();
         return;
     }
-    if (typing) return;
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    if (typing || local) return;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault();
-        moveSelection(event.key === 'ArrowDown' ? 1 : -1);
+        cycleFile(event.key === 'ArrowRight' ? 1 : -1);
+        return;
     }
-    if (event.key === 'ArrowRight' && state.selectedPath) {
-        const entry = state.entries.find((item) => item.path === state.selectedPath);
-        if (entry && entry.dir) navigate(entry.path);
+    if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        goUpDir();
+        return;
     }
-    if (event.key === 'ArrowLeft') {
-        goBack();
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        enterSelectedDir();
+    }
+}
+
+// isTypingTarget 焦点在输入控件、可编辑区域或媒体控件时，方向键必须保留原生行为。
+function isTypingTarget(target) {
+    if (!target) return false;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return true;
+    if (target.isContentEditable) return true;
+    return target.tagName === 'VIDEO' || target.tagName === 'AUDIO';
+}
+
+// inLocalKeyScope 数据库表格 / 压缩包列表内部自行消费按键，全局方向键不再介入。
+function inLocalKeyScope(target) {
+    return Boolean(target && target.closest && target.closest('[data-key-scope="local"]'));
+}
+
+// cycleFile 在当前目录的可见文件（排除文件夹）之间循环切换预览。
+function cycleFile(delta) {
+    const files = visibleItems().filter((entry) => !entry.dir);
+    if (files.length === 0) return;
+    const current = files.findIndex((entry) => entry.path === state.selectedPath);
+    const next = current < 0
+        ? (delta > 0 ? 0 : files.length - 1)
+        : (current + delta + files.length) % files.length;
+    selectFile(files[next].path);
+}
+
+// goUpDir 返回上级目录；已在虚拟根时只清空选中。
+function goUpDir() {
+    if (!state.currentPath) {
+        if (state.selectedPath) {
+            state.selectedPath = '';
+            resetDatabase();
+            resetArchive();
+            renderAll();
+        }
+        return;
+    }
+    const parent = parentOf(state.currentPath);
+    navigate(!parent || state.roots.includes(parent) ? '' : parent);
+}
+
+// enterSelectedDir 下钻选中的文件夹；未选中时进入当前目录的第一项文件夹。
+function enterSelectedDir() {
+    const entry = currentEntry();
+    if (entry && entry.dir) {
+        navigate(entry.path);
+        return;
+    }
+    if (!entry) {
+        const firstDir = visibleItems().find((item) => item.dir);
+        if (firstDir) navigate(firstDir.path);
     }
 }
 
@@ -611,14 +1566,6 @@ function openSelected() {
     if (state.selectedPath) return;
     const cards = els.grid.querySelectorAll('.file-card');
     if (cards.length) cards[0].click();
-}
-
-function moveSelection(delta) {
-    const cards = [...els.grid.querySelectorAll('.file-card')];
-    if (cards.length === 0) return;
-    const current = cards.findIndex((card) => card.dataset.path === state.selectedPath);
-    const next = Math.max(0, Math.min(cards.length - 1, (current < 0 ? 0 : current) + delta));
-    cards[next].click();
 }
 
 function clearSearch() {
@@ -631,17 +1578,18 @@ function clearSearch() {
 
 function showHelp() {
     helpDialog([
-        ['↑ / ↓', '在当前目录中切换选中文件'],
-        ['Enter', '打开选中项（文件夹进入、文件预览）'],
-        ['← / Esc', '返回上级或退出预览'],
-        ['→', '进入选中的文件夹'],
+        ['← / →', '在当前目录的文件间循环切换预览'],
+        ['↑', '返回上级目录（已无上级时清空选中）'],
+        ['↓', '进入选中的文件夹（未选中时进入第一项）'],
+        ['Enter', '未选中时打开第一项'],
+        ['Esc', '关闭沙箱 / 详情抽屉，或退出预览返回上级'],
         ['F2', '重命名选中文件'],
         ['Delete', '删除选中文件'],
         ['Ctrl+M', '移动选中文件'],
         ['Ctrl+F', '定位搜索框'],
         ['F1', '显示本帮助'],
         ['F5', '刷新清单与状态'],
-        ['鼠标', '单击选择、双击文件夹进入；Esc 关闭弹窗或沙箱'],
+        ['鼠标', '单击文件预览、单击文件夹进入；Esc 关闭弹窗或沙箱'],
     ]);
 }
 
@@ -659,11 +1607,15 @@ function connectSocket() {
     socket = new WebSocket(`${scheme}://${location.host}/ws?channel=library`);
     socket.addEventListener('open', () => {
         attempts = 0;
+        setPushConnected(true);
+        setStoryboardPushConnected(true);
         // 首次连接与断线重连都回库同步一次，补上断开期间漏掉的变更。
         scheduleSync(0);
     });
     socket.addEventListener('message', onSocketMessage);
     socket.addEventListener('close', () => {
+        setPushConnected(false);
+        setStoryboardPushConnected(false);
         if (attempts >= 5) return;
         attempts += 1;
         setTimeout(connectSocket, 3000);
@@ -678,6 +1630,16 @@ function onSocketMessage(event) {
         return;
     }
     if (!payload || !payload.type) return;
+    // 创作任务进度推送：data 即创作链输出的任务视图。
+    if (payload.type === 'creation_task') {
+        handleCreationEvent(payload.data);
+        return;
+    }
+    // 演绎任务进度推送：与创作链互不干扰，各自由自己的跟踪器消费。
+    if (payload.type === 'storyboard_task') {
+        handleStoryboardEvent(payload.data);
+        return;
+    }
     // 后端只发同步信号，完整状态由前端回库拉取。
     if (payload.type === 'library_sync') {
         scheduleSync(150);
@@ -719,6 +1681,8 @@ function iconOf(entry) {
         case 'image': return 'fa-image';
         case 'video': return 'fa-film';
         case 'audio': return 'fa-music';
+        case 'database': return 'fa-database';
+        case 'archive': return 'fa-file-zipper';
         case 'text': return isRunnable(entry.name) ? 'fa-code' : 'fa-file-lines';
         default: return 'fa-file';
     }

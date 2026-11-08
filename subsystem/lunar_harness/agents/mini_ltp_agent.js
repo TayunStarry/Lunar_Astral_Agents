@@ -223,14 +223,24 @@
         throw new Error('AI 响应格式异常');
     }
 
-    function safeParseArgs(jsonStr) {
-        if (jsonStr && typeof jsonStr === 'object') return jsonStr;
-        if (!jsonStr) return {};
+    /**
+     * 解析模型给出的工具参数。
+     * 参数非法时**不静默回退空对象**：空对象会让执行器把「参数缺失」误判成
+     * 「操作成功/队列为空」，模型以为工具调用成功，后续再也拿不到可纠正的反馈。
+     * 这里把失败原因交回给模型，由它修正后重试。
+     * @returns {{ok:boolean, value?:Object, error?:string}}
+     */
+    function parseToolArgs(jsonStr) {
+        if (jsonStr && typeof jsonStr === 'object') return { ok: true, value: jsonStr };
+        if (jsonStr === undefined || jsonStr === null || jsonStr === '') return { ok: true, value: {} };
         try {
             const parsed = JSON.parse(jsonStr);
-            return parsed && typeof parsed === 'object' ? parsed : {};
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return { ok: false, error: '参数必须是 JSON 对象' };
+            }
+            return { ok: true, value: parsed };
         } catch (e) {
-            return {};
+            return { ok: false, error: (e && e.message) || 'JSON 解析失败' };
         }
     }
 
@@ -424,8 +434,15 @@
 
             // 依次执行工具，将结果作为 tool 消息回填
             for (const tc of toolCalls) {
-                const args = safeParseArgs(tc.function.arguments);
-                const result = await executeTool(tc.function.name, args);
+                const parsed = parseToolArgs(tc.function && tc.function.arguments);
+                // 参数非法时不执行工具，直接把失败原因回填，让模型修正后重新调用
+                const result = parsed.ok
+                    ? await executeTool(tc.function.name, parsed.value)
+                    : {
+                        success: false,
+                        error: '工具参数不是合法 JSON（' + parsed.error + '），原始参数：'
+                            + String(tc.function && tc.function.arguments).slice(0, 500) + '。请修正参数后重新调用。'
+                    };
                 messages.push({
                     role: 'tool',
                     tool_call_id: tc.id,
