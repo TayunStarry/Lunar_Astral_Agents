@@ -33,9 +33,4 @@ func init() {
 
 	Dialogue.WebSearch = search.Run
 	Dialogue.RequestLifeEvent = life.RequestEvent
-	Dialogue.LifeSnapshot = func() (string, string) {
-		snapshot := life.Snapshot()
-		return snapshot.LastRecord, snapshot.ActiveEvent
-	}
-	Dialogue.SetCreativeIntent = life.SetCreativeIntent
 }

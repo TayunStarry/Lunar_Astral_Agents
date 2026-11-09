@@ -26,6 +26,15 @@ import (
 )
 
 // Advance 推进最早一个可推进任务的单个原子步骤。
+//
+// 超时与失败判定（与「运行总时长」彻底解耦）：
+//   - 运行预算到期只做状态校验：仍在推进就顺延并提醒，绝不终止；
+//   - 接近预算只提醒，不改变任务状态；
+//   - 唯一会判失败的是「单个步骤超时后仍无任何状态更新」，
+//     由每个原子步骤自己的兜底看门狗（beginStepGuard）负责。
+//
+// 注意：卡死判定故意不放在这里。调度器同一时刻只推进一个任务，
+// 排队等待的时间不属于任何步骤，放在这里会把正常排队误判成卡死。
 func Advance(ctx context.Context) error {
 	taskMu.Lock()
 	state := oldestActionableLocked()
@@ -35,12 +44,15 @@ func Advance(ctx context.Context) error {
 	}
 	taskID := state.view.TaskID
 	stage := state.stage
-	expired := !state.deadline.IsZero() && !time.Now().Before(state.deadline)
+	stageText := state.view.Stage
+	action := watchTaskLocked(state, time.Now())
 	taskMu.Unlock()
 
-	if expired {
-		failTask(taskID, fmt.Errorf("任务执行超时（超过 %v）", runTimeout))
-		return nil
+	switch action {
+	case watchdogRenew:
+		renewBudget(taskID, stageText)
+	case watchdogWarn:
+		warnLongRunning(taskID, stageText)
 	}
 
 	switch stage {
@@ -60,6 +72,110 @@ func Advance(ctx context.Context) error {
 	return nil
 }
 
+// watchdogAction 看门狗对某个任务的处置（只会提醒或顺延，不会终止）。
+type watchdogAction int
+
+const (
+	// watchdogIdle 无需干预
+	watchdogIdle watchdogAction = iota
+	// watchdogWarn 接近预算：只提醒
+	watchdogWarn
+	// watchdogRenew 预算到期：先校验，仍在推进则顺延并提醒
+	watchdogRenew
+)
+
+// watchTaskLocked 判断任务是否需要预算处置；调用方必须持有 taskMu。
+func watchTaskLocked(state *taskState, now time.Time) watchdogAction {
+	if state.stage == stageDone || state.paused || state.canceled {
+		return watchdogIdle
+	}
+	if !state.budgetAt.IsZero() && !now.Before(state.budgetAt) {
+		return watchdogRenew
+	}
+	if !state.nextWarn.IsZero() && !now.Before(state.nextWarn) {
+		return watchdogWarn
+	}
+	return watchdogIdle
+}
+
+// stallReason 生成卡死判定文案：必须说清「哪个阶段 + 静默了多久」。
+func stallReason(stageText string, idle time.Duration) error {
+	if stageText == "" {
+		stageText = "未知阶段"
+	}
+	return fmt.Errorf("任务在「%s」阶段已 %s 没有任何状态更新，判定为执行卡死（自愈失败，请重新提交）",
+		stageText, humanDuration(idle))
+}
+
+// renewBudget 预算到期的状态校验：先判断任务是否真的没有响应，再决定顺延还是判卡死。
+func renewBudget(taskID, stageText string) {
+	taskMu.Lock()
+	state, ok := tasks[taskID]
+	if !ok || state.stage == stageDone || state.paused || state.canceled {
+		taskMu.Unlock()
+		return
+	}
+	now := time.Now()
+	if now.Before(state.budgetAt) {
+		taskMu.Unlock()
+		return
+	}
+	// 状态校验：静默超过上限说明确实没有响应，此时才允许判失败。
+	idle := now.Sub(state.lastBeat)
+	if !state.lastBeat.IsZero() && idle > runStallTimeout {
+		taskMu.Unlock()
+		failTask(taskID, stallReason(stageText, idle))
+		return
+	}
+	running := now.Sub(state.startedAt)
+	state.budgetAt = now.Add(runBudget)
+	if state.nextWarn.Before(now.Add(runWarnInterval)) {
+		state.nextWarn = now.Add(runWarnInterval)
+	}
+	applyEventLocked(state, ProgressEvent{
+		Event:   eventLongRunning,
+		Summary: fmt.Sprintf("任务已运行 %s，仍在正常推进（%s）；已自动顺延预算，不会被判定超时", humanDuration(running), stageText),
+	})
+	schedulePushLocked(state)
+	taskMu.Unlock()
+}
+
+// warnLongRunning 接近预算的提前提醒：只提示，不改变任务状态。
+func warnLongRunning(taskID, stageText string) {
+	taskMu.Lock()
+	state, ok := tasks[taskID]
+	if !ok || state.stage == stageDone || state.paused || state.canceled {
+		taskMu.Unlock()
+		return
+	}
+	now := time.Now()
+	if now.Before(state.nextWarn) {
+		taskMu.Unlock()
+		return
+	}
+	running := now.Sub(state.startedAt)
+	state.nextWarn = now.Add(runWarnInterval)
+	applyEventLocked(state, ProgressEvent{
+		Event:   eventLongRunning,
+		Summary: fmt.Sprintf("任务已运行 %s，接近预算上限，但仍在正常推进（%s）；不会中断，请继续等待", humanDuration(running), stageText),
+	})
+	schedulePushLocked(state)
+	taskMu.Unlock()
+}
+
+// humanDuration 把时长格式化成可读文案，避免日志里出现 1h30m0s 这类原始写法。
+func humanDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%d 秒", int(d.Seconds()))
+	}
+	hours := int(d / time.Hour)
+	minutes := int(d/time.Minute) % 60
+	if hours > 0 {
+		return fmt.Sprintf("%d 小时 %d 分", hours, minutes)
+	}
+	return fmt.Sprintf("%d 分钟", minutes)
+}
+
 // advanceQueued 读取故事正文并进入资料准备阶段。
 func advanceQueued(taskID string) {
 	taskMu.Lock()
@@ -69,7 +185,9 @@ func advanceQueued(taskID string) {
 		return
 	}
 	req := state.req
+	stopGuard := beginStepGuard(state, queuedStepTimeout)
 	taskMu.Unlock()
+	defer stopGuard()
 
 	story, err := resolveStory(req)
 	if err != nil {
@@ -193,7 +311,6 @@ func advancePlanning(ctx context.Context, taskID string) {
 	state.plan = plan
 	state.shots = shots
 	state.nextShot = 0
-	state.previous = ""
 	state.stage = stageReviewing
 	state.cancel = nil
 	state.restedAt = time.Now()
@@ -206,7 +323,7 @@ func advancePlanning(ctx context.Context, taskID string) {
 		Event:    eventReviewReady,
 		Shots:    cloneShots(shots),
 	})
-	commitLocked(state)
+	commitSnapshotLocked(state)
 }
 
 // advanceRevising 调用「分镜规划-修订」整理审查稿，完成后进入逐镜绘制。
@@ -253,7 +370,6 @@ func advanceRevising(ctx context.Context, taskID string) {
 	state.plan.Shots = fillMissingPrompts(state.plan.Shots)
 	state.shots = shotsFromPlan(state.plan, shotPlanned)
 	state.nextShot = 0
-	state.previous = ""
 	state.stage = stagePainting
 	applyEventLocked(state, ProgressEvent{
 		Status:   statusPainting,
@@ -264,7 +380,7 @@ func advanceRevising(ctx context.Context, taskID string) {
 		Event:    eventRevising,
 		Shots:    cloneShots(state.shots),
 	})
-	commitLocked(state)
+	commitSnapshotLocked(state)
 }
 
 // advancePainting 绘制单镜：先推送开镜事件，再执行绘制，最后推送结果事件。
@@ -291,7 +407,6 @@ func advancePainting(ctx context.Context, taskID string) {
 
 	index := state.nextShot
 	shot := state.plan.Shots[index]
-	previous := state.previous
 	state.shots[index].Status = shotDrawing
 	state.shots[index].Error = ""
 	applyEventLocked(state, ProgressEvent{
@@ -304,12 +419,12 @@ func advancePainting(ctx context.Context, taskID string) {
 	})
 	stepCtx, cancel := taskStepContext(ctx, state, stagePaintTimeout())
 	state.cancel = cancel
-	started := takeViewLocked(state)
+	// 开镜事件走合并推送：绘制本身可能长达数分钟，推送不能被绘制阻塞。
+	schedulePushLocked(state)
 	taskMu.Unlock()
-	emitTask(started)
 	defer cancel()
 
-	result, paintErr := paintShot(stepCtx, shot, previous)
+	result, paintErr := paintShot(stepCtx, shot)
 
 	taskMu.Lock()
 	state, ok = tasks[taskID]
@@ -334,7 +449,6 @@ func advancePainting(ctx context.Context, taskID string) {
 		if paintErr == nil && len(result.Handles) > 0 {
 			state.shots[index].Status = shotPainted
 			state.shots[index].Handle = result.Handles[0]
-			state.previous = result.Handles[0]
 			state.nextShot = index + 1
 			applyEventLocked(state, ProgressEvent{
 				Status:    statusPaused,
@@ -366,7 +480,6 @@ func advancePainting(ctx context.Context, taskID string) {
 	} else {
 		state.shots[index].Status = shotPainted
 		state.shots[index].Handle = result.Handles[0]
-		state.previous = result.Handles[0]
 		event.Stage = fmt.Sprintf("已完成第 %d / %d 镜（%s）", index+1, total, shot.Scene)
 		event.Event = eventShotCompleted
 	}
@@ -386,7 +499,9 @@ func advanceWriting(taskID string) {
 	}
 	plan := state.plan
 	shots := cloneShots(state.shots)
+	stopGuard := beginStepGuard(state, writingStepTimeout)
 	taskMu.Unlock()
+	defer stopGuard()
 
 	doc, updated, err := writeStoryboardDoc(plan, shots)
 	if err != nil {
@@ -442,7 +557,7 @@ func advanceWriting(taskID string) {
 	if failure != "" {
 		state.view.Error = failure
 	}
-	commitLocked(state)
+	commitSnapshotLocked(state)
 }
 
 // failTask 把任务标记为失败并推送终止事件。
@@ -455,16 +570,16 @@ func failTask(taskID string, err error) {
 	}
 	reason := clipRunes(strings.TrimSpace(err.Error()), maxErrorRunes)
 	state.stage = stageDone
+	// 失败不是完成：保留失败时真实到达的进度，不再强行标 100%。
 	applyEventLocked(state, ProgressEvent{
-		Status:   statusFailed,
-		Stage:    "执行失败",
-		Progress: 100,
-		Summary:  reason,
-		Event:    eventFailed,
-		Shots:    cloneShots(state.shots),
+		Status:  statusFailed,
+		Stage:   "执行失败",
+		Summary: reason,
+		Event:   eventFailed,
+		Shots:   cloneShots(state.shots),
 	})
 	state.view.Error = reason
-	commitLocked(state)
+	commitSnapshotLocked(state)
 	logger.Warn(Module, "演绎任务 %s 失败: %s", taskID, reason)
 }
 
@@ -476,15 +591,57 @@ func isPausedOrCanceled(taskID string) bool {
 	return ok && (state.paused || state.canceled)
 }
 
-// taskStepContext 单步超时：不超过任务总截止时间。
+// taskStepContext 单个执行步骤的超时与卡死兜底；调用方必须持有 taskMu。
+//
+// 只按「本步骤自己的超时」计时，不再用任务总时长裁剪：
+// 大任务包含几十个长步骤，按剩余总时长裁剪会让正常步骤提前失败。
+// 步骤超时后智能体应当返回；若它连上下文都不响应，兜底看门狗在
+// step+stepStallGrace 之后确认「仍停在同一阶段且没有新状态」才判卡死。
 func taskStepContext(ctx context.Context, state *taskState, step time.Duration) (context.Context, context.CancelFunc) {
-	if !state.deadline.IsZero() {
-		if remaining := time.Until(state.deadline); remaining < step {
-			if remaining <= 0 {
-				remaining = time.Second
-			}
-			step = remaining
-		}
+	stopGuard := beginStepGuard(state, step)
+	stepCtx, cancel := context.WithTimeout(ctx, step)
+	return stepCtx, func() {
+		stopGuard()
+		cancel()
 	}
-	return context.WithTimeout(ctx, step)
+}
+
+// beginStepGuard 为当前原子步骤装上卡死兜底；调用方必须持有 taskMu。
+//
+// 返回的函数在步骤正常结束时调用，用于撤销兜底计时。
+// 没有上下文的步骤（受理读正文、收尾写文档）同样必须装上它，
+// 否则那两步卡住时没有任何机制能判定失败。
+func beginStepGuard(state *taskState, limit time.Duration) func() {
+	taskID := state.view.TaskID
+	stage := state.stage
+	guard := time.AfterFunc(limit+stepStallGrace, func() {
+		failStalledStep(taskID, stage, limit)
+	})
+	return func() {
+		guard.Stop()
+	}
+}
+
+// failStalledStep 单步兜底：只有「超时后仍停在同一阶段且没有任何状态更新」才判卡死。
+//
+// 任何一次状态更新（含逐镜进度、过程文本）都会刷新 lastBeat，
+// 因此步骤内部只要还在产出进度，就不会被这里误杀。
+func failStalledStep(taskID, stage string, step time.Duration) {
+	taskMu.Lock()
+	state, ok := tasks[taskID]
+	if !ok || state.stage != stage || state.paused || state.canceled || state.stage == stageDone {
+		taskMu.Unlock()
+		return
+	}
+	if time.Since(state.lastBeat) < step+stepStallGrace {
+		// 步骤期间仍有状态更新：不判卡死，交给下一次调度继续推进。
+		taskMu.Unlock()
+		return
+	}
+	stageText := state.view.Stage
+	taskMu.Unlock()
+	reason := fmt.Errorf("步骤「%s」已超过 %s 没有任何状态更新，判定为执行卡死（自愈失败，请重新提交）",
+		stageText, humanDuration(step+stepStallGrace))
+	logger.Warn(Module, "演绎任务 %s 单步卡死: %v", taskID, reason)
+	failTask(taskID, reason)
 }

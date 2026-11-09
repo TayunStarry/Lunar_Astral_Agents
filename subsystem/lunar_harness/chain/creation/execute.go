@@ -177,6 +177,43 @@ func summarizeSteps(results []stepResult, plan planResult) string {
 	return clipAtSentence(prefix+b.String(), maxSummaryRunes)
 }
 
+// creativeActivity 生成一句「刚刚在做什么」的人话，不复述步骤明细。
+//
+// 活动状态是给人格对话与用户看的，不是执行日志：优先用选题时写好的自然描述，
+// 全部步骤被跳过或没有可执行步骤时如实收口，避免把「6 步完成」当成成果。
+func creativeActivity(planned *PlanItem, results []stepResult) string {
+	if planned == nil {
+		return "完成了一次创作"
+	}
+	base := strings.TrimPrefix(strings.TrimSpace(planned.Activity), "刚")
+	if base == "" {
+		base = "完成了一次创作"
+	}
+	if len(results) == 0 {
+		return "想创作，但这次没排上可执行的步骤"
+	}
+	done := countDone(results)
+	switch {
+	case done == 0:
+		return "想创作，但这次没做成"
+	case done < len(results):
+		return base + "，但有几项没完成"
+	default:
+		return base
+	}
+}
+
+// countDone 统计未被跳过的步骤数。
+func countDone(results []stepResult) int {
+	done := 0
+	for _, result := range results {
+		if !result.Skipped {
+			done++
+		}
+	}
+	return done
+}
+
 // mergeMemos 合并计划备忘与执行遗留备忘，去重并限长。
 func mergeMemos(plan planResult, extra []string) []string {
 	out := make([]string, 0, maxMemos)

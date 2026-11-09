@@ -16,7 +16,14 @@ import (
 //
 // 跨任务保留运行时画作、最近作品路径与对话上下文，与原绘制者角色的行为一致；
 // 串行执行避免并发任务互相覆盖参考图基座。
-func Perform(ctx context.Context, instruction string, ref *Reference, env Env) (Result, error) {
+// opts.Silent 为 true 时只登记资源并返回句柄，不推送前端、不写近期记忆、不发 QQ，
+// 且使用独立的上下文与运行时画作，不污染人格对话的跨任务状态。
+func Perform(ctx context.Context, instruction string, ref *Reference, env Env, opts Options) (Result, error) {
+	if opts.Silent {
+		if _, ok := env.(SilentEnv); !ok {
+			return Result{}, fmt.Errorf("静默产出需要支持静默推送的执行环境")
+		}
+	}
 	library := newPromptLibrary()
 	system := systemPrompt(library)
 
@@ -24,31 +31,52 @@ func Perform(ctx context.Context, instruction string, ref *Reference, env Env) (
 	defer stateMu.Unlock()
 
 	s := &session{
-		ctx:        ctx,
-		env:        env,
-		prompts:    library,
-		custom:     CustomCharacters(),
-		resultPath: state.path,
-		artwork:    state.artwork,
+		ctx:     ctx,
+		env:     env,
+		prompts: library,
+		custom:  CustomCharacters(),
+		silent:  opts.Silent,
+	}
+	history := &state.history
+	if opts.Silent {
+		// 静默任务的上下文与运行时画作独立：演绎链逐镜产出不应成为
+		// 人格对话里「把刚才那张图改成…」的基座。
+		local := make([]chatMessage, 0, 4)
+		history = &local
+	} else {
+		s.resultPath = state.path
+		s.artwork = state.artwork
 	}
 	if err := s.bindReference(ref); err != nil {
 		return Result{}, err
 	}
 	s.task = s.buildTaskContent(instruction)
-	state.history = append(state.history, chatMessage{Role: "user", Content: s.task})
-	if len(state.history) > contextLimit {
-		state.history = state.history[len(state.history)-contextLimit:]
+	*history = append(*history, chatMessage{Role: "user", Content: s.task})
+	if len(*history) > contextLimit {
+		*history = (*history)[len(*history)-contextLimit:]
 	}
-	summary := s.run(system, s.tools(), &state.history)
-	state.artwork = s.artwork
-	state.path = s.resultPath
+	summary := s.run(system, s.tools(), history)
+	if !opts.Silent {
+		state.artwork = s.artwork
+		state.path = s.resultPath
+	}
 
 	handles := make([]string, 0, 1)
 	if s.artwork.Handle != "" {
 		handles = append(handles, s.artwork.Handle)
 	}
-	recordRun(summary, handles)
+	if !opts.Silent {
+		recordRun(summary, handles)
+	}
 	return Result{Summary: summary, Handles: handles}, nil
+}
+
+// pushImages 按调用选项交付图片：静默任务只登记资源，不广播、不写记忆。
+func (s *session) pushImages(images []string) []string {
+	if s.silent {
+		return s.env.(SilentEnv).PushImagesSilently(images)
+	}
+	return s.env.PushImages(images)
 }
 
 // UpdateArtworkPath 在外部迁移画作文件后同步运行时画作与最近作品路径。

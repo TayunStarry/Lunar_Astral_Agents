@@ -836,3 +836,33 @@ func TestPrivateMessagesAreBatched(t *testing.T) {
 		t.Fatalf("合并后的消息条数应为 2，实得 %d", len(deliveries[0]))
 	}
 }
+
+// TestReadFileSegmentUsesFileFieldAsDirectSource 合并转发里的文件段会把真实地址
+// 写在 file 字段（data URI / 直链 / 本地路径）。此时必须直接读取，
+// 不能把它当裸文件名去调 get_file——那会超时，最终报“没有可用的读取来源”。
+func TestReadFileSegmentUsesFileFieldAsDirectSource(t *testing.T) {
+	uri := "data:image/png;base64," + base64.StdEncoding.EncodeToString(testPNG(t, 4, 3))
+	data, err := readFileSegmentBytes(napcat.FileData{File: uri, FileID: "stale-file-id"})
+	if err != nil || len(data) == 0 {
+		t.Fatalf("file 字段为直接来源时应读取成功: len=%d err=%v", len(data), err)
+	}
+	if mimeType, _ := sniffImageBytes(data); mimeType != "image/png" {
+		t.Fatalf("读出的字节应为 PNG，实际 mime=%q", mimeType)
+	}
+}
+
+// TestResolveImageURLUsesFileField 转发的图片段只有 file 字段（没有 url/path）时，
+// file 里的直接来源必须原样采用，而不是先拿整串地址去调 get_image。
+func TestResolveImageURLUsesFileField(t *testing.T) {
+	uri := "data:image/png;base64," + base64.StdEncoding.EncodeToString(testPNG(t, 2, 2))
+	if got := resolveImageURL(napcat.ImageData{File: uri, FileID: "stale-file-id"}); got != uri {
+		t.Fatalf("应直接采用 file 里的 data URI，实际 %q", got)
+	}
+	path := filepath.Join(t.TempDir(), "forward.png")
+	if err := os.WriteFile(path, testPNG(t, 2, 2), 0o644); err != nil {
+		t.Fatalf("写测试图片失败: %v", err)
+	}
+	if got := resolveImageURL(napcat.ImageData{File: path}); !strings.HasPrefix(got, "data:image/png;base64,") {
+		t.Fatalf("file 为本地绝对路径时应读出图片，实际 %q", got)
+	}
+}

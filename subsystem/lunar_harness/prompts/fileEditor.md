@@ -44,7 +44,4 @@
 | 项 | 说明 |
 |----|------|
 | 入口 | `run_project` |
-| 私有运行时 | 文件头含 `//Engine: Lunar Harness` 的走月华私有 js 运行时 |
-| 资源库沙箱 | 其余 js/html 自动弹出「资源库」前端，并在 iframe 沙箱中运行 |
-| 运行时长 | 默认上限 120 秒；调用时传 `timeout_sec`（5-3600），或在文件首行写 `//Engine: Lunar Harness \| timeout=300s` |
-| 订阅型脚本 | 到期自动卸载 |
+| 资源库沙箱 | js/html 自动弹出「资源库」前端，并在 iframe 沙箱中运行 |

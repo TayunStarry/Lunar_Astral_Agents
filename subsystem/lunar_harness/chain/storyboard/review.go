@@ -86,9 +86,8 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 	state.plan = storyboardPlan{Title: viewTitle, Style: style, Shots: planShots}
 	state.shots = shots
 	state.nextShot = 0
-	state.previous = ""
 	state.stage = stageRevising
-	releaseDeadlineLocked(state)
+	releaseRestLocked(state)
 	applyEventLocked(state, ProgressEvent{
 		Status:   statusRevising,
 		Stage:    "审查已确认，正在梳理分镜衔接",
@@ -100,6 +99,8 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 	})
 	view := takeViewLocked(state)
 	persistTasksLocked()
+	// 回执本身就是完整快照：待推送的增量已被覆盖，直接作废。
+	consumePendingLocked(state)
 	taskMu.Unlock()
 	emitTask(view)
 	return view, nil
@@ -166,6 +167,7 @@ func PauseTask(taskID string) (TaskView, error) {
 	state.cancel = nil
 	view := takeViewLocked(state)
 	persistTasksLocked()
+	consumePendingLocked(state)
 	taskMu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -188,7 +190,7 @@ func ResumeTask(taskID string) (TaskView, error) {
 		return TaskView{}, fmt.Errorf("任务当前未暂停")
 	}
 	state.paused = false
-	releaseDeadlineLocked(state)
+	releaseRestLocked(state)
 	event := ProgressEvent{
 		Status: stageStatus(state.stage),
 		Stage:  "继续执行",
@@ -210,6 +212,7 @@ func ResumeTask(taskID string) (TaskView, error) {
 	applyEventLocked(state, event)
 	view := takeViewLocked(state)
 	persistTasksLocked()
+	consumePendingLocked(state)
 	taskMu.Unlock()
 	emitTask(view)
 	return view, nil
@@ -252,6 +255,7 @@ func CancelTask(taskID, reason string) (TaskView, error) {
 	state.cancel = nil
 	view := takeViewLocked(state)
 	persistTasksLocked()
+	consumePendingLocked(state)
 	taskMu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -260,14 +264,24 @@ func CancelTask(taskID, reason string) (TaskView, error) {
 	return view, nil
 }
 
-// releaseDeadlineLocked 把暂停/审查期间的时间顺延到任务截止时间；调用方必须持有锁。
-func releaseDeadlineLocked(state *taskState) {
+// releaseRestLocked 让暂停 / 审查的等待时间不进入运行预算与静默计时；调用方必须持有锁。
+//
+// 用户停留在审查态或主动暂停的时间不该被算成「任务卡住」，
+// 恢复推进时重置心跳并把预算、提醒时间整体顺延。
+func releaseRestLocked(state *taskState) {
 	if state.restedAt.IsZero() {
 		return
 	}
-	if !state.deadline.IsZero() {
-		state.deadline = state.deadline.Add(time.Since(state.restedAt))
+	rested := time.Since(state.restedAt)
+	now := time.Now()
+	state.startedAt = state.startedAt.Add(rested)
+	if !state.budgetAt.IsZero() {
+		state.budgetAt = state.budgetAt.Add(rested)
 	}
+	if !state.nextWarn.IsZero() {
+		state.nextWarn = state.nextWarn.Add(rested)
+	}
+	state.lastBeat = now
 	state.restedAt = time.Time{}
 }
 

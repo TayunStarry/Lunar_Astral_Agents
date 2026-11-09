@@ -3,7 +3,7 @@ package life
 // rounds.go 生活回合的固定顺序编排。
 //
 // 一个回合固定五步，顺序不可打乱：
-//  1. 固定三步（更新心情 → 更新对他人态度 → 合并记忆待处理条目）
+//  1. 固定四步（结算愿望 → 更新心情 → 更新对他人态度 → 合并记忆待处理条目）
 //  2. viewer.EnsureWatchlist
 //  3. viewer.AutoRespondOnBilibili
 //  4. MutualForum.AutoRespondUnread
@@ -184,7 +184,7 @@ func setRoundStage(stage string) {
 	saveStateLocked()
 }
 
-// statusFromFailures 固定三步任一失败记为 failed，但回合继续。
+// statusFromFailures 固定四步任一失败记为 failed，但回合继续。
 func statusFromFailures(failures []error) string {
 	if len(failures) == 0 {
 		return roundStatusOK
@@ -192,10 +192,10 @@ func statusFromFailures(failures []error) string {
 	return roundStatusFailed
 }
 
-// detailFromFailures 汇总固定三步的失败原因。
+// detailFromFailures 汇总固定四步的失败原因。
 func detailFromFailures(failures []error) string {
 	if len(failures) == 0 {
-		return "心情 / 态度 / 记忆待合并 均已完成"
+		return "愿望 / 心情 / 态度 / 记忆待合并 均已完成"
 	}
 	parts := make([]string, 0, len(failures))
 	for _, err := range failures {

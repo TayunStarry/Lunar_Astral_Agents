@@ -93,9 +93,6 @@ func init() {
 		toolDef("code_index",
 			"代码索引：返回目标代码文件的全局变量、全局函数签名、全局类名及各自注释。",
 			map[string]any{"path": strProp("相对 /document 的代码文件路径")}, []string{"path"}),
-		toolDef("read_dts",
-			"查阅内嵌运行时 API 契约：契约按能力拆分为多个 *API.d.ts，统一存放在 engine/runtime/contracts 目录（runtimeAPI / agentAPI / memoryAPI / databaseAPI 等），按需只读所需模块；name 为空时列出清单。",
-			map[string]any{"name": strProp("文档名（如 runtimeAPI.d.ts，只写文件名不带目录；为空时列出全部可查阅文档）")}, nil),
 		toolDef("change_query",
 			"查看文件操作的内容级变更：返回最新 10 次差异块与更早合并成的原始基准；path 为空时返回全局最近变更。",
 			map[string]any{

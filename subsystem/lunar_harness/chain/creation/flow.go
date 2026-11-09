@@ -124,7 +124,7 @@ func (s *session) mutate(op, tool, target string, snapshotPaths []string, defaul
 }
 
 // mutationOutcome 汇总写操作结果与审查结论。
-func mutationOutcome(op, target string, decision routeDecision, result mutationResult, review *fileflow.Review) toolOutcome {
+func mutationOutcome(op, _ string, decision routeDecision, result mutationResult, review *fileflow.Review) toolOutcome {
 	payload := map[string]any{
 		"ok":      result.OK && review.OK,
 		"op":      op,

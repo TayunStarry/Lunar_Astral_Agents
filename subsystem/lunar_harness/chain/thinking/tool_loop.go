@@ -24,7 +24,7 @@ func (role *DialogueRole) runToolLoop(cache *ChatCache) {
 			return role.roundReply(ctx, round, cache)
 		},
 		OnToolRoundsExhausted: func(ctx context.Context, round int, reply agentbase.Reply) (agentbase.Reply, error) {
-			role.exhaustToolRounds(round, reply)
+			role.exhaustToolRounds(reply)
 			return role.finalizeReply(), nil
 		},
 		Execute: func(ctx context.Context, call agentbase.ToolCall) (string, bool, error) {
@@ -43,7 +43,7 @@ func (role *DialogueRole) runToolLoop(cache *ChatCache) {
 }
 
 // exhaustToolRounds 工具轮次用尽：说明上限、回填未执行原因，实际计数与判定在 RunToolLoop。
-func (role *DialogueRole) exhaustToolRounds(round int, reply agentbase.Reply) {
+func (role *DialogueRole) exhaustToolRounds(reply agentbase.Reply) {
 	logger.Warn(lunarCoreModule, "["+Dialogue.Role+"] 工具调用轮次达到上限（%d），停止继续调用", maxToolRounds)
 	role.speakAssistantText(strings.TrimSpace(reply.Text))
 	calls := make([]ToolCallItem, 0, len(reply.ToolCalls))

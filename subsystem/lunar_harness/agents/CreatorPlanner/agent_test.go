@@ -11,8 +11,8 @@ import (
 
 func TestToolSchemasRegistered(t *testing.T) {
 	schemas := toolreg.Schemas(AgentID)
-	if len(schemas) != 22 {
-		t.Fatalf("登记的工具声明数 = %d，期望 22", len(schemas))
+	if len(schemas) != 21 {
+		t.Fatalf("登记的工具声明数 = %d，期望 21", len(schemas))
 	}
 	for _, name := range []string{"submit_plan", "file_read", "fetch_resources", "run_script", "send_private_text"} {
 		if _, ok := toolreg.LookupSchema(name); !ok {

@@ -359,13 +359,7 @@ func pushAssistantMusic(title, summary string, duration float64, audio string) b
 
 // pushAssistantImage 推送助手图片并写入近期记忆
 func pushAssistantImage(images []string, isSticker bool) []string {
-	canonical := make([]string, 0, len(images))
-	for _, image := range images {
-		canonical = append(canonical, registerPushedImage(image))
-	}
-	if len(canonical) == 0 {
-		canonical = images
-	}
+	canonical := RegisterPainterImages(images)
 	PushMessageFunc("image", PushImageData{Type: "image", Images: canonical, Sticker: isSticker})
 	for _, image := range canonical {
 		if image == "" {
@@ -563,7 +557,7 @@ func cachedToContext(record CachedMessage) *PostMessage {
 			return nil
 		}
 		// 历史重放与首次进入共用同一清洗入口；重放模式只登记视频句柄，不重新下载落盘
-		converted := convertMessageResources(PostMessage{Role: RoleUser, Content: items}, true)
+		converted := convertMessageResources(PostMessage{Role: RoleUser, Content: items})
 		if convertedItems := asItems(converted.Content); len(convertedItems) == 1 && convertedItems[0].Type == ContentText {
 			return &PostMessage{Role: RoleUser, Content: convertedItems[0].Text}
 		}
@@ -598,14 +592,14 @@ func initConversationCache(loadContext func([]PostMessage)) {
 		return
 	}
 	records := make([]CachedMessage, 0, len(rows))
-	// 历史文件里可能残留计划表触发的内部提醒：它们不属于用户对话，载入时剔除并回写
+	// 历史文件里可能残留愿望到期触发的内部提醒：它们不属于用户对话，载入时剔除并回写
 	removedSchedule := false
 	for _, row := range rows {
 		record := normalizeRecord(row)
 		if record == nil {
 			continue
 		}
-		if record.Role == RoleUser && strings.HasPrefix(strings.TrimSpace(record.Content), scheduleTriggerPrefix) {
+		if record.Role == RoleUser && strings.HasPrefix(strings.TrimSpace(record.Content), wishTriggerPrefix) {
 			removedSchedule = true
 			continue
 		}

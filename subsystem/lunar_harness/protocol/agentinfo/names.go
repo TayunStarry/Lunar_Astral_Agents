@@ -15,8 +15,8 @@ const (
 	NameDocumentReader = "文献解析"
 	// NameFileEditor 文件编辑
 	NameFileEditor = "文件编辑"
-	// NamePlanManager 计划管理
-	NamePlanManager = "计划管理"
+	// NameWishManager 愿望管理
+	NameWishManager = "愿望管理"
 	// NameDialogueBridging 通讯桥接
 	NameDialogueBridging = "通讯桥接"
 	// NameMutualForum 互助论坛
@@ -67,8 +67,6 @@ const (
 	NameMemoryFuser = "记忆融合"
 	// NameAudioTranscriber 语音转写
 	NameAudioTranscriber = "语音转写"
-	// NameRuntimeChat 插件对话
-	NameRuntimeChat = "插件对话"
 )
 
 // DisplayNames 智能体 ID → 显示名。
@@ -77,7 +75,7 @@ var DisplayNames = map[string]string{
 	"archive_ops":       NameArchiveOps,
 	"document_reader":   NameDocumentReader,
 	"file_editor":       NameFileEditor,
-	"plan_manager":      NamePlanManager,
+	"wish_manager":      NameWishManager,
 	"dialogue_bridging": NameDialogueBridging,
 	"mutual_forum":      NameMutualForum,
 	"responder":         NameResponder,
@@ -105,7 +103,6 @@ var DisplayNames = map[string]string{
 	"memory_tagger":     NameMemoryTagger,
 	"memory_fuser":      NameMemoryFuser,
 	"audio_transcriber": NameAudioTranscriber,
-	"runtime_chat":      NameRuntimeChat,
 }
 
 // Name 返回智能体显示名；未登记的 ID 原样返回，便于调用方暴露真实 ID 排查。

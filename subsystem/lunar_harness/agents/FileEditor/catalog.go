@@ -84,10 +84,9 @@ var toolDefinitions = map[string]toolDefinition{
 		"联网查询：给出查询意图，返回搜索摘要。需要外部资料时使用。",
 		map[string]any{"query": strProp("搜索查询，尽量具体")}, []string{"query"}),
 	ToolRunProj: toolDef(ToolRunProj,
-		"运行 js / html 项目文件：文件头含「//Engine: Lunar Harness」走月华私有 js 运行时；其余 js/html 自动弹出「资源库」前端并在其 iframe 沙箱中运行。默认运行时长上限 120 秒，可用 timeout_sec 或文件首行 `timeout=120s` 覆盖。",
+		"运行 js / html 项目文件：自动弹出「资源库」前端并在其 iframe 沙箱中运行，宿主进程不再执行脚本。",
 		map[string]any{
-			"path":        strProp("相对 /document 的项目文件路径"),
-			"timeout_sec": intProp("运行时长上限（秒；默认 120，允许 5-3600；优先级高于文件首行声明）", 5, 3600),
+			"path": strProp("相对 /document 的项目文件路径"),
 		}, []string{"path"}),
 	ToolSchedule: schemaDef(ToolSchedule,
 		"单方面调度其他智能体完成任务：type 选定目标智能体，instruction 用自然语言说明要做什么，handle 传目标路径或句柄。压缩包、GGUF、文档正文、图片 / 动图 / 视频一律走这里，不要用文件工具直接读写二进制容器。",

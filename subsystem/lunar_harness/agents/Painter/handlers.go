@@ -55,7 +55,7 @@ func (s *session) paint(params GenerateImageParams, label string) string {
 	seed := toInt64Value(result["seed"])
 	s.resultPath = path
 	if url := readURLOf(path); url != "" {
-		urls := s.env.PushImages([]string{url})
+		urls := s.pushImages([]string{url})
 		if len(urls) > 0 {
 			s.resultPath = urls[0]
 			s.rememberRuntimeArtwork(urls[0], "最新作品")
@@ -377,7 +377,7 @@ func (s *session) handleUpscaleImage(args map[string]any) string {
 	width := toIntValue(result["width"])
 	height := toIntValue(result["height"])
 	if url := readURLOf(path); url != "" {
-		if urls := s.env.PushImages([]string{url}); len(urls) > 0 {
+		if urls := s.pushImages([]string{url}); len(urls) > 0 {
 			s.resultPath = urls[0]
 			s.rememberRuntimeArtwork(urls[0], "最新超分作品")
 		} else {

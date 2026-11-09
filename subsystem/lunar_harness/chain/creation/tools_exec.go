@@ -41,8 +41,6 @@ func (s *session) executeTool(ctx context.Context, name string, args map[string]
 		return s.archiveWrite(args)
 	case toolCodeIndex:
 		return codeIndexTool(args)
-	case toolReadDTS:
-		return readDTSTool(args)
 	case toolChangeQuery:
 		return changeQueryTool(args)
 	case toolSendGroupText:

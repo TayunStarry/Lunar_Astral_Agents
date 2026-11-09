@@ -8,12 +8,13 @@ import {
     resetDatabase, databasePath, setDatabaseChangeHandler,
 } from './dbview.js';
 import { isArchiveFile, openArchive, renderArchivePreview, resetArchive } from './archiveview.js';
-import { prepareRequirement, submitRequirement, watchRequirement, handleCreationEvent, setPushConnected, setRequirementObserver } from './requirement.js';
+import { prepareRequirement, submitRequirement, bindRequirementPush, setRequirementObserver } from './requirement.js';
 import {
-    prepareStoryboard, submitStoryboard, watchStoryboard, handleStoryboardEvent,
-    setStoryboardPushConnected, setStoryboardObserver,
+    prepareStoryboard, submitStoryboard, bindStoryboardPush,
+    setStoryboardObserver,
     confirmStoryboard, pauseStoryboard, resumeStoryboard, cancelStoryboard,
 } from './storyboard.js';
+import { connectSocket, onPush, onSocketStatus } from './socket.js';
 import { toast, confirmDialog, promptDialog, folderDialog, helpDialog } from './dialog.js';
 import { runInSandbox, hideSandbox } from './sandbox.js';
 
@@ -31,10 +32,6 @@ const TASK_STATUS_LABELS = {
     executing: '执行中',
     completed: '已完成',
     failed: '失败',
-};
-const TASK_MODE_LABELS = {
-    assigned: '指定句柄',
-    random: '随机选题',
 };
 const state = {
     entries: [],
@@ -58,26 +55,25 @@ const jumpedTasks = new Set();
 // 演绎产出自动跳转：同样只对本次会话提交的任务生效。
 const storyboardBaselines = new Map();
 const storyboardJumped = new Set();
-// 演绎进度视图：按镜头逐条追加，避免每次推送整块重建。
-const storyboardView = {
-    taskId: '',
-    task: null,
-    titleEl: null,
-    idEl: null,
-    stageEl: null,
-    thoughtEl: null,
-    docEl: null,
-    listEl: null,
-    rows: new Map(),
-};
 
-// 分镜审查面板：只在任务进入 reviewing 时出现，编辑内容以本地状态为准。
+// 演绎进度：只保留当前任务引用（暂停 / 终止按钮需要任务标识与状态）。
+// 进度与阶段文案全部走 toast 轻提示，不再向页面注入会撑开的文本块。
+let storyboardActiveTask = null;
+// 推送提示限流：同一任务的最短提示间隔，避免逐镜事件把提示刷屏。
+const NOTICE_MIN_INTERVAL_MS = 1200;
+const storyboardNotice = { key: '', at: 0 };
+const creationNotice = { key: '', at: 0 };
+
+// 分镜审查面板：只在任务进入审查态时出现，编辑内容以本地状态为准。
 const storyboardReview = {
     taskId: '',
     title: '',
     shots: [],
     busy: false,
+    mode: 'read',
     root: null,
+    // statuses 只读模式下已同步到徽标的镜头状态，避免每帧重复查找 DOM。
+    statuses: [],
 };
 
 // 窄窗（详情以抽屉形式覆盖显示）判定，与 styles.css 的断点保持一致
@@ -92,6 +88,11 @@ async function init() {
     bindEvents();
     setRequirementObserver(onRequirementEvent);
     setStoryboardObserver(onStoryboardEvent);
+    // 任务推送与连接状态统一由 socket.js 分发，页面不再自己持有 WebSocket。
+    bindRequirementPush();
+    bindStoryboardPush();
+    onPush('library_sync', () => scheduleSync(150));
+    onSocketStatus(onRealtimeStatus);
     // 数据库视图的数据变化（选表 / 翻页 / 排序）回写主显示区与右侧标签页。
     setDatabaseChangeHandler(() => {
         const entry = currentEntry();
@@ -144,7 +145,6 @@ function cacheElements() {
     els.reqPick = document.getElementById('requirement-pick');
     els.reqSubmit = document.getElementById('requirement-submit');
     els.reqState = document.getElementById('requirement-state');
-    els.reqResult = document.getElementById('requirement-result');
     els.storyForm = document.getElementById('storyboard-form');
     els.storyText = document.getElementById('storyboard-text');
     els.storyHandle = document.getElementById('storyboard-handle');
@@ -154,7 +154,6 @@ function cacheElements() {
     els.storyRatio = document.getElementById('storyboard-ratio');
     els.storySubmit = document.getElementById('storyboard-submit');
     els.storyState = document.getElementById('storyboard-state');
-    els.storyResult = document.getElementById('storyboard-result');
     els.storyPause = document.getElementById('storyboard-pause');
     els.storyCancel = document.getElementById('storyboard-cancel');
     els.storyReviewOpen = document.getElementById('storyboard-review-open');
@@ -745,39 +744,29 @@ async function onSubmitRequirement(event) {
         const task = await submitRequirement({ handle, description });
         if (task && task.taskId) creationBaselines.set(task.taskId, baseline);
         renderCreationTask(task);
-        watchRequirement(task);
         void maybeJumpToOutput(task);
     } catch (err) {
         renderRequirement('failed', err.message || String(err));
     }
 }
 
+// renderRequirement 只更新页脚状态行：提交态与失败原因都在这一行内收敛，
+// 不再插入结果块，避免推送内容把表单撑开、挤掉提交按钮。
 function renderRequirement(status, text) {
     els.reqState.className = `requirement-state${status === 'idle' ? '' : ` is-${status}`}`;
     els.reqState.textContent = text || '';
-    els.reqResult.classList.add('hidden');
-    els.reqResult.replaceChildren();
     els.reqSubmit.disabled = status === 'submitting';
     setRequirementButtonLabel(status === 'failed' ? '重试' : '提交需求');
 }
 
 function renderCreationTask(task) {
     if (!task) return;
+    const text = taskStatusText(task);
     els.reqState.className = `requirement-state ${taskStateClass(task.status)}`;
-    els.reqState.textContent = taskStatusText(task);
+    els.reqState.textContent = text;
     els.reqSubmit.disabled = false;
     setRequirementButtonLabel(task.status === 'failed' ? '重试' : '提交需求');
-    els.reqResult.replaceChildren();
-    els.reqResult.classList.remove('hidden');
-    if (task.taskId) {
-        els.reqResult.append(textSpan('任务标识'));
-        const code = document.createElement('code');
-        code.textContent = task.taskId;
-        els.reqResult.append(code);
-    }
-    if (task.mode) {
-        els.reqResult.append(textSpan(TASK_MODE_LABELS[task.mode] || task.mode));
-    }
+    noticeTask(creationNotice, task, '创作');
 }
 
 function taskStateClass(status) {
@@ -802,12 +791,46 @@ function taskStatusText(task) {
     return parts.join(' · ');
 }
 
+// noticeTask 把后端推送的阶段变化收敛成 toast 轻提示：
+// 同一条文案只提示一次；非终态限流，终态（完成 / 失败 / 终止）立即提示。
+function noticeTask(bucket, task, prefix) {
+    if (!task) return;
+    const terminal = task.status === 'completed' || task.status === 'failed'
+        || task.status === 'canceled';
+    const key = `${task.taskId}|${task.status}|${task.stage}|${task.summary}|${task.error}`;
+    if (key === bucket.key) return;
+    const now = Date.now();
+    if (!terminal && now - bucket.at < NOTICE_MIN_INTERVAL_MS) return;
+    bucket.key = key;
+    bucket.at = now;
+    const text = noticeText(task, prefix);
+    if (!text) return;
+    toast(text, terminal ? (task.status === 'failed' ? 'error' : 'success') : '');
+}
+
+// noticeText 生成一条提示文案：阶段优先，终态给结论。
+function noticeText(task, prefix) {
+    if (task.status === 'failed') return `${prefix}失败：${task.error || task.summary || '未知原因'}`;
+    if (task.status === 'canceled') return `${prefix}已终止`;
+    if (task.status === 'completed') {
+        return task.summary ? `${prefix}完成：${task.summary}` : `${prefix}已完成`;
+    }
+    // 长耗时提醒：后端已把结论写进 summary（预算顺延 / 接近上限），直接展示
+    if (task.event === 'long_running' && task.summary) return task.summary;
+    const label = TASK_STATUS_LABELS[task.status] || task.status || '';
+    const detail = task.stage || task.summary || '';
+    return detail ? `${prefix}${label} · ${detail}` : `${prefix}${label}`;
+}
+
 // onRequirementEvent 接收 requirement.js 的推送/轮询结果。
 function onRequirementEvent(event) {
-    if (event && event.kind === 'task' && event.task) {
+    if (!event || event.kind !== 'task' || !event.task) return;
+    try {
         renderCreationTask(event.task);
-        if (event.task.status === 'completed') void maybeJumpToOutput(event.task);
+    } catch (err) {
+        console.error('[library] 创作进度渲染失败', err);
     }
+    if (event.task.status === 'completed') void maybeJumpToOutput(event.task);
 }
 
 // maybeJumpToOutput 创作完成且产出新文件时自动选中并预览。
@@ -863,22 +886,22 @@ async function pickStoryboardHandle(notify) {
     const known = handleOf(entry);
     if (known) {
         els.storyHandle.value = known;
-        renderStoryboard('idle', `已带入 ${known}`);
+        renderStoryboardState('idle', `已带入 ${known}`);
         return;
     }
-    renderStoryboard('idle', '正在读取资源句柄…');
+    renderStoryboardState('idle', '正在读取资源句柄…');
     try {
         const res = await fetchMeta(entry.path);
         state.meta.set(entry.path, res.meta);
         const handle = handleOf(entry);
         if (handle) {
             els.storyHandle.value = handle;
-            renderStoryboard('idle', `已带入 ${handle}`);
+            renderStoryboardState('idle', `已带入 ${handle}`);
         } else {
-            renderStoryboard('idle', '该文件尚未登记资源句柄，可手动填写');
+            renderStoryboardState('idle', '该文件尚未登记资源句柄，可手动填写');
         }
     } catch (err) {
-        renderStoryboard('idle', `读取句柄失败，可手动填写：${err.message}`);
+        renderStoryboardState('idle', `读取句柄失败，可手动填写：${err.message}`);
     }
 }
 
@@ -895,163 +918,57 @@ async function onSubmitStoryboard(event) {
     try {
         prepareStoryboard(input);
     } catch (err) {
-        renderStoryboard('failed', err.message);
+        renderStoryboardState('failed', err.message);
         return;
     }
-    renderStoryboard('submitting', '正在提交到演绎系统…');
+    renderStoryboardState('submitting', '正在提交到演绎系统…');
+    // 新任务开始：清掉上一个任务的审查面板与提示去重标记。
+    storyboardActiveTask = null;
+    resetStoryboardReview();
+    storyboardNotice.key = '';
     // 记录提交瞬间的选中项，用于判断任务完成时是否适合自动跳转。
     const baseline = state.selectedPath;
     try {
         const task = await submitStoryboard(input);
         if (task && task.taskId) storyboardBaselines.set(task.taskId, baseline);
-        renderStoryboardTask(task);
-        watchStoryboard(task);
+        applyStoryboardTask(task);
         void maybeJumpToStoryboardDoc(task);
     } catch (err) {
-        renderStoryboard('failed', err.message || String(err));
+        renderStoryboardState('failed', err.message || String(err));
     }
 }
 
-function renderStoryboard(status, text) {
+// renderStoryboardState 只更新页脚状态行：提交中与失败原因都在一行内收敛。
+function renderStoryboardState(status, text) {
     els.storyState.className = `requirement-state${status === 'idle' ? '' : ` is-${status}`}`;
     els.storyState.textContent = text || '';
-    resetStoryboardView();
-    resetStoryboardReview();
-    els.storyResult.classList.add('hidden');
-    els.storyResult.replaceChildren();
     els.storySubmit.disabled = status === 'submitting';
     setStoryboardButtonLabel(status === 'failed' ? '重试' : '开始演绎');
 }
 
-// resetStoryboardView 清空增量视图引用，下一次渲染重建容器。
-function resetStoryboardView() {
-    storyboardView.taskId = '';
-    storyboardView.task = null;
-    storyboardView.titleEl = null;
-    storyboardView.idEl = null;
-    storyboardView.stageEl = null;
-    storyboardView.thoughtEl = null;
-    storyboardView.docEl = null;
-    storyboardView.listEl = null;
-    storyboardView.rows.clear();
-}
-
-// ensureStoryboardView 为任务创建稳定的头部、过程输出与镜头列表容器。
-function ensureStoryboardView(task) {
-    const taskId = task.taskId || '';
-    if (storyboardView.taskId === taskId && storyboardView.listEl) return;
-    resetStoryboardView();
-    storyboardView.taskId = taskId;
-    els.storyResult.replaceChildren();
-    els.storyResult.classList.remove('hidden');
-
-    storyboardView.titleEl = textSpan('');
-    storyboardView.titleEl.classList.add('hidden');
-    storyboardView.idEl = textSpan('');
-    storyboardView.idEl.classList.add('hidden');
-    storyboardView.stageEl = document.createElement('div');
-    storyboardView.stageEl.className = 'storyboard-stage';
-    storyboardView.stageEl.classList.add('hidden');
-    storyboardView.thoughtEl = document.createElement('div');
-    storyboardView.thoughtEl.className = 'storyboard-thought';
-    storyboardView.thoughtEl.classList.add('hidden');
-    storyboardView.docEl = textSpan('');
-    storyboardView.docEl.classList.add('hidden');
-    storyboardView.listEl = document.createElement('div');
-    storyboardView.listEl.className = 'storyboard-shots';
-    storyboardView.listEl.classList.add('hidden');
-    els.storyResult.append(
-        storyboardView.titleEl,
-        storyboardView.idEl,
-        storyboardView.stageEl,
-        storyboardView.thoughtEl,
-        storyboardView.docEl,
-        storyboardView.listEl,
-    );
-}
-
-// setViewText 写入文本并按空值隐藏。
-function setViewText(el, text) {
-    if (!el) return;
-    el.textContent = text || '';
-    el.classList.toggle('hidden', !text);
-}
-
-// storyboardShotText 生成单镜进度行文案。
-function storyboardShotText(shot) {
-    const label = `第 ${shot.index} 镜 · ${shot.scene || '未编号'}`;
-    let detail = '待绘制';
-    if (shot.status === 'drawing') {
-        detail = '绘制中…';
-    } else if (shot.status === 'failed') {
-        detail = `失败：${shot.error || '未产出图片'}`;
-    } else if (shot.status === 'pending') {
-        detail = '待确认';
-    } else if (shot.status === 'planned') {
-        detail = '待绘制';
-    } else if (shot.file) {
-        detail = `已生成 ${shot.file}`;
-    } else if (shot.status === 'painted') {
-        detail = '已生成';
-    }
-    return `${label} · ${detail}`;
-}
-
-function renderStoryboardTask(task) {
-    if (!task) return;
-    ensureStoryboardView(task);
-    storyboardView.task = task;
-    els.storyState.className = `requirement-state ${taskStateClass(task.status)}`;
-    els.storyState.textContent = storyboardTaskText(task);
+// applyStoryboardTask 应用一次任务更新：页脚状态行 + 控制按钮 + 审查面板 + 轻提示。
+//
+// 这里刻意不向页面插入任何进度文本块：旧实现把阶段、过程文本与逐镜列表
+// 全部写进右侧表单，内容一变就撑开／挤压表单，页面排版随之跳动。
+// 现在进度只更新一行状态与 toast，任何量级的推送都不改变页面结构。
+function applyStoryboardTask(task) {
+    if (!task || !task.taskId || typeof task.status !== 'string') return;
+    if (!els.storyState || !els.storySubmit) return;
+    const view = { ...task, shots: Array.isArray(task.shots) ? task.shots : [] };
+    storyboardActiveTask = view;
+    const text = storyboardTaskText(view);
+    els.storyState.className = `requirement-state ${taskStateClass(view.status)}`;
+    els.storyState.textContent = text;
+    els.storyState.title = text;
     els.storySubmit.disabled = false;
-    setStoryboardButtonLabel(task.status === 'failed' ? '重试' : '开始演绎');
-    els.storyResult.classList.remove('hidden');
-    renderStoryboardControls(task);
-
-    setViewText(storyboardView.titleEl, task.title ? `《${task.title}》` : '');
-    setViewText(storyboardView.idEl, task.taskId ? `任务标识：${task.taskId}` : '');
-    setViewText(storyboardView.stageEl, task.stage || '');
-    renderStoryboardThought(task);
-    setViewText(storyboardView.docEl, task.docPath ? `分镜文档：${task.docPath}` : '');
-    renderStoryboardReviewTask(task);
-
-    const shots = task.shots || [];
-    if (!shots.length) {
-        storyboardView.listEl.classList.add('hidden');
-        return;
+    setStoryboardButtonLabel(view.status === 'failed' ? '重试' : '开始演绎');
+    renderStoryboardControls(view);
+    try {
+        renderStoryboardReviewTask(view);
+    } catch (err) {
+        console.error('[library] 分镜审查渲染失败', err);
     }
-    storyboardView.listEl.classList.remove('hidden');
-    shots.forEach((shot) => {
-        let row = storyboardView.rows.get(shot.index);
-        if (!row) {
-            row = document.createElement('div');
-            row.className = 'storyboard-shot';
-            storyboardView.rows.set(shot.index, row);
-            storyboardView.listEl.append(row);
-        }
-        row.className = `storyboard-shot${shot.status === 'failed' ? ' is-failed' : ''}`;
-        row.textContent = storyboardShotText(shot);
-    });
-}
-
-// renderStoryboardThought 追加规划阶段的可读过程文本。
-// 推送事件携带 delta 时逐段追加；轮询兜底没有 delta 时用累计 thought 对齐。
-function renderStoryboardThought(task) {
-    const el = storyboardView.thoughtEl;
-    if (!el) return;
-    if (task.thoughtReset) {
-        el.textContent = '';
-    }
-    if (task.delta) {
-        el.textContent += task.delta;
-    } else if (task.thought && task.thought.length > el.textContent.length) {
-        // 过程文本只增不减：仅当累计文本更长时对齐，避免过期的轮询响应把
-        // 已经追加的内容回退。
-        el.textContent = task.thought;
-    }
-    const hasText = el.textContent.trim() !== '';
-    el.classList.toggle('hidden', !hasText);
-    if (hasText) el.scrollTop = el.scrollHeight;
+    noticeTask(storyboardNotice, view, '演绎');
 }
 
 function storyboardTaskText(task) {
@@ -1066,16 +983,35 @@ function storyboardTaskText(task) {
         parts.push(task.summary);
         return parts.join(' · ');
     }
+    if (task.stage) parts.push(task.stage);
     if (task.status === 'completed' && task.summary) parts.push(task.summary);
     return parts.join(' · ');
 }
 
-// onStoryboardEvent 接收 storyboard.js 的推送/轮询结果。
+// onStoryboardEvent 推送入口：一帧最多渲染一次，帧内多次推送只保留最新状态。
+// 推送合并已经在后端完成（120ms 一次），这里再做一层帧级合并。
+let pendingStoryboardTask = null;
+let storyboardRenderFrame = 0;
+
 function onStoryboardEvent(event) {
-    if (event && event.kind === 'task' && event.task) {
-        renderStoryboardTask(event.task);
-        if (event.task.status === 'completed') void maybeJumpToStoryboardDoc(event.task);
+    if (!event || event.kind !== 'task' || !event.task) return;
+    pendingStoryboardTask = event.task;
+    if (storyboardRenderFrame) return;
+    storyboardRenderFrame = requestAnimationFrame(flushStoryboardRender);
+}
+
+function flushStoryboardRender() {
+    storyboardRenderFrame = 0;
+    const task = pendingStoryboardTask;
+    pendingStoryboardTask = null;
+    if (!task) return;
+    // 渲染失败只让这一帧失效：页面其余部分与后续推送照常工作。
+    try {
+        applyStoryboardTask(task);
+    } catch (err) {
+        console.error('[library] 演绎进度渲染失败', err);
     }
+    if (task.status === 'completed') void maybeJumpToStoryboardDoc(task);
 }
 
 // maybeJumpToStoryboardDoc 演绎完成且产出文档时，自动打开分镜文档。
@@ -1121,15 +1057,15 @@ function renderStoryboardControls(task) {
     const canPause = status === 'researching' || status === 'planning' ||
         status === 'revising' || status === 'painting' || status === 'paused';
     els.storyPause.classList.toggle('hidden', !canPause);
-    els.storyPause.querySelector('span').textContent = status === 'paused' ? '继续' : '暂停';
+    setStoryboardButtonLabel(status === 'paused' ? '继续' : '暂停', els.storyPause);
     els.storyCancel.classList.toggle('hidden', terminal);
     const hasShots = (task.shots || []).length > 0;
     els.storyReviewOpen.classList.toggle('hidden', !hasShots);
-    els.storyReviewOpen.querySelector('span').textContent = status === 'reviewing' ? '打开审查' : '查看分镜';
+    setStoryboardButtonLabel(status === 'reviewing' ? '打开审查' : '查看分镜', els.storyReviewOpen);
 }
 
 async function onStoryboardPause() {
-    const task = storyboardView.task;
+    const task = storyboardActiveTask;
     if (!task || !task.taskId) return;
     const paused = task.status === 'paused';
     els.storyPause.disabled = true;
@@ -1149,7 +1085,7 @@ async function onStoryboardPause() {
 }
 
 async function onStoryboardCancel() {
-    const task = storyboardView.task;
+    const task = storyboardActiveTask;
     if (!task || !task.taskId) return;
     const ok = await confirmDialog(
         '终止演绎',
@@ -1235,6 +1171,7 @@ function resetStoryboardReview() {
     storyboardReview.shots = [];
     storyboardReview.busy = false;
     storyboardReview.mode = 'read';
+    storyboardReview.statuses = [];
     closeStoryboardReview();
 }
 
@@ -1263,7 +1200,9 @@ function buildStoryboardReview() {
 
     const list = document.createElement('div');
     list.className = 'sb-review-list';
+    storyboardReview.statuses = [];
     storyboardReview.shots.forEach((shot, index) => {
+        storyboardReview.statuses.push(shot.status || 'pending');
         list.append(buildReviewShotCard(shot, index, editing));
     });
     list.addEventListener('input', onReviewShotInput);
@@ -1419,14 +1358,19 @@ async function onStoryboardConfirm() {
 }
 
 // updateReviewBadges 只读模式下把服务端镜头状态同步到徽标。
+// 只写真正变化的徽标：逐镜绘制阶段每帧都会推送，全量重写会让渲染层反复重排。
 function updateReviewBadges(shots) {
     const cards = els.storyReview.querySelectorAll('.sb-review-shot');
     cards.forEach((card, index) => {
         const shot = shots[index];
+        if (!shot) return;
+        const status = shot.status || 'pending';
+        if (storyboardReview.statuses[index] === status) return;
+        storyboardReview.statuses[index] = status;
         const badge = card.querySelector('[data-role="status"]');
-        if (!shot || !badge) return;
-        badge.className = `sb-review-badge is-${shot.status || 'pending'}`;
-        badge.textContent = REVIEW_STATUS_LABELS[shot.status] || '待确认';
+        if (!badge) return;
+        badge.className = `sb-review-badge is-${status}`;
+        badge.textContent = REVIEW_STATUS_LABELS[status] || '待确认';
     });
 }
 
@@ -1436,8 +1380,9 @@ function makeIcon(className) {
     return icon;
 }
 
-function setStoryboardButtonLabel(label) {
-    const span = els.storySubmit.querySelector('span');
+// setStoryboardButtonLabel 更新按钮文案；节点缺失时静默跳过，不影响其余渲染。
+function setStoryboardButtonLabel(label, button = els.storySubmit) {
+    const span = button && button.querySelector('span');
     if (span) span.textContent = label;
 }
 
@@ -1593,57 +1538,32 @@ function showHelp() {
     ]);
 }
 
-// ===== WebSocket =====
-let socket = null;
-let attempts = 0;
+// ===== 实时同步 =====
+// 连接、重连、命令回执匹配与推送分发全部收敛在 socket.js；
+// 这里只保留「文件变更信号 → 回库拉取」的合并节流。
 let syncTimer = null;
 let syncRunning = false;
+let realtimeWasOpen = false;
+let realtimeHadConnection = false;
 
 // 结构类操作会改变目录内容，必须重新拉取清单；内容类操作只更新状态与预览。
 const STRUCTURE_OPS = new Set(['create', 'delete', 'move', 'rename', 'copy']);
 
-function connectSocket() {
-    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-    socket = new WebSocket(`${scheme}://${location.host}/ws?channel=library`);
-    socket.addEventListener('open', () => {
-        attempts = 0;
-        setPushConnected(true);
-        setStoryboardPushConnected(true);
+// onRealtimeStatus 实时通道状态变化：断开与恢复都必须可见，不能静默。
+function onRealtimeStatus(state) {
+    if (state === 'open') {
         // 首次连接与断线重连都回库同步一次，补上断开期间漏掉的变更。
         scheduleSync(0);
-    });
-    socket.addEventListener('message', onSocketMessage);
-    socket.addEventListener('close', () => {
-        setPushConnected(false);
-        setStoryboardPushConnected(false);
-        if (attempts >= 5) return;
-        attempts += 1;
-        setTimeout(connectSocket, 3000);
-    });
-}
-
-function onSocketMessage(event) {
-    let payload = null;
-    try {
-        payload = JSON.parse(event.data);
-    } catch {
+        if (realtimeWasOpen) return;
+        realtimeWasOpen = true;
+        if (realtimeHadConnection) toast('实时连接已恢复', 'success');
+        realtimeHadConnection = true;
         return;
     }
-    if (!payload || !payload.type) return;
-    // 创作任务进度推送：data 即创作链输出的任务视图。
-    if (payload.type === 'creation_task') {
-        handleCreationEvent(payload.data);
-        return;
+    if (realtimeWasOpen) {
+        toast('实时连接已断开，正在重连；期间任务进度可能延迟', 'error');
     }
-    // 演绎任务进度推送：与创作链互不干扰，各自由自己的跟踪器消费。
-    if (payload.type === 'storyboard_task') {
-        handleStoryboardEvent(payload.data);
-        return;
-    }
-    // 后端只发同步信号，完整状态由前端回库拉取。
-    if (payload.type === 'library_sync') {
-        scheduleSync(150);
-    }
+    realtimeWasOpen = false;
 }
 
 // needsTreeRefresh 判断一次操作是否可能改变目录结构。

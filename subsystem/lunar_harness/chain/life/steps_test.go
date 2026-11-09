@@ -1,7 +1,7 @@
 package life
 
 // steps_test.go 固定步骤编排回归测试：
-// 顺序固定为「心情 → 态度 → 记忆待合并」，前一步失败不阻断后一步，
+// 顺序固定为「愿望结算 → 心情 → 态度 → 记忆待合并」，前一步失败不阻断后一步，
 // 无待合并条目时不排队事件、不产生任何模型调用。
 
 import (
@@ -12,8 +12,11 @@ import (
 
 func withFixedStepHooks(t *testing.T) {
 	t.Helper()
-	oldMood, oldAffection, oldMemory := moodStepHook, affectionStepHook, memoryPendingStepHook
+	oldWish, oldMood, oldAffection, oldMemory := wishStepHook, moodStepHook, affectionStepHook, memoryPendingStepHook
+	// 默认把愿望结算替换为空操作，避免单元测试读写真实心愿链路文件。
+	wishStepHook = func(context.Context) error { return nil }
 	t.Cleanup(func() {
+		wishStepHook = oldWish
 		moodStepHook = oldMood
 		affectionStepHook = oldAffection
 		memoryPendingStepHook = oldMemory
@@ -25,6 +28,10 @@ func TestFixedStepsRunInFixedOrder(t *testing.T) {
 	withFixedStepHooks(t)
 
 	var order []string
+	wishStepHook = func(context.Context) error {
+		order = append(order, "wish")
+		return nil
+	}
 	moodStepHook = func(context.Context) error {
 		order = append(order, "mood")
 		return nil
@@ -41,7 +48,7 @@ func TestFixedStepsRunInFixedOrder(t *testing.T) {
 	if failures := runFixedSteps(context.Background()); len(failures) != 0 {
 		t.Fatalf("无失败步骤时不应记录失败: %v", failures)
 	}
-	want := []string{"mood", "affection", "memory"}
+	want := []string{"wish", "mood", "affection", "memory"}
 	if len(order) != len(want) {
 		t.Fatalf("固定步骤数量应为 %d，实际 %v", len(want), order)
 	}
@@ -57,6 +64,10 @@ func TestFixedStepFailureDoesNotBlockFollowingSteps(t *testing.T) {
 	withFixedStepHooks(t)
 
 	var order []string
+	wishStepHook = func(context.Context) error {
+		order = append(order, "wish")
+		return nil
+	}
 	moodStepHook = func(context.Context) error {
 		order = append(order, "mood")
 		return errors.New("嵌入服务不可用")
@@ -74,7 +85,7 @@ func TestFixedStepFailureDoesNotBlockFollowingSteps(t *testing.T) {
 	if len(failures) != 1 {
 		t.Fatalf("应记录 1 个失败步骤，实际 %v", failures)
 	}
-	if len(order) != 3 || order[0] != "mood" || order[1] != "affection" || order[2] != "memory" {
+	if len(order) != 4 || order[0] != "wish" || order[1] != "mood" || order[2] != "affection" || order[3] != "memory" {
 		t.Fatalf("前一步失败不应阻断后续步骤，实际顺序 %v", order)
 	}
 }
@@ -105,7 +116,7 @@ func TestPendingMergeNoPendingIsNoop(t *testing.T) {
 	}
 }
 
-// TestMemoryStepRunsOncePerRound 固定步骤三每回合只执行一次，
+// TestMemoryStepRunsOncePerRound 固定步骤四每回合只执行一次，
 // 且事件挑选不会再次命中 memory。
 func TestMemoryStepRunsOncePerRound(t *testing.T) {
 	resetLifeForTest(t)

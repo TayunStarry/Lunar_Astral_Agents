@@ -142,13 +142,29 @@ func (h *Hub) BroadcastMessage(msgType string, data any) {
 // 若走全量 BroadcastMessage，消息终端会把无法识别的结构体当成内容渲染，
 // 聊天记录里就会出现一串 library_sync JSON。
 func (h *Hub) BroadcastMessageToChannel(channel, msgType string, data any) {
+	h.channelFanout(channel, msgType, data, true)
+}
+
+// TryBroadcastMessageToChannel 同 BroadcastMessageToChannel，但**不阻塞**：
+// 下行缓冲已满的连接直接跳过（该客户端要么已经卡死，要么重连后会自行对齐状态）。
+//
+// 为什么需要它：演绎/创作这类高频进度推送由后台调度协程产生，
+// 阻塞式投递会让「一个卡住的浏览器」把整个调度器一起拖停，
+// 表现为所有链同时不推进。进度推送允许丢帧、不允许拖垮调度。
+// 返回 false 表示至少有一个连接的缓冲已满、本次被跳过。
+func (h *Hub) TryBroadcastMessageToChannel(channel, msgType string, data any) bool {
+	return h.channelFanout(channel, msgType, data, false)
+}
+
+// channelFanout 按频道投递结构化消息；wait 为 true 时缓冲满会等待消费。
+func (h *Hub) channelFanout(channel, msgType string, data any, wait bool) bool {
 	if channel == "" {
 		channel = DefaultBusChannel
 	}
 	msgBytes, err := json.Marshal(WSResponse{Type: msgType, Data: data})
 	if err != nil {
 		logger.SubError("StudioHub", "WebSocket", "消息序列化失败: %v", err)
-		return
+		return true
 	}
 
 	h.clientsMu.RLock()
@@ -160,12 +176,23 @@ func (h *Hub) BroadcastMessageToChannel(channel, msgType string, data any) {
 	}
 	h.clientsMu.RUnlock()
 
+	full := false
 	for _, c := range clients {
+		if wait {
+			select {
+			case c.Send <- msgBytes:
+			case <-c.Done:
+			}
+			continue
+		}
 		select {
 		case c.Send <- msgBytes:
 		case <-c.Done:
+		default:
+			full = true
 		}
 	}
+	return !full
 }
 
 // ==================== 连接生命周期 ====================
@@ -284,6 +311,25 @@ func (c *WSClient) readPump(h *Hub) {
 		// 消息终端等 bus=0 连接不参与总线互投。
 		if c.bus {
 			h.Bus <- BusFrame{Channel: c.channel, Data: message}
+			continue
+		}
+		// 非总线连接（资源库前端等）的上行消息是结构化命令：交给装配层注入的
+		// 处理器，并用同一条连接回执，避免命令与回执跨 HTTP / WS 两套通道。
+		if ClientMessageHandler != nil {
+			payload := append([]byte(nil), message...)
+			ClientMessageHandler(ClientMessage{
+				Channel: c.channel,
+				Data:    payload,
+				Send: func(raw []byte) {
+					if len(raw) == 0 {
+						return
+					}
+					select {
+					case c.Send <- raw:
+					case <-c.Done:
+					}
+				},
+			})
 		}
 	}
 }

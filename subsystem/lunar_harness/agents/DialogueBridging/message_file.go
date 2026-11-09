@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,7 +33,10 @@ func processFileSegment(groupID int64, fileData napcat.FileData) (string, string
 
 	data, err := readFileSegmentBytes(fileData)
 	if err != nil || len(data) == 0 {
-		logger.SubError("LunarCore", "Napcat", "下载文件失败: %v", err)
+		// 合并转发里的文件段常常只带文件名或已过期的引用，取不到字节属于可降级情形，
+		// 用 WARN 记录并把原始字段带出来，避免同一条消息反复触发 ERROR 快照。
+		logger.SubWarn("LunarCore", "Napcat", "下载文件失败: %v（name=%s file_id=%s file=%s url=%s path=%s）",
+			err, fileName, fileData.FileID, fileData.File, fileData.URL, fileData.Path)
 		return describeFile(fileName, fileData.FileSize), "", nil
 	}
 
@@ -78,10 +82,18 @@ func fileSegmentName(fileData napcat.FileData) string {
 	return mediaDisplayName("未命名文件", candidates...)
 }
 
-// readFileSegmentBytes 按可用性依次尝试文件段的三种读取来源
+// readFileSegmentBytes 按可用性依次尝试文件段的读取来源。
+//
+// 合并转发里的文件段经常把真实地址塞进 file 字段（data URI / 直链 / 本地路径），
+// 而不是 path 或 url；若直接拿这个文件名去调 get_file，既取不到字节又会拖满超时。
+// 因此先尝试“可直接读取的来源”，再退回 get_file，最后才用 url。
 func readFileSegmentBytes(fileData napcat.FileData) ([]byte, error) {
-	if path := strings.TrimSpace(fileData.Path); path != "" {
-		if data, err := napcat.FetchFileBytes(path); err == nil && len(data) > 0 {
+	for _, raw := range []string{fileData.Path, fileData.File, fileData.URL} {
+		raw = strings.TrimSpace(raw)
+		if raw == "" || !directFileSource(raw) {
+			continue
+		}
+		if data, err := napcat.FetchFileBytes(raw); err == nil && len(data) > 0 {
 			return data, nil
 		}
 	}
@@ -90,10 +102,25 @@ func readFileSegmentBytes(fileData napcat.FileData) ([]byte, error) {
 			return data, nil
 		}
 	}
-	if url := strings.TrimSpace(fileData.URL); url != "" {
-		return napcat.FetchFileBytes(url)
-	}
 	return nil, fmt.Errorf("文件没有可用的读取来源")
+}
+
+// directFileSource 判断字段是否本身就是可直接读取的来源（data URI / 直链 / 本地路径）。
+//
+// 裸文件名（如 photo.png）不算：它需要交给 get_file 按聊天上下文解析，
+// 直接当本地路径读可能误伤工作目录下的同名文件。
+func directFileSource(raw string) bool {
+	lower := strings.ToLower(raw)
+	if strings.HasPrefix(lower, "data:") ||
+		strings.HasPrefix(lower, "http://") ||
+		strings.HasPrefix(lower, "https://") ||
+		strings.HasPrefix(lower, "file://") {
+		return true
+	}
+	if filepath.IsAbs(raw) {
+		return true
+	}
+	return len(raw) > 2 && raw[1] == ':' && (raw[2] == '\\' || raw[2] == '/')
 }
 
 // describeFile 构建文件的名称与大小信息描述

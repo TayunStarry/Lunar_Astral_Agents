@@ -30,6 +30,20 @@ func resolveImageURL(imageData napcat.ImageData) string {
 			return dataURI
 		}
 	}
+	// 合并转发里的图片常把真实地址写在 file 字段（data URI / 直链 / 本地路径）。
+	// 这类引用必须优先按来源直接使用，否则会先拿整串地址去调 get_image，白白超时后丢图。
+	if raw := strings.TrimSpace(imageData.File); raw != "" && directFileSource(raw) {
+		lower := strings.ToLower(raw)
+		if strings.HasPrefix(lower, "data:") {
+			return raw
+		}
+		if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+			return resource.UpgradeCDNScheme(raw)
+		}
+		if dataURI := localImageDataURI(raw); dataURI != "" {
+			return dataURI
+		}
+	}
 	if bytes, err := napcat.GetImageContent(imageData.FileID, imageData.File); err == nil && len(bytes) > 0 {
 		return imageDataURI(bytes)
 	}

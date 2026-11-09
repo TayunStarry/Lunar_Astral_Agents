@@ -22,8 +22,8 @@ const (
 	ToolDispatchTechnique = "dispatch_technique"
 	// ToolFetchResources 统一资源工具名
 	ToolFetchResources = "fetch_resources"
-	// ToolLifePlanning 生活规划聚合工具名
-	ToolLifePlanning = "life_planning"
+	// ToolWishManager 愿望管理工具名
+	ToolWishManager = "wish_manager"
 	// ToolNetworkExplore 联网探索聚合工具名
 	ToolNetworkExplore = "network_explore"
 
@@ -55,13 +55,13 @@ func init() {
 			Parameters:  resourcehub.ToolSchema(),
 		},
 		toolreg.Schema{
-			Name:        ToolLifePlanning,
-			Description: "生活规划：计划表增删改查、查看最近做了什么、记录创作意图",
+			Name:        ToolWishManager,
+			Description: "愿望管理：按 type 新增、改写、完成、删除月华的愿望或调整优先级（待实现最多 16 条，优先级 0-15，0 最高）",
 			Parameters: agentdispatch.Schema(
-				"plan_manager=计划管理（新增/删除/改写/查询计划表）；recent_activity=查看最近做了什么；record_intent=记录空闲时的创作意图",
-				[]string{"plan_manager", "recent_activity", "record_intent"},
-				"plan_manager 用自然语言写清要对计划表做什么（如「把明天下午三点的会议改到四点」「今天还有什么计划」）；recent_activity 可留空；record_intent 写清下一轮生活创作想做什么",
-				"计划管理可传计划项标识；recent_activity / record_intent 没有目标句柄时传空数组。",
+				"add=新增愿望；update=改写愿望；complete=标记完成；delete=删除愿望；priority=调整优先级（0 最高）",
+				wishTypeOrder,
+				"例如: 新增「下周三前看完一部科幻电影」，优先级最高；把看科幻电影那条改到下周五；标记看电影的愿望已完成；删掉写诗那条；把看科幻电影提到 P0",
+				"愿望管理不使用资源句柄，handle 传空数组。",
 			),
 		},
 	)
@@ -78,8 +78,8 @@ func registerExecutors() {
 	toolreg.RegisterExecutor(ToolFetchResources, func(_ context.Context, args map[string]any) (any, error) {
 		return ExecuteFetchResources(args), nil
 	})
-	toolreg.RegisterExecutor(ToolLifePlanning, func(_ context.Context, args map[string]any) (any, error) {
-		return ExecuteLifePlanning(args), nil
+	toolreg.RegisterExecutor(ToolWishManager, func(_ context.Context, args map[string]any) (any, error) {
+		return ExecuteWishManager(args), nil
 	})
 	toolreg.RegisterExecutor(ToolNetworkExplore, func(_ context.Context, args map[string]any) (any, error) {
 		return ExecuteNetworkExplore(args), nil

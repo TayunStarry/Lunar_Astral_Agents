@@ -149,7 +149,6 @@ const (
 	toolArchiveRead     = "archive_read"
 	toolArchiveWrite    = "archive_write"
 	toolCodeIndex       = "code_index"
-	toolReadDTS         = "read_dts"
 	toolSendGroupText   = "send_group_text"
 	toolSendGroupFile   = "send_group_file"
 	toolSendPrivateText = "send_private_text"
@@ -164,7 +163,7 @@ const (
 var plannerTools = []string{
 	toolWebSearch, toolFetchResources,
 	toolFileList, toolFileRead, toolArchiveRead,
-	toolCodeIndex, toolReadDTS, toolChangeQuery, toolSubmitPlan,
+	toolCodeIndex, toolChangeQuery, toolSubmitPlan,
 }
 
 // pathSnapshotRoots 注入调度者的路径树根目录（相对 LocalDir）；用户明确只要这两个根。
@@ -176,7 +175,7 @@ var writerTools = []string{
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
 	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText,
 	toolArchiveRead, toolArchiveWrite,
-	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile, toolSendPrivateText,
+	toolCodeIndex, toolSendGroupText, toolSendGroupFile, toolSendPrivateText,
 }
 
 // engineerTools 工程创作者：JS 项目与文件、脚本、开发文档。
@@ -185,20 +184,20 @@ var engineerTools = []string{
 	toolFileList, toolFileRead, toolFileCreate, toolFileRewrite, toolFileRemove,
 	toolFileDelete, toolFileMove, toolFileReplace, toolFileDeleteText,
 	toolArchiveRead, toolArchiveWrite,
-	toolCodeIndex, toolReadDTS, toolSendGroupText, toolSendGroupFile,
+	toolCodeIndex, toolSendGroupText, toolSendGroupFile,
 	toolRunScript, toolScriptStatus,
 }
 
 // researcherTools 资料查阅者：只读取证，不改文件。
 var researcherTools = []string{
 	toolWebSearch, toolFetchResources,
-	toolFileList, toolFileRead, toolArchiveRead, toolCodeIndex, toolReadDTS,
+	toolFileList, toolFileRead, toolArchiveRead, toolCodeIndex,
 }
 
 // runnerTools 脚本运行者：运行、监控与必要的文件读写；同样可随时搜索与查记忆。
 var runnerTools = []string{
 	toolWebSearch, toolFetchResources, toolFileList, toolFileRead,
-	toolFileCreate, toolFileRewrite, toolArchiveRead, toolArchiveWrite, toolReadDTS, toolRunScript,
+	toolFileCreate, toolFileRewrite, toolArchiveRead, toolArchiveWrite, toolRunScript,
 	toolScriptStatus, toolSendGroupText, toolSendPrivateText,
 }
 

@@ -12,10 +12,9 @@ import (
 	"LunarSubsystem/LunarHarness/chain/life"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/viewer"
-	"LunarSubsystem/LunarHarness/engine/affection"
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/mediaobject"
-	"LunarSubsystem/LunarHarness/engine/mood"
 )
 
 const failureReply = "刚才有点走神，你再说一遍好吗？"
@@ -27,7 +26,7 @@ func Start() error {
 	if running.Load() {
 		return nil
 	}
-	initSchedules()
+	initWishes()
 	Dialogue.SyncLTPXRemoteTools()
 
 	// 角色实例：绘制者外观由扁平智能体提供，对话者复用其基础外观
@@ -43,15 +42,11 @@ func Start() error {
 	// 演绎任务视图落盘后，启动时把上次进程遗留的未完成任务标记为中断并推送，
 	// 不做静默续跑（绘制现场与外部句柄在重启后不可恢复）。
 	storyboard.RecoverInterrupted()
-	life.SetPlanHooks(pushDueScheduleItems, upcomingPlanSummary)
-	life.SetLastUserTextProvider(latestUserUtterance)
+	life.SetWishHooks(pushDueWishItems, upcomingWishSummary)
 	life.SetDialogueRoundsProvider(recentAffectionRounds)
 	go func() {
-		if err := mood.Init(context.Background()); err != nil {
-			logger.Warn(lunarCoreModule, "[心情] 启动初始化未完成，将在生活事件中重试: %v", err)
-		}
-		if err := affection.Init(context.Background()); err != nil {
-			logger.Warn(lunarCoreModule, "[情感] 启动初始化未完成，将在生活事件中重试: %v", err)
+		if err := wishchain.Init(context.Background()); err != nil {
+			logger.Warn(lunarCoreModule, "[心愿] 启动初始化未完成，将在生活事件中重试: %v", err)
 		}
 	}()
 
@@ -97,6 +92,8 @@ func buildTickScheduler() *tickScheduler {
 	scheduler.Register(logisticsSystem{})
 	// 外部响应链：无主链运行时按优先级调度；特许运行期间由调度器单独放行。
 	scheduler.Register(responseSystem{})
+	// 资源库创作链：受理即入队，由 Tick 调度器按优先级逐个推进。
+	scheduler.Register(creationSystem{})
 	// 演绎链：用户发起的后台任务，按原子步骤推进，镜头之间立即让出 Tick。
 	scheduler.Register(storyboardSystem{})
 	scheduler.Register(lifeSystem{})

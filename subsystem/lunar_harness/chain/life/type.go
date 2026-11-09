@@ -15,7 +15,7 @@ type State struct {
 	Used        map[string]int `json:"used"`
 	Active      *ActiveRun     `json:"active,omitempty"`
 	LastRecord  string         `json:"last_record"`
-	PlanSummary string         `json:"plan_summary"`
+	WishSummary string         `json:"wish_summary"`
 	// PendingEvent 工具触发的强制事件：下一 Tick 跳过权重选择直接执行
 	PendingEvent string `json:"pending_event,omitempty"`
 	// PendingInstruction 强制事件的自然语言要求，用于引导智能体流程
@@ -81,7 +81,7 @@ type ActiveRun struct {
 // LifeSnapshot 供对话运行时消息读取的只读快照。
 type LifeSnapshot struct {
 	LastRecord  string
-	PlanSummary string
+	WishSummary string
 	ActiveEvent string
 }
 

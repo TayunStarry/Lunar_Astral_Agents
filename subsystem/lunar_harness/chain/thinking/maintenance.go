@@ -25,14 +25,15 @@ const (
 	maintenanceIdlePoll = 200 * time.Millisecond
 )
 
-// BeginMaintenance 进入维护态：同时暂停主调度 Tick 与响应者 Tick，暂停播报链路并
+// BeginMaintenance 进入维护态：暂停 Tick 调度与响应车道，暂停播报链路并
 // 卸载在位 TTS 引擎，最后卸载对话模型，返回恢复函数。
 //
-// 若当前思维链或通用应答在 30 秒内仍未结束，则不强行卸载（避免打断正在进行的
-// 模型调用），但两个 Tick 都保持暂停——打包期间不会再有新的模型调用被拉起；
+// 若当前主链步骤或响应车道步骤在 30 秒内仍未结束，则不强行卸载（避免打断正在进行的
+// 模型调用），但调度与响应车道都保持暂停——打包期间不会再有新的模型调用被拉起；
 // 播报链路同样保持拒绝响应，TTS 引擎的卸载由 broadcaster.Pause 自行等待收尾。
 func BeginMaintenance() func() {
-	// 响应者 Tick 独立于主调度器：先暂停它，确保 LTPX 特许运行也不会绕开维护态
+	// 响应车道与主链共用同一个 Tick 调度器：先置响应暂停，确保 LTPX 特许运行期间
+	// 也不会启动新的响应步骤。
 	Responder.Pause()
 	schedulerPaused := false
 	if tickSchedulerInstance != nil {
@@ -46,20 +47,20 @@ func BeginMaintenance() func() {
 	schedulerIdle := tickSchedulerInstance == nil || tickSchedulerInstance.WaitIdle(time.Until(deadline))
 	responderIdle := waitResponderIdle(deadline)
 	if !schedulerIdle || !responderIdle {
-		logger.Warn(tickModule, "[维护] 思维链或通用应答仍在运行，维护期间已暂停两个 Tick 与播报链路；当前调用结束后才可卸载模型")
+		logger.Warn(tickModule, "[维护] 思维链或响应车道仍在运行，维护期间已暂停 Tick 调度与响应车道及播报链路；当前调用结束后才可卸载模型")
 		return func() { resumeMaintenanceTicks(schedulerPaused) }
 	}
 
 	unloadDialogModels()
-	logger.Info(tickModule, "[维护] 已暂停思维链 Tick 与通用应答 Tick，并卸载对话模型与 TTS 引擎")
+	logger.Info(tickModule, "[维护] 已暂停 Tick 调度与响应车道，并卸载对话模型与 TTS 引擎")
 	return func() {
 		resumeMaintenanceTicks(schedulerPaused)
 		// 只恢复 Tick 调度与播报响应：不主动加载任何模型，下一次真正需要推理/合成时按需加载
-		logger.Info(tickModule, "[维护] 维护结束，Tick 调度与播报链路已恢复")
+		logger.Info(tickModule, "[维护] 维护结束，Tick 调度与响应车道及播报链路已恢复")
 	}
 }
 
-// waitResponderIdle 等待响应者当前一轮推理结束；超时返回 false。
+// waitResponderIdle 等待响应车道当前一轮推理结束；超时返回 false。
 func waitResponderIdle(deadline time.Time) bool {
 	for {
 		if !Responder.Busy() {
@@ -72,7 +73,7 @@ func waitResponderIdle(deadline time.Time) bool {
 	}
 }
 
-// resumeMaintenanceTicks 恢复两个 Tick 与播报链路（幂等，只恢复本次暂停过的部分）。
+// resumeMaintenanceTicks 恢复 Tick 调度与响应车道及播报链路（幂等，只恢复本次暂停过的部分）。
 func resumeMaintenanceTicks(schedulerPaused bool) {
 	Responder.Resume()
 	if schedulerPaused && tickSchedulerInstance != nil {

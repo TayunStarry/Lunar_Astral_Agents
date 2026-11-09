@@ -13,15 +13,11 @@ import (
 
 // paintShot 绘制单个分镜，失败时按上限重试；返回最后一次失败原因。
 //
-// previous 是上一镜成功产出的图片句柄：作为参考图交给绘制智能体，
-// 由它自己的图生图机制承接角色外观与画面基调；首镜没有参考图时走纯文生图。
-func paintShot(ctx context.Context, shot plannedShot, previous string) (PaintResult, error) {
+// 演绎链优先纯文生图：不把上一镜画面作为参考图传入，任务描述里也会明确要求
+// 尽量不使用图生图；角色与画风一致性交给绘制智能体自身的角色库与画风机制。
+func paintShot(ctx context.Context, shot plannedShot) (PaintResult, error) {
 	if PaintHook == nil {
 		return PaintResult{}, fmt.Errorf("图片绘制智能体未接入，无法执行绘制")
-	}
-	references := make([]string, 0, 1)
-	if handle := strings.TrimSpace(previous); handle != "" {
-		references = append(references, handle)
 	}
 	var lastErr error
 	for attempt := 1; attempt <= maxPaintAttempts; attempt++ {
@@ -30,12 +26,13 @@ func paintShot(ctx context.Context, shot plannedShot, previous string) (PaintRes
 		}
 		attemptCtx, cancel := context.WithTimeout(ctx, shotPaintTimeout)
 		result, err := PaintHook(attemptCtx, PaintRequest{
-			Prompt:     shot.Prompt,
-			Ratio:      shot.Ratio,
-			Style:      shot.Style,
-			Task:       fmt.Sprintf("演绎链第 %d 镜（%s）", shot.Index, shot.Scene),
-			Output:     "默认多媒体资源目录，完成后回复资源句柄",
-			References: references,
+			Prompt: shot.Prompt,
+			Ratio:  shot.Ratio,
+			Style:  shot.Style,
+			Task: fmt.Sprintf("演绎链第 %d 镜（%s）。本任务优先纯文生图：请尽量不使用图生图，"+
+				"不要沿用上一镜或历史画作，按本镜画面描述独立生成。", shot.Index, shot.Scene),
+			Output: "默认多媒体资源目录，完成后回复资源句柄",
+			Silent: true,
 		})
 		cancel()
 		if err == nil {

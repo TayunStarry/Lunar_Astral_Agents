@@ -159,9 +159,39 @@ func cancelLibraryStoryboard(taskID, reason string) (server.LibraryStoryboardTas
 
 // toLibraryStoryboardTask 把演绎链任务视图映射为 HTTP 层结构。
 func toLibraryStoryboardTask(view storyboard.TaskView) server.LibraryStoryboardTask {
-	shots := make([]server.LibraryStoryboardShot, 0, len(view.Shots))
-	for _, shot := range view.Shots {
-		shots = append(shots, server.LibraryStoryboardShot{
+	return server.LibraryStoryboardTask{
+		TaskID:    view.TaskID,
+		Status:    view.Status,
+		Stage:     view.Stage,
+		Progress:  view.Progress,
+		Summary:   view.Summary,
+		Title:     view.Title,
+		DocPath:   view.DocPath,
+		DocHandle: view.DocHandle,
+		Shots:     toLibraryStoryboardShots(view.Shots),
+		ShotPatch: toLibraryStoryboardShots(view.ShotPatch),
+		ShotCount: view.ShotCount,
+		Handles:   append([]string(nil), view.Handles...),
+		Error:     view.Error,
+		Event:     view.Event,
+		ShotIndex: view.ShotIndex,
+		Thought:   view.Thought,
+		Seq:       view.Seq,
+		Epoch:     view.Epoch,
+		V:         view.V,
+		CreatedAt: view.CreatedAt,
+		UpdatedAt: view.UpdatedAt,
+	}
+}
+
+// toLibraryStoryboardShots 映射镜头列表；空列表保持为空，避免推送出现多余的空数组。
+func toLibraryStoryboardShots(source []storyboard.ShotView) []server.LibraryStoryboardShot {
+	if len(source) == 0 {
+		return nil
+	}
+	out := make([]server.LibraryStoryboardShot, 0, len(source))
+	for _, shot := range source {
+		out = append(out, server.LibraryStoryboardShot{
 			Index:     shot.Index,
 			Act:       shot.Act,
 			Scene:     shot.Scene,
@@ -174,24 +204,7 @@ func toLibraryStoryboardTask(view storyboard.TaskView) server.LibraryStoryboardT
 			Error:     shot.Error,
 		})
 	}
-	return server.LibraryStoryboardTask{
-		TaskID:    view.TaskID,
-		Status:    view.Status,
-		Stage:     view.Stage,
-		Progress:  view.Progress,
-		Summary:   view.Summary,
-		Title:     view.Title,
-		DocPath:   view.DocPath,
-		DocHandle: view.DocHandle,
-		Shots:     shots,
-		Handles:   append([]string(nil), view.Handles...),
-		Error:     view.Error,
-		Event:     view.Event,
-		ShotIndex: view.ShotIndex,
-		Thought:   view.Thought,
-		CreatedAt: view.CreatedAt,
-		UpdatedAt: view.UpdatedAt,
-	}
+	return out
 }
 
 // agentEnvelopeTypes 需要经过信封接收链路的内容类型（六类新信封 + 四类已废止旧信封）。

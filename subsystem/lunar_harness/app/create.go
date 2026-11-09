@@ -13,7 +13,6 @@ import (
 	"LunarSubsystem/LunarHarness/agents/MemoryFuser"
 	"LunarSubsystem/LunarHarness/agents/MemoryTagger"
 	"LunarSubsystem/LunarHarness/agents/Painter"
-	"LunarSubsystem/LunarHarness/agents/RuntimeChat"
 	"LunarSubsystem/LunarHarness/agents/ltpxhost"
 	"LunarSubsystem/LunarHarness/chain/creation"
 	"LunarSubsystem/LunarHarness/chain/search"
@@ -30,7 +29,6 @@ import (
 	"LunarSubsystem/LunarHarness/engine/memory"
 	"LunarSubsystem/LunarHarness/engine/protocolwire"
 	"LunarSubsystem/LunarHarness/engine/resource"
-	harnessruntime "LunarSubsystem/LunarHarness/engine/runtime"
 	"LunarSubsystem/LunarHarness/engine/websocket"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"LunarSubsystem/LunarHarness/server"
@@ -58,11 +56,8 @@ func Assemble() {
 		}
 	})
 
-	// ==== 跨层注入：运行时沙箱的网络搜索 ====
-	// engine/runtime 不得反向依赖 agents/chain，agent.search 的实现由装配层注入搜索链入口。
-	harnessruntime.AgentSearchFunc = search.Run
+	// ==== 跨层注入：记忆与文件编辑 ====
 	// 模型调用统一由独立智能体承载：engine 侧只保留装配钩子，不直接调用模型。
-	harnessruntime.AgentLLMFunc = RuntimeChat.Chat
 	memory.TagGenerator = MemoryTagger.Generate
 	memory.MemoryMergeFunc = MemoryFuser.Merge
 	resource.TranscribeAudioFunc = AudioTranscriber.Transcribe
@@ -84,7 +79,7 @@ func Assemble() {
 			reference.Desc = refs[0].Desc
 			reference.Extras = refs[1:]
 		}
-		result, err := Painter.Perform(ctx, creation.PaintInstruction(req), reference, thinking.PainterHost{})
+		result, err := Painter.Perform(ctx, creation.PaintInstruction(req), reference, thinking.PainterHost{}, Painter.Options{})
 		if err != nil {
 			return creation.PaintResult{Summary: result.Summary}, err
 		}
@@ -116,7 +111,13 @@ func Assemble() {
 			Task:       req.Task,
 			References: append([]string(nil), req.References...),
 		}
-		result, err := Painter.Perform(ctx, creation.PaintInstruction(paintReq), reference, thinking.PainterHost{})
+		// 演绎链按需静默：只登记图片资源，不推送到月华前端、不写记忆、不发 QQ。
+		var env Painter.Env = thinking.PainterHost{}
+		if req.Silent {
+			env = silentPainterHost{}
+		}
+		result, err := Painter.Perform(ctx, creation.PaintInstruction(paintReq), reference, env,
+			Painter.Options{Silent: req.Silent})
 		if err != nil {
 			return storyboard.PaintResult{Summary: result.Summary}, err
 		}
@@ -127,9 +128,10 @@ func Assemble() {
 		return storyboard.PaintResult{Summary: result.Summary, Handles: result.Handles}, nil
 	}
 	// 资源库提交的创作任务状态变化推送给资源库前端（复用现有 WebSocket 频道）。
+	// 进度推送走非阻塞投递：卡住的浏览器不能把后台调度一起拖停。
 	creation.TaskEventHook = func(view creation.TaskView) {
 		if websocket.Instance != nil {
-			websocket.Instance.BroadcastMessageToChannel(libraryTerminalChannel, "creation_task", view)
+			websocket.Instance.TryBroadcastMessageToChannel(libraryTerminalChannel, "creation_task", view)
 		}
 	}
 	// 分镜图片被迁移到文档目录后，同步绘制者的运行时画作路径。
@@ -141,7 +143,7 @@ func Assemble() {
 	// 演绎任务状态变化同样推送到资源库前端。
 	storyboard.TaskEventHook = func(view storyboard.TaskView) {
 		if websocket.Instance != nil {
-			websocket.Instance.BroadcastMessageToChannel(libraryTerminalChannel, "storyboard_task", view)
+			websocket.Instance.TryBroadcastMessageToChannel(libraryTerminalChannel, "storyboard_task", view)
 		}
 	}
 	// 对话者工具执行器已归 agents/Dialogue，跨链能力在此注入。
@@ -158,6 +160,8 @@ func Assemble() {
 	// ==== 传输层：统一 WebSocket 集线器 ====
 	websocket.Instance = websocket.NewHub()
 	go websocket.Instance.Run()
+	// 资源库前端的命令通道：上行命令与下行回执都在 /ws?channel=library 内完成。
+	websocket.ClientMessageHandler = server.HandleLibraryWSMessage
 	logger.Info("LunarHarness", "统一 WebSocket 集线器已启动")
 
 	// ==== 传输层：结构化广播 ====
@@ -231,7 +235,7 @@ func Assemble() {
 	broadcaster.StartIdleUnloader()
 
 	// ==== 消费层启动：月华 Go 原生思维链（每秒思考循环） ====
-	// 必须最后启动：思考循环一经运行即可能消费计划表等到期任务，若此时 llama 模型、
+	// 必须最后启动：思考循环一经运行即可能消费愿望到期等任务，若此时 llama 模型、
 	// 记忆库、LTP9/LTPX 协调层尚未就绪，到期任务会在依赖缺失下执行。
 	if err := startLunarAgent(); err != nil {
 		logger.Fatal("LunarHarness", "月华智能体运行时启动失败: %v", err)
@@ -250,6 +254,20 @@ func clipPaintReason(text string) string {
 		return string(runes[:300]) + "…"
 	}
 	return text
+}
+
+// silentPainterHost 演绎链专用的静默宿主：
+// 仍登记图片资源并返回可查看地址，但跳过前端推送、近期记忆写入与 QQ 通知。
+type silentPainterHost struct {
+	thinking.PainterHost
+}
+
+func (silentPainterHost) PushImages(images []string) []string {
+	return thinking.RegisterPainterImages(images)
+}
+
+func (silentPainterHost) PushImagesSilently(images []string) []string {
+	return thinking.RegisterPainterImages(images)
 }
 
 // wireDialogueTools 向对话者工具执行器注入创作链能力。

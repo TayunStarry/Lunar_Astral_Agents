@@ -7,10 +7,25 @@ package storyboard
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"LunarSubsystem/LunarHarness/agents/StoryboardPlanner"
 	"LunarSubsystem/LunarHarness/agents/StoryboardReviser"
 )
+
+// appendThoughtBounded 追加过程文本并只保留尾部 maxThoughtBytes 字节。
+// 截断点向前对齐到合法 UTF-8 起始字节，避免把中文/emoji 截成半个字符。
+func appendThoughtBounded(current, delta string) string {
+	combined := current + delta
+	if len(combined) <= maxThoughtBytes {
+		return combined
+	}
+	start := len(combined) - maxThoughtBytes
+	for start < len(combined) && !utf8.RuneStart(combined[start]) {
+		start++
+	}
+	return "…（前文已省略）\n" + combined[start:]
+}
 
 // shotViewFromPlanner 把分镜规划结果转成逐镜视图。
 func shotViewFromPlanner(shot StoryboardPlanner.Shot, status string) ShotView {

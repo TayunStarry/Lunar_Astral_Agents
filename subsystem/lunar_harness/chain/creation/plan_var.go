@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/mood"
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 )
 
 const (
@@ -25,20 +25,20 @@ const (
 	maxParked = 8
 )
 
-// 情绪极性分组：与 engine/mood 的基础情绪词表一一对应。
+// 情绪极性分组：与 chain/wishchain 的基础情绪词表一一对应。
 var (
 	// positiveMoodLabels 正向情绪
-	positiveMoodLabels = []string{"开心", "满足", "元气", "好奇", "平静"}
+	positiveMoodLabels = []string{"开心", "满足", "好奇"}
 	// negativeMoodLabels 负向情绪
-	negativeMoodLabels = []string{"愤怒", "伤心", "无聊", "厌倦", "担忧", "恐慌"}
+	negativeMoodLabels = []string{"愤怒", "伤心", "无聊", "失望", "厌倦", "担忧", "恐慌", "遗憾"}
 )
 
 var (
 	// planMu 串行化事项状态文件的读改写，避免并发选到不同事项
 	planMu sync.Mutex
 
-	// moodSnapshotHook 心情快照读取入口；生产走 engine/mood，测试可替换。
-	moodSnapshotHook = mood.Snapshot
+	// moodSnapshotHook 心情快照读取入口；生产走 chain/wishchain，测试可替换。
+	moodSnapshotHook = wishchain.SnapshotMood
 	// qqProbeHook QQ 适配器只读探测；返回空集合表示适配器不可用。
 	qqProbeHook = probeQQTargets
 	// newRandHook 随机源；生产按时间播种，测试可替换为固定种子。

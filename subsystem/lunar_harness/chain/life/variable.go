@@ -9,8 +9,8 @@ import (
 	"LunarSubsystem/LunarHarness/agents/LifeMemorizer"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
 	"LunarSubsystem/LunarHarness/chain/viewer"
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/activity"
-	"LunarSubsystem/LunarHarness/engine/affection"
 	"LunarSubsystem/LunarHarness/engine/memory"
 )
 
@@ -21,14 +21,12 @@ const (
 	stateFile = "database/life/life_state.json"
 	// memoryPlanFile 记忆整理批次计划（相对 LocalDir）
 	memoryPlanFile = "database/life/memory_plan.json"
-	// creativeIntentFile 生活创作的参考字符串（相对 LocalDir）
-	creativeIntentFile = "database/life/creative_intent.txt"
 	// memoryJournalDir 记忆整理批次意图日志目录（相对 LocalDir）
 	memoryJournalDir = "database/life/memory_journal"
 	// defaultIdleThreshold 默认生活冷却：600 个空闲 Tick（10 分钟）
 	defaultIdleThreshold = 600
-	// planWindow 未来计划摘要窗口
-	planWindow = time.Hour
+	// wishWindow 未来愿望摘要窗口
+	wishWindow = time.Hour
 	// memoryReplaceSource 整理后新条目的来源标记，便于追溯与排除
 	memoryReplaceSource = "consolidation"
 	// memoryPlanVersion 记忆整理计划格式版本
@@ -98,19 +96,12 @@ var (
 	state    = State{Version: 1, Used: map[string]int{}}
 	registry []Event
 
-	// creativeMu 保护创作参考字符串的读写与条件重置
-	creativeMu sync.Mutex
-
-	// planDueHook 到期计划入队（由 lunar 注入，返回入队条数）
-	planDueHook func() int
-	// planUpcomingHook 未来窗口内计划摘要（由 lunar 注入）
-	planUpcomingHook func(time.Time, time.Duration) string
-	// lastUserTextHook 最新用户发言（由 lunar 注入）
-	lastUserTextHook func() string
+	// wishDueHook 到期愿望入队（由 lunar 注入，返回入队条数）
+	wishDueHook func() int
+	// wishUpcomingHook 未来窗口内愿望摘要（由 lunar 注入）
+	wishUpcomingHook func(time.Time, time.Duration) string
 	// dialogueRoundsHook 各角色最近若干轮的成对交互（由 lunar 注入）
-	dialogueRoundsHook func() []affection.Round
-	// lastMoodInput 上次已用于更新心情的最新发言，避免同一发言重复嵌入
-	lastMoodInput string
+	dialogueRoundsHook func() []wishchain.Round
 	// idleThreshold 可通过配置覆盖（当前先用默认值）
 	idleThreshold = defaultIdleThreshold
 
@@ -135,13 +126,15 @@ var (
 	// 以下为每轮固定步骤的注入点，测试可替换为记录调用顺序的桩。
 	// 顺序在 steps.go 的 runFixedSteps 中显式书写，不依赖任何表遍历。
 
-	// moodStepHook 固定步骤一：更新心情。
+	// wishStepHook 固定步骤一：结算愿望并联动心情。
+	wishStepHook = settleWishesStep
+	// moodStepHook 固定步骤二：更新心情。
 	moodStepHook = updateMoodStep
-	// affectionStepHook 固定步骤二：更新对他人态度。
+	// affectionStepHook 固定步骤三：更新对他人态度。
 	affectionStepHook = updateAffectionStep
-	// memoryPendingStepHook 固定步骤三：合并记忆待处理条目。
+	// memoryPendingStepHook 固定步骤四：合并记忆待处理条目。
 	memoryPendingStepHook = mergePendingMemories
-	// memoryMergeRunHook 固定步骤三的实际整理执行器；测试可替换以统计调用次数。
+	// memoryMergeRunHook 固定步骤四的实际整理执行器；测试可替换以统计调用次数。
 	memoryMergeRunHook = runMemoryBatches
 
 	// 以下为回合第 2~4 步「机会性维护」的注入点。

@@ -27,10 +27,6 @@ var (
 	WebSearch func(query string) (string, error)
 	// RequestLifeEvent 登记强制生活事件（生活链）
 	RequestLifeEvent func(eventID, instruction string) bool
-	// LifeSnapshot 读取最近生活记录（生活链）
-	LifeSnapshot func() (lastRecord, activeEvent string)
-	// SetCreativeIntent 覆盖生活创作参考字符串（生活链）
-	SetCreativeIntent func(text string) error
 	// PushImages 推送图片消息并返回可引用句柄（月华宿主）
 	PushImages func(images []string) []string
 	// PushMusic 推送可播放音乐消息（月华宿主）

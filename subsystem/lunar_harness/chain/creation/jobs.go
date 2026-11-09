@@ -1,6 +1,7 @@
 package creation
 
-// jobs.go 资源库提交的创作任务：受理即返回任务标识，后台自动规划执行，状态可查询并推送。
+// jobs.go 资源库提交的创作任务：受理即入队，由 Tick 调度器按优先级逐个推进，
+// 保证同一时刻只有一条链在跑；状态可查询并推送。
 
 import (
 	"context"
@@ -12,7 +13,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
-// SubmitTask 受理一个创作任务并立即返回任务标识；规划与执行在后台进行。
+// SubmitTask 受理一个创作任务并立即返回任务标识；真正的规划与执行交给 Tick 调度器。
 func SubmitTask(req SubmitRequest) (TaskView, error) {
 	mode := strings.TrimSpace(req.Mode)
 	if mode == "" {
@@ -37,7 +38,11 @@ func SubmitTask(req SubmitRequest) (TaskView, error) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	state := &taskState{view: view}
+	state := &taskState{
+		view:        view,
+		instruction: description,
+		handles:     cleanHandles(req.Handles),
+	}
 
 	taskMu.Lock()
 	tasks[view.TaskID] = state
@@ -45,10 +50,52 @@ func SubmitTask(req SubmitRequest) (TaskView, error) {
 	trimTasksLocked()
 	taskMu.Unlock()
 
-	handles := cleanHandles(req.Handles)
 	emitTask(view)
-	go runTask(view.TaskID, mode, description, handles)
 	return view, nil
+}
+
+// HasWork 报告是否存在等待推进的创作任务。
+func HasWork() bool {
+	taskMu.Lock()
+	defer taskMu.Unlock()
+	for _, id := range taskOrder {
+		if state, ok := tasks[id]; ok && state.view.Status == statusQueued {
+			return true
+		}
+	}
+	return false
+}
+
+// Step 推进最早一个等待中的创作任务；每次 Tick 最多推进一个任务。
+func Step(ctx context.Context) error {
+	taskMu.Lock()
+	var (
+		taskID      string
+		mode        string
+		instruction string
+		handles     []string
+	)
+	for _, id := range taskOrder {
+		state, ok := tasks[id]
+		if !ok || state.view.Status != statusQueued {
+			continue
+		}
+		taskID = id
+		mode = state.view.Mode
+		instruction = state.instruction
+		handles = append([]string(nil), state.handles...)
+		// 先落执行态再放锁：即使本轮耗时较长，也不会被下一个 Tick 重复领取。
+		state.view.Status = statusPlanning
+		state.view.Stage = "开始规划"
+		state.view.UpdatedAt = time.Now().Format(time.RFC3339)
+		break
+	}
+	taskMu.Unlock()
+	if taskID == "" {
+		return nil
+	}
+	runTask(ctx, taskID, mode, instruction, handles)
+	return nil
 }
 
 // TaskStatus 查询单个任务。
@@ -78,8 +125,18 @@ func TaskList(limit int) []TaskView {
 	return out
 }
 
-// runTask 在后台执行任务；进度通过 TaskEventHook 推送。
-func runTask(taskID, mode, description string, handles []string) {
+// runTask 执行一个任务；进度通过 TaskEventHook 推送。
+func runTask(ctx context.Context, taskID, mode, description string, handles []string) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logger.Warn(Module, "[资源库] 创作任务 %s 异常中断: %v", taskID, recovered)
+			updateTask(taskID, ProgressEvent{
+				Status:  statusFailed,
+				Stage:   "执行异常中断",
+				Summary: fmt.Sprintf("%v", recovered),
+			})
+		}
+	}()
 	observe := func(event ProgressEvent) {
 		updateTask(taskID, event)
 	}
@@ -88,9 +145,9 @@ func runTask(taskID, mode, description string, handles []string) {
 		err    error
 	)
 	if mode == "random" {
-		result, err = RunFreeWithProgress(context.Background(), observe)
+		result, err = RunFreeWithProgress(ctx, observe)
 	} else {
-		result, err = RunAssignedWithProgress(context.Background(), description, handles, observe)
+		result, err = RunAssignedWithProgress(ctx, description, handles, observe)
 	}
 	if err != nil {
 		logger.Warn(Module, "[资源库] 创作任务 %s 失败: %v", taskID, err)

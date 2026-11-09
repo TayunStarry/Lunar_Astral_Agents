@@ -38,24 +38,6 @@ func EditsHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, snapshot)
 }
 
-// HistoryHandler GET /library/history?path=&before=&limit= — 单文件历史记录分页。
-func HistoryHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "只支持 GET", http.StatusMethodNotAllowed)
-		return
-	}
-	page, err := History(HistoryQuery{
-		Path:   r.URL.Query().Get("path"),
-		Before: queryUint(r, "before"),
-		Limit:  queryInt(r, "limit"),
-	})
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, page)
-}
-
 // MetaHandler GET /library/meta?path=documents/x.png — 单文件详情字段。
 func MetaHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

@@ -62,13 +62,6 @@ export function fetchEdits(options = {}) {
     return getJSON(`${BASE}/edits${suffix ? `?${suffix}` : ''}`);
 }
 
-// fetchHistory 单文件历史记录分页（before 为上一页返回的游标）。
-export function fetchHistory(path, before = 0, limit = 50) {
-    const query = new URLSearchParams({ path, limit: String(limit) });
-    if (before) query.set('before', String(before));
-    return getJSON(`${BASE}/history?${query.toString()}`);
-}
-
 // fetchMeta 单文件详情。
 export function fetchMeta(path) {
     return getJSON(`${BASE}/meta?path=${encodeURIComponent(path)}`);
@@ -87,27 +80,6 @@ export function moveFile(path, target) {
 // deleteFile 删除文件。
 export function deleteFile(path) {
     return postJSON(`${BASE}/delete`, { path });
-}
-
-// submitCreation 提交创作任务：mode=assigned 需要 description，mode=random 自主选题。
-// options: { mode, description, handle, handles }；返回 { ok, task }。
-export function submitCreation(options = {}) {
-    return postJSON(`${BASE}/create`, {
-        mode: options.mode || 'assigned',
-        description: options.description || '',
-        handle: options.handle || '',
-        handles: options.handles || [],
-    });
-}
-
-// fetchCreationTask 查询创作任务进度与结果。
-export function fetchCreationTask(taskId) {
-    return getJSON(`${BASE}/create/status?task_id=${encodeURIComponent(taskId)}`);
-}
-
-// fetchCreationTasks 最近创作任务列表。
-export function fetchCreationTasks(limit = 20) {
-    return getJSON(`${BASE}/create/list?limit=${encodeURIComponent(limit)}`);
 }
 
 // fetchDBTables 只读：数据库表 / 视图清单。

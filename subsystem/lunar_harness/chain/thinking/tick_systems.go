@@ -1,6 +1,6 @@
 package thinking
 
-// tick_systems.go 内建 Tick 体系适配器（对话 / 后勤 / 响应 / 演绎 / 生活）。
+// tick_systems.go 内建 Tick 体系适配器（对话 / 后勤 / 响应 / 创作 / 演绎 / 生活）。
 //
 // 所有链都向同一个调度器注册，由调度器统一保证「同一时刻只有一条链执行一个原子步骤」；
 // 新增链只需要实现 System 接口并注册优先级，不需要在调度器里增加分支。
@@ -12,6 +12,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/Responder"
 	"LunarSubsystem/LunarHarness/agents/Savior"
+	"LunarSubsystem/LunarHarness/chain/creation"
 	"LunarSubsystem/LunarHarness/chain/life"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking/tickloop"
@@ -82,6 +83,24 @@ func (responseSystem) Ready(TickSnapshot) (bool, string) {
 func (responseSystem) Run(ctx context.Context) error {
 	Responder.Drain(ctx)
 	return nil
+}
+
+type creationSystem struct{}
+
+func (creationSystem) ID() string          { return "creation" }
+func (creationSystem) Priority() int       { return 220 }
+func (creationSystem) Kind() tickloop.Kind { return tickloop.KindJob }
+func (creationSystem) IdleReset() int      { return 0 }
+
+func (creationSystem) Ready(TickSnapshot) (bool, string) {
+	if creation.HasWork() {
+		return true, "待执行的资源库创作任务"
+	}
+	return false, ""
+}
+
+func (creationSystem) Run(ctx context.Context) error {
+	return creation.Step(ctx)
 }
 
 type storyboardSystem struct{}

@@ -10,12 +10,12 @@ import (
 
 // writeMessage 写入消息（文本或多模态内容）
 //
-// source 为宿主侧来源标记：计划表到期触发的上下文只进入模型上下文，
+// source 为宿主侧来源标记：愿望到期触发的上下文只进入模型上下文，
 // 不写入前端可见的对话缓存，避免「系统内部提醒」以用户气泡出现在聊天界面。
 func writeMessage(role, source string, content any) {
 	normalized := normalizeIncomingContent(content)
 	message := PostMessage{Role: role, Content: normalized}
-	if role == RoleUser && source != scheduleSource {
+	if role == RoleUser && source != wishSource {
 		appendUserMessage(message.Content)
 		rememberUserUtterance(message.Content)
 		rememberEmotionMark(message.Content)

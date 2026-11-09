@@ -1,16 +1,51 @@
-// dialog.js 提示条与模态弹窗（重命名 / 移动 / 删除 / 快捷键）。
+// dialog.js 轻提示与模态弹窗（重命名 / 移动 / 删除 / 快捷键）。
 
 const root = () => document.getElementById('modal-root');
 
-// toast 顶部提示。
+// TOAST_LIFE_MS 单条提示存活时长；TOAST_MAX_VISIBLE 同时可见条数上限
+const TOAST_LIFE_MS = 2600;
+const TOAST_MAX_VISIBLE = 3;
+const TOAST_EXIT_MS = 200;
+
+// toast 轻提示：固定定位、不参与文档流，自动消失、不阻塞操作。
+//
+// 为什么改成堆叠而不是单条覆盖：后端进度推送（阶段、失败原因、完成摘要）
+// 都走这里，单条覆盖会让后到的提示把前一条直接顶掉。堆叠 + 条数上限
+// 既保证每条都看得见，又不会在屏幕上堆积出一片文字。
 export function toast(message, type = '') {
-    const el = document.getElementById('toast');
-    el.className = `toast visible ${type}`.trim();
-    el.textContent = message;
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => {
+    const container = document.getElementById('toast-root');
+    const text = String(message == null ? '' : message).trim();
+    if (!container || !text) return;
+
+    // 同文案去重：连续相同的提示只把计时往后推，不重复叠一颗。
+    const last = container.lastElementChild;
+    if (last && last.dataset.text === text && last.dataset.type === type) {
+        last.classList.add('visible');
+        restartToastTimer(last);
+        return;
+    }
+
+    const el = document.createElement('div');
+    el.className = `toast${type ? ` ${type}` : ''}`;
+    el.dataset.text = text;
+    el.dataset.type = type;
+    el.textContent = text;
+    container.append(el);
+    while (container.childElementCount > TOAST_MAX_VISIBLE) {
+        container.firstElementChild.remove();
+    }
+    // 下一帧再加 visible，保证入场过渡生效（同步添加会被合并掉）。
+    requestAnimationFrame(() => el.classList.add('visible'));
+    restartToastTimer(el);
+}
+
+// restartToastTimer 重排一条提示的消失计时。
+function restartToastTimer(el) {
+    if (el.toastTimer) clearTimeout(el.toastTimer);
+    el.toastTimer = setTimeout(() => {
         el.classList.remove('visible');
-    }, 2200);
+        el.toastExitTimer = setTimeout(() => el.remove(), TOAST_EXIT_MS);
+    }, TOAST_LIFE_MS);
 }
 
 // openModal 打开一个模态弹窗。

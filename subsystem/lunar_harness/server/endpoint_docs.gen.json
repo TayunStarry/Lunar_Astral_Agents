@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Lunar Harness",
-    "version": "2026.312.2208",
+    "version": "2026.313.2356",
     "x-service": "LunarHarness"
   },
   "servers": [
@@ -786,45 +786,6 @@
         }
       }
     },
-    "/library/api/create": {
-      "post": {
-        "summary": "资源库创作提交（资源句柄 + 自然语言描述；mode=assigned/random，后台自动规划执行）",
-        "description": "资源库创作提交（资源句柄 + 自然语言描述；mode=assigned/random，后台自动规划执行）",
-        "operationId": "libraryCreateHandler",
-        "x-handler": "libraryCreateHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/library/api/create/list": {
-      "get": {
-        "summary": "资源库最近创作任务列表（limit）",
-        "description": "资源库最近创作任务列表（limit）",
-        "operationId": "libraryCreateListHandler",
-        "x-handler": "libraryCreateListHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/library/api/create/status": {
-      "get": {
-        "summary": "资源库创作任务状态与结果（task_id）",
-        "description": "资源库创作任务状态与结果（task_id）",
-        "operationId": "libraryCreateStatusHandler",
-        "x-handler": "libraryCreateStatusHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/library/api/db/ai-sql": {
       "post": {
         "summary": "资源库自然语言转 SQL（携带当前库表结构，只生成一条只读语句）",
@@ -916,19 +877,6 @@
         }
       }
     },
-    "/library/api/history": {
-      "get": {
-        "summary": "资源库单文件历史操作分页（path / before / limit）",
-        "description": "资源库单文件历史操作分页（path / before / limit）",
-        "operationId": "library.HistoryHandler",
-        "x-handler": "library.HistoryHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/library/api/meta": {
       "get": {
         "summary": "资源库文件详情（入库时间 / 句柄 / 引用积分 / 描述状态）",
@@ -961,97 +909,6 @@
         "description": "资源库重命名（限 4 个存储根）",
         "operationId": "library.RenameHandler",
         "x-handler": "library.RenameHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/library/api/storyboard": {
-      "post": {
-        "summary": "资源库演绎提交（故事文本或资源句柄，≤4000 字；后台补资料、拆分镜并等待审查）",
-        "description": "资源库演绎提交（故事文本或资源句柄，≤4000 字；后台补资料、拆分镜并等待审查）",
-        "operationId": "libraryStoryboardHandler",
-        "x-handler": "libraryStoryboardHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/library/api/storyboard/cancel": {
-      "post": {
-        "summary": "终止演绎任务并保留已产出镜头",
-        "description": "终止演绎任务并保留已产出镜头",
-        "operationId": "libraryStoryboardCancelHandler",
-        "x-handler": "libraryStoryboardCancelHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/library/api/storyboard/confirm": {
-      "post": {
-        "summary": "确认审查后的分镜稿并开始逐镜绘制（task_id + shots）",
-        "description": "确认审查后的分镜稿并开始逐镜绘制（task_id + shots）",
-        "operationId": "libraryStoryboardConfirmHandler",
-        "x-handler": "libraryStoryboardConfirmHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/library/api/storyboard/list": {
-      "get": {
-        "summary": "资源库最近演绎任务列表（limit）",
-        "description": "资源库最近演绎任务列表（limit）",
-        "operationId": "libraryStoryboardListHandler",
-        "x-handler": "libraryStoryboardListHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/library/api/storyboard/pause": {
-      "post": {
-        "summary": "暂停演绎任务（已绘镜头保留，续跑从下一镜继续）",
-        "description": "暂停演绎任务（已绘镜头保留，续跑从下一镜继续）",
-        "operationId": "libraryStoryboardPauseHandler",
-        "x-handler": "libraryStoryboardPauseHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/library/api/storyboard/resume": {
-      "post": {
-        "summary": "继续已暂停的演绎任务",
-        "description": "继续已暂停的演绎任务",
-        "operationId": "libraryStoryboardResumeHandler",
-        "x-handler": "libraryStoryboardResumeHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/library/api/storyboard/status": {
-      "get": {
-        "summary": "资源库演绎任务状态与结果（task_id）",
-        "description": "资源库演绎任务状态与结果（task_id）",
-        "operationId": "libraryStoryboardStatusHandler",
-        "x-handler": "libraryStoryboardStatusHandler",
         "responses": {
           "200": {
             "description": "成功"

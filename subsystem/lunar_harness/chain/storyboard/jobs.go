@@ -22,7 +22,8 @@ func SubmitTask(req SubmitRequest) (TaskView, error) {
 			return TaskView{}, err
 		}
 	}
-	now := time.Now().Format(time.RFC3339)
+	created := time.Now()
+	now := created.Format(time.RFC3339)
 	seq := atomic.AddUint64(&taskSeq, 1)
 	view := TaskView{
 		TaskID:    fmt.Sprintf("storyboard-%d-%d", time.Now().UnixNano(), seq),
@@ -34,10 +35,13 @@ func SubmitTask(req SubmitRequest) (TaskView, error) {
 		UpdatedAt: now,
 	}
 	state := &taskState{
-		view:     view,
-		req:      req,
-		stage:    stageQueued,
-		deadline: time.Now().Add(runTimeout),
+		view:      view,
+		req:       req,
+		stage:     stageQueued,
+		startedAt: created,
+		lastBeat:  created,
+		budgetAt:  created.Add(runBudget),
+		nextWarn:  created.Add(runWarnTimeout),
 	}
 
 	taskMu.Lock()
@@ -45,9 +49,15 @@ func SubmitTask(req SubmitRequest) (TaskView, error) {
 	taskOrder = append(taskOrder, view.TaskID)
 	trimTasksLocked()
 	persistTasksLocked()
+	// 受理即推送一份完整快照：前端据此建立任务模型，后续都是增量。
+	pushView, _ := buildPushLocked(state, true)
 	taskMu.Unlock()
 
-	emitTask(view)
+	emitTask(pushView)
+	// 回执与推送共用同一个快照序号：客户端先收到推送、再收到回执，不会重复建模型。
+	view.Seq = pushView.Seq
+	view.Epoch = pushView.Epoch
+	view.V = pushVersion
 	return view, nil
 }
 
@@ -68,7 +78,29 @@ func TaskStatus(taskID string) (TaskView, bool) {
 	if !ok {
 		return TaskView{}, false
 	}
-	return cloneTaskView(state), true
+	// 查询返回的是全量视图：先消费掉待推送的增量，再把过程文本游标对齐，
+	// 避免随后到达的增量推送把同一段文本重复补发。
+	consumePendingLocked(state)
+	view := cloneTaskView(state)
+	view.V = pushVersion
+	view.ShotCount = len(view.Shots)
+	view.Thought = state.thought
+	state.sentThought = len(state.thought)
+	view.Seq = atomic.AddUint64(&viewSeq, 1)
+	view.Epoch = taskEpoch
+	state.view.Seq = view.Seq
+	return view, true
+}
+
+// consumePendingLocked 丢弃尚未发出的增量；调用方必须持有 taskMu。
+func consumePendingLocked(state *taskState) {
+	if state.pushTimer != nil {
+		state.pushTimer.Stop()
+		state.pushTimer = nil
+	}
+	state.pushPending = false
+	state.dirtyAll = false
+	state.dirtyShots = nil
 }
 
 // TaskList 按创建顺序倒序返回最近任务。
@@ -136,6 +168,8 @@ func applyEventLocked(state *taskState, event ProgressEvent) {
 		state.view.DocHandle = event.DocHandle
 	}
 	if len(event.Shots) > 0 {
+		// 先记录差异再覆盖：推送只带变化的镜头，前端按序合并。
+		markChangedShotsLocked(state, event.Shots)
 		state.view.Shots = cloneShots(event.Shots)
 	}
 	if len(event.Handles) > 0 {
@@ -146,55 +180,76 @@ func applyEventLocked(state *taskState, event ProgressEvent) {
 	}
 	if event.ThoughtReset {
 		state.thought = ""
-		state.view.Thought = ""
 		state.thoughtReset = true
 	}
 	if event.ThoughtDelta != "" {
-		state.thought += event.ThoughtDelta
-		state.view.Thought = state.thought
-		state.delta = event.ThoughtDelta
+		state.thought = appendThoughtBounded(state.thought, event.ThoughtDelta)
 	}
 	state.view.Event = event.Event
 	state.view.ShotIndex = event.ShotIndex
 	state.view.UpdatedAt = time.Now().Format(time.RFC3339)
+	// 任何一次状态合并都算「有进展」：卡死判定只认这个时间点。
+	state.lastBeat = time.Now()
 }
 
-// takeViewLocked 克隆视图并把待推送的过程文本增量挂上；调用方必须持有锁。
+// takeViewLocked 克隆视图作为控制回执；调用方必须持有锁。
 //
-// 增量只存在于推送快照中，不写入任务视图本身：否则轮询查询会把同一段
-// 文本重复返回，前端就会重复追加。
+// 回执是完整快照（前端据此整体对齐），因此这里不需要处理增量。
 func takeViewLocked(state *taskState) TaskView {
 	view := cloneTaskView(state)
-	if state.delta != "" {
-		view.Delta = state.delta
-		state.delta = ""
-	}
-	if state.thoughtReset {
-		view.ThoughtReset = true
-		state.thoughtReset = false
-	}
+	view.V = pushVersion
+	view.ShotCount = len(view.Shots)
+	view.Seq = atomic.AddUint64(&viewSeq, 1)
+	view.Epoch = taskEpoch
+	state.view.Seq = view.Seq
+	// 回执不含累计过程文本：文本只走增量推送，避免大对象来回搬运。
+	view.Thought = ""
+	view.Delta = ""
+	view.ThoughtReset = false
+	state.sentThought = len(state.thought)
 	return view
 }
 
-// commitLocked 落盘并解锁，随后推送当前视图；调用方必须持有锁。
+// commitLocked 落盘并立即推送一次增量快照；调用方必须持有锁。
 func commitLocked(state *taskState) {
-	view := takeViewLocked(state)
 	persistTasksLocked()
+	view, ok := buildPushLocked(state, false)
 	taskMu.Unlock()
-	emitTask(view)
+	if ok {
+		emitTask(view)
+	}
 }
 
-// commitVolatileLocked 解锁并推送当前视图，但不落盘。
-// 用于高频的逐镜与逐段过程事件：落盘只需覆盖阶段切换与终态，
-// 避免每次增量都重写整个任务文件。
-func commitVolatileLocked(state *taskState) {
-	view := takeViewLocked(state)
+// commitSnapshotLocked 落盘并立即推送一份完整快照；调用方必须持有锁。
+// 用于提交 / 审查 / 终态这类低频且镜头表整体变化的节点。
+func commitSnapshotLocked(state *taskState) {
+	persistTasksLocked()
+	view, ok := buildPushLocked(state, true)
 	taskMu.Unlock()
-	emitTask(view)
+	if ok {
+		emitTask(view)
+	}
+}
+
+// commitVolatileLocked 只安排合并推送，不落盘；调用方必须持有锁。
+// 用于高频的逐镜与逐段过程事件：落盘只需覆盖阶段切换与终态，
+// 避免每次增量都重写整个任务文件；推送则由 emit.go 合并限流。
+func commitVolatileLocked(state *taskState) {
+	schedulePushLocked(state)
+	taskMu.Unlock()
 }
 
 // emitTask 调用装配层注入的推送回调。
 func emitTask(view TaskView) {
+	// 重启恢复的视图来自旧进程的落盘文件，统一改盖当前 epoch。
+	view.Epoch = taskEpoch
+	if view.V == 0 {
+		view.V = pushVersion
+	}
+	// 全量快照一定带得出镜头总数：前端据此裁剪本地多出的镜头。
+	if view.ShotCount == 0 && len(view.Shots) > 0 {
+		view.ShotCount = len(view.Shots)
+	}
 	if hook := TaskEventHook; hook != nil {
 		hook(view)
 	}
@@ -211,6 +266,10 @@ func trimTasksLocked() {
 		state, ok := tasks[id]
 		if excess > 0 && ok && (state.view.Status == statusCompleted ||
 			state.view.Status == statusFailed || state.view.Status == statusCanceled) {
+			if state.pushTimer != nil {
+				state.pushTimer.Stop()
+				state.pushTimer = nil
+			}
 			delete(tasks, id)
 			excess--
 			continue

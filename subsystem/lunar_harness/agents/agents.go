@@ -13,13 +13,13 @@
 //	agents/DialogueBridging/ 通讯桥接智能体（Go：向群/好友发送文本、图片、文件）
 //	agents/MutualForum/      互助论坛智能体（Go：论坛浏览/发帖/回复的多轮工具执行）
 //	agents/FileEditor/       文件编辑智能体（Go：/document 文档库读写与项目运行）
-//	agents/PlanManager/      计划管理智能体（Go：计划表新增 / 删除 / 改写 / 查询）
+//	agents/WishManager/      愿望管理智能体（Go：愿望新增 / 改写 / 完成 / 删除 / 优先级 / 查询）
 //	agents/SQLWriter/        语句生成智能体（Go：自然语言 → 一条只读 SQL，不执行）
 //	agents/*.js            页面注入型智能体（JS：Mini-LTP / Self-LTP / SharedInput）
 //
 // 跨多轮 / 跨多智能体的系统级链路编排不在本目录，统一收纳于 chain/：
 //
-//	chain/thinking/ 思维链（对话者 Dialogue + 两组 Tick 循环）
+//	chain/thinking/ 思维链（对话者 Dialogue + 单 Tick 循环与特许响应车道）
 //	chain/search/   搜索链（规划 → 抓取 → 摘要三段调度）
 //	chain/life/     生活链路（生活事件编排）
 //	chain/viewer/   观影链路（哔哩观影编排）

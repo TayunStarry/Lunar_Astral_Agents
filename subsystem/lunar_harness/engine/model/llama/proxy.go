@@ -103,7 +103,7 @@ func startLocked() {
 	go waitForProcessExit(cmd)
 }
 
-// Alive 探测模型服务是否仍在监听（用于"引擎重载"决策：服务崩了，重载 goja 也白搭）
+// Alive 探测模型服务是否仍在监听（用于"引擎重载"决策：服务崩了，重载上层也白搭）
 func Alive() bool {
 	return portOpen(config.ModelPort)
 }

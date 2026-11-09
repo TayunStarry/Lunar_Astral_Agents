@@ -58,7 +58,7 @@ func routeTarget(target, op string) (routeDecision, error) {
 	archive := ArchiveReader.IsArchiveExt(ext)
 	gguf := ArchiveReader.IsGGUFExt(ext)
 	if archive || gguf {
-		return routeArchiveDecision(decision, op, archive, gguf)
+		return routeArchiveDecision(decision, op, gguf)
 	}
 
 	info, statErr := os.Stat(abs)
@@ -109,7 +109,7 @@ func resolveActualPath(target string) (abs, rel string, err error) {
 }
 
 // routeArchiveDecision 压缩包 / GGUF 的路由。
-func routeArchiveDecision(decision routeDecision, op string, archive, gguf bool) (routeDecision, error) {
+func routeArchiveDecision(decision routeDecision, op string, gguf bool) (routeDecision, error) {
 	if fileflow.Mutating(op) {
 		if gguf {
 			return routeDecision{}, fmt.Errorf("GGUF 模型只支持读取，不支持写入")

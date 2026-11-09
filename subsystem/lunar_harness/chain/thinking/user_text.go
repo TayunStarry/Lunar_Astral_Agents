@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/engine/affection"
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 )
 
 func rememberUserUtterance(content any) {
@@ -50,12 +50,12 @@ func latestUserUtterance() string {
 // recentAffectionRounds 汇总最近若干轮「用户发言 + 月华回应」，按角色分组交给生活阶段逐人评估。
 //
 // 只收成对完整的轮次：没有回应的发言不构成情感交互；无发送者名的发言（如系统上下文）也跳过。
-func recentAffectionRounds() []affection.Round {
+func recentAffectionRounds() []wishchain.Round {
 	cacheMu.Lock()
 	records := append([]CachedMessage(nil), cachedMessages...)
 	cacheMu.Unlock()
 
-	rounds := make([]affection.Round, 0, maxCacheMessages)
+	rounds := make([]wishchain.Round, 0, maxCacheMessages)
 	perUser := make(map[string]int)
 	reply := ""
 	for i := len(records) - 1; i >= 0; i-- {
@@ -85,7 +85,7 @@ func recentAffectionRounds() []affection.Round {
 			continue
 		}
 		perUser[sender]++
-		rounds = append(rounds, affection.Round{
+		rounds = append(rounds, wishchain.Round{
 			Key:       record.ID,
 			UserName:  sender,
 			UserText:  body,
@@ -107,7 +107,7 @@ func rememberEmotionMark(content any) {
 	if sender == "" {
 		return
 	}
-	label, ok := affection.Label(sender)
+	label, ok := wishchain.AttitudeLabel(sender)
 	if !ok {
 		return
 	}

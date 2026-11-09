@@ -2,48 +2,40 @@ package FileEditor
 
 // tool_run.go 运行文档库中的 js / html 项目文件。
 //
-// 分流规则：
-//   - 文件首行含 `//Engine: Lunar Harness` 标识 → 交给月华私有 js 运行时执行；
-//   - 其余 .js / .html → 打开「资源库」前端，并在其 iframe 沙箱中运行；
-//     资源库窗口会自动弹出并作为浏览器端代码的主页面。
+// 统一分流：.js / .html / .htm 一律打开「资源库」前端，并在其 iframe 沙箱中运行；
+// 资源库窗口会自动弹出并作为浏览器端代码的主页面。
+// 宿主侧不再内置 js 运行时，脚本不再由进程内的脚本引擎执行。
 
 import (
 	"context"
 	"fmt"
 	"net/url"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
-	"time"
 
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	runtime "LunarSubsystem/LunarHarness/engine/runtime"
 )
 
-// harnessEngineMark 文件头部标识：命中则使用月华私有 js 运行时。
-const harnessEngineMark = "//Engine: Lunar Harness"
-
-// runLimitRe 首行运行时长声明：timeout=120s / timeout: 90 / timeout=5000ms / timeout=2分
-var runLimitRe = regexp.MustCompile(`(?i)\btimeout\s*[:=]\s*(\d+)\s*(ms|s|分|秒)?`)
-
-// RunProject 以默认运行时长上限运行指定的 js / html 项目文件。
+// RunProject 运行指定的 js / html 项目文件。
 func RunProject(ctx context.Context, path string) OpResult {
-	return runProject(ctx, path, 0)
+	return runProject(ctx, path)
 }
 
-// RunProjectWithLimit 运行项目文件，timeoutSec 为 AI 显式指定的运行时长（秒；<=0 表示不指定）。
-// 优先级：显式参数 > 文件首行注释 > 默认 120 秒。
+// RunProjectWithLimit 运行项目文件。
+//
+// timeoutSec 为历史参数（早期宿主侧脚本运行时的时长上限），
+// 现在脚本统一在浏览器沙箱执行，该参数不再生效，保留签名以兼容既有调用方。
 func RunProjectWithLimit(ctx context.Context, path string, timeoutSec int) OpResult {
-	return runProject(ctx, path, timeoutSec)
+	_ = timeoutSec
+	return runProject(ctx, path)
 }
 
-// runProject 运行入口：校验文件、解析时长并分流执行。
-func runProject(ctx context.Context, path string, timeoutSec int) OpResult {
-	content, err := readDocument(path)
-	if err != nil {
+// runProject 运行入口：校验文件并分流执行。
+func runProject(ctx context.Context, path string) OpResult {
+	_ = ctx
+	if _, err := readDocument(path); err != nil {
 		return failResult(ToolRunProj, path, err)
 	}
 	ext := strings.ToLower(filepath.Ext(path))
@@ -55,8 +47,7 @@ func runProject(ctx context.Context, path string, timeoutSec int) OpResult {
 		localRel = rel
 	}
 
-	limit := resolveRunLimit(content, timeoutSec)
-	outcome := runProjectFile(ctx, path, ext, content, limit)
+	outcome := runProjectFile(path, ext)
 	if localRel != "" {
 		// 运行结束再上报：成功保持绿色，报错/警告转为红色（供资源库文件名着色）。
 		publishRun(localRel, !outcome.OK)
@@ -64,164 +55,24 @@ func runProject(ctx context.Context, path string, timeoutSec int) OpResult {
 	return outcome
 }
 
-// runProjectFile 按文件头标识与扩展名分流执行。
-func runProjectFile(ctx context.Context, path, ext, content string, limit time.Duration) OpResult {
-	if hasHarnessMark(content) {
-		return runWithHarness(ctx, path, content, limit)
-	}
+// runProjectFile 按扩展名分流执行。
+func runProjectFile(path, ext string) OpResult {
 	if ext == ".html" || ext == ".htm" {
 		return openInBrowser(path, "html")
 	}
 	return runJSInBrowser(path)
 }
 
-// RunProjectPath 以默认运行时长运行指定项目文件（供创作管线等进程内调用方使用）。
+// RunProjectPath 运行指定项目文件（供创作管线等进程内调用方使用）。
 func RunProjectPath(path string) OpResult {
 	return RunProjectPathWithLimit(path, 0)
 }
 
-// RunProjectPathWithLimit 以指定运行时长运行项目文件（timeoutSec <= 0 时使用默认值）。
+// RunProjectPathWithLimit 运行项目文件。
 func RunProjectPathWithLimit(path string, timeoutSec int) OpResult {
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
 	return RunProjectWithLimit(ctx, path, timeoutSec)
-}
-
-// resolveRunLimit 解析本次运行时长：显式参数 > 文件首行声明 > 默认值，并夹在允许区间内。
-func resolveRunLimit(content string, timeoutSec int) time.Duration {
-	limit := defaultRunLimit
-	if timeoutSec > 0 {
-		limit = time.Duration(timeoutSec) * time.Second
-	} else if declared := runLimitFromFirstLine(content); declared > 0 {
-		limit = declared
-	}
-	switch {
-	case limit < minRunLimit:
-		return minRunLimit
-	case limit > maxRunLimit:
-		return maxRunLimit
-	}
-	return limit
-}
-
-// runLimitFromFirstLine 读取文件第一行的运行时长声明。
-// 约定：第一行类型注释中可写 `timeout=120s`（支持 ms / s / 分 / 秒，缺省单位为秒）。
-func runLimitFromFirstLine(content string) time.Duration {
-	content = strings.TrimPrefix(content, "\ufeff")
-	firstLine := strings.SplitN(strings.ReplaceAll(content, "\r\n", "\n"), "\n", 2)[0]
-	match := runLimitRe.FindStringSubmatch(firstLine)
-	if len(match) == 0 {
-		return 0
-	}
-	value, err := strconv.Atoi(match[1])
-	if err != nil || value <= 0 {
-		return 0
-	}
-	switch strings.ToLower(match[2]) {
-	case "ms":
-		return time.Duration(value) * time.Millisecond
-	case "分":
-		return time.Duration(value) * time.Minute
-	default: // s / 秒 / 缺省
-		return time.Duration(value) * time.Second
-	}
-}
-
-// hasHarnessMark 检测文件头部是否包含 `//Engine: Lunar Harness` 标识。
-func hasHarnessMark(content string) bool {
-	content = strings.ReplaceAll(content, "\r\n", "\n")
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(strings.TrimPrefix(line, "\ufeff"))
-		if line == "" {
-			continue
-		}
-		return strings.HasPrefix(line, harnessEngineMark)
-	}
-	return false
-}
-
-// runWithHarness 在月华私有 js 运行时中执行脚本。
-//
-// 运行时长上限同时约束两件事：
-//   - main 同步调用不得超过该时长；
-//   - 脚本加载完成后，私有运行时最多驻留该时长，到期自动卸载
-//     （订阅事件等长驻脚本不会无限占用事件循环与内存）。
-func runWithHarness(ctx context.Context, path, code string, limit time.Duration) OpResult {
-	// 运行时长由文件头声明 / 工具参数 / 默认值统一解析，外层 ctx 只负责整轮编辑的总超时。
-	_ = ctx
-	deadline := time.Now().Add(limit)
-	id := "file-" + sanitizeID(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))) + "-" + fmt.Sprint(time.Now().UnixNano()%1_000_000)
-	rt, err := runtime.Run(id, path, code)
-	if err != nil {
-		return failResult(ToolRunProj, path, err)
-	}
-	exports := rt.Exports()
-	d := map[string]any{
-		"engine":        "lunar-harness",
-		"runtime":       id,
-		"exports":       exports,
-		"limit_seconds": int(limit.Seconds()),
-	}
-	// 操作简述不写运行时长：资源库只展示运行结果，不展示时长配置；
-	// 时长信息放在结构化字段 limit_seconds 中，供调用方与排查使用。
-	summary := "已在月华私有 js 运行时执行 " + path
-	if containsString(exports, "main") {
-		value, callErr := callMainWithLimit(rt, time.Until(deadline), limit)
-		if callErr != nil {
-			rt.Close()
-			return failResult(ToolRunProj, path, callErr)
-		}
-		d["result"] = value
-		summary += "（main 已调用）"
-	}
-	// 剩余时长即运行时驻留宽限：到期自动卸载，避免订阅型脚本常驻。
-	scheduleRuntimeClose(rt, time.Until(deadline))
-	return newResult(ToolRunProj, path, summary, nil, d)
-}
-
-// callMainWithLimit 在给定剩余时长内调用导出函数 main。
-// 超时后关闭运行时以中断事件循环，并返回可读错误。
-func callMainWithLimit(rt *runtime.Runtime, remain, limit time.Duration) (any, error) {
-	if remain <= 0 {
-		return nil, fmt.Errorf("运行时长已用尽（上限 %d 秒）", int(limit.Seconds()))
-	}
-	type callOutcome struct {
-		value any
-		err   error
-	}
-	done := make(chan callOutcome, 1)
-	go func() {
-		value, err := rt.Call("main")
-		done <- callOutcome{value: value, err: err}
-	}()
-	select {
-	case result := <-done:
-		return result.value, result.err
-	case <-time.After(remain):
-		rt.Close()
-		return nil, fmt.Errorf("main 调用超过运行时长上限（%d 秒）", int(limit.Seconds()))
-	}
-}
-
-// scheduleRuntimeClose 在 after 时长后卸载私有运行时（after <= 0 表示立即卸载）。
-func scheduleRuntimeClose(rt *runtime.Runtime, after time.Duration) {
-	runID := "unknown"
-	if rt != nil {
-		// 运行时就绪后 PID 已注册，日志里带上实例标识便于排查「谁被自动卸载」。
-		if exports := rt.Exports(); len(exports) > 0 {
-			runID = fmt.Sprintf("exports=%d", len(exports))
-		}
-	}
-	if after <= 0 {
-		after = 0
-	}
-	go func() {
-		timer := time.NewTimer(after)
-		defer timer.Stop()
-		<-timer.C
-		rt.Close()
-		logger.Info(Module, "[文件编辑] 私有 js 运行时已到期自动卸载（%s）", runID)
-	}()
 }
 
 // runJSInBrowser 把纯 JS 交给「资源库」前端，在页面内的 iframe 沙箱执行。
@@ -269,25 +120,4 @@ func libraryRunnerURL(path, kind string) string {
 		params.Set("kind", kind)
 	}
 	return config.LocalBaseURL() + "/library/?" + params.Encode()
-}
-
-// sanitizeID 文件名 → 安全标识。
-func sanitizeID(name string) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
-			return r
-		}
-		return '_'
-	}, name)
-}
-
-// containsString 判断字符串是否在切片中。
-func containsString(items []string, target string) bool {
-	for _, item := range items {
-		if item == target {
-			return true
-		}
-	}
-	return false
 }

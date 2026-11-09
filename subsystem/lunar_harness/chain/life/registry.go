@@ -3,27 +3,19 @@ package life
 import (
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/affection"
-	"LunarSubsystem/LunarHarness/engine/mood"
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 )
 
-// SetPlanHooks 注入计划表判定能力（由 lunar 包提供，避免包循环依赖）。
-func SetPlanHooks(due func() int, upcoming func(time.Time, time.Duration) string) {
+// SetWishHooks 注入愿望判定能力（由 lunar 包提供，避免包循环依赖）。
+func SetWishHooks(due func() int, upcoming func(time.Time, time.Duration) string) {
 	mu.Lock()
 	defer mu.Unlock()
-	planDueHook = due
-	planUpcomingHook = upcoming
-}
-
-// SetLastUserTextProvider 注入最新用户发言读取能力（由 lunar 包提供）。
-func SetLastUserTextProvider(provider func() string) {
-	mu.Lock()
-	defer mu.Unlock()
-	lastUserTextHook = provider
+	wishDueHook = due
+	wishUpcomingHook = upcoming
 }
 
 // SetDialogueRoundsProvider 注入各角色最近若干轮对话读取能力（由 lunar 包提供）。
-func SetDialogueRoundsProvider(provider func() []affection.Round) {
+func SetDialogueRoundsProvider(provider func() []wishchain.Round) {
 	mu.Lock()
 	defer mu.Unlock()
 	dialogueRoundsHook = provider
@@ -109,7 +101,7 @@ func pickLocked() Event {
 }
 
 func envFromStateLocked(now time.Time) Env {
-	// 注意：这里不再注入最新用户发言。生活事件（尤其创作）需要对话内容时，
-	// 统一通过 life_planning 写入的创作参考字符串获取，不从对话历史截取。
-	return Env{Now: now, LastRecord: state.LastRecord, MoodLabel: mood.Snapshot().Label}
+	// 注意：这里不再注入最新用户发言。生活事件（尤其创作）需要方向时，
+	// 统一读取心愿链路的愿望清单，不从对话历史截取。
+	return Env{Now: now, LastRecord: state.LastRecord, MoodLabel: wishchain.SnapshotMood().Label}
 }

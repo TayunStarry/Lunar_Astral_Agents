@@ -23,6 +23,19 @@ type Env interface {
 	ReadImageBytes(source string) ([]byte, error)
 }
 
+// SilentEnv 静默产出的宿主能力。
+// 只登记资源并返回可查看地址，不推送前端、不写近期记忆、不发 QQ。
+type SilentEnv interface {
+	PushImagesSilently(images []string) []string
+}
+
+// Options 单次绘制任务的调用选项。
+type Options struct {
+	// Silent 静默产出：成果只登记资源并返回句柄，不对外推送。
+	// 默认 false，人格对话与创作链的行为保持不变。
+	Silent bool
+}
+
 // Result 一次绘制任务的结果。
 type Result struct {
 	// Summary 回传给对话者的作品说明
@@ -155,10 +168,12 @@ type session struct {
 	textOnly     bool
 	forceImg2Img bool
 	fromRuntime  bool
-	resultPath   string
-	runtime      []chatMessage
-	artwork      ReferenceState
-	task         any
+	// silent 本次任务为静默产出：只登记资源，不推送、不写记忆
+	silent     bool
+	resultPath string
+	runtime    []chatMessage
+	artwork    ReferenceState
+	task       any
 }
 
 // runtimeState 跨任务保留的运行时画作与最近作品路径。

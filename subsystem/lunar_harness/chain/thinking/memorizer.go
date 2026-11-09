@@ -44,7 +44,7 @@ func (role *MemorizerRole) persistUnreadRecords() {
 			continue
 		}
 		content := strings.TrimSpace(memoryRecordText(message))
-		if content == "" || len([]rune(content)) <= 5 || strings.Contains(content, scheduleTriggerPrefix) {
+		if content == "" || len([]rune(content)) <= 5 || strings.Contains(content, wishTriggerPrefix) {
 			continue
 		}
 		if _, err := addMemory(message.Role, content); err != nil {

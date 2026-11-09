@@ -22,12 +22,15 @@ type WatchOutcome struct {
 	// Triggered 是否真的看了一个片段；false 时 Reason 说明原因。
 	Triggered bool   `json:"triggered"`
 	Reason    string `json:"reason,omitempty"`
+	// Failed 是否属于真正的观看失败（无片可看、视频已不在列表）；暂停让出不算失败。
+	Failed bool `json:"failed,omitempty"`
 
-	BV           string `json:"bv,omitempty"`
-	Title        string `json:"title,omitempty"`
-	SegmentIndex int    `json:"segment_index,omitempty"`
-	SegmentTotal int    `json:"segment_total,omitempty"`
-	LastSegment  bool   `json:"last_segment,omitempty"`
+	BV           string   `json:"bv,omitempty"`
+	Title        string   `json:"title,omitempty"`
+	Topics       []string `json:"topics,omitempty"`
+	SegmentIndex int      `json:"segment_index,omitempty"`
+	SegmentTotal int      `json:"segment_total,omitempty"`
+	LastSegment  bool     `json:"last_segment,omitempty"`
 
 	// VisualSource 画面理解的来源：frames（真实抽帧）或 impression（降级）。
 	VisualSource string `json:"visual_source,omitempty"`
@@ -82,6 +85,7 @@ func watchWithDeps(ctx context.Context, instruction string, deps watchDeps) (Wat
 	}
 	if !ok {
 		out.Reason = "待看列表里还没有下载好的片段"
+		out.Failed = true
 		return out, nil
 	}
 	video, found, err := deps.loadVideo(seg.BV)
@@ -90,6 +94,7 @@ func watchWithDeps(ctx context.Context, instruction string, deps watchDeps) (Wat
 	}
 	if !found {
 		out.Reason = fmt.Sprintf("片段 %s 对应的视频已不在待看列表", seg.BV)
+		out.Failed = true
 		return out, nil
 	}
 	segments, err := deps.loadSegments(seg.BV)
@@ -107,6 +112,7 @@ func watchWithDeps(ctx context.Context, instruction string, deps watchDeps) (Wat
 	out.Triggered = true
 	out.BV = seg.BV
 	out.Title = video.Title
+	out.Topics = append([]string(nil), video.Topics...)
 	out.SegmentIndex = seg.Index + 1
 	out.SegmentTotal = total
 	out.LastSegment = lastSegmentIndex(segments) == seg.Index

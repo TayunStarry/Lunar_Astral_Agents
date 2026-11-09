@@ -75,3 +75,9 @@ var Upgrader = websocket.Upgrader{
 // OnStructuredMessage 结构化消息的旁路回调（由装配层注入，例如转发到 QQ 桥接）。
 // 仅对 BroadcastMessage 生效，原始字节广播不触发。
 var OnStructuredMessage func(WSResponse)
+
+// ClientMessageHandler 非总线连接的上行命令处理入口（由装配层注入）。
+//
+// 未注入时上行消息按旧行为直接丢弃。资源库前端借此把「提交 / 查询 / 控制」
+// 这类命令与回执收敛到 WebSocket，避免再维护一套轮询兜底。
+var ClientMessageHandler func(ClientMessage)

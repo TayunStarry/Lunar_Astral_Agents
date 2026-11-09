@@ -49,14 +49,13 @@ func assembleLunar() error {
 }
 
 // startLunarAgent 启动月华的 Go 原生智能体（每秒思考循环）。
-// 该循环一经启动即可能消费计划表等到期任务，故必须排在全部服务层与琉璃消费层之后启动。
+// 该循环一经启动即可能消费愿望到期等任务，故必须排在全部服务层与琉璃消费层之后启动。
 func startLunarAgent() error {
 	return thinking.Start()
 }
 
 // shutdownLunar 关闭月华人格局持有的资源
 func shutdownLunar() {
-	thinking.Close()
 	thinking.Stop()
 	DialogueBridging.StopBridge()
 	llama.Close()

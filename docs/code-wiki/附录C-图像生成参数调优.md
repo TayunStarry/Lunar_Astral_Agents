@@ -1,8 +1,8 @@
 # 附录 C 图像生成参数调优
 
-> [🏠 手册门户](README.md) ｜ [◀ 上一附录](附录B-stable-diffusion.cpp参数参考.md)
+> [🏠 阅读入口](README.md) ｜ [◀ 上一附录](附录B-stable-diffusion.cpp参数参考.md)
 
-本手册帮助你在「出图效果 / 出图速度 / 显存占用」三者之间做出取舍。当前基线模型为 `Qwen-Image 2.1`（原生 2K 画质）。参数完整速查见 [附录 B](附录B-stable-diffusion.cpp参数参考.md)，配置字段与操作方式见 [05 绘画机制](05-绘画机制.md)。
+本手册帮助你在「出图效果 / 出图速度 / 显存占用」三者之间做出取舍。当前基线模型为 `Qwen-Image 2.1`（原生 2K 画质）。参数完整速查见 [附录 B](附录B-stable-diffusion.cpp参数参考.md)，配置字段与操作方式见 [06 创作与演绎](06-创作与演绎.md#绘画)。
 
 ---
 
@@ -86,7 +86,7 @@
 | `sd_diffusion_fa` | 扩散 flash attention | 开启 | 保持开启；排查伪影时可关闭对比 |
 | 随机种子 | 复现指定构图 | 空 / 0 = 随机 | 复现实验时填固定值 |
 
-完整 CLI 参数见 [附录 B](附录B-stable-diffusion.cpp参数参考.md)；配置字段键名与含义（位于 `config/painter.json` 顶层，扩散参数与方案键平铺）见 [05 绘画机制](05-绘画机制.md)。
+完整 CLI 参数见 [附录 B](附录B-stable-diffusion.cpp参数参考.md)；配置字段键名与含义（位于 `config/painter.json` 顶层，扩散参数与方案键平铺）见 [06 创作与演绎](06-创作与演绎.md#绘画)。
 
 ---
 
@@ -109,7 +109,7 @@
 
 ## 六、引用跳转
 
-- [🏠 手册门户](README.md)
-- [05 绘画机制](05-绘画机制.md)
+- [🏠 阅读入口](README.md)
+- [06 创作与演绎](06-创作与演绎.md#绘画)
 - [附录 B stable-diffusion.cpp 参数参考](附录B-stable-diffusion.cpp参数参考.md)
-- [10 快速部署](10-快速部署.md)
+- [10 运行配置与安全](10-运行配置与安全.md)

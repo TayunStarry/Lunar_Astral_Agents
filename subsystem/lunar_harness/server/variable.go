@@ -13,6 +13,9 @@ import (
 	file "LunarSubsystem/LunarHarness/engine/persistence/httpapi"
 )
 
+// LibraryChannel 资源库前端接入的 WebSocket 频道名（与 app 层 libraryTerminalChannel 一致）。
+const LibraryChannel = "library"
+
 // httpMux HTTP 路由复用器实例（Start 中创建）
 var httpMux *http.ServeMux
 
@@ -48,21 +51,10 @@ var SystemEndpoints = []SystemEndpoint{
 	// ==================== 资源库（内嵌前端） ====================
 	{Path: "/library/api/tree", Handler: library.TreeHandler, Method: "GET", Description: "资源库递归清单（documents / audios / multimedia / unknown）"},
 	{Path: "/library/api/edits", Handler: library.EditsHandler, Method: "GET", Description: "资源库文件状态与最近 10 次操作（支持 since 增量、offset/limit 分页）"},
-	{Path: "/library/api/history", Handler: library.HistoryHandler, Method: "GET", Description: "资源库单文件历史操作分页（path / before / limit）"},
 	{Path: "/library/api/meta", Handler: library.MetaHandler, Method: "GET", Description: "资源库文件详情（入库时间 / 句柄 / 引用积分 / 描述状态）"},
 	{Path: "/library/api/rename", Handler: library.RenameHandler, Method: "POST", Description: "资源库重命名（限 4 个存储根）"},
 	{Path: "/library/api/move", Handler: library.MoveHandler, Method: "POST", Description: "资源库移动（限 4 个存储根）"},
 	{Path: "/library/api/delete", Handler: library.DeleteHandler, Method: "POST", Description: "资源库删除文件（同步清理句柄）"},
-	{Path: "/library/api/create", Handler: libraryCreateHandler, Method: "POST", Description: "资源库创作提交（资源句柄 + 自然语言描述；mode=assigned/random，后台自动规划执行）"},
-	{Path: "/library/api/create/status", Handler: libraryCreateStatusHandler, Method: "GET", Description: "资源库创作任务状态与结果（task_id）"},
-	{Path: "/library/api/create/list", Handler: libraryCreateListHandler, Method: "GET", Description: "资源库最近创作任务列表（limit）"},
-	{Path: "/library/api/storyboard", Handler: libraryStoryboardHandler, Method: "POST", Description: "资源库演绎提交（故事文本或资源句柄，≤4000 字；后台补资料、拆分镜并等待审查）"},
-	{Path: "/library/api/storyboard/status", Handler: libraryStoryboardStatusHandler, Method: "GET", Description: "资源库演绎任务状态与结果（task_id）"},
-	{Path: "/library/api/storyboard/list", Handler: libraryStoryboardListHandler, Method: "GET", Description: "资源库最近演绎任务列表（limit）"},
-	{Path: "/library/api/storyboard/confirm", Handler: libraryStoryboardConfirmHandler, Method: "POST", Description: "确认审查后的分镜稿并开始逐镜绘制（task_id + shots）"},
-	{Path: "/library/api/storyboard/pause", Handler: libraryStoryboardPauseHandler, Method: "POST", Description: "暂停演绎任务（已绘镜头保留，续跑从下一镜继续）"},
-	{Path: "/library/api/storyboard/resume", Handler: libraryStoryboardResumeHandler, Method: "POST", Description: "继续已暂停的演绎任务"},
-	{Path: "/library/api/storyboard/cancel", Handler: libraryStoryboardCancelHandler, Method: "POST", Description: "终止演绎任务并保留已产出镜头"},
 	{Path: "/library/api/db/tables", Handler: library.DBTablesHandler, Method: "GET", Description: "资源库数据库表清单（只读，path=database/*.db）"},
 	{Path: "/library/api/db/schema", Handler: library.DBSchemaHandler, Method: "GET", Description: "资源库数据库表结构（只读，PRAGMA table_info）"},
 	{Path: "/library/api/db/rows", Handler: library.DBRowsHandler, Method: "GET", Description: "资源库数据库行数据分页（只读，支持 sort / order / offset / limit）"},
@@ -139,7 +131,7 @@ var SystemEndpoints = []SystemEndpoint{
 
 // ==== 跨层能力注入（app 装配时接线；server 不反向依赖 chain / agents） ====
 //
-// 与 engine/runtime.AgentSearchFunc 同一做法：server 只声明 handler 需要的函数变量，
+// 与搜索能力的注入做法一致：server 只声明 handler 需要的函数变量，
 // 具体实现由装配层（app）注入。这样 HTTP 层不会 import 编排层与智能体实现。
 
 // AgentEnqueueFunc 外部推理入队实现（装配层注入 agents/Responder.Enqueue 的适配）

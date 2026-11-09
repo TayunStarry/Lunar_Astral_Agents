@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/activity"
 )
 
@@ -29,12 +30,15 @@ func PlanNext(_ context.Context) (PlanItem, error) {
 		if state.Active != nil {
 			state.Active.Reason = polarityReason(polarity, true)
 			savePlanState(state)
+			// 创作主题延续接入心愿链路。
+			wishchain.NoteLink(wishchain.LinkCreationTopic, "延续："+state.Active.Title)
 			return *state.Active, nil
 		}
 		if item, ok := popParked(&state); ok {
 			item.Reason = polarityReason(polarity, true)
 			state.Active = &item
 			savePlanState(state)
+			wishchain.NoteLink(wishchain.LinkCreationTopic, "延续："+item.Title)
 			return item, nil
 		}
 		return activateNew(&state, polarityReason(polarity, false))
@@ -75,6 +79,8 @@ func activateNew(state *planState, reason string) (PlanItem, error) {
 	pushRecent(state, item.Kind)
 	pushRecentTarget(state, paintSceneOf(item))
 	savePlanState(*state)
+	// 创作选题接入心愿链路。
+	wishchain.NoteLink(wishchain.LinkCreationTopic, "选择："+item.Title)
 	return item, nil
 }
 
@@ -119,9 +125,10 @@ func completePlan(item PlanItem) {
 }
 
 // finishPlan 一轮创作收尾：标记事项完成，并立即更新「我刚刚在干的事情」。
+// 活动文案去掉前缀「刚」，避免和「我刚刚在干的事情：」重复。
 func finishPlan(item PlanItem) {
 	completePlan(item)
-	activity.Set(item.Activity)
+	activity.Set(strings.TrimPrefix(strings.TrimSpace(item.Activity), "刚"))
 }
 
 // withPlanInstruction 把自主选定的事项写在指令最前，替代旧的「对话者指定」来源。

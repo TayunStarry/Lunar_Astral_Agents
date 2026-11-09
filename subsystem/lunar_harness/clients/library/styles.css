@@ -37,6 +37,8 @@
     --radius-sm: 0.5rem;
     --radius-md: 0.65rem;
     --radius-lg: 0.85rem;
+    /* 覆盖式工作面底色：纯色不透明，避免下层内容透出造成「文字重影」 */
+    --review-bg: #f7f9fc;
     --shadow-glass: 0 1px 2px rgba(0, 0, 0, 0.06);
     --shadow-float: 0 10px 30px rgba(0, 0, 0, 0.16);
     --transition: all 0.2s ease;
@@ -85,6 +87,7 @@
     --text-primary: rgba(240, 240, 244, 1);
     --text-secondary: rgba(178, 178, 188, 1);
     --text-tertiary: rgba(136, 136, 148, 1);
+    --review-bg: #1f1f24;
     --code-comment: #8b949e;
     --code-keyword: #d2a8ff;
     --code-string: #a5d6ff;
@@ -1031,35 +1034,7 @@ body {
 .requirement-state.is-accepted { color: var(--success); }
 .requirement-state.is-failed { color: var(--danger); }
 
-.requirement-result {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    border-radius: var(--radius-xs);
-    background: var(--input-bg);
-    font-size: 0.72rem;
-}
-
-.requirement-result code {
-    font-family: var(--font-mono);
-    color: var(--text-primary);
-    word-break: break-all;
-}
-
-.requirement-result a {
-    margin-left: auto;
-    color: var(--accent);
-    text-decoration: none;
-    white-space: nowrap;
-}
-
-.requirement-result a:hover {
-    text-decoration: underline;
-}
-
-/* 演绎链：可选的标题 / 画风 / 画幅并排，任务结果纵向展开 */
+/* 演绎链：可选的标题 / 画风 / 画幅并排 */
 .storyboard-options {
     flex: 0 0 auto;
     display: flex;
@@ -1072,50 +1047,10 @@ body {
     min-width: 90px;
 }
 
-#details-pane-storyboard .requirement-result {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    max-height: 220px;
-    overflow-y: auto;
-}
-
-.storyboard-stage {
-    font-size: 0.72rem;
-    line-height: 1.4;
-    color: var(--accent);
-}
-
-/* 规划阶段的可读过程文本：逐段追加，滚动查看 */
-.storyboard-thought {
-    max-height: 160px;
-    overflow-y: auto;
-    padding: 6px 8px;
-    border: 1px solid var(--panel-border);
-    border-radius: 6px;
-    background: rgba(0, 0, 0, 0.03);
-    font-size: 0.7rem;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.storyboard-shots {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin-top: 4px;
-}
-
-.storyboard-shot {
-    font-size: 0.7rem;
-    line-height: 1.4;
-    color: var(--text-secondary);
-}
-
-.storyboard-shot.is-failed {
-    color: var(--danger, #d9534f);
+#requirement-state,
+#storyboard-state {
+    /* 状态行固定单行：推送文案再长也只做省略，不改变表单高度 */
+    white-space: nowrap;
 }
 
 /* ===== 演绎控制与审查 ===== */
@@ -1126,6 +1061,8 @@ body {
     margin-top: 8px;
 }
 
+/* 审查面板是覆盖在内容区上的独立工作面：
+   底色必须不透明，否则下方的文件网格会透上来，看上去像文案错位、重影。 */
 .storyboard-review {
     position: absolute;
     inset: 0;
@@ -1135,9 +1072,11 @@ body {
     gap: 10px;
     padding: 12px 14px;
     overflow: hidden;
-    background: var(--glass-bg);
-    backdrop-filter: blur(24px);
+    background: var(--review-bg);
+    border: 1px solid var(--panel-border);
     border-radius: inherit;
+    /* 把重排/重绘限制在面板内部，徽标更新不会带动外层玻璃面板重绘 */
+    contain: layout paint;
 }
 
 .sb-review-head {
@@ -1467,11 +1406,23 @@ body {
 .folder-item.active { background: var(--active-bg); }
 .folder-item i { color: var(--accent); }
 
-.toast {
+.toast-root {
     position: fixed;
     top: 18px;
     left: 50%;
-    transform: translateX(-50%) translateY(-12px);
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: min(560px, calc(100vw - 32px));
+    /* 容器不接收指针事件：提示不拦截任何点击与拖拽 */
+    pointer-events: none;
+    z-index: 40;
+}
+
+.toast {
+    max-width: 100%;
     padding: 8px 16px;
     border: 1px solid var(--panel-border);
     border-radius: 999px;
@@ -1479,15 +1430,20 @@ body {
     backdrop-filter: blur(var(--glass-blur));
     box-shadow: var(--shadow-glass);
     font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--text-primary);
     opacity: 0;
-    pointer-events: none;
-    transition: var(--transition);
-    z-index: 40;
+    transform: translateY(-8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    /* 长文案单行省略：提示永远不换行，不会把顶部区域撑高 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .toast.visible {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
 }
 
 .toast.success { color: var(--success); border-color: rgba(31, 157, 107, 0.35); }

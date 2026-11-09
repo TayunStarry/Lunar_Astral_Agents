@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
@@ -142,6 +143,9 @@ func ensureWatchlist(ctx context.Context, lifeTriggered bool, deps watchlistDeps
 	logger.Info("BilibiliViewer", "待看列表：补齐完成，候选 %d｜印象 %d｜过审 %d｜入队 %d｜可播放 %d｜失败 %d｜预算耗尽 %v｜顺延 %d",
 		result.Candidates, result.Impressions, result.Approved, result.Enqueued, result.Downloaded,
 		result.Failed, result.BudgetExhausted, result.Skipped)
+	// 观影列表变更接入心愿链路：后续心情偏移与愿望结算共用同一条状态。
+	wishchain.NoteLink(wishchain.LinkViewerWatchlist,
+		fmt.Sprintf("候选 %d，入队 %d，可播放 %d", result.Candidates, result.Enqueued, result.Downloaded))
 	return result, nil
 }
 

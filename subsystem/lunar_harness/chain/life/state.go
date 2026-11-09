@@ -86,7 +86,7 @@ func LastRoundSummary() (RoundSummary, bool) {
 func Snapshot() LifeSnapshot {
 	mu.Lock()
 	defer mu.Unlock()
-	out := LifeSnapshot{LastRecord: state.LastRecord, PlanSummary: state.PlanSummary}
+	out := LifeSnapshot{LastRecord: state.LastRecord, WishSummary: state.WishSummary}
 	if state.Active != nil {
 		out.ActiveEvent = state.Active.Event
 	}

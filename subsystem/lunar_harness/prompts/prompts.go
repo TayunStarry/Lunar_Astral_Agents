@@ -9,8 +9,7 @@
 //     agents/MutualForum 互助论坛、agents/FileEditor 文件编辑）。
 //
 // 提示词是数据而不是代码，集中到独立的 prompts/；运行期间提示词经 prompts.Read
-// 以 "prompts/xxx.md" 的虚拟路径读取。运行时 API 契约（*.d.ts）不属于提示词，
-// 已拆分到 engine/runtime/contracts，调用方无需感知真实文件布局。
+// 以 "prompts/xxx.md" 的虚拟路径读取，调用方无需感知真实文件布局。
 package prompts
 
 import (
@@ -28,7 +27,6 @@ var files embed.FS
 //
 // name 为 prompts/ 下的文件名（如 "dialogueRole.md"），也接受带 "prompts/"
 // 前缀的写法——TypeScript 侧的调用形态正是 `fileView('prompts/dialogueRole.md')`。
-// 运行时 API 契约不走这里，请使用 engine/runtime/contracts 包。
 func Read(name string) ([]byte, error) {
 	if name == "" {
 		return nil, fmt.Errorf("提示词名称为空")

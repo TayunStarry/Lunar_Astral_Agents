@@ -8,14 +8,14 @@ package creation
 //  3. |d| 达到阈值才算倾向明确：d >= 阈值 → 偏正向，d <= -阈值 → 偏负面；
 //     否则视为中性，按偏正向处理（保守续做，避免未完成事项被无谓丢弃）。
 //
-// 阈值来源：心情是 11 类 softmax 分布（见 engine/mood 的基础情绪词表），
+// 阈值来源：心情是 11 类 softmax 分布（见 chain/wishchain 的基础情绪词表），
 // 均匀基线为单类份额 1/N。只有当一极的最强分量比另一极高出至少一个均匀份额，
 // 才算脱离噪声区间；这样主导标签在相邻两轮之间轻微抖动时不会反复切换创作事项。
 
-import "LunarSubsystem/LunarHarness/engine/mood"
+import "LunarSubsystem/LunarHarness/chain/wishchain"
 
 // polarityOf 按最强的正 / 负向情绪分量判定极性。
-func polarityOf(snapshot mood.MoodSnapshot) MoodPolarity {
+func polarityOf(snapshot wishchain.MoodSnapshot) MoodPolarity {
 	if len(snapshot.Weights) == 0 {
 		return polarityByLabel(snapshot.Label)
 	}

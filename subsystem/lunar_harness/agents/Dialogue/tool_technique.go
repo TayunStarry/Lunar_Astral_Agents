@@ -121,7 +121,7 @@ func dispatchPainter(instruction string, handles []string) agentdispatch.Result 
 		reference = &Painter.Reference{Handle: handle, Source: source, Desc: desc}
 		usedHandles = append(usedHandles, handle)
 	}
-	result, err := Painter.Perform(context.Background(), instruction, reference, painterEnv{})
+	result, err := Painter.Perform(context.Background(), instruction, reference, painterEnv{}, Painter.Options{})
 	usedHandles = append(usedHandles, result.Handles...)
 	summary := strings.TrimSpace(result.Summary)
 	if err != nil {

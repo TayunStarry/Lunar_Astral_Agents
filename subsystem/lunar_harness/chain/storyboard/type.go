@@ -74,6 +74,12 @@ type TaskView struct {
 	Delta string `json:"delta,omitempty"`
 	// ThoughtReset 本次推送要求前端清空过程文本（阶段重跑时使用）
 	ThoughtReset bool `json:"thought_reset,omitempty"`
+	// V 推送协议版本：2 表示增量推送。缺省（1）时 Shots 即全量镜头表。
+	V int `json:"v,omitempty"`
+	// ShotPatch 本次推送中发生变化的镜头（增量推送使用；为空表示镜头表未变）
+	ShotPatch []ShotView `json:"shot_patch,omitempty"`
+	// ShotCount 任务当前镜头总数：前端据此裁剪本地多出的镜头
+	ShotCount int `json:"shot_count,omitempty"`
 	// DocPath 分镜文档相对 LocalDir 的路径（documents/演绎/.../分镜.md）
 	DocPath string `json:"doc_path,omitempty"`
 	// DocHandle 分镜文档的资源句柄
@@ -81,8 +87,12 @@ type TaskView struct {
 	Shots     []ShotView `json:"shots,omitempty"`
 	Handles   []string   `json:"handles,omitempty"`
 	Error     string     `json:"error,omitempty"`
-	CreatedAt string     `json:"created_at"`
-	UpdatedAt string     `json:"updated_at"`
+	// Seq 同一 epoch 内单调递增的快照序号：前端据此丢弃迟到/乱序的推送与查询结果。
+	Seq uint64 `json:"seq,omitempty"`
+	// Epoch 进程启动标识：进程重启后序号从头开始，前端见到新 epoch 即重置序号。
+	Epoch     string `json:"epoch,omitempty"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 // ProgressEvent 分步骤执行中的增量进度。
@@ -125,6 +135,8 @@ type PaintRequest struct {
 	Output     string
 	Task       string
 	References []string
+	// Silent 静默产出：只登记资源并返回句柄，不推送前端、不写记忆、不发 QQ
+	Silent bool
 }
 
 // PaintResult 图片绘制智能体的返回。
@@ -168,10 +180,19 @@ type taskState struct {
 	story string
 	// thought 可读过程文本（资料准备与规划阶段累计）
 	thought string
-	// delta 待推送的过程文本增量（推送后立即清空）
-	delta string
+	// sentThought 已推送给前端的过程文本字节偏移（始终落在 rune 起始处）：
+	// 增量推送只补发其后的内容，避免每条消息重复携带累计全文。
+	sentThought int
 	// thoughtReset 待推送的「清空过程文本」标记（推送后立即清空）
 	thoughtReset bool
+	// dirtyShots 待推送的镜头下标（本次推送只带这些镜头）
+	dirtyShots map[int]struct{}
+	// dirtyAll 下一次推送必须携带完整镜头表
+	dirtyAll bool
+	// pushPending 存在尚未推送的变更
+	pushPending bool
+	// pushTimer 合并推送的定时器；非 nil 表示已安排
+	pushTimer *time.Timer
 	// research 资料准备进度
 	research researchState
 	// plan 分镜规划结果
@@ -180,10 +201,14 @@ type taskState struct {
 	shots []ShotView
 	// nextShot 下一个待绘制镜头下标
 	nextShot int
-	// previous 上一镜成功产出的图片句柄（作为下一镜参考图）
-	previous string
-	// deadline 整个任务的截止时间（暂停与审查期间会顺延）
-	deadline time.Time
+	// startedAt 任务实际推进的起点（暂停 / 审查等待时间不计入）
+	startedAt time.Time
+	// lastBeat 最近一次状态更新时刻：卡死判定只看它，不看运行总时长
+	lastBeat time.Time
+	// budgetAt 当前运行预算到期时刻：到期先做状态校验，仍在推进则顺延
+	budgetAt time.Time
+	// nextWarn 下一次长耗时提醒时刻
+	nextWarn time.Time
 	// restedAt 进入暂停/审查的起始时刻；为零表示任务正在推进
 	restedAt time.Time
 	// paused 用户暂停标记

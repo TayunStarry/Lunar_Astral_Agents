@@ -11,7 +11,6 @@ import (
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
-	"LunarSubsystem/LunarHarness/agents/PlanManager"
 	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/agents/SearchPlanner"
 	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
@@ -23,6 +22,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
 	"LunarSubsystem/LunarHarness/agents/ViewerShare"
 	"LunarSubsystem/LunarHarness/agents/Vision"
+	"LunarSubsystem/LunarHarness/agents/WishManager"
 	"LunarSubsystem/LunarHarness/agents/desktop"
 	"LunarSubsystem/LunarHarness/chain/creation"
 	"LunarSubsystem/LunarHarness/chain/desktop"
@@ -226,7 +226,6 @@ var roleAgentIDs = map[string]string{
 	agentinfo.NameMemoryTagger:       "memory_tagger",
 	agentinfo.NameMemoryFuser:        "memory_fuser",
 	agentinfo.NameAudioTranscriber:   "audio_transcriber",
-	agentinfo.NameRuntimeChat:        "runtime_chat",
 	agentinfo.NameResponder:          "responder",
 	agentinfo.NameSavior:             "savior",
 	"智能修复":                           "savior",
@@ -235,6 +234,7 @@ var roleAgentIDs = map[string]string{
 	agentinfo.NameStoryboardResearch: "storyboard_research",
 	agentinfo.NameStoryboardPlan:     "storyboard_planner",
 	agentinfo.NameStoryboardRevise:   "storyboard_revise",
+	agentinfo.NameWishManager:        "wish_manager",
 }
 
 // agentIDByRole 把故障归属映射到智能修复使用的智能体 ID。
@@ -257,7 +257,7 @@ func agentIDByRole(role string) string {
 		"storyboard_research", "storyboard_planner", "storyboard_revise",
 		"viewer_screening", "viewer_censor", "viewer_critic", "viewer_share", "viewer_remark",
 		"responder", "savior", "dialogue", "unknown",
-		"memory_tagger", "memory_fuser", "audio_transcriber", "runtime_chat":
+		"memory_tagger", "memory_fuser", "audio_transcriber", "wish_manager":
 		return role
 	}
 	return "dialogue"
@@ -272,7 +272,7 @@ func buildToolCatalog() []agentinfo.Agent {
 	out = append(out, ArchiveOps.ToolCatalog()...)
 	out = append(out, FileEditor.ToolCatalog()...)
 	out = append(out, creation.ToolCatalog()...)
-	out = append(out, PlanManager.ToolCatalog()...)
+	out = append(out, WishManager.ToolCatalog()...)
 	out = append(out, DialogueBridging.ToolCatalog()...)
 	out = append(out, search.ToolCatalog()...)
 	out = append(out, SearchPlanner.ToolCatalog()...)

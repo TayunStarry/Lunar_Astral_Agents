@@ -110,6 +110,10 @@ type TaskView struct {
 // taskState 内存中的任务记录。
 type taskState struct {
 	view TaskView
+	// instruction 与 handles 是任务真正执行所需的入参：受理时落在这里，
+	// 由 Tick 调度器在后续轮次取出执行，避免受理时就启动后台 goroutine。
+	instruction string
+	handles     []string
 }
 
 // ProgressEvent 创作流程进度事件（供任务管理与前端查询）。
@@ -152,7 +156,7 @@ type planResult struct {
 }
 
 // journal 创作事件的规划日志视图：由统一库 creation.db 的上一轮调用记录构建。
-// Directives 保存本轮创作参考（来自 life_planning 的字符串变量），一次性消费，不落库。
+// Directives 保存本轮创作参考（来自愿望清单），一次性消费，不落库。
 // Changes 为上一轮的文件内容级变更（来自 change 表），完整内容可按路径查库。
 type journal struct {
 	Version     int                     `json:"version"`
@@ -291,12 +295,6 @@ type scriptRunResult struct {
 	Exports    []string `json:"exports"`
 	Result     any      `json:"result,omitempty"`
 	Error      string   `json:"error,omitempty"`
-}
-
-// docInfo DTS 开发文档信息。
-type docInfo struct {
-	Name string `json:"name"`
-	Size int64  `json:"size"`
 }
 
 // nowUnix 当前时间。

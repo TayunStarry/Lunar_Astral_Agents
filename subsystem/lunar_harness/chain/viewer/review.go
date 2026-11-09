@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/ViewerCensor"
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 )
@@ -48,6 +49,12 @@ func reviewVideo(video *videoRecord) videoReview {
 	}
 	logger.Info("BilibiliViewer", "审核结果：《%s》通过=%v｜原因=%s｜切片=%d",
 		video.Info.Title, review.Pass, reason, review.Slices)
+	// 观影反馈接入心愿链路：过审带来满足，未通过带来遗憾。
+	if review.Pass {
+		wishchain.NoteLink(wishchain.LinkViewerFeedback, "《"+video.Info.Title+"》过审")
+	} else {
+		wishchain.NoteLink(wishchain.LinkViewerRejected, "《"+video.Info.Title+"》未通过："+reason)
+	}
 	return review
 }
 

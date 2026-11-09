@@ -115,15 +115,6 @@ func assertStructured(t *testing.T, result OpResult, wantOp string) {
 	}
 }
 
-func TestHarnessMarkDetection(t *testing.T) {
-	if !hasHarnessMark("\ufeff  \n//Engine: Lunar Harness\nconsole.log(1)") {
-		t.Fatal("应识别文件头部的 Lunar Harness 标识")
-	}
-	if hasHarnessMark("// 普通脚本\nconsole.log(1)") {
-		t.Fatal("无标识的脚本不应被判为 Lunar Harness")
-	}
-}
-
 func TestLibraryRunnerURL(t *testing.T) {
 	target := libraryRunnerURL("demo.js", "js")
 	if !strings.Contains(target, "/library/?") || !strings.Contains(target, "run=documents%2Fdemo.js") {

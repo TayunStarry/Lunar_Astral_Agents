@@ -106,7 +106,7 @@ type AgentResult struct {
 	Err          error
 }
 
-// LibraryCreationRequest /library/api/create 请求体：资源句柄 + 自然语言描述。
+// LibraryCreationRequest 创作提交请求体（WS 命令 creation.submit）：资源句柄 + 自然语言描述。
 type LibraryCreationRequest struct {
 	// Mode assigned（默认，需要 description）或 random（随机目标池自主选题）
 	Mode string `json:"mode"`
@@ -146,7 +146,7 @@ type LibraryCreationListResponse struct {
 	Error string                `json:"error,omitempty"`
 }
 
-// LibraryStoryboardRequest /library/api/storyboard 请求体：故事文本或资源句柄。
+// LibraryStoryboardRequest 演绎提交请求体（WS 命令 storyboard.submit）：故事文本或资源句柄。
 type LibraryStoryboardRequest struct {
 	// Text 故事正文
 	Text string `json:"text"`
@@ -218,10 +218,45 @@ type LibraryStoryboardTask struct {
 	// Event 最近一次增量事件名，ShotIndex 该事件对应的镜头序号（0 表示不指向具体镜头）。
 	Event     string `json:"event,omitempty"`
 	ShotIndex int    `json:"shot_index,omitempty"`
-	// Thought 规划阶段主智能体的累计可读过程文本（轮询兜底用）。
-	Thought   string `json:"thought,omitempty"`
+	// Thought 规划阶段主智能体的累计可读过程文本。
+	Thought string `json:"thought,omitempty"`
+	// Seq 同一 epoch 内单调递增的快照序号，前端据此丢弃乱序快照。
+	Seq uint64 `json:"seq,omitempty"`
+	// Epoch 进程启动标识，重启后前端据此重置本地序号。
+	Epoch string `json:"epoch,omitempty"`
+	// V 推送协议版本：2 表示增量推送（shot_patch 为差异、shots 为全量）。
+	V int `json:"v,omitempty"`
+	// ShotPatch 本次推送中发生变化的镜头（仅增量推送出现）。
+	ShotPatch []LibraryStoryboardShot `json:"shot_patch,omitempty"`
+	// ShotCount 任务当前镜头总数，前端据此裁剪本地多出的镜头。
+	ShotCount int    `json:"shot_count,omitempty"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+}
+
+// LibraryWSEnvelope 资源库 WebSocket 上行命令信封。
+//
+// 前端只发这一种上行结构；服务端以 {"type":"library_reply","data":{...}}
+// 定向回执到发起命令的连接，id 用于把回执与请求配对。
+type LibraryWSEnvelope struct {
+	Type   string          `json:"type"`
+	ID     string          `json:"id"`
+	Action string          `json:"action"`
+	Data   json.RawMessage `json:"data,omitempty"`
+}
+
+// LibraryWSReply 命令回执；Result 为对应动作的响应体（与 HTTP 接口同构）。
+type LibraryWSReply struct {
+	ID     string `json:"id"`
+	OK     bool   `json:"ok"`
+	Error  string `json:"error,omitempty"`
+	Result any    `json:"result,omitempty"`
+}
+
+// LibraryTaskQuery 按任务标识查询状态 / 列表的通用入参。
+type LibraryTaskQuery struct {
+	TaskID string `json:"task_id,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
 }
 
 // LibraryStoryboardResponse 提交 / 查询单个任务的响应。

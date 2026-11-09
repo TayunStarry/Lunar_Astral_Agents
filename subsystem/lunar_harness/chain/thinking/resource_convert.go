@@ -30,7 +30,7 @@ func ResourcesConversionHandle(messages []PostMessage) []PostMessage {
 	prepared := prepareInboundMessages(messages)
 	converted := make([]PostMessage, len(prepared.Messages))
 	for index := range prepared.Messages {
-		converted[index] = convertMessageResources(prepared.Messages[index], false)
+		converted[index] = convertMessageResources(prepared.Messages[index])
 	}
 	// 本批音频已在接入阶段全部转写：统一卸载 ASR，避免逐条加载/卸载抖动
 	if batchHasAudio(messages) {
@@ -42,7 +42,7 @@ func ResourcesConversionHandle(messages []PostMessage) []PostMessage {
 // convertMessageResources 单条消息的内部内容项清洗
 //
 // replay=true 表示历史消息重放：视频只登记句柄，不重新下载落盘。
-func convertMessageResources(message PostMessage, replay bool) PostMessage {
+func convertMessageResources(message PostMessage) PostMessage {
 	if _, ok := message.Content.(string); ok {
 		// 工具回传的文本与用户纯文本都保持原样
 		return message
@@ -53,7 +53,7 @@ func convertMessageResources(message PostMessage, replay bool) PostMessage {
 	}
 	out := make([]ContentItem, 0, len(items))
 	for _, item := range items {
-		out = append(out, convertResourceItem(item, channelOrigin, replay))
+		out = append(out, convertResourceItem(item))
 	}
 	message.Content = out
 	return message
@@ -82,7 +82,7 @@ func batchHasAudio(messages []PostMessage) bool {
 }
 
 // convertResourceItem 单项内部资源转换
-func convertResourceItem(item ContentItem, origin string, replay bool) ContentItem {
+func convertResourceItem(item ContentItem) ContentItem {
 	switch item.Type {
 	case ContentText:
 		return item
@@ -95,7 +95,7 @@ func convertResourceItem(item ContentItem, origin string, replay bool) ContentIt
 		if item.ResourceHandle != "" && strings.HasPrefix(strings.ToLower(strings.TrimSpace(item.ImageURL.URL)), "data:") {
 			return item
 		}
-		return convertImageResource(item.ImageURL, origin)
+		return convertImageResource(item.ImageURL)
 	case ContentAudioHandle:
 		if item.AudioHandle == nil {
 			return ContentItem{Type: ContentText, Text: ""}
@@ -109,7 +109,7 @@ func convertResourceItem(item ContentItem, origin string, replay bool) ContentIt
 }
 
 // convertImageResource 内部 image_url 只承载静态图：已带视觉句柄的原样保留，其余落盘为缩影
-func convertImageResource(payload *URLPayload, origin string) ContentItem {
+func convertImageResource(payload *URLPayload) ContentItem {
 	source := resource.UpgradeCDNScheme(payload.URL)
 	if tag := handleFromVisionURL(source); tag != "" {
 		return ContentItem{Type: ContentImageURL, ImageURL: &URLPayload{URL: source}, ResourceHandle: tag}

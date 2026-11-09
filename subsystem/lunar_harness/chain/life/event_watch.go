@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/chain/viewer"
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 )
 
 type watchEvent struct{ params eventParams }
@@ -40,14 +41,32 @@ func (r *watchRun) Start(_ context.Context, env Env) error {
 func (r *watchRun) Next(ctx context.Context, _ Env) (EventStep, error) {
 	outcome, err := watchStepHook(ctx, r.data.Instruction)
 	if err != nil {
+		// 观看过程失败：命中相关愿望时直接判定逾期。
+		wishchain.MarkOverdueMatching(strings.Join([]string{r.data.Instruction, err.Error()}, "\n"))
 		return EventStep{}, err
 	}
 	r.outcome = outcome
+	matchText := watchMatchText(outcome, r.data.Instruction)
+	if outcome.Triggered && outcome.LastSegment {
+		// 整支视频看完：命中相关愿望时标记完成。
+		wishchain.CompleteMatching(matchText)
+	} else if outcome.Failed {
+		// 无片可看或视频已不在列表：命中相关愿望时标记逾期。
+		wishchain.MarkOverdueMatching(matchText + "\n" + outcome.Reason)
+	}
 	return EventStep{
 		Done:   true,
 		Record: outcome.RecordText(),
 		Detail: watchDetail(outcome),
 	}, nil
+}
+
+// watchMatchText 拼接用于愿望匹配的文本：对话者要求 + 视频标题 + 印象主题词。
+func watchMatchText(outcome viewer.WatchOutcome, instruction string) string {
+	parts := make([]string, 0, len(outcome.Topics)+2)
+	parts = append(parts, instruction, outcome.Title)
+	parts = append(parts, outcome.Topics...)
+	return strings.Join(parts, "\n")
 }
 
 // ActivityText 看视频分支已在 viewer 内部写过具体文案：有片段时原样保留，

@@ -64,13 +64,13 @@ func continueActiveEvent(ctx context.Context, now time.Time) error {
 	return runOneEventStep(ctx, env, event, run, stepNo)
 }
 
-// startEventFromPick 回合第 5 步：判定计划 → 权重选择（或强制事件）→ 启动事件并走第一步。
+// startEventFromPick 回合第 5 步：判定愿望 → 权重选择（或强制事件）→ 启动事件并走第一步。
 func startEventFromPick(ctx context.Context, now time.Time) error {
-	summary := judgePlans(now)
+	summary := judgeWishes(now)
 
 	mu.Lock()
-	if summary != state.PlanSummary {
-		state.PlanSummary = summary
+	if summary != state.WishSummary {
+		state.WishSummary = summary
 		saveStateLocked()
 	}
 	env := envFromStateLocked(now)

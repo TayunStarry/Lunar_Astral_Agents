@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/activity"
-	"LunarSubsystem/LunarHarness/engine/mood"
 	"LunarSubsystem/LunarHarness/internal/testenv"
 )
 
@@ -159,8 +159,32 @@ func TestFinishPlanUpdatesActivity(t *testing.T) {
 	setupPlanTest(t, positiveWeights(), qqTargets{}, 3)
 	item := PlanItem{ID: "activity-case", Kind: KindStory, Activity: "刚写完一篇小故事"}
 	finishPlan(item)
-	if got := activity.Current(); got != item.Activity {
-		t.Fatalf("活动状态应更新为 %q，实际 %q", item.Activity, got)
+	if got := activity.Current(); got != "写完一篇小故事" {
+		t.Fatalf("活动状态应去掉前缀「刚」，实际 %q", got)
+	}
+}
+
+// TestCreativeActivityWording 活动文案只描述「做了什么」，不复述步骤明细。
+func TestCreativeActivityWording(t *testing.T) {
+	planned := &PlanItem{Activity: "刚写完一个计算器小项目"}
+	if got := creativeActivity(planned, []stepResult{{}, {}}); got != "写完一个计算器小项目" {
+		t.Fatalf("全部完成时应使用选题写好的自然描述，实际 %q", got)
+	}
+	if got := creativeActivity(planned, []stepResult{{}, {Skipped: true}}); !strings.Contains(got, "没完成") {
+		t.Fatalf("部分跳过时应如实说明没完成，实际 %q", got)
+	}
+	if got := creativeActivity(planned, []stepResult{{Skipped: true}}); !strings.Contains(got, "没做成") {
+		t.Fatalf("全部跳过时应如实说明没做成，实际 %q", got)
+	}
+	if got := creativeActivity(planned, nil); !strings.Contains(got, "没排上") {
+		t.Fatalf("没有可执行步骤时应说明原因，实际 %q", got)
+	}
+	if got := creativeActivity(nil, nil); got != "完成了一次创作" {
+		t.Fatalf("没有选题时应回退为通用描述，实际 %q", got)
+	}
+	// 活动状态不能被「本轮创作 N 步」这类执行日志污染。
+	if strings.Contains(creativeActivity(planned, []stepResult{{}, {}}), "步") {
+		t.Fatal("活动文案不应包含步骤计数")
 	}
 }
 
@@ -180,8 +204,8 @@ func setupPlanTest(t *testing.T, weights map[string]float64, targets qqTargets, 
 
 // setMoodWeights 替换心情快照，模拟心情在正负之间切换。
 func setMoodWeights(weights map[string]float64) {
-	moodSnapshotHook = func() mood.MoodSnapshot {
-		return mood.MoodSnapshot{Label: "开心", Weights: weights}
+	moodSnapshotHook = func() wishchain.MoodSnapshot {
+		return wishchain.MoodSnapshot{Label: "开心", Weights: weights}
 	}
 }
 

@@ -12,14 +12,21 @@ import (
 	"fmt"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/engine/activity"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/fileflow"
 )
 
 // TaskResult 一次指派任务的执行结果。
 type TaskResult struct {
-	// Summary 本轮结果简述
+	// Summary 本轮结果简述（步骤级明细，供日志与跨轮记录使用）
 	Summary string
+	// Activity 一句人话，描述「刚刚在做什么」，供生活活动状态直接展示
+	Activity string
+	// Topic 本轮自主创作选中的事项标题，用于回写愿望完成 / 逾期
+	Topic string
+	// Failed 本轮是否整体失败（规划失败或全部步骤被跳过）
+	Failed bool
 	// Handles 本次涉及的全部资源句柄
 	Handles []string
 	// ReviewFailures 审查失败并回滚的上下文
@@ -34,13 +41,18 @@ func Run(ctx context.Context, instruction string, userTexts []string) (string, e
 	return RunWithReference(ctx, instruction, strings.Join(userTexts, "；"))
 }
 
-// RunWithReference 执行一轮自由创作，reference 为本轮创作参考（来自 life_planning）。
+// RunWithReference 执行一轮自由创作，reference 为本轮创作参考（可空）。
 func RunWithReference(ctx context.Context, instruction, reference string) (string, error) {
-	result, err := runFlow(ctx, fileflow.ModeCreator, instruction, reference, nil, nil)
+	result, err := RunWithReferenceResult(ctx, instruction, reference)
 	if err != nil {
 		return "", err
 	}
 	return result.Summary, nil
+}
+
+// RunWithReferenceResult 执行一轮自由创作，并返回包含活动文案的完整结果。
+func RunWithReferenceResult(ctx context.Context, instruction, reference string) (TaskResult, error) {
+	return runFlow(ctx, fileflow.ModeCreator, instruction, reference, nil, nil)
 }
 
 // RunAssigned 执行一次对话者指派的任务：只带入历史操作记录，其余上下文不进入本轮。
@@ -79,11 +91,13 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 	// 自由创作的事项来源改为自主决定：心情极性决定续做未完成事项还是换新，
 	// 具体事项由预设列表随机组合；选题失败时退回调用方原始指令。
 	var planned *PlanItem
+	topic := ""
 	if mode == fileflow.ModeCreator {
 		if item, planErr := PlanNext(runCtx); planErr != nil {
 			logger.Warn(Module, "[自由创作] 自主选题失败，按原指令继续: %v", planErr)
 		} else {
 			planned = &item
+			topic = item.Title
 			instruction = withPlanInstruction(instruction, item)
 		}
 	}
@@ -129,8 +143,9 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 		runSession.addError(err)
 		saveRoundFailure(callID, mode, runSession.errs)
 		logger.Warn(Module, "[%s] 规划失败: %v", flowLabel, err)
-		// 失败上报由创作规划者智能体内部完成（归属 ID：creator）
-		return TaskResult{}, err
+		// 失败上报由创作规划者智能体内部完成（归属 ID：creator）；
+		// 带回选题标题，供生活创作回写愿望逾期。
+		return TaskResult{Topic: topic, Failed: true}, err
 	}
 	runSession.report(ProgressEvent{
 		Status:   statusExecuting,
@@ -158,9 +173,23 @@ func runFlow(ctx context.Context, mode fileflow.Mode, instruction, reference str
 	if planned != nil {
 		finishPlan(*planned)
 	}
+	// 活动文案只描述「做了什么」，不复述步骤明细；失败时按真实结果收口。
+	// 仅自由创作写活动状态；对话者指派的任务由调用方自行决定展示方式。
+	activityText := ""
+	failed := false
+	if mode == fileflow.ModeCreator {
+		failed = countDone(results) == 0
+		activityText = creativeActivity(planned, results)
+		if activityText != "" {
+			activity.Set(activityText)
+		}
+	}
 	logger.Info(Module, "[%s] 本轮完成：%d 步规划，%d 条操作记录，%d 个错误",
 		flowLabel, len(plan.Steps), len(runSession.flowRecords()), len(runSession.errs))
 	result := runSession.taskResult(summary)
+	result.Activity = activityText
+	result.Topic = topic
+	result.Failed = failed
 	return result, nil
 }
 

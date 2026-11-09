@@ -2,20 +2,20 @@ package life
 
 // steps.go 生活链每轮固定动作的顺序编排。
 //
-// 顺序硬编码为：更新心情 → 更新对他人态度 → 合并记忆待处理条目。
-// 三个动作彼此独立：任一步失败只记录失败并继续后续步骤，
-// 避免一次嵌入/数据库抖动同时丢掉本轮的心情、态度与记忆整理推进。
+// 顺序硬编码为：结算愿望 → 更新心情 → 更新对他人态度 → 合并记忆待处理条目。
+// 四个动作彼此独立：任一步失败只记录失败并继续后续步骤，
+// 避免一次嵌入/数据库抖动同时丢掉本轮的愿望联动、心情、态度与记忆整理推进。
 
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"LunarSubsystem/LunarHarness/engine/affection"
+	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/mood"
 )
 
-// runFixedSteps 按固定顺序执行三个固定动作，返回失败列表（调用方无需中断 Tick）。
+// runFixedSteps 按固定顺序执行四个固定动作，返回失败列表（调用方无需中断 Tick）。
 func runFixedSteps(ctx context.Context) []error {
 	var failures []error
 	exec := func(name string, hook func(context.Context) error) {
@@ -27,42 +27,42 @@ func runFixedSteps(ctx context.Context) []error {
 			failures = append(failures, fmt.Errorf("%s: %w", name, err))
 		}
 	}
+	exec("结算愿望", wishStepHook)
 	exec("更新心情", moodStepHook)
 	exec("更新对他人态度", affectionStepHook)
 	exec("合并记忆待处理条目", memoryPendingStepHook)
 	return failures
 }
 
-// fixedStepActivity 固定三步结束后写入的状态文案：全部完成与部分失败分开表述。
+// fixedStepActivity 固定四步结束后写入的状态文案：全部完成与部分失败分开表述。
 func fixedStepActivity(failures []error) string {
 	if len(failures) == 0 {
-		return "刚整理完心情、对他人的态度和记忆"
+		return "刚结算完愿望，整理完心情、对他人的态度和记忆"
 	}
-	return "想整理心情和记忆，但没整理完（" + truncateAtSentence(failures[0].Error(), activityReasonLimit) + "）"
+	return "想整理愿望、心情和记忆，但没整理完（" + truncateAtSentence(failures[0].Error(), activityReasonLimit) + "）"
 }
 
-// updateMoodStep 固定步骤一：用最新用户发言更新心情。
-// 输入未变化时跳过，避免生活续跑步骤重复调用嵌入服务。
-func updateMoodStep(ctx context.Context) error {
-	mu.Lock()
-	textHook := lastUserTextHook
-	mu.Unlock()
-
-	userText := ""
-	if textHook != nil {
-		userText = textHook()
-	}
-
-	mu.Lock()
-	changed := userText != lastMoodInput
-	if changed {
-		lastMoodInput = userText
-	}
-	mu.Unlock()
-	if !changed {
+// settleWishesStep 固定步骤一：把延期 / 临近 / 完成 / 逾期映射为心情偏移，
+// 并清除「完成 + 心情结算」都已完成的历史愿望。
+func settleWishesStep(_ context.Context) error {
+	result := wishchain.Settle(time.Now())
+	if len(result.Applied) == 0 && len(result.Removed) == 0 {
 		return nil
 	}
-	return mood.UpdateFromText(ctx, userText)
+	logger.Info(Module, "[生活] 愿望结算：联动 %d 项，清除已完成 %d 条", len(result.Applied), len(result.Removed))
+	return nil
+}
+
+// updateMoodStep 固定步骤二：用最近 5 轮对话更新心情。
+// 窗口未前移时跳过，避免生活续跑步骤重复调用嵌入服务。
+func updateMoodStep(ctx context.Context) error {
+	mu.Lock()
+	roundsHook := dialogueRoundsHook
+	mu.Unlock()
+	if roundsHook == nil {
+		return nil
+	}
+	return wishchain.UpdateMoodFromRounds(ctx, roundsHook())
 }
 
 // updateAffectionStep 固定步骤二：按「每个角色最近若干轮」逐人更新情感认知。
@@ -74,7 +74,7 @@ func updateAffectionStep(ctx context.Context) error {
 	if roundsHook == nil {
 		return nil
 	}
-	_, err := affection.UpdateWindows(ctx, roundsHook())
+	_, err := wishchain.UpdateAttitudeWindows(ctx, roundsHook())
 	return err
 }
 

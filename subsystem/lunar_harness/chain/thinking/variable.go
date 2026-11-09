@@ -115,7 +115,7 @@ var (
 	lastSnapshot string
 )
 
-// ==== 计划表 ====
+// ==== 心愿链路 ====
 
 // ==== 常量 ====
 
@@ -148,10 +148,10 @@ const (
 	// missingImageHandleText 远期记忆里没有句柄的图片的兜底：宁可留一条说明，也不静默丢弃
 	missingImageHandleText = "（一张未能登记句柄的图片）"
 
-	// scheduleTriggerPrefix 计划到期触发消息统一前缀
-	scheduleTriggerPrefix = "[计划提醒]"
-	// scheduleSource 计划到期触发消息的来源标记：只进模型上下文，不写入前端可见的对话缓存
-	scheduleSource = "schedule"
+	// wishTriggerPrefix 愿望到期触发消息统一前缀
+	wishTriggerPrefix = "[愿望提醒]"
+	// wishSource 愿望到期触发消息的来源标记：只进模型上下文，不写入前端可见的对话缓存
+	wishSource = "wish"
 
 	// tickModule Tick 调度日志模块名
 	tickModule = "TickLoop"

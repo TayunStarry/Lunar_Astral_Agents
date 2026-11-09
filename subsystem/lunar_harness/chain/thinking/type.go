@@ -364,7 +364,7 @@ type TickSnapshot struct {
 type tickScheduler = tickloop.Scheduler[TickSnapshot]
 
 // RuntimeGlobalMessage 对话者运行时消息的全局共享数据。
-// 最近生活记录与计划摘要不再主动注入对话上下文，需要时由 life_planning 按需读取。
+// 当前时间、心情、刚刚在做的事情与完整愿望清单由 buildRuntimeGlobalMessage 统一注入。
 type RuntimeGlobalMessage struct {
 	Timestamp    int64    `json:"timestamp"`
 	MoodLabel    string   `json:"mood_label"`

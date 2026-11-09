@@ -38,6 +38,20 @@ type WSResponse struct {
 	Data any    `json:"data"`
 }
 
+// ClientMessage 客户端上行结构化命令。
+//
+// 只有**非总线订阅者**（bus=0，如资源库前端）的上行消息会进入这里：
+// 总线参与者（引擎 iframe、工作室面板）的上行帧仍走 Hub.Bus 回流。
+// Send 用于把回执定向发回发起命令的那一条连接，避免全频道广播。
+type ClientMessage struct {
+	// Channel 连接声明的频道（URL 的 channel 参数）
+	Channel string
+	// Data 上行消息原始字节（已拷贝，处理方无需关心读取缓冲复用）
+	Data []byte
+	// Send 向该连接投递一条下行消息；连接已断开时静默丢弃
+	Send func([]byte)
+}
+
 // Hub 统一 WebSocket 集线器。
 // 同时承载两条互不相同的投递通道：
 //   - BroadcastMessage 结构化下行（{"type":…,"data":…}）→ 投递给全部客户端

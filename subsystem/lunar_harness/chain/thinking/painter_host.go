@@ -12,6 +12,19 @@ func (PainterHost) PushImages(images []string) []string {
 	return pushAssistantImage(images, false)
 }
 
+// RegisterPainterImages 只登记图片资源并返回可查看地址。
+// 不推送前端、不写近期记忆、不发 QQ，供静默产出等只需要句柄的调用使用。
+func RegisterPainterImages(images []string) []string {
+	canonical := make([]string, 0, len(images))
+	for _, image := range images {
+		canonical = append(canonical, registerPushedImage(image))
+	}
+	if len(canonical) == 0 {
+		return images
+	}
+	return canonical
+}
+
 // VisionCopy 生成视觉副本并返回像素宽高。
 func (PainterHost) VisionCopy(relPath, tag string) (int, int, error) {
 	_, _, width, height, err := visionCopy(relPath, tag, 0)

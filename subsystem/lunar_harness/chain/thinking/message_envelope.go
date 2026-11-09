@@ -101,9 +101,9 @@ func ingestEnvelope(item ContentItem) (ContentItem, string, error) {
 	case mediaobject.EnvelopeImageAnimated:
 		return admitImageEnvelope(ref, resource.KindAnimated)
 	case mediaobject.EnvelopeVideo:
-		return admitStoredEnvelope(ref, resource.KindVideo, ".mp4")
+		return admitStoredEnvelope(ref, resource.KindVideo)
 	case mediaobject.EnvelopeFile:
-		return admitStoredEnvelope(ref, resource.KindDocument, "")
+		return admitStoredEnvelope(ref, resource.KindDocument)
 	case mediaobject.EnvelopeAudio:
 		return admitAudioEnvelope(ref)
 	case mediaobject.EnvelopeWebpage:
@@ -134,7 +134,7 @@ func admitImageEnvelope(ref *mediaobject.Ref, kindCode string) (ContentItem, str
 }
 
 // admitStoredEnvelope 视频 / 文件：落盘 + 字节校验 → 句柄文本
-func admitStoredEnvelope(ref *mediaobject.Ref, kindCode, fallbackExt string) (ContentItem, string, error) {
+func admitStoredEnvelope(ref *mediaobject.Ref, kindCode string) (ContentItem, string, error) {
 	admitted, err := admitEnvelopeSource(ref, kindCode)
 	if err != nil {
 		return ContentItem{}, "", err
