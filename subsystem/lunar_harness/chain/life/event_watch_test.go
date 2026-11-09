@@ -46,7 +46,7 @@ func TestWatchRunCompletesWish(t *testing.T) {
 	}
 }
 
-func TestWatchRunMarksWishOverdue(t *testing.T) {
+func TestWatchRunFailureKeepsWishPending(t *testing.T) {
 	testenv.Isolate(t)
 	wishchain.Reset()
 	t.Cleanup(wishchain.Reset)
@@ -66,8 +66,11 @@ func TestWatchRunMarksWishOverdue(t *testing.T) {
 		t.Fatal(err)
 	}
 	item, ok := wishchain.Get(wish.ID)
-	if !ok || !item.ForcedOverdue {
-		t.Fatalf("观看失败应把对应愿望标记为逾期，实际 %+v（%v）", item, ok)
+	if !ok || item.Status != wishchain.StatusPending {
+		t.Fatalf("观看失败不应改变愿望状态，实际 %+v（%v）", item, ok)
+	}
+	if !hasLink(wishchain.LinkFailure) {
+		t.Fatal("观看失败应写入类似逾期的失望联动")
 	}
 }
 
@@ -91,7 +94,20 @@ func TestWatchRunPauseDoesNotMarkOverdue(t *testing.T) {
 		t.Fatal(err)
 	}
 	item, ok := wishchain.Get(wish.ID)
-	if !ok || item.ForcedOverdue || item.Status != wishchain.StatusPending {
-		t.Fatalf("暂停让出不应标记逾期，实际 %+v（%v）", item, ok)
+	if !ok || item.Status != wishchain.StatusPending {
+		t.Fatalf("暂停让出不应改变愿望状态，实际 %+v（%v）", item, ok)
 	}
+	if hasLink(wishchain.LinkFailure) {
+		t.Fatal("暂停让出不应产生失败联动")
+	}
+}
+
+// hasLink 检查最近联动记录里是否存在指定类型。
+func hasLink(kind string) bool {
+	for _, link := range wishchain.RecentLinks(16) {
+		if link.Kind == kind {
+			return true
+		}
+	}
+	return false
 }

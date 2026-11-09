@@ -30,6 +30,9 @@ func buildRuntimeGlobalMessage() PostMessage {
 		activity.Line(),
 		wishchain.FormatList(),
 	)
+	if obsession := wishchain.Obsession(); obsession != "" {
+		text += "\n\n【执念】" + obsession
+	}
 	if len(message.EmotionMarks) > 0 {
 		text += "\n" + strings.Join(message.EmotionMarks, "\n")
 	}

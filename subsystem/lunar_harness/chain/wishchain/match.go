@@ -4,9 +4,11 @@ package wishchain
 //
 // 愿望没有显式分类标签，因此用「愿望内容在结果文本中的字面覆盖率」做匹配：
 // 结果文本可以包含标题、简介、主题词、创作选题与活动文案；匹配到最相关的一条
-// 待实现愿望后，完成或强制逾期。匹配不到时不做任何改动，避免误伤无关愿望。
+// 待实现愿望后标记完成。失败只走心情联动，不改愿望状态。匹配不到时不做任何
+// 改动，避免误伤无关愿望。
 
 import (
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -37,26 +39,50 @@ func CompleteMatching(text string) (Wish, bool) {
 	return *item, true
 }
 
-// MarkOverdueMatching 找到与文本最匹配的待实现愿望并标记为逾期。
+// Obsession 返回运行时消息里的单一执念提示。
 //
-// 逾期标记只负责状态；心情联动仍由生活链固定步骤的 Settle 统一结算。
-func MarkOverdueMatching(text string) (Wish, bool) {
+// 逾期愿望不销毁，全部保留到完成或删除；多条逾期时在这里整合为一条，
+// 保证运行时消息只出现一个「执念」。
+func Obsession() string {
 	mu.Lock()
 	defer mu.Unlock()
 	ensureLoadedLocked()
-	index := matchPendingLocked(text)
-	if index < 0 {
-		return Wish{}, false
+	now := time.Now()
+	overdue := make([]Wish, 0)
+	for _, item := range state.Wishes {
+		if isOverdue(item, now) {
+			overdue = append(overdue, item)
+		}
 	}
-	item := &state.Wishes[index]
-	if item.ForcedOverdue {
-		return *item, false
+	if len(overdue) == 0 {
+		return ""
 	}
-	item.ForcedOverdue = true
-	item.OverdueSettled = false
-	item.UpdatedAt = time.Now().Unix()
-	saveLocked()
-	return *item, true
+	sort.SliceStable(overdue, func(i, j int) bool {
+		if overdue[i].Priority != overdue[j].Priority {
+			return overdue[i].Priority < overdue[j].Priority
+		}
+		return overdue[i].ID < overdue[j].ID
+	})
+	parts := make([]string, 0, len(overdue))
+	seen := make(map[string]bool, len(overdue))
+	for _, item := range overdue {
+		content := strings.TrimSpace(item.Content)
+		if content == "" || seen[content] {
+			continue
+		}
+		seen[content] = true
+		parts = append(parts, "「"+content+"」")
+	}
+	return "请寻找办法完成已失约的 " + strings.Join(parts, "、") + " 愿望"
+}
+
+// isOverdue 判断愿望是否已超过截止时间 + 宽限期。
+func isOverdue(item Wish, now time.Time) bool {
+	if item.Status != StatusPending {
+		return false
+	}
+	due, ok := parseWishDue(item.Due)
+	return ok && now.After(due.Add(GraceDuration))
 }
 
 // matchPendingLocked 选出与文本最相关的待实现愿望；没有达到阈值时返回 -1。

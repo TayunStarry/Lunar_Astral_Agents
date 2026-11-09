@@ -54,16 +54,12 @@ type Wish struct {
 	Notified bool `json:"notified,omitempty"`
 	// NearSettled 临近截止的心情联动是否已结算
 	NearSettled bool `json:"near_settled,omitempty"`
-	// OverdueSettled 逾期的心情联动是否已结算
-	OverdueSettled bool `json:"overdue_settled,omitempty"`
 	// CompletedSettled 完成的心情联动是否已结算
 	CompletedSettled bool `json:"completed_settled,omitempty"`
 	// PostponedCount 被延期的累计次数
 	PostponedCount int `json:"postponed_count,omitempty"`
 	// PostponedSettled 已结算的延期次数
 	PostponedSettled int `json:"postponed_settled,omitempty"`
-	// ForcedOverdue 由创作 / 观影失败直接判定为逾期（不等截止时间）
-	ForcedOverdue bool `json:"forced_overdue,omitempty"`
 }
 
 // DueNotice 一条到期提醒。

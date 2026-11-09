@@ -121,8 +121,15 @@ func TestDueNotificationAndGrace(t *testing.T) {
 	if !found {
 		t.Fatalf("超出宽限期应结算为失望，实际 %+v", settled.Applied)
 	}
-	if repeated := Settle(now.Add(GraceDuration + 2*time.Minute)); len(repeated.Applied) != 0 {
-		t.Fatalf("逾期联动不应重复结算: %+v", repeated.Applied)
+	repeated := Settle(now.Add(GraceDuration + 2*time.Minute))
+	repeatedOverdue := false
+	for _, change := range repeated.Applied {
+		if change.WishID == item.ID && change.Reason == "overdue" {
+			repeatedOverdue = true
+		}
+	}
+	if !repeatedOverdue {
+		t.Fatalf("逾期应每轮持续结算，实际 %+v", repeated.Applied)
 	}
 }
 
@@ -258,68 +265,76 @@ func TestCompleteMatchingByTopic(t *testing.T) {
 	}
 }
 
-func TestMarkOverdueMatchingAndSettlement(t *testing.T) {
+func TestOverdueSettledEveryRoundAndRetained(t *testing.T) {
 	newChain(t)
-	wish, err := Add("写一篇关于月亮的散文", "", AutoPriority)
+	past := time.Now().Add(-GraceDuration - time.Hour).Format("2006-01-02 15:04:05")
+	wish, err := Add("写一篇关于月亮的散文", past, AutoPriority)
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, ok := MarkOverdueMatching("月亮主题散文\n创作失败：模型不可用")
-	if !ok || item.ID != wish.ID || !item.ForcedOverdue {
-		t.Fatalf("应按创作主题标记逾期，实际 %+v（%v）", item, ok)
-	}
-	if again, ok := MarkOverdueMatching("月亮主题散文"); ok {
-		t.Fatalf("强制逾期不应重复标记: %+v", again)
-	}
-	result := Settle(time.Now())
-	found := false
-	for _, change := range result.Applied {
-		if change.WishID == wish.ID && change.Reason == "overdue" && change.Label == "失望" {
-			found = true
+	for round := 1; round <= 2; round++ {
+		result := Settle(time.Now())
+		found := false
+		for _, change := range result.Applied {
+			if change.WishID == wish.ID && change.Reason == "overdue" && change.Label == "失望" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("第 %d 轮应执行逾期结算，实际 %+v", round, result.Applied)
+		}
+		item, ok := Get(wish.ID)
+		if !ok || item.Status != StatusPending {
+			t.Fatalf("逾期愿望不应被销毁，实际 %+v（%v）", item, ok)
 		}
 	}
-	if !found {
-		t.Fatalf("强制逾期应结算为失望，实际 %+v", result.Applied)
-	}
-	if repeated := Settle(time.Now()); len(repeated.Applied) != 0 {
-		t.Fatalf("逾期联动不应重复结算: %+v", repeated.Applied)
-	}
 }
 
-func TestForcedOverdueSkipsDueNotice(t *testing.T) {
+func TestOverdueWishRetainedUntilComplete(t *testing.T) {
 	newChain(t)
-	now := time.Now()
-	wish, err := Add("看电影", now.Add(-time.Hour).Format("2006-01-02 15:04:05"), AutoPriority)
+	past := time.Now().Add(-GraceDuration - time.Hour).Format("2006-01-02 15:04:05")
+	wish, err := Add("看《流浪地球》", past, AutoPriority)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := MarkOverdueMatching("看电影"); !ok {
-		t.Fatal("应标记为强制逾期")
+	Settle(time.Now())
+	if item, ok := Get(wish.ID); !ok || item.Status != StatusPending {
+		t.Fatalf("逾期后应保留愿望，实际 %+v（%v）", item, ok)
 	}
-	if notices := ConsumeDue(now); len(notices) != 0 {
-		t.Fatalf("强制逾期不应再发到期提醒: %+v", notices)
+	if _, err := Complete(wish.ID); err != nil {
+		t.Fatal(err)
 	}
-	if item, _ := Get(wish.ID); !item.ForcedOverdue {
-		t.Fatalf("愿望应保持逾期状态: %+v", item)
+	Settle(time.Now())
+	if _, ok := Get(wish.ID); ok {
+		t.Fatal("完成并结算后应清除愿望")
 	}
 }
 
-func TestUpdateFutureDueClearsForcedOverdue(t *testing.T) {
+func TestObsessionAggregatesOverdueWishes(t *testing.T) {
 	newChain(t)
-	wish, err := Add("看电影", "", AutoPriority)
-	if err != nil {
+	past := time.Now().Add(-GraceDuration - time.Hour).Format("2006-01-02 15:04:05")
+	if _, err := Add("写一篇关于月亮的散文", past, 3); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := MarkOverdueMatching("看电影"); !ok {
-		t.Fatal("应标记为强制逾期")
+	if _, err := Add("看《流浪地球》", past, 0); err != nil {
+		t.Fatal(err)
 	}
 	future := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
-	updated, err := Update(wish.ID, "", future, AutoPriority)
-	if err != nil {
+	if _, err := Add("下个月去海边", future, 1); err != nil {
 		t.Fatal(err)
 	}
-	if updated.ForcedOverdue {
-		t.Fatalf("期限改到未来后应撤销强制逾期: %+v", updated)
+	obsession := Obsession()
+	if !strings.Contains(obsession, "写一篇关于月亮的散文") || !strings.Contains(obsession, "看《流浪地球》") {
+		t.Fatalf("执念应整合全部逾期愿望: %s", obsession)
+	}
+	if strings.Contains(obsession, "下个月去海边") {
+		t.Fatalf("未逾期愿望不应进入执念: %s", obsession)
+	}
+	if strings.Contains(obsession, "\n") {
+		t.Fatalf("执念只能有一条: %s", obsession)
+	}
+	if strings.Index(obsession, "看《流浪地球》") > strings.Index(obsession, "写一篇关于月亮的散文") {
+		t.Fatalf("执念应按优先级从高到低整合: %s", obsession)
 	}
 }
 

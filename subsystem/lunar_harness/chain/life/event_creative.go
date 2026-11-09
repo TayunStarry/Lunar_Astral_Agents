@@ -62,10 +62,8 @@ func (r *creativeRun) Start(_ context.Context, env Env) error {
 func (r *creativeRun) Next(ctx context.Context, _ Env) (EventStep, error) {
 	result, err := creation.RunWithReferenceResult(ctx, r.data.Instruction, "")
 	if err != nil {
-		// 创作失败：命中相关愿望时直接判定逾期，不再等截止时间。
-		wishchain.MarkOverdueMatching(result.Topic + "\n" + err.Error())
-		// 创作过程问题接入心愿链路。
-		wishchain.NoteLink(wishchain.LinkCreationIssue, truncateAtSentence(err.Error(), 120))
+		// 创作失败只产生类似逾期的失望，不把愿望改判为逾期。
+		wishchain.NoteLink(wishchain.LinkFailure, truncateAtSentence(err.Error(), 120))
 		return EventStep{}, fmt.Errorf("创作失败: %w", err)
 	}
 	summary := strings.TrimSpace(result.Summary)
@@ -79,9 +77,8 @@ func (r *creativeRun) Next(ctx context.Context, _ Env) (EventStep, error) {
 	r.data.Activity = activity
 	matchText := result.Topic + "\n" + activity + "\n" + summary
 	if result.Failed {
-		// 整轮没做成：相关愿望标记逾期。
-		wishchain.MarkOverdueMatching(matchText)
-		wishchain.NoteLink(wishchain.LinkCreationIssue, truncateAtSentence(activity, 120))
+		// 整轮没做成：只产生类似逾期的失望，不改变愿望状态。
+		wishchain.NoteLink(wishchain.LinkFailure, truncateAtSentence(activity, 120))
 	} else {
 		// 创作完成：命中相关愿望时标记完成；联动记录用活动文案。
 		wishchain.CompleteMatching(matchText)

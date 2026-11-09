@@ -134,16 +134,14 @@ func Update(id, content, due string, priority int) (Wish, error) {
 				item.PostponedCount++
 				// 延期后重新进入临近 / 逾期判断。
 				item.NearSettled = false
-				item.OverdueSettled = false
 				item.Notified = false
 			}
 		}
 		item.Due = normalizedDue
-		// 目标时间被改到未来时，撤销失败造成的强制逾期，让愿望重新回到待实现。
+		// 期限改到未来后重新允许一次到期提醒。
 		if newDue, ok := parseWishDue(normalizedDue); ok && newDue.After(time.Now()) {
-			item.ForcedOverdue = false
-			item.OverdueSettled = false
 			item.Notified = false
+			item.NearSettled = false
 		}
 	}
 	if priority != AutoPriority {
@@ -263,7 +261,8 @@ func Query(keywords []string) string {
 		builder.WriteString(fmt.Sprintf("当前共有 %d 条愿望（按优先级排序）", len(matched)))
 	}
 	for _, item := range matched {
-		builder.WriteString("\n" + formatWishLine(item))
+		builder.WriteString("\n")
+		builder.WriteString(formatWishLine(item))
 	}
 	return builder.String()
 }
@@ -277,7 +276,8 @@ func FormatList() string {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("【愿望清单】（优先级 0 最高，共 %d 条）", len(items)))
 	for _, item := range items {
-		builder.WriteString("\n" + formatWishLine(item))
+		builder.WriteString("\n")
+		builder.WriteString(formatWishLine(item))
 	}
 	return builder.String()
 }
@@ -307,7 +307,7 @@ func ConsumeDue(now time.Time) []DueNotice {
 	notices := make([]DueNotice, 0)
 	for index := range state.Wishes {
 		item := &state.Wishes[index]
-		if item.Status != StatusPending || item.Notified || item.ForcedOverdue {
+		if item.Status != StatusPending || item.Notified {
 			continue
 		}
 		due, ok := parseWishDue(item.Due)
@@ -358,13 +358,6 @@ func Settle(now time.Time) Settlement {
 		if item.PostponedCount > item.PostponedSettled {
 			candidates = append(candidates, candidate{wishID: item.ID, reason: "postponed", label: "遗憾"})
 		}
-		// 创作 / 观影失败直接判定逾期，不再等截止时间与宽限期。
-		if item.ForcedOverdue {
-			if !item.OverdueSettled {
-				candidates = append(candidates, candidate{wishID: item.ID, reason: "overdue", label: "失望"})
-			}
-			continue
-		}
 		due, ok := parseWishDue(item.Due)
 		if !ok {
 			continue
@@ -372,7 +365,9 @@ func Settle(now time.Time) Settlement {
 		if !item.NearSettled && !item.Notified && !now.Before(due.Add(-NearWindow)) && now.Before(due) {
 			candidates = append(candidates, candidate{wishID: item.ID, reason: "near", label: "开心"})
 		}
-		if !item.OverdueSettled && now.After(due.Add(GraceDuration)) {
+		// 逾期不销毁、不设一次性标记：每一次结算都重新施加失望，
+		// 直到愿望被完成或删除。
+		if now.After(due.Add(GraceDuration)) {
 			candidates = append(candidates, candidate{wishID: item.ID, reason: "overdue", label: "失望"})
 		}
 	}
@@ -405,9 +400,6 @@ func Settle(now time.Time) Settlement {
 			}
 			if reasons["near"] {
 				item.NearSettled = true
-			}
-			if reasons["overdue"] {
-				item.OverdueSettled = true
 			}
 			if reasons["completed"] {
 				item.CompletedSettled = true
@@ -535,7 +527,7 @@ func formatWishLine(item Wish) string {
 	if parsed, ok := parseWishDue(item.Due); ok {
 		due = parsed.Format("2006-01-02 15:04")
 	}
-	if item.ForcedOverdue {
+	if isOverdue(item, time.Now()) {
 		due = "已逾期"
 	}
 	return fmt.Sprintf("P%d｜%s｜%s｜ID:%s", item.Priority, due, item.Content, item.ID)

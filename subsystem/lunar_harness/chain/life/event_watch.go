@@ -41,8 +41,8 @@ func (r *watchRun) Start(_ context.Context, env Env) error {
 func (r *watchRun) Next(ctx context.Context, _ Env) (EventStep, error) {
 	outcome, err := watchStepHook(ctx, r.data.Instruction)
 	if err != nil {
-		// 观看过程失败：命中相关愿望时直接判定逾期。
-		wishchain.MarkOverdueMatching(strings.Join([]string{r.data.Instruction, err.Error()}, "\n"))
+		// 观看失败只产生类似逾期的失望，不把愿望改判为逾期。
+		wishchain.NoteLink(wishchain.LinkFailure, truncateAtSentence(err.Error(), 120))
 		return EventStep{}, err
 	}
 	r.outcome = outcome
@@ -51,8 +51,8 @@ func (r *watchRun) Next(ctx context.Context, _ Env) (EventStep, error) {
 		// 整支视频看完：命中相关愿望时标记完成。
 		wishchain.CompleteMatching(matchText)
 	} else if outcome.Failed {
-		// 无片可看或视频已不在列表：命中相关愿望时标记逾期。
-		wishchain.MarkOverdueMatching(matchText + "\n" + outcome.Reason)
+		// 无片可看或视频已不在列表：只产生类似逾期的失望。
+		wishchain.NoteLink(wishchain.LinkFailure, truncateAtSentence(outcome.Reason, 120))
 	}
 	return EventStep{
 		Done:   true,

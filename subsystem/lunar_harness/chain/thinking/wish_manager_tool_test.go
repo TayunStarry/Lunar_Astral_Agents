@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"LunarSubsystem/LunarHarness/agents/Dialogue"
+	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/internal/testenv"
 	"LunarSubsystem/LunarHarness/prompts"
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
 )
@@ -132,6 +135,25 @@ func TestRuntimeMessageCarriesWishList(t *testing.T) {
 		if strings.Contains(text, banned) {
 			t.Fatalf("运行时消息仍注入旧计划语义 %q：%s", banned, text)
 		}
+	}
+}
+
+// TestRuntimeMessageCarriesObsession 逾期愿望在运行时消息里整合为唯一执念。
+func TestRuntimeMessageCarriesObsession(t *testing.T) {
+	testenv.Isolate(t)
+	wishchain.Reset()
+	t.Cleanup(wishchain.Reset)
+	past := time.Now().Add(-wishchain.GraceDuration - time.Hour).Format("2006-01-02 15:04:05")
+	if _, err := wishchain.Add("看《流浪地球》", past, wishchain.AutoPriority); err != nil {
+		t.Fatal(err)
+	}
+	message := buildRuntimeGlobalMessage()
+	text, _ := message.Content.(string)
+	if !strings.Contains(text, "已逾期") {
+		t.Fatalf("运行时愿望清单应标记已逾期：%s", text)
+	}
+	if !strings.Contains(text, "【执念】请寻找办法完成已失约的") || !strings.Contains(text, "看《流浪地球》") {
+		t.Fatalf("运行时消息缺少执念提示：%s", text)
 	}
 }
 

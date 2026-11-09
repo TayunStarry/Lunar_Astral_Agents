@@ -29,6 +29,8 @@ const (
 	LinkCreationDone = "创作完成"
 	// LinkCreationIssue 创作过程问题
 	LinkCreationIssue = "创作问题"
+	// LinkFailure 创作 / 观影失败：只产生类似逾期的失望，不改变愿望状态
+	LinkFailure = "失败"
 )
 
 // NoteLink 记录一次机制联动，并按联动类型推动心情偏移。
@@ -75,6 +77,8 @@ func linkMood(kind string) (string, float64) {
 		return "满足", 0.10
 	case LinkViewerRejected, LinkCreationIssue:
 		return "遗憾", 0.08
+	case LinkFailure:
+		return "失望", 0.20
 	default:
 		return "", 0
 	}
