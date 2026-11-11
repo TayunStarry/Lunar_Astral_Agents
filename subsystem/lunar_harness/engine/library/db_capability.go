@@ -1,6 +1,6 @@
 package library
 
-// dbcapability.go 资源库数据库能力的对外出口。
+// db_capability.go 资源库数据库能力的对外出口。
 //
 // 自然语言转 SQL 的编排已上移到 server 层；engine/library 只暴露纯能力：
 // 只读打开、表结构读取、只读语句分类与路径规整。本文件不拼提示词、不调用智能体。

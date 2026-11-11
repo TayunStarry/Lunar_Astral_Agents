@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/file"
-	"LunarSubsystem/LunarHarness/agents/file/filesupport"
+	"LunarSubsystem/LunarHarness/agents/file/FileSupport"
 	"LunarSubsystem/LunarHarness/prompts"
 )
 
@@ -133,14 +133,14 @@ func projectFolder(paths []string) string {
 func rollbackPaths(paths []string, sinceUnix int64) error {
 	var failures []string
 	for _, rel := range paths {
-		version, ok := filesupport.OldestSince(rel, sinceUnix)
+		version, ok := FileSupport.OldestSince(rel, sinceUnix)
 		if !ok {
-			version, ok = filesupport.Latest(rel)
+			version, ok = FileSupport.Latest(rel)
 		}
 		if !ok {
 			continue
 		}
-		if err := filesupport.Restore(rel, version.ID); err != nil {
+		if err := FileSupport.Restore(rel, version.ID); err != nil {
 			failures = append(failures, rel+"："+err.Error())
 		}
 	}

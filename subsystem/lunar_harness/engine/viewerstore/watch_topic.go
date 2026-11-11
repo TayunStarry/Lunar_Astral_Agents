@@ -1,6 +1,6 @@
 package viewerstore
 
-// watchtopic.go 观看主题词偏好池（watch_topic）的行级读写。
+// watch_topic.go 观看主题词偏好池（watch_topic）的行级读写。
 //
 // 存储层只负责表结构与按行读写：衰减、加权、淘汰、排序与筛选等偏好策略在 chain/viewer。
 // 池的每条记录由主题词、权重与最后一次写入时间组成，读取一律带行数上限。

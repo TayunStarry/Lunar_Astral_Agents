@@ -1,6 +1,6 @@
 package logbuf
 
-// agentstream.go 智能体流式事件与轮次缓冲（由 Lunar Harness 的 syncFetch 流式桥调用）。
+// agent_stream.go 智能体流式事件与轮次缓冲（由 Lunar Harness 的 syncFetch 流式桥调用）。
 // 这里只维护数据与事件通道，不依赖 TUI 渲染。
 
 import (

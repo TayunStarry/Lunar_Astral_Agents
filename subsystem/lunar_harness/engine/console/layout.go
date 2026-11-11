@@ -111,7 +111,7 @@ func (f frame) tooSmall() bool {
 
 // render 渲染整屏：内容区被裁剪/补齐为恰好 bodySize 行，整屏高度恒等于终端高度。
 //
-// 行宽由 dispWidth（终端实测宽度）保证，见 theme.go / glyphwidth.go：
+// 行宽由 dispWidth（终端实测宽度）保证，见 theme.go / glyph_width.go：
 // 中文控制台字体下部分字形占 2 列，度量若按 1 列算，整行会超出终端而折行，
 // 整屏高度翻倍 → 表现为「一打开就滚动 + 显示混乱」。
 func (f frame) render(body []string) string {

@@ -2,7 +2,7 @@
 
 package execute
 
-// toolresult_test.go 钉住工具结果三态的判定依据，以及实况中「调用 + 结果」的成对形态。
+// tool_result_test.go 钉住工具结果三态的判定依据，以及实况中「调用 + 结果」的成对形态。
 
 import (
 	"strings"

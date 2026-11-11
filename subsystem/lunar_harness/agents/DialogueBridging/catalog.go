@@ -1,6 +1,6 @@
 package DialogueBridging
 
-// tool_catalog.go 通讯桥接的内部能力目录（供控制台「工具列表」屏展示）。
+// catalog.go 通讯桥接的内部能力目录（供控制台「工具列表」屏展示）。
 
 import "LunarSubsystem/LunarHarness/protocol/agentinfo"
 

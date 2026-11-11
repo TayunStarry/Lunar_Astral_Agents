@@ -1,6 +1,6 @@
 package viewer
 
-// autorespond_queue.go 自动响应的待回应队列：先落盘再发布，失败可重试。
+// auto_respond_queue.go 自动响应的待回应队列：先落盘再发布，失败可重试。
 //
 // 队列只由 chain/viewer 自己维护（不改 engine/viewerstore 的结构），
 // 默认落在 local_data/database/bilibili/autorespond.json。

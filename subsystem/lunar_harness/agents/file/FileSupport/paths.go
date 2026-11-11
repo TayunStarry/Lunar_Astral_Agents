@@ -1,4 +1,4 @@
-package filesupport
+package FileSupport
 
 // paths.go 路径解析：句柄、/document 前缀、相对路径统一落到 LocalDir 下的规范路径。
 

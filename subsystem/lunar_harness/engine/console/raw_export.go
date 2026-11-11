@@ -1,6 +1,6 @@
 package console
 
-// rawexport.go 原始日志导出的兼容入口。
+// raw_export.go 原始日志导出的兼容入口。
 // 实现位于 logbuf 子包（server / debugsnap 直接依赖子包）。
 
 import (

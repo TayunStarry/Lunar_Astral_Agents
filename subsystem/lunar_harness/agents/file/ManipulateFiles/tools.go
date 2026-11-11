@@ -9,7 +9,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/file"
 	"LunarSubsystem/LunarHarness/agents/file/FileEditor"
-	"LunarSubsystem/LunarHarness/agents/file/filesupport"
+	"LunarSubsystem/LunarHarness/agents/file/FileSupport"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
@@ -90,11 +90,11 @@ func fetch(args map[string]any) file.Outcome {
 }
 
 func replace(args map[string]any, c *collector) file.Outcome {
-	rel, _, err := filesupport.Resolve(file.StringArg(args, "path"), c.root)
+	rel, _, err := FileSupport.Resolve(file.StringArg(args, "path"), c.root)
 	if err != nil {
 		return file.Failure(toolReplace, err)
 	}
-	if _, err := filesupport.BackupWithOp(rel, "replace"); err != nil {
+	if _, err := FileSupport.BackupWithOp(rel, "replace"); err != nil {
 		return file.Failure(toolReplace, fmt.Errorf("保存版本失败：%w", err))
 	}
 	content := file.StringArg(args, "content")
@@ -119,11 +119,11 @@ func replace(args map[string]any, c *collector) file.Outcome {
 }
 
 func appendContent(args map[string]any, c *collector) file.Outcome {
-	rel, _, err := filesupport.Resolve(file.StringArg(args, "path"), c.root)
+	rel, _, err := FileSupport.Resolve(file.StringArg(args, "path"), c.root)
 	if err != nil {
 		return file.Failure(toolAppend, err)
 	}
-	if _, err := filesupport.BackupWithOp(rel, "append"); err != nil {
+	if _, err := FileSupport.BackupWithOp(rel, "append"); err != nil {
 		return file.Failure(toolAppend, fmt.Errorf("保存版本失败：%w", err))
 	}
 	existing, readErr := FileEditor.ReadText(rel)
@@ -143,7 +143,7 @@ func appendContent(args map[string]any, c *collector) file.Outcome {
 }
 
 func deleteLines(args map[string]any, c *collector) file.Outcome {
-	rel, _, err := filesupport.Resolve(file.StringArg(args, "path"), c.root)
+	rel, _, err := FileSupport.Resolve(file.StringArg(args, "path"), c.root)
 	if err != nil {
 		return file.Failure(toolDelete, err)
 	}
@@ -155,7 +155,7 @@ func deleteLines(args map[string]any, c *collector) file.Outcome {
 	if end < start {
 		end = start
 	}
-	if _, err := filesupport.BackupWithOp(rel, "delete_lines"); err != nil {
+	if _, err := FileSupport.BackupWithOp(rel, "delete_lines"); err != nil {
 		return file.Failure(toolDelete, fmt.Errorf("保存版本失败：%w", err))
 	}
 	content, readErr := FileEditor.ReadText(rel)
@@ -177,11 +177,11 @@ func deleteLines(args map[string]any, c *collector) file.Outcome {
 }
 
 func createFile(args map[string]any, c *collector) file.Outcome {
-	rel, _, err := filesupport.Resolve(file.StringArg(args, "path"), c.root)
+	rel, _, err := FileSupport.Resolve(file.StringArg(args, "path"), c.root)
 	if err != nil {
 		return file.Failure(toolCreate, err)
 	}
-	if _, err := filesupport.BackupWithOp(rel, "create"); err != nil {
+	if _, err := FileSupport.BackupWithOp(rel, "create"); err != nil {
 		return file.Failure(toolCreate, fmt.Errorf("保存版本失败：%w", err))
 	}
 	result := FileEditor.CreateFile(rel, "")
@@ -189,11 +189,11 @@ func createFile(args map[string]any, c *collector) file.Outcome {
 }
 
 func uninstall(args map[string]any, c *collector) file.Outcome {
-	rel, _, err := filesupport.Resolve(file.StringArg(args, "path"), c.root)
+	rel, _, err := FileSupport.Resolve(file.StringArg(args, "path"), c.root)
 	if err != nil {
 		return file.Failure(toolUninstall, err)
 	}
-	if _, err := filesupport.BackupWithOp(rel, "uninstall"); err != nil {
+	if _, err := FileSupport.BackupWithOp(rel, "uninstall"); err != nil {
 		return file.Failure(toolUninstall, fmt.Errorf("保存版本失败：%w", err))
 	}
 	result := FileEditor.DeleteFile(rel)

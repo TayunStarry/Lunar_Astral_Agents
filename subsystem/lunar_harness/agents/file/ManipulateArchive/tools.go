@@ -13,7 +13,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/file"
 	"LunarSubsystem/LunarHarness/agents/file/ArchiveOps"
-	"LunarSubsystem/LunarHarness/agents/file/filesupport"
+	"LunarSubsystem/LunarHarness/agents/file/FileSupport"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/executors/ArchiveReader"
 )
@@ -94,12 +94,12 @@ func archiveCreate(args map[string]any, c *collector) file.Outcome {
 	if err != nil {
 		return file.Failure(toolCreate, err)
 	}
-	if _, err := filesupport.BackupWithOp(actualRel, "archive_create"); err != nil {
+	if _, err := FileSupport.BackupWithOp(actualRel, "archive_create"); err != nil {
 		return file.Failure(toolCreate, fmt.Errorf("保存版本失败：%w", err))
 	}
 	relSources := make([]string, 0, len(sources))
 	for _, source := range sources {
-		rel, _, resolveErr := filesupport.Resolve(source, c.root)
+		rel, _, resolveErr := FileSupport.Resolve(source, c.root)
 		if resolveErr != nil {
 			return file.Failure(toolCreate, resolveErr)
 		}
@@ -115,7 +115,7 @@ func archiveUninstall(args map[string]any, c *collector) file.Outcome {
 	if err != nil {
 		return file.Failure(toolUninstall, err)
 	}
-	if _, err := filesupport.BackupWithOp(rel, "archive_uninstall"); err != nil {
+	if _, err := FileSupport.BackupWithOp(rel, "archive_uninstall"); err != nil {
 		return file.Failure(toolUninstall, fmt.Errorf("保存版本失败：%w", err))
 	}
 	result := ArchiveOps.Delete(target)
@@ -128,13 +128,13 @@ func archiveAdd(args map[string]any, c *collector) file.Outcome {
 	if err != nil {
 		return file.Failure(toolAdd, err)
 	}
-	if _, err := filesupport.BackupWithOp(rel, "archive_add"); err != nil {
+	if _, err := FileSupport.BackupWithOp(rel, "archive_add"); err != nil {
 		return file.Failure(toolAdd, fmt.Errorf("保存版本失败：%w", err))
 	}
 	entry := file.StringArg(args, "entry")
 	source := file.StringArg(args, "source")
 	if source != "" {
-		resolved, _, resolveErr := filesupport.Resolve(source, c.root)
+		resolved, _, resolveErr := FileSupport.Resolve(source, c.root)
 		if resolveErr != nil {
 			return file.Failure(toolAdd, resolveErr)
 		}
@@ -159,11 +159,11 @@ func archiveExtract(args map[string]any, c *collector) file.Outcome {
 		outputDir = path.Dir(archiveRel)
 	}
 	outputRel := path.Join(outputDir, path.Base(entryName))
-	outputAbs := filesupport.Abs(outputRel)
-	if _, err := filesupport.BackupWithOp(outputRel, "archive_extract"); err != nil {
+	outputAbs := FileSupport.Abs(outputRel)
+	if _, err := FileSupport.BackupWithOp(outputRel, "archive_extract"); err != nil {
 		return file.Failure(toolExtract, fmt.Errorf("保存版本失败：%w", err))
 	}
-	reader, err := zip.OpenReader(filesupport.Abs(archiveRel))
+	reader, err := zip.OpenReader(FileSupport.Abs(archiveRel))
 	if err != nil {
 		return file.Failure(toolExtract, err)
 	}

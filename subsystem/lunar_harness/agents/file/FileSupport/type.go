@@ -1,4 +1,4 @@
-package filesupport
+package FileSupport
 
 // type.go 文件操纵共享的版本记录与路径约定。
 

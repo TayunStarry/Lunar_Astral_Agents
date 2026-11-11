@@ -1,6 +1,6 @@
 package logbuf
 
-// rawexport.go 原始日志导出（数据导出端点与开发者调试快照共用）。
+// raw_export.go 原始日志导出（数据导出端点与开发者调试快照共用）。
 
 import (
 	"bytes"

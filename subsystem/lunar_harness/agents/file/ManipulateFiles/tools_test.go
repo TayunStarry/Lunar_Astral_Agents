@@ -6,18 +6,18 @@ import (
 	"os"
 	"testing"
 
-	"LunarSubsystem/LunarHarness/agents/file/filesupport"
+	"LunarSubsystem/LunarHarness/agents/file/FileSupport"
 	"LunarSubsystem/LunarHarness/internal/testenv"
 )
 
 func TestReplaceByPhysicalLines(t *testing.T) {
 	testenv.Isolate(t)
-	t.Cleanup(func() { _ = filesupport.Close() })
-	if err := os.MkdirAll(filesupport.Abs("documents"), 0o755); err != nil {
+	t.Cleanup(func() { _ = FileSupport.Close() })
+	if err := os.MkdirAll(FileSupport.Abs("documents"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	rel := "documents/story.md"
-	if err := os.WriteFile(filesupport.Abs(rel), []byte("第一行\n第二行\n第三行\n"), 0o644); err != nil {
+	if err := os.WriteFile(FileSupport.Abs(rel), []byte("第一行\n第二行\n第三行\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -31,7 +31,7 @@ func TestReplaceByPhysicalLines(t *testing.T) {
 	if !outcome.Mutated {
 		t.Fatalf("替换应标记为已修改: %+v", outcome)
 	}
-	got, err := os.ReadFile(filesupport.Abs(rel))
+	got, err := os.ReadFile(FileSupport.Abs(rel))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,19 +39,19 @@ func TestReplaceByPhysicalLines(t *testing.T) {
 	if string(got) != want {
 		t.Fatalf("物理行替换结果不正确：\n got=%q\nwant=%q", got, want)
 	}
-	if versions, _ := filesupport.List(rel); len(versions) != 1 {
+	if versions, _ := FileSupport.List(rel); len(versions) != 1 {
 		t.Fatalf("修改前应保存 1 个版本，实际 %d", len(versions))
 	}
 }
 
 func TestReplaceAllLines(t *testing.T) {
 	testenv.Isolate(t)
-	t.Cleanup(func() { _ = filesupport.Close() })
-	if err := os.MkdirAll(filesupport.Abs("documents"), 0o755); err != nil {
+	t.Cleanup(func() { _ = FileSupport.Close() })
+	if err := os.MkdirAll(FileSupport.Abs("documents"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	rel := "documents/story.md"
-	if err := os.WriteFile(filesupport.Abs(rel), []byte("旧内容\n"), 0o644); err != nil {
+	if err := os.WriteFile(FileSupport.Abs(rel), []byte("旧内容\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,7 +64,7 @@ func TestReplaceAllLines(t *testing.T) {
 	if !outcome.Mutated {
 		t.Fatalf("全量替换应标记为已修改: %+v", outcome)
 	}
-	got, err := os.ReadFile(filesupport.Abs(rel))
+	got, err := os.ReadFile(FileSupport.Abs(rel))
 	if err != nil {
 		t.Fatal(err)
 	}

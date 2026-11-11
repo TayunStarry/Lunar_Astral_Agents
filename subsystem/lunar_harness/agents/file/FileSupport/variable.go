@@ -1,4 +1,4 @@
-package filesupport
+package FileSupport
 
 // variable.go 版本库的存储位置、保留策略与连接状态。
 

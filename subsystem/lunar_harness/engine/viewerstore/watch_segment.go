@@ -1,6 +1,6 @@
 package viewerstore
 
-// watchsegment.go 待看视频片段（watch_segment）的写入、续跑取片与完整视频计数。
+// watch_segment.go 待看视频片段（watch_segment）的写入、续跑取片与完整视频计数。
 
 import (
 	"database/sql"

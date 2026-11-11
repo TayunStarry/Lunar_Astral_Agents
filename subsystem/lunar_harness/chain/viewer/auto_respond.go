@@ -1,6 +1,6 @@
 package viewer
 
-// autorespond.go 生活链触发后的 B 站自动响应。
+// auto_respond.go 生活链触发后的 B 站自动响应。
 //
 // 三项触发条件全部满足才执行：
 //  1. 生活链被触发（AutoRespondOnBilibili 由生活链在事件触发后调用，天然满足）；

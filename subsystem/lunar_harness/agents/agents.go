@@ -5,10 +5,10 @@
 // 把 AgentID 与显示名登记到 protocol/agentinfo，并在 app/tui_hooks.go 的
 // roleAgentIDs 与 buildToolCatalog 挂上，否则推理实况里看不到它、故障也修不到它。
 //
-// 有四个子包不是智能体，按用途分两类：
-//   - 发起模型调用、但只作为共用基座：toolagent（工具型智能体的通用工具循环）；
-//   - 不发起模型调用、只提供原子能力：filesupport（文件版本存储）、
-//     ArchiveOps（归档写操作）、FileEditor（文档库读写与项目运行）。
+// 有三个子包不是智能体，只提供原子能力：FileSupport（文件版本存储）、
+// ArchiveOps（归档写操作）、FileEditor（文档库读写与项目运行）。
+// 工具型智能体共用的工具推理循环不再单列子包，已并入 agents/file 族根
+// （package file 的 loop.go），由各智能体包声明自己的 AgentID、角色、提示词与工具后调用。
 //
 // 硬边界：全仓只有 protocol/agentbase 能发起推理，请求组装、流式解析、tool_calls
 // 分片聚合、重试、超时、推理实况与失败上报都在那里。chain/、engine/、server/、

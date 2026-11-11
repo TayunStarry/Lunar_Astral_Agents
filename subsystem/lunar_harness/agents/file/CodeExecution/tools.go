@@ -10,7 +10,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/file"
 	"LunarSubsystem/LunarHarness/agents/file/FileEditor"
-	"LunarSubsystem/LunarHarness/agents/file/filesupport"
+	"LunarSubsystem/LunarHarness/agents/file/FileSupport"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
@@ -43,7 +43,7 @@ func toolHandler(c *collector) file.Handler {
 }
 
 func execute(ctx context.Context, args map[string]any, c *collector) file.Outcome {
-	rel, _, err := filesupport.Resolve(file.StringArg(args, "path"), c.root)
+	rel, _, err := FileSupport.Resolve(file.StringArg(args, "path"), c.root)
 	if err != nil {
 		return file.Failure(toolExecute, err)
 	}
@@ -54,7 +54,7 @@ func execute(ctx context.Context, args map[string]any, c *collector) file.Outcom
 }
 
 func parse(args map[string]any, c *collector) file.Outcome {
-	rel, _, err := filesupport.Resolve(file.StringArg(args, "path"), c.root)
+	rel, _, err := FileSupport.Resolve(file.StringArg(args, "path"), c.root)
 	if err != nil {
 		return file.Failure(toolParse, err)
 	}

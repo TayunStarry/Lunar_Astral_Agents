@@ -1,6 +1,6 @@
 package console
 
-// agentstream.go 智能体流式事件与轮次缓冲的兼容入口。
+// agent_stream.go 智能体流式事件与轮次缓冲的兼容入口。
 // 状态与实现位于 logbuf 子包（debugsnap / server 直接依赖子包），
 // 这里保留同名函数供 TUI 视图与既有调用方使用。
 

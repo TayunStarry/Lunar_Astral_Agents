@@ -1,6 +1,6 @@
 package thinking
 
-// engine.go 前端在线判定与语音合成桥接。
+// frontend_tts_bridge.go 前端在线判定与语音合成桥接。
 //
 // 动作匹配已移交前端引擎：消息推送后由 lunar.live2d_engine / lunar.rendering_engine
 // 各自调用嵌入模型匹配自己的动作列表，后端不再读取 animation_list / telemetry，

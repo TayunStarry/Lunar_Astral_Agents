@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/file"
-	"LunarSubsystem/LunarHarness/agents/file/filesupport"
+	"LunarSubsystem/LunarHarness/agents/file/FileSupport"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )
 
@@ -30,11 +30,11 @@ func toolHandler(c *collector) file.Handler {
 }
 
 func listVersions(args map[string]any, c *collector) file.Outcome {
-	rel, _, err := filesupport.Resolve(file.StringArg(args, "path"), c.root)
+	rel, _, err := FileSupport.Resolve(file.StringArg(args, "path"), c.root)
 	if err != nil {
 		return file.Failure(toolList, err)
 	}
-	versions, err := filesupport.List(rel)
+	versions, err := FileSupport.List(rel)
 	if err != nil {
 		return file.Failure(toolList, err)
 	}
@@ -45,19 +45,19 @@ func listVersions(args map[string]any, c *collector) file.Outcome {
 }
 
 func rollback(args map[string]any, c *collector) file.Outcome {
-	rel, _, err := filesupport.Resolve(file.StringArg(args, "path"), c.root)
+	rel, _, err := FileSupport.Resolve(file.StringArg(args, "path"), c.root)
 	if err != nil {
 		return file.Failure(toolRollback, err)
 	}
 	versionID := file.StringArg(args, "version")
 	if versionID == "" {
-		latest, ok := filesupport.Latest(rel)
+		latest, ok := FileSupport.Latest(rel)
 		if !ok {
 			return file.Failure(toolRollback, fmt.Errorf("没有可回滚的版本"))
 		}
 		versionID = latest.ID
 	}
-	if err := filesupport.Restore(rel, versionID); err != nil {
+	if err := FileSupport.Restore(rel, versionID); err != nil {
 		return file.Failure(toolRollback, err)
 	}
 	c.addChanged(rel)

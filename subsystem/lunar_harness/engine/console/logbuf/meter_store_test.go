@@ -1,6 +1,6 @@
 package logbuf
 
-// meterstore_test.go 校验模型调用计量的持久化与损坏文件处理。
+// meter_store_test.go 校验模型调用计量的持久化与损坏文件处理。
 
 import (
 	"os"

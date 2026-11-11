@@ -1,6 +1,6 @@
 package agentbase
 
-// toolloop_test.go 通用工具循环的纯编排测试（不依赖模型服务）。
+// tool_loop_test.go 通用工具循环的纯编排测试（不依赖模型服务）。
 
 import (
 	"context"

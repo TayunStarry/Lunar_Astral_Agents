@@ -1,6 +1,6 @@
 package viewer
 
-// autorespond_source.go 把消息中心条目归到三类回应来源。
+// auto_respond_source.go 把消息中心条目归到三类回应来源。
 //
 // 来源判定只看条目自身字段（消息中心已给出 business_id 与 uri）：
 //   - 带 @ 的条目一律算「@我的」，即使它落在视频或动态评论区；

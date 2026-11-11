@@ -1,6 +1,6 @@
 package logbuf
 
-// meterstore.go 模型调用计量的持久化。
+// meter_store.go 模型调用计量的持久化。
 //
 // 计量数据原本只存在于进程内，重启即归零。这里把它落到
 // <LocalDir>/database/model_stats.json：

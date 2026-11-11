@@ -1,6 +1,6 @@
 package viewer
 
-// autorespond_type.go B 站自动响应的类型定义与依赖端口。
+// auto_respond_type.go B 站自动响应的类型定义与依赖端口。
 //
 // 管线只做调度：浏览器、回应智能体、发布能力与重试队列全部通过接口注入，
 // 生产由 defaultAutoRespondDeps 绑定真实实现，测试换成假实现即可离线跑。

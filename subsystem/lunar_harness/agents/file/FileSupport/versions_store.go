@@ -1,4 +1,4 @@
-package filesupport
+package FileSupport
 
 // versions_store.go 版本库的 SQLite 存储：建表、导入旧目录、裁剪保留策略。
 //

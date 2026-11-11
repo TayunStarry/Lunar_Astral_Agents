@@ -1,6 +1,6 @@
 package viewerstore
 
-// watchsegment_test.go 片段取用顺序、完整视频计数与重新切片（全部使用 t.TempDir）。
+// watch_segment_test.go 片段取用顺序、完整视频计数与重新切片（全部使用 t.TempDir）。
 
 import "testing"
 

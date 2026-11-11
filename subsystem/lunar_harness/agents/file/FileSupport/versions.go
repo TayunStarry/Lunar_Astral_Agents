@@ -1,4 +1,4 @@
-package filesupport
+package FileSupport
 
 // versions.go 文件内容版本：每次写操作前保存一份原文件内容，
 // 供 contentRollback 列出与回滚。

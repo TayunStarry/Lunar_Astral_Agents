@@ -11,7 +11,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/MemoryFuser"
 	"LunarSubsystem/LunarHarness/agents/MemoryTagger"
 	"LunarSubsystem/LunarHarness/agents/Painter"
-	"LunarSubsystem/LunarHarness/agents/file/filesupport"
+	"LunarSubsystem/LunarHarness/agents/file/FileSupport"
 	"LunarSubsystem/LunarHarness/chain/search"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking"
@@ -333,7 +333,7 @@ func GracefulShutdown(reason string) {
 			logger.Warn("LunarHarness", "关闭资源库变更库失败: %v", err)
 		}
 		// 文件版本库（versions.db）
-		if err := filesupport.Close(); err != nil {
+		if err := FileSupport.Close(); err != nil {
 			logger.Warn("LunarHarness", "关闭文件版本库失败: %v", err)
 		}
 		if websocket.Instance != nil {

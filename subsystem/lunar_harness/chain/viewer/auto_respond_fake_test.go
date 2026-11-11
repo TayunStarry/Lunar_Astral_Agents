@@ -1,6 +1,6 @@
 package viewer
 
-// autorespond_fake_test.go 自动响应的离线测试替身：不打开浏览器、不调模型、不写真实数据。
+// auto_respond_fake_test.go 自动响应的离线测试替身：不打开浏览器、不调模型、不写真实数据。
 
 import (
 	"errors"

@@ -1,6 +1,6 @@
 package MutualForum
 
-// tool_catalog.go Mutual Forum 的论坛工具目录（供控制台「工具列表」屏展示）。
+// catalog.go Mutual Forum 的论坛工具目录（供控制台「工具列表」屏展示）。
 
 import "LunarSubsystem/LunarHarness/protocol/agentinfo"
 

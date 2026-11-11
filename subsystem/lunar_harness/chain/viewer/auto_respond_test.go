@@ -1,6 +1,6 @@
 package viewer
 
-// autorespond_test.go 生活链自动响应的行为测试：条件判定、三类来源、失败隔离与重试上限。
+// auto_respond_test.go 生活链自动响应的行为测试：条件判定、三类来源、失败隔离与重试上限。
 
 import (
 	"context"
