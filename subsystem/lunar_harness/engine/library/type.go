@@ -162,6 +162,12 @@ type DBColumn struct {
 	Default string `json:"default"`
 }
 
+// DBTableSchema 一张表（或视图）及其全部列，供上层组装模型上下文。
+type DBTableSchema struct {
+	Table   DBTable
+	Columns []DBColumn
+}
+
 // DBTablesResponse 数据库表清单回执。
 type DBTablesResponse struct {
 	OK     bool      `json:"ok"`
@@ -211,20 +217,6 @@ type DBQueryResponse struct {
 	Truncated bool     `json:"truncated"`
 	ElapsedMS int64    `json:"elapsed_ms"`
 	Error     string   `json:"error,omitempty"`
-}
-
-// DBSQLRequest 自然语言转 SQL 请求。
-type DBSQLRequest struct {
-	Path     string `json:"path"`
-	Question string `json:"question"`
-}
-
-// DBSQLResponse 自然语言转 SQL 回执：只返回一条只读 SQL，不执行。
-type DBSQLResponse struct {
-	OK    bool   `json:"ok"`
-	Path  string `json:"path"`
-	SQL   string `json:"sql"`
-	Error string `json:"error,omitempty"`
 }
 
 // ArchiveEntry 压缩包内一个条目（只读元数据，不解压内容）。

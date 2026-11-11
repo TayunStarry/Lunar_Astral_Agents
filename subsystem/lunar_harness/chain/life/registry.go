@@ -3,7 +3,7 @@ package life
 import (
 	"time"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 // SetWishHooks 注入愿望判定能力（由 lunar 包提供，避免包循环依赖）。

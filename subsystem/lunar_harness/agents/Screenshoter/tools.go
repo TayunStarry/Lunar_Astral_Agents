@@ -4,11 +4,6 @@ package Screenshoter
 
 import "LunarSubsystem/LunarHarness/protocol/agentbase"
 
-// ToolDefinitions 导出截图者工具声明（控制台目录展示用）。
-func ToolDefinitions() []agentbase.ToolDefinition {
-	return toolDefinitions()
-}
-
 // toolDefinitions 截图者工具集。
 func toolDefinitions() []agentbase.ToolDefinition {
 	return []agentbase.ToolDefinition{

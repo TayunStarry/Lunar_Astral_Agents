@@ -16,11 +16,15 @@ import (
 // Remark 生成一条符合语境、贴合画面的观感评论。
 func Remark(ctx context.Context, in RemarkInput) (text string, err error) {
 	defer func() { agentbase.ReportRun(AgentID, err) }()
+	persona := loadPersona()
+	if strings.TrimSpace(persona) == "" {
+		return "", fmt.Errorf("读取人设提示词失败")
+	}
 	task := loadPrompt(promptRemark)
 	if task == "" {
 		return "", fmt.Errorf("读取观感评论提示词失败")
 	}
-	system := withPersona(in.Persona, task)
+	system := withPersona(persona, task)
 	text, err = viewbase.Chat(ctx, viewbase.ChatRequest{
 		Agent: AgentID, Role: Role, Model: in.Model, System: system, User: in.Material, Attempts: attempts,
 	})
@@ -41,6 +45,13 @@ func loadPrompt(name string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
+}
+
+// loadPersona 读取人设提示词（复用基座进程内缓存，同一包内多次调用只读一次文件）。
+//
+// 读取失败时基座返回空串并记日志；调用方必须把空串当失败处理，不能静默降级成无人设。
+func loadPersona() string {
+	return agentbase.PromptText(personaFile)
 }
 
 // withPersona 拼人设与任务段落。

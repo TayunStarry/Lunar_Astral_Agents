@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 func rememberUserUtterance(content any) {

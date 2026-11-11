@@ -19,6 +19,8 @@ const (
 	// 与视频分析（watch / keyframe）上限一致，覆盖 QQ 渠道长视频；
 	// 同时避免异常大流被整段读入内存。
 	maxRemoteVideoBytes = int64(2 << 30)
+	// visualFactRulesPrompt 图片描述与影像观看共用的判定标准（唯一来源）
+	visualFactRulesPrompt = "visualFactRules.md"
 )
 
 // 视觉理解工具名

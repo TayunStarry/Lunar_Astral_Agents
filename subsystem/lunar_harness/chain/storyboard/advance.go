@@ -23,6 +23,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/StoryboardPlanner"
 	"LunarSubsystem/LunarHarness/engine/activity"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // Advance 推进最早一个可推进任务的单个原子步骤。
@@ -250,13 +251,13 @@ func advancePlanning(ctx context.Context, taskID string) {
 
 	// 每解析出一镜立即写入任务视图并推送 shot_planned，
 	// 前端据此逐条追加渲染，而不是等整份分镜规划完再刷新。
-	titleOverride := clipRunes(strings.TrimSpace(req.Title), 60)
+	titleOverride := textutil.TruncateRunes(strings.TrimSpace(req.Title), 60)
 	streamed := make([]ShotView, 0, 16)
 	onShot := func(title string, shot StoryboardPlanner.Shot) {
 		streamed = append(streamed, shotViewFromPlanner(shot, shotPending))
 		viewTitle := titleOverride
 		if viewTitle == "" {
-			viewTitle = clipRunes(title, 60)
+			viewTitle = textutil.TruncateRunes(title, 60)
 		}
 		taskMu.Lock()
 		state, ok := tasks[taskID]
@@ -431,7 +432,7 @@ func advancePainting(ctx context.Context, taskID string) {
 	}
 	if paintErr != nil {
 		state.shots[index].Status = shotFailed
-		state.shots[index].Error = clipRunes(paintErr.Error(), maxErrorRunes)
+		state.shots[index].Error = textutil.TruncateRunes(paintErr.Error(), maxErrorRunes)
 		event.Stage = fmt.Sprintf("第 %d / %d 镜绘制失败（%s）", index+1, total, shot.Scene)
 		event.Summary = state.shots[index].Error
 		event.Event = eventShotFailed
@@ -531,7 +532,7 @@ func failTask(taskID string, err error) {
 		taskMu.Unlock()
 		return
 	}
-	reason := clipRunes(strings.TrimSpace(err.Error()), maxErrorRunes)
+	reason := textutil.TruncateRunes(strings.TrimSpace(err.Error()), maxErrorRunes)
 	state.stage = stageDone
 	// 失败不是完成：保留失败时真实到达的进度，不再强行标 100%。
 	applyEventLocked(state, ProgressEvent{

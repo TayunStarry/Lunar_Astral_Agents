@@ -7,8 +7,6 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-	engineforum "LunarSubsystem/LunarHarness/engine/forum"
 )
 
 func prepareGateTest(t *testing.T) *fakeForum {
@@ -31,7 +29,7 @@ func TestWriteOperationWaitsForSharedGate(t *testing.T) {
 	forum := prepareGateTest(t)
 	before := requestCount(forum)
 
-	release, err := engineforum.AcquireWrite(context.Background())
+	release, err := acquireWrite(context.Background())
 	if err != nil {
 		t.Fatalf("获取写锁失败: %v", err)
 	}
@@ -61,7 +59,7 @@ func TestWriteOperationWaitsForSharedGate(t *testing.T) {
 func TestReadOperationNotBlockedBySharedGate(t *testing.T) {
 	_ = prepareGateTest(t)
 
-	release, err := engineforum.AcquireWrite(context.Background())
+	release, err := acquireWrite(context.Background())
 	if err != nil {
 		t.Fatalf("获取写锁失败: %v", err)
 	}
@@ -81,7 +79,7 @@ func TestReadOperationNotBlockedBySharedGate(t *testing.T) {
 func TestAutoReplySendUsesSharedGate(t *testing.T) {
 	_ = prepareGateTest(t)
 
-	release, err := engineforum.AcquireWrite(context.Background())
+	release, err := acquireWrite(context.Background())
 	if err != nil {
 		t.Fatalf("获取写锁失败: %v", err)
 	}
@@ -121,7 +119,7 @@ func TestAutoRespondGenerationDoesNotHoldSharedGate(t *testing.T) {
 
 	acquired := make(chan struct{})
 	go func() {
-		gateRelease, err := engineforum.AcquireWrite(context.Background())
+		gateRelease, err := acquireWrite(context.Background())
 		if err != nil {
 			return
 		}

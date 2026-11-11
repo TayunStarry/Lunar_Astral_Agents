@@ -13,8 +13,11 @@ import (
 	"LunarSubsystem/LunarHarness/agents/FileOperations"
 	"LunarSubsystem/LunarHarness/agents/ManipulateArchive"
 	"LunarSubsystem/LunarHarness/agents/ManipulateFiles"
+	"LunarSubsystem/LunarHarness/agents/Musician"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
+	"LunarSubsystem/LunarHarness/agents/Painter"
 	"LunarSubsystem/LunarHarness/agents/Savior"
+	"LunarSubsystem/LunarHarness/agents/Screenshoter"
 	"LunarSubsystem/LunarHarness/agents/SearchPlanner"
 	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
 	"LunarSubsystem/LunarHarness/agents/StoryboardPlanner"
@@ -36,6 +39,7 @@ import (
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/engine/websocket"
 	"LunarSubsystem/LunarHarness/executors/ArchiveReader"
+	"LunarSubsystem/LunarHarness/executors/WebCrawler"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 	"LunarSubsystem/LunarHarness/server"
@@ -198,14 +202,14 @@ var roleAgentIDs = map[string]string{
 	"绘制者":                            "painter",
 	agentinfo.NameScreenshoter:       "screenshoter",
 	"截图者":                            "screenshoter",
-	agentinfo.NameDesktopOperator:    "desktop_agent",
-	"桌面操作-模型":                        "desktop_agent",
-	"桌面操纵":                           "desktop_agent",
+	agentinfo.NameDesktopOperator:    "desktop_operator",
+	"桌面操作-模型":                        "desktop_operator",
+	"桌面操纵":                           "desktop_operator",
 	agentinfo.NameMusician:           "musician",
 	"演奏者":                            "musician",
 	agentinfo.NameDialogueBridging:   "dialogue_bridging",
-	agentinfo.NameMutualForum:        "mutual_forum_agent",
-	"互助论坛-模型":                        "mutual_forum_agent",
+	agentinfo.NameMutualForum:        "mutual_forum",
+	"互助论坛-模型":                        "mutual_forum",
 	agentinfo.NameSearchPlanner:      "search_planner",
 	"搜索者-规划":                         "search_planner",
 	agentinfo.NameSearchSummarizer:   "search_summarizer",
@@ -253,8 +257,8 @@ func agentIDByRole(role string) string {
 		"creative", "life_memorizer", "painter", "screenshoter",
 		"manipulate_files", "manipulate_archive", "code_execution", "content_rollback",
 		"file_operations",
-		"desktop", "desktop_agent", "bilibili",
-		"web_search", "search_planner", "search_summarizer", "sql_writer", "mutual_forum", "mutual_forum_agent", "dialogue_bridging",
+		"desktop", "desktop_operator", "bilibili",
+		"web_search", "search_planner", "search_summarizer", "sql_writer", "mutual_forum", "dialogue_bridging",
 		"storyboard_research", "storyboard_planner",
 		"viewer_screening", "viewer_censor", "viewer_critic", "viewer_share", "viewer_remark",
 		"responder", "savior", "dialogue", "unknown",
@@ -267,9 +271,14 @@ func agentIDByRole(role string) string {
 // buildToolCatalog 汇总全部 Go 智能体的工具目录（供控制台「工具列表」屏扫描展示）。
 func buildToolCatalog() []agentinfo.Agent {
 	out := thinking.ToolCatalog()
+	// 思维链内的扁平智能体按既有展示顺序紧随对话者。
+	out = append(out, Painter.ToolCatalog()...)
+	out = append(out, Musician.ToolCatalog()...)
+	out = append(out, Screenshoter.ToolCatalog()...)
 	out = append(out, Vision.ToolCatalog()...)
 	out = append(out, DocumentReader.ToolCatalog()...)
 	out = append(out, ArchiveReader.ToolCatalog()...)
+	out = append(out, WebCrawler.ToolCatalog()...)
 	out = append(out, ManipulateFiles.ToolCatalog()...)
 	out = append(out, ManipulateArchive.ToolCatalog()...)
 	out = append(out, CodeExecution.ToolCatalog()...)

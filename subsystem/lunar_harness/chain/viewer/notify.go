@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/ViewerCritic"
-	"LunarSubsystem/LunarHarness/prompts"
 )
 
 // inboxBrief 通知条目的关键字段摘要（失败日志排查用）
@@ -17,12 +16,8 @@ func inboxBrief(item inboxItem) string {
 		item.Type, item.Oid, item.SourceID, item.RootID, item.TargetID, item.URI)
 }
 
-// generateInboxReply 按场景生成一句自然回应（注入人设与长期记忆）。
+// generateInboxReply 按场景生成一句自然回应（人设由智能体自行注入）。
 func generateInboxReply(item inboxItem) (string, error) {
-	persona, err := prompts.Read("lifeRole.md")
-	if err != nil {
-		return "", fmt.Errorf("读取人设失败: %w", err)
-	}
 	scene := inboxScene(item)
 	var material strings.Builder
 	fmt.Fprintf(&material, "对方：%s\n对方的消息：%s\n", item.User, item.Message)
@@ -33,8 +28,7 @@ func generateInboxReply(item inboxItem) (string, error) {
 		fmt.Fprintf(&material, "所在位置：《%s》\n", item.Title)
 	}
 	text, err := ViewerCritic.InboxReply(context.Background(), ViewerCritic.InboxInput{
-		Persona: string(persona), Scene: scene,
-		Material: material.String(), Model: modelPrimary,
+		Scene: scene, Material: material.String(), Model: modelPrimary,
 	})
 	if err != nil {
 		return "", err

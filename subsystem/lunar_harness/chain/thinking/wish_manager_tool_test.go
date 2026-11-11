@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/Dialogue"
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 	"LunarSubsystem/LunarHarness/internal/testenv"
 	"LunarSubsystem/LunarHarness/prompts"
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"

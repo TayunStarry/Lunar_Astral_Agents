@@ -50,7 +50,7 @@ func buildOneImpression(video *videoRecord) videoImpression {
 // fallbackImpression 模型不可用时的印象兜底：标题 + 标签 + 简介摘要。
 func fallbackImpression(video *videoRecord) videoImpression {
 	summary := fmt.Sprintf("《%s》，UP主 %s。%s", video.Info.Title, video.Info.Owner,
-		hardTruncate(strings.TrimSpace(video.Info.Desc), 120))
+		truncate(strings.TrimSpace(video.Info.Desc), 120))
 	return videoImpression{
 		Summary: strings.TrimSpace(summary),
 		Topics:  append([]string{}, video.Tags...),
@@ -74,7 +74,7 @@ func impressionMaterial(video *videoRecord) string {
 		fmt.Fprintf(&builder, "标签：%s\n", strings.Join(video.Tags, "、"))
 	}
 	if desc := strings.TrimSpace(video.Info.Desc); desc != "" {
-		fmt.Fprintf(&builder, "简介：%s\n", hardTruncate(desc, 600))
+		fmt.Fprintf(&builder, "简介：%s\n", truncate(desc, 600))
 	}
 	fmt.Fprintf(&builder, "播放：%d｜点赞：%d｜收藏：%d｜评论：%d｜弹幕：%d\n",
 		video.Info.View, video.Info.Like, video.Info.Favorite, video.Info.ReplyNum, video.Info.Danmaku)

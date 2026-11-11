@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	agentrepair.RegisterReadonly("desktop_agent", DisplayName,
+	agentrepair.RegisterReadonly(AgentID, DisplayName,
 		DisplayName+"各阶段最近一次执行结果（只读）",
 		func(int) (any, error) { return exportContext(false) })
 }

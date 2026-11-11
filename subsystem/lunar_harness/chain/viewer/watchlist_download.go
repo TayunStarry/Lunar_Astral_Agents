@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/engine/bilibili"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
@@ -224,7 +225,7 @@ func (ffmpegWatchDownloader) Download(ctx context.Context, info videoInfo, segme
 	if strings.TrimSpace(info.Bvid) == "" || info.Cid <= 0 {
 		return nil, fmt.Errorf("缺少 BV 号或 Cid，无法获取播放地址")
 	}
-	playURL, err := fetchPlayURL(info.Bvid, info.Cid, 32)
+	playURL, err := bilibili.PlayURL(info.Bvid, info.Cid, 32)
 	if err != nil {
 		return nil, fmt.Errorf("获取播放地址失败: %w", err)
 	}
@@ -248,7 +249,7 @@ func (ffmpegWatchDownloader) Download(ctx context.Context, info videoInfo, segme
 		args := []string{
 			"-y", "-hide_banner", "-loglevel", "error",
 			"-ss", strconv.Itoa(segment.StartSec),
-			"-headers", "Referer: https://www.bilibili.com/\r\nUser-Agent: " + biliUA + "\r\n",
+			"-headers", "Referer: " + bilibili.Referer + "\r\nUser-Agent: " + bilibili.UserAgent + "\r\n",
 			"-i", playURL,
 			"-t", strconv.Itoa(length),
 			"-c", "copy", "-avoid_negative_ts", "make_zero", path,

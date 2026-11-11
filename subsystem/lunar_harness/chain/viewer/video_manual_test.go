@@ -6,18 +6,20 @@ package viewer
 import (
 	"os"
 	"testing"
+
+	"LunarSubsystem/LunarHarness/engine/bilibili"
 )
 
 func TestManualVideoAPIProbe(t *testing.T) {
 	if os.Getenv("BILI_LIFE_API_PROBE") != "1" {
 		t.Skip("设置 BILI_LIFE_API_PROBE=1 才请求真实 B 站接口")
 	}
-	info, err := fetchVideoInfo("BV1ponw6vEB9")
+	info, err := bilibili.FetchVideo("BV1ponw6vEB9")
 	if err != nil {
 		t.Fatalf("view 失败: %v", err)
 	}
 	t.Logf("view: %s aid=%d cid=%d duration=%d owner=%s", info.Title, info.Aid, info.Cid, info.Duration, info.Owner)
-	play, err := fetchPlayURL(info.Bvid, info.Cid, 32)
+	play, err := bilibili.PlayURL(info.Bvid, info.Cid, 32)
 	if err != nil {
 		t.Fatalf("playurl 失败: %v", err)
 	}

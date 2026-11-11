@@ -9,9 +9,9 @@ import (
 	"LunarSubsystem/LunarHarness/agents/LifeMemorizer"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
 	"LunarSubsystem/LunarHarness/chain/viewer"
-	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/activity"
 	"LunarSubsystem/LunarHarness/engine/memory"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 const (

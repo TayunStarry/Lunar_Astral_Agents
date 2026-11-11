@@ -11,6 +11,8 @@ const (
 	Role = agentinfo.NameViewerRemark
 	// promptRemark 观感评论提示词
 	promptRemark = "viewerRemark.md"
+	// personaFile 人设提示词文件名
+	personaFile = "lifeRole.md"
 	// attempts 观感评论的尝试次数：失败可重试，避免一条评论都留不下
 	attempts = 3
 	// taskBlock 人设与任务的分隔格式

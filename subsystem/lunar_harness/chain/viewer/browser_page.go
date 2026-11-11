@@ -8,11 +8,10 @@ package viewer
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
+	"LunarSubsystem/LunarHarness/engine/bilibili"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -59,8 +58,6 @@ func (w *webSession) readComments(max int) ([]commentItem, error) {
 	return items, nil
 }
 
-var csrfRe = regexp.MustCompile(`(?:^|;\s*)bili_jct=([^;]+)`)
-
 func (w *webSession) csrf() string {
 	raw, err := w.eval(`return document.cookie;`, 4*time.Second)
 	if err != nil {
@@ -70,12 +67,22 @@ func (w *webSession) csrf() string {
 	if err := json.Unmarshal([]byte(raw), &cookie); err != nil {
 		cookie = raw
 	}
-	m := csrfRe.FindStringSubmatch(cookie)
-	if len(m) < 2 {
-		return ""
-	}
-	v, _ := url.QueryUnescape(m[1])
-	return v
+	return bilibili.CSRFToken(cookie)
+}
+
+// FetchText 让 webSession 满足 engine/bilibili.Fetcher（页面上下文请求）。
+func (w *webSession) FetchText(method, target, contentType, body string, timeout time.Duration) (string, error) {
+	return w.pageFetchText(method, target, contentType, body, timeout)
+}
+
+// FetchForm 让 webSession 满足 engine/bilibili.Fetcher（页面上下文表单）。
+func (w *webSession) FetchForm(target string, fields map[string]string, timeout time.Duration) (string, error) {
+	return w.pageFetchForm(target, fields, timeout)
+}
+
+// CSRFToken 让 webSession 满足 engine/bilibili.Page（表单接口签名）。
+func (w *webSession) CSRFToken() string {
+	return w.csrf()
 }
 
 // pageFetchForm 在页面上下文里用 FormData 发 POST（B 站动态接口只认表单）。

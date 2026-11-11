@@ -57,11 +57,11 @@ func PainterReferences(raws []string) ([]Painter.Reference, error) {
 	return out, nil
 }
 
-// resolveImageRef 把单个图片句柄解析为可取用来源，供人格对话的绘画调度使用。
+// ResolveImageRef 把单个图片句柄解析为可取用来源，供人格对话的绘画调度使用。
 //
 // 与创作链的严格解析不同：这里保留「句柄存在但本体已回收」的中间态，
 // 让对话者能提示用户重新发送图片。
-func resolveImageRef(raw string) (handle, source, desc string, ok bool) {
+func ResolveImageRef(raw string) (handle, source, desc string, ok bool) {
 	parsed := parseHandle(raw)
 	if parsed == nil || (parsed.Kind != resource.KindImage && parsed.Kind != resource.KindAnimated) {
 		return "", "", "", false

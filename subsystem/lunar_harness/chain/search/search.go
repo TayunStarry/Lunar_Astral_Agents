@@ -4,7 +4,7 @@ package search
 //
 //	步骤 0：卸载主多模态模型 → 加载搜索模型（链侧持有模型切换租约）
 //	步骤 1：调度「搜索者-规划」产出结构化决策（模型调用 1/2）；命中天气直连则直接返回
-//	步骤 2：调度抓取子包 crawler 完成引擎降级、详情页采集（不发起模型调用）
+//	步骤 2：调度网页抓取执行体 WebCrawler 完成引擎降级、详情页采集（不发起模型调用）
 //	步骤 3：调度「搜索者-摘要」把全部正文一次提取为针对性摘要（模型调用 2/2）
 //	步骤 4：摘要即最终输出；仅失败时走确定性兜底
 //	步骤 5：卸载搜索模型（主模型交给 router 按需重载），返回最终输出
@@ -19,9 +19,9 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/SearchPlanner"
 	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
-	"LunarSubsystem/LunarHarness/chain/search/crawler"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/weather"
+	"LunarSubsystem/LunarHarness/executors/WebCrawler"
 	"LunarSubsystem/LunarHarness/internal/textutil"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
@@ -38,7 +38,7 @@ func Run(instruction string) (out string, err error) {
 	runMu.Lock()
 	defer runMu.Unlock()
 
-	cfg := crawler.LoadConfig()
+	cfg := WebCrawler.LoadConfig()
 	started := time.Now()
 	deadline := started.Add(time.Duration(cfg.MaxRunSeconds) * time.Second)
 	runCtx, cancel := context.WithDeadline(context.Background(), deadline)
@@ -71,10 +71,10 @@ func Run(instruction string) (out string, err error) {
 
 	// 步骤 2：调度抓取执行体（指令中的「前N个」优先于配置的条目余量）
 	n := cfg.DetailCount()
-	if m := crawler.PageCountFromInstruction(instruction); m > 0 {
+	if m := WebCrawler.PageCountFromInstruction(instruction); m > 0 {
 		n = m
 	}
-	crawl, crawlErr := crawler.Crawl(query, n, cfg, deadline)
+	crawl, crawlErr := WebCrawler.Crawl(query, n, cfg, deadline)
 	if crawlErr != nil {
 		return "", crawlErr
 	}
@@ -108,7 +108,7 @@ func Run(instruction string) (out string, err error) {
 }
 
 // buildSources 组装摘要来源：搜索结果页在前，详情页按打开顺序在后
-func buildSources(crawl crawler.CrawlResult) []SearchSummarizer.Source {
+func buildSources(crawl WebCrawler.CrawlResult) []SearchSummarizer.Source {
 	sources := make([]SearchSummarizer.Source, 0, len(crawl.Pages)+1)
 	if strings.TrimSpace(crawl.SearchText) != "" {
 		sources = append(sources, SearchSummarizer.Source{

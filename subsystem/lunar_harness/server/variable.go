@@ -1,16 +1,17 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
-	"LunarSubsystem/LunarHarness/agents/ltpxhost"
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/library"
 	media "LunarSubsystem/LunarHarness/engine/media/httpapi"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
 	image "LunarSubsystem/LunarHarness/engine/multimodal/httpapi"
 	file "LunarSubsystem/LunarHarness/engine/persistence/httpapi"
+	"LunarSubsystem/LunarHarness/server/ltpxhost"
 )
 
 // LibraryChannel 资源库前端接入的 WebSocket 频道名（与 app 层 libraryTerminalChannel 一致）。
@@ -59,7 +60,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/library/api/db/schema", Handler: library.DBSchemaHandler, Method: "GET", Description: "资源库数据库表结构（只读，PRAGMA table_info）"},
 	{Path: "/library/api/db/rows", Handler: library.DBRowsHandler, Method: "GET", Description: "资源库数据库行数据分页（只读，支持 sort / order / offset / limit）"},
 	{Path: "/library/api/db/query", Handler: library.DBQueryHandler, Method: "POST", Description: "资源库数据库只读 SQL（仅 SELECT / PRAGMA 查询 / EXPLAIN，多语句与写操作后端拦截）"},
-	{Path: "/library/api/db/ai-sql", Handler: library.DBAISQLHandler, Method: "POST", Description: "资源库自然语言转 SQL（携带当前库表结构，只生成一条只读语句）"},
+	{Path: "/library/api/db/ai-sql", Handler: DBAISQLHandler, Method: "POST", Description: "资源库自然语言转 SQL（携带当前库表结构，只生成一条只读语句）"},
 	{Path: "/library/api/archive", Handler: library.ArchiveHandler, Method: "GET", Description: "资源库压缩包条目分页（只读元数据，支持 zip / tar / tar.gz / gz）"},
 
 	// ==================== 文件归档（ZIP） ====================
@@ -133,6 +134,7 @@ var SystemEndpoints = []SystemEndpoint{
 //
 // 与搜索能力的注入做法一致：server 只声明 handler 需要的函数变量，
 // 具体实现由装配层（app）注入。这样 HTTP 层不会 import 编排层与智能体实现。
+// 智能体统一经装配层注入的高层入口调用（如 SQLWriter.Generate），不直接发起推理。
 
 // AgentEnqueueFunc 外部推理入队实现（装配层注入 agents/Responder.Enqueue 的适配）
 var AgentEnqueueFunc func(req *AgentRequest) error
@@ -144,14 +146,15 @@ var AgentPendingFunc func() int
 // 含多模态内容时把 messages 走一遍「声明校验 → 落盘 → 清洗」，避免该端点成为绕过信封协议的后门。
 var AgentPrepareMessagesFunc func(messages json.RawMessage) (json.RawMessage, error)
 
+// DBSQLGenerateFunc 自然语言转 SQL 的语句生成实现（装配层注入 agents/SQLWriter.Generate）。
+// 只暴露「表结构上下文 + 问题 → SQL 文本」的能力，不携带任何智能体包类型。
+var DBSQLGenerateFunc func(ctx context.Context, schema, question string) (string, error)
+
 // VisionReadFunc 视觉副本读取实现（装配层注入 chain/thinking.VisionReadBlob）
 var VisionReadFunc func(relPath, tag string, side int) ([]byte, string, error)
 
 // MessageBatchHandlerFunc 消息写入队列处理器（装配层注入 chain/thinking.MessageBatchHandler）
 var MessageBatchHandlerFunc http.HandlerFunc
-
-// ProxyHandlerFunc 代理访问处理器（装配层注入 chain/thinking.ProxyHandler）
-var ProxyHandlerFunc http.HandlerFunc
 
 // LibraryCreationSubmitFunc 资源库创作任务受理（装配层注入文件操作智能体任务入口）
 var LibraryCreationSubmitFunc func(req LibraryCreationRequest) (LibraryCreationTask, error)

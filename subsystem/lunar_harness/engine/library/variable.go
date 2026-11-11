@@ -43,8 +43,6 @@ const (
 	maxDBQueryRows = 500
 	// dbQueryTimeout 只读 SQL 的最长执行时间
 	dbQueryTimeout = 30 * time.Second
-	// maxDBSchemaPromptTables 自然语言转 SQL 时随提示词携带的最大表数
-	maxDBSchemaPromptTables = 80
 	// defaultArchivePageSize 压缩包条目默认分页大小
 	defaultArchivePageSize = 200
 	// maxArchivePageSize 压缩包条目单页上限

@@ -12,9 +12,9 @@ import (
 	"LunarSubsystem/LunarHarness/chain/life"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/viewer"
-	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/mediaobject"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 const failureReply = "刚才有点走神，你再说一遍好吗？"
@@ -42,6 +42,9 @@ func Start() error {
 	// 演绎任务现场落盘后，启动时恢复上次进程遗留的未完成任务：
 	// 能还原现场的从原阶段继续，无法还原的标记中断并推送原因。
 	storyboard.RecoverInterrupted()
+	// 这两处是链内运行时注入，不是装配点：入参依赖思考链的实时状态
+	// （愿望推送、最近对话轮次），装配层拿不到这些上下文，
+	// 故不随 init() 一起上移到 app。
 	life.SetWishHooks(pushDueWishItems, upcomingWishSummary)
 	life.SetDialogueRoundsProvider(recentAffectionRounds)
 	go func() {
@@ -53,6 +56,7 @@ func Start() error {
 	tickSchedulerInstance = buildTickScheduler()
 	// 观影是后台活动：用户消息到达时有更高的优先级，观影在安全边界让出，
 	// 先把消息回应完，再由后续 Tick 接着看（见 chain/viewer/interrupt.go）。
+	// 同上：暂停判定依赖思考链的实时未读队列，属链内运行时注入，不是装配点。
 	viewer.SetPauseHook(func() bool { return UnreadCount() > 0 })
 
 	agentReady.Store(true)

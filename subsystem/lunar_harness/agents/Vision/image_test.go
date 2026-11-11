@@ -42,7 +42,7 @@ func TestImageAndVideoShareVisualRules(t *testing.T) {
 		t.Fatal("共用判定标准不应为空")
 	}
 	image := imageTask("")
-	video := multimodal.WatchTask(1, 1, multimodal.WatchSlice{Start: 0, End: 60, Images: []string{"a"}}, "")
+	video := WatchTask(1, 1, multimodal.WatchSlice{Start: 0, End: 60, Images: []string{"a"}}, "")
 	if !strings.HasPrefix(image, rules) {
 		t.Fatalf("图片任务应以共用判定标准开头：%s", image)
 	}

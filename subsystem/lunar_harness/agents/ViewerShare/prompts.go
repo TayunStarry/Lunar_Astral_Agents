@@ -7,6 +7,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/prompts"
+	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // loadPrompt 读取提示词文本（读取失败返回空串）
@@ -17,6 +18,13 @@ func loadPrompt(name string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
+}
+
+// loadPersona 读取人设提示词（复用基座进程内缓存，同一包内多次调用只读一次文件）。
+//
+// 读取失败时基座返回空串并记日志；调用方必须把空串当失败处理，不能静默降级成无人设。
+func loadPersona() string {
+	return agentbase.PromptText(personaFile)
 }
 
 // withPersona 拼人设与任务段落。

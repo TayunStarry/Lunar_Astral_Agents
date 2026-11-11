@@ -89,15 +89,3 @@ func fillMissingPrompts(shots []plannedShot) []plannedShot {
 	}
 	return shots
 }
-
-// clipRunes 按字符数截断。
-func clipRunes(text string, limit int) string {
-	if limit <= 0 {
-		return ""
-	}
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	return string(runes[:limit]) + "…"
-}

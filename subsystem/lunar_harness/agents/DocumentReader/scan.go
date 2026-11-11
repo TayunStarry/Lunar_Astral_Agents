@@ -170,7 +170,7 @@ func chunkText(doc *docContext, span chunkSpan, limit int) string {
 	}
 	text := strings.Join(doc.Lines[start-1:end], "\n")
 	if len([]rune(text)) > limit {
-		text = agentbase.HardCutRunes(text, limit)
+		text = agentbase.CutRunes(text, limit)
 	}
 	return text
 }

@@ -12,6 +12,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/netsource"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
@@ -47,7 +48,7 @@ func newModelBuilder(prompt, roleTag string, contextLimit int) *ModelBuilder {
 
 // promptCompletion 替换系统提示词中的当前位置占位符
 func (builder *ModelBuilder) promptCompletion(prompt string) string {
-	addressText := strings.Join(resolveAddress(), " ")
+	addressText := strings.Join(netsource.ResolveAddress(), " ")
 	prompt = strings.ReplaceAll(prompt, "{current-address}", addressText)
 	return strings.ReplaceAll(prompt, "{current_address}", addressText)
 }

@@ -25,8 +25,3 @@ func unloadModel(model string) {
 func truncate(text string, limit int) string {
 	return agentbase.TruncateRunes(text, limit)
 }
-
-// hardTruncate 按字符数直接硬截断（不找句末标点）。
-func hardTruncate(text string, limit int) string {
-	return agentbase.TruncateRunes(text, limit)
-}

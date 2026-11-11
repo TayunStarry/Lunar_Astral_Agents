@@ -53,6 +53,9 @@ func mediaMessages(req Request) []chatMessage {
 }
 
 // truncate 截断字符串用于错误输出。
+//
+// 语义与 internal/textutil 的通用实现不同：切完还要去掉切口处空白，并用 ASCII「...」
+// 而非全角省略号（错误日志里与模型原文的省略号区分）。仅本包错误信息使用，故不并入 textutil。
 func truncate(s string, maxLen int) string {
 	runes := []rune(s)
 	if len(runes) <= maxLen {

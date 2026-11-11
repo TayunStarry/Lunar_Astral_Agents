@@ -6,6 +6,7 @@ package ViewerShare
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/viewbase"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
@@ -14,11 +15,15 @@ import (
 // Dynamic 生成本轮观影动态正文。
 func Dynamic(ctx context.Context, in DynamicInput) (text string, err error) {
 	defer func() { agentbase.ReportRun(AgentID, err) }()
+	persona := loadPersona()
+	if strings.TrimSpace(persona) == "" {
+		return "", fmt.Errorf("读取人设提示词失败")
+	}
 	task := loadPrompt(promptDynamic)
 	if task == "" {
 		return "", fmt.Errorf("读取动态提示词失败")
 	}
-	system := withPersona(in.Persona, task)
+	system := withPersona(persona, task)
 	text, err = viewbase.Chat(ctx, viewbase.ChatRequest{
 		Agent: AgentID, Role: Role, Model: in.Model, System: system, User: in.Material, Attempts: attempts,
 	})

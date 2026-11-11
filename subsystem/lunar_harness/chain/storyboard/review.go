@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // ConfirmTask 用用户审查后的分镜替换规划稿，直接进入逐镜绘制。
@@ -57,7 +59,7 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 			shotRatio = ratio
 		}
 		// 画面描述留空时按分镜叙事兜底，审查确认后直接进入绘制。
-		prompt := clipRunes(strings.TrimSpace(item.Prompt), maxPaintPromptRunes)
+		prompt := textutil.TruncateRunes(strings.TrimSpace(item.Prompt), maxPaintPromptRunes)
 		shots = append(shots, ShotView{
 			Index:     index + 1,
 			Act:       act,
@@ -78,7 +80,7 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 		})
 	}
 
-	viewTitle := clipRunes(strings.TrimSpace(title), 60)
+	viewTitle := textutil.TruncateRunes(strings.TrimSpace(title), 60)
 	if viewTitle == "" {
 		viewTitle = state.plan.Title
 	}
@@ -231,7 +233,7 @@ func CancelTask(taskID, reason string) (TaskView, error) {
 		taskMu.Unlock()
 		return view, nil
 	}
-	reason = clipRunes(strings.TrimSpace(reason), maxErrorRunes)
+	reason = textutil.TruncateRunes(strings.TrimSpace(reason), maxErrorRunes)
 	if reason == "" {
 		reason = "用户终止了演绎任务"
 	}

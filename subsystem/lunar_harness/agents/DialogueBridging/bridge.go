@@ -211,7 +211,7 @@ func HandleAgentMusicResponse(audio, title, summary string, duration float64) {
 
 // dispatchMusic 将演奏音频转发到目标会话：优先语音条，失败降级为文字 + 音频文件。
 func dispatchMusic(target BridgeTarget, audio, title, summary string, duration float64) {
-	if err := napcat.SendMusic(target.IsGroup, target.ID, audio, title, summary, duration); err != nil {
+	if err := deliverMusic(target.IsGroup, target.ID, audio, title, summary, duration); err != nil {
 		where := "群"
 		if !target.IsGroup {
 			where = "用户"

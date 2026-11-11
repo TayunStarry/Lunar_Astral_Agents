@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"LunarSubsystem/LunarHarness/chain/viewer"
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 	"LunarSubsystem/LunarHarness/internal/testenv"
 )
 

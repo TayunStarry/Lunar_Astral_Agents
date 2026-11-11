@@ -44,7 +44,7 @@ func pageContentDigest(sources []Source) string {
 			continue
 		}
 		fmt.Fprintf(&builder, "【%s】\n%s\n\n",
-			textutil.FirstNonEmpty(source.Title, source.URL), textutil.HardCutRunes(body, pageDigestMaxRunes))
+			textutil.FirstNonEmpty(source.Title, source.URL), textutil.HardCutRunesWithNotice(body, pageDigestMaxRunes))
 	}
 	out := strings.TrimSpace(builder.String())
 	if out == "" {

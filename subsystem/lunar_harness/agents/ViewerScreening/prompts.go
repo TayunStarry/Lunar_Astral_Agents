@@ -20,6 +20,13 @@ func loadPrompt(name string) string {
 	return strings.TrimSpace(string(data))
 }
 
+// loadPersona 读取人设提示词（复用基座进程内缓存，同一包内多次调用只读一次文件）。
+//
+// 读取失败时基座返回空串并记日志；调用方必须把空串当失败处理，不能静默降级成无人设。
+func loadPersona() string {
+	return agentbase.PromptText(personaFile)
+}
+
 // renderPrompt 单次替换提示词中的 {占位符}（pairs 为「占位符, 值」成对传入）
 func renderPrompt(template string, pairs ...string) string {
 	return agentbase.RenderPrompt(template, pairs...)

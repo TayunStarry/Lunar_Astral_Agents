@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 	"LunarSubsystem/LunarHarness/internal/testenv"
 	"LunarSubsystem/LunarHarness/protocol/agentrepair"
 )

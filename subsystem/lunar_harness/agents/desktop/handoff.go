@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	desktopos "LunarSubsystem/LunarHarness/engine/desktop"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // buildPlanContext 组装任务目标/验收标准/预期步骤，供各角色提示词复用。
@@ -22,7 +23,7 @@ func buildPlanContext(plan editorTask) string {
 // stringifyProgress 汇总当前进度（不含历史尝试，供视觉/书记使用）。
 func stringifyProgress(h HandoffRecord) string {
 	return fmt.Sprintf("目标=%s；前台=%s（进程 %s）；画面=%s；输入框=%s；动作=%s；进度=%s",
-		h.TargetApp, h.Foreground, h.ForegroundProcess, truncateStr(h.VisualSummary, 512), h.InputBoxText, h.LastAction, h.Progress)
+		h.TargetApp, h.Foreground, h.ForegroundProcess, textutil.TruncateRunes(h.VisualSummary, 512), h.InputBoxText, h.LastAction, h.Progress)
 }
 
 // stringifyHandoff 在进度之外追加最近尝试记录，供规划者避免重复无效操作。
@@ -47,7 +48,7 @@ func stringifyHandoff(h HandoffRecord) string {
 			tool = "（未执行工具）"
 		}
 		fmt.Fprintf(&sb, "\n- 第%d轮 %s/%s：%s（%s，%s）",
-			a.Round, a.Decision, tool, truncateStr(a.Result, 512), status, effect)
+			a.Round, a.Decision, tool, textutil.TruncateRunes(a.Result, 512), status, effect)
 	}
 	return sb.String()
 }
@@ -71,7 +72,7 @@ func advanceHandoff(h HandoffRecord, attempt ActionAttempt) HandoffRecord {
 	h.Evidence = attempt.Result
 	switch {
 	case !attempt.Success:
-		h.Progress = "上一步未成功：" + truncateStr(attempt.Result, 512)
+		h.Progress = "上一步未成功：" + textutil.TruncateRunes(attempt.Result, 512)
 	case attempt.Changed:
 		h.Progress = "上一步操作已生效"
 	default:

@@ -133,11 +133,26 @@ func ShouldSkipVerify(rawURL string) bool {
 }
 
 // NewHTTPClient 构建统一配置的 HTTP 客户端（超时 / 重定向上限 / 可选跳过证书校验）
+// 不跟随代理环境变量；需要代理的调用方用 NewHTTPClientOnTransport(NewHTTPTransport(...), timeout)。
 func NewHTTPClient(timeout time.Duration, skipVerify bool) *http.Client {
+	return NewHTTPClientOnTransport(NewHTTPTransport(skipVerify, false), timeout)
+}
+
+// NewHTTPTransport 构建与 NewHTTPClient 同源的 Transport。
+// proxyFromEnvironment 为 true 时恢复原生客户端的代理行为（HTTP_PROXY / HTTPS_PROXY / NO_PROXY 及其小写形式）。
+func NewHTTPTransport(skipVerify, proxyFromEnvironment bool) *http.Transport {
 	transport := &http.Transport{
 		TLSClientConfig:   &tls.Config{InsecureSkipVerify: skipVerify},
 		ForceAttemptHTTP2: true,
 	}
+	if proxyFromEnvironment {
+		transport.Proxy = http.ProxyFromEnvironment
+	}
+	return transport
+}
+
+// NewHTTPClientOnTransport 用给定的 Transport 构建客户端（单个 Transport 可在多个超时不同的客户端间共享连接池）。
+func NewHTTPClientOnTransport(transport *http.Transport, timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout:   timeout,
 		Transport: transport,

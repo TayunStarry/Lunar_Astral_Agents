@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	"LunarSubsystem/LunarHarness/agents/Responder"
+	"LunarSubsystem/LunarHarness/agents/SQLWriter"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking"
 	"LunarSubsystem/LunarHarness/engine/mediaobject"
@@ -21,11 +22,12 @@ import (
 // wireServerHooks 在 server.Start 之前完成全部注入。
 func wireServerHooks() {
 	server.MessageBatchHandlerFunc = thinking.MessageBatchHandler
-	server.ProxyHandlerFunc = thinking.ProxyHandler
 	server.VisionReadFunc = thinking.VisionReadBlob
 	server.AgentPendingFunc = Responder.Pending
 	server.AgentEnqueueFunc = enqueueExternalAgent
 	server.AgentPrepareMessagesFunc = prepareAgentMessages
+	// 资源库自然语言转 SQL：HTTP 层只收参，语句生成由 SQLWriter 智能体完成。
+	server.DBSQLGenerateFunc = SQLWriter.Generate
 	// 资源库创作入口：HTTP 层只收参，规划执行由创作链完成。
 	server.LibraryCreationSubmitFunc = submitLibraryCreation
 	server.LibraryCreationStatusFunc = libraryCreationStatus

@@ -17,7 +17,7 @@ type ToolResult struct {
 	Image string
 }
 
-// 能力注入面：由装配层（app / chain/thinking）在启动前赋值。
+// 能力注入面：由装配层（app）在启动前赋值。
 // 未注入时执行器返回明确的失败原因，不静默降级。
 var (
 	// WebSearch 联网检索（检索链）

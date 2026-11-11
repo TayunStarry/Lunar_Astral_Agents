@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"time"
 
+	"LunarSubsystem/LunarHarness/engine/bilibili"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
 
@@ -71,9 +72,9 @@ type watchlistBudget struct {
 
 // commentReader 评论读取能力（*webSession 实现）。
 //
-// 抽出来是为了让印象采集与原有预选共用同一份分页读取逻辑。
+// 接口分页在 engine/bilibili；这里只保留页面 DOM 兜底读取。
 type commentReader interface {
-	readCommentsAPIPage(typ int, oid int64, page, ps int, byTime bool) ([]commentItem, error)
+	bilibili.Fetcher
 	readComments(max int) ([]commentItem, error)
 }
 
@@ -131,7 +132,7 @@ func defaultWatchlistDeps() watchlistDeps {
 		},
 		watchlistEmpty:  viewerstore.WatchlistEmpty,
 		loadVideo:       viewerstore.LoadVideo,
-		fetchInfo:       fetchVideoInfo,
+		fetchInfo:       bilibili.FetchVideo,
 		impress:         func(_ context.Context, video *videoRecord) videoImpression { return buildOneImpression(video) },
 		review:          func(_ context.Context, video *videoRecord) videoReview { return reviewVideo(video) },
 		enqueue:         viewerstore.EnqueueVideos,

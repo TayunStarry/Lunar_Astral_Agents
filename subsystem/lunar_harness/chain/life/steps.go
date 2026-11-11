@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"time"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 // runFixedSteps 按固定顺序执行四个固定动作，返回失败列表（调用方无需中断 Tick）。

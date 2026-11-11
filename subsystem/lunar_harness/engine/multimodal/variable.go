@@ -80,13 +80,6 @@ const (
 	minFrameInterval = 0.001
 )
 
-// ==== 视觉理解提示词 ====
-
-const (
-	// visualFactRulesPrompt 图片描述与影像观看共用的判定标准（唯一来源）
-	visualFactRulesPrompt = "visualFactRules.md"
-)
-
 // ==== 日志模块标签 ====
 //
 // 控制台按模块名路由：绘图屏只接收 sd.cpp 绘图链路。视频抽帧、关键帧与

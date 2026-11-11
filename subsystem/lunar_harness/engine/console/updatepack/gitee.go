@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/channel"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // giteeRelease Gitee Release API 响应（仅解析用到的字段）
@@ -72,7 +73,7 @@ func apiRequest(path string, query url.Values, out any) error {
 	}
 	if resp.StatusCode != http.StatusOK {
 		// 返回可分类的接口错误：限流/鉴权/权限需要给出不同的人话提示（见 channel/api.go）
-		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: truncate(string(body), 512)}
+		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: textutil.TruncateRunes(string(body), 512)}
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("解析响应失败: %w", err)
@@ -98,7 +99,7 @@ func deleteRequest(path string, query url.Values) error {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: truncate(string(body), 512)}
+		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: textutil.TruncateRunes(string(body), 512)}
 	}
 	return nil
 }
@@ -256,15 +257,6 @@ func matchUpdateTagByHash(cfg Config, hash string) (string, error) {
 		logf("  跳过 tag %s（属于 LTPX 应用市场通道）", tag.Name)
 	}
 	return "", nil
-}
-
-// truncate 截断文本用于错误信息
-func truncate(s string, n int) string {
-	runes := []rune(s)
-	if len(runes) <= n {
-		return s
-	}
-	return string(runes[:n]) + "…"
 }
 
 // extractSHA 从 Release 描述中提取 SHA-256 声明（格式约定：整行形如 `SHA-256: <hex>`）。

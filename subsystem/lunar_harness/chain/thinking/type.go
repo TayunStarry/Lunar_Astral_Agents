@@ -304,29 +304,6 @@ type BatchResponse struct {
 	Invalid int `json:"invalid,omitempty"`
 }
 
-// ProxyRequest 代理请求结构
-type ProxyRequest struct {
-	URL         string      `json:"url"`
-	RequestInit RequestInit `json:"requestInit"`
-}
-
-// RequestInit 请求初始化参数
-type RequestInit struct {
-	Method      string            `json:"method,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Body        any               `json:"body,omitempty"`
-	Redirect    string            `json:"redirect,omitempty"`
-	Credentials string            `json:"credentials,omitempty"`
-}
-
-// ProxyResponse 代理响应结构
-type ProxyResponse struct {
-	Status     int               `json:"status"`
-	StatusText string            `json:"statusText"`
-	Headers    map[string]string `json:"headers"`
-	Body       json.RawMessage   `json:"body"`
-}
-
 // ==== 推送数据 ====
 
 // PushContextData 推送上下文数据

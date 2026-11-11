@@ -138,7 +138,7 @@ func RunRound(ctx context.Context, instruction string, history []agentbase.Messa
 
 /* ---------------- 最近一次模型轮次（诊断用） ---------------- */
 
-// recordLastRun 记录最近一次模型轮次的诊断信息，供 agentdump / agentrepair 使用。
+// recordLastRun 记录最近一次模型轮次的诊断信息，供 chain/forum 的统一导出（mutual_forum）使用。
 func recordLastRun(rounds, toolCalls int, errText string) {
 	lastRunMu.Lock()
 	defer lastRunMu.Unlock()
@@ -150,8 +150,11 @@ func recordLastRun(rounds, toolCalls int, errText string) {
 	}
 }
 
-// snapshotLastRun 返回最近一次模型轮次诊断信息的副本。
-func snapshotLastRun() map[string]any {
+// LastRunSnapshot 返回最近一次模型轮次诊断信息的副本。
+//
+// 导出与只读诊断统一登记在 chain/forum，目标 ID 与故障上报一致（mutual_forum）；
+// 本包不再单独注册 mutual_forum_agent。
+func LastRunSnapshot() map[string]any {
 	lastRunMu.Lock()
 	defer lastRunMu.Unlock()
 	out := make(map[string]any, len(lastRun))
@@ -161,11 +164,4 @@ func snapshotLastRun() map[string]any {
 	return out
 }
 
-// resetLastRun 清空最近一次模型轮次诊断信息。
-func resetLastRun() {
-	lastRunMu.Lock()
-	lastRun = nil
-	lastRunMu.Unlock()
-}
-
-/* ---------------- 独立上下文已上移到 chain/forum ---------------- */
+/* ---------------- 独立上下文与导出/诊断已上移到 chain/forum ---------------- */

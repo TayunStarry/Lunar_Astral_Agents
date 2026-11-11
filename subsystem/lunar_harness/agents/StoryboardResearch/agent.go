@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 
+	"LunarSubsystem/LunarHarness/internal/textutil"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
@@ -30,7 +31,7 @@ func Plan(ctx context.Context, story string) (result Result, err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	story = clipRunes(strings.TrimSpace(story), maxStoryRunes)
+	story = textutil.TruncateRunes(strings.TrimSpace(story), maxStoryRunes)
 	if story == "" {
 		return Result{}, fmt.Errorf("故事正文为空")
 	}
@@ -128,7 +129,7 @@ func normalizeQueries(queries []string) []string {
 	out := make([]string, 0, len(queries))
 	seen := make(map[string]bool, len(queries))
 	for _, query := range queries {
-		query = clipRunes(strings.TrimSpace(query), maxQueryRunes)
+		query = textutil.TruncateRunes(strings.TrimSpace(query), maxQueryRunes)
 		if query == "" || seen[query] {
 			continue
 		}
@@ -149,16 +150,4 @@ func extractJSONObject(text string) string {
 		return ""
 	}
 	return text[start : end+1]
-}
-
-// clipRunes 按字符数截断。
-func clipRunes(text string, limit int) string {
-	if limit <= 0 {
-		return ""
-	}
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	return string(runes[:limit]) + "…"
 }

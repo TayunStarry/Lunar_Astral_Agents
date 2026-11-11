@@ -24,7 +24,7 @@ func exportContext(includeImages bool) (any, error) {
 
 func init() {
 	agentdump.Register(agentdump.Provider{
-		ID:          "desktop_agent",
+		ID:          AgentID,
 		Label:       DisplayName,
 		Group:       "Go 智能体",
 		Description: DisplayName + "各阶段（编纂/启动/UIA/规划/操作）最近一次执行结果",

@@ -248,7 +248,7 @@ func scopedContent(doc *docContext, rawHandle string) (scope, block string) {
 	}
 	body := scoped.Content
 	if len([]rune(body)) > inlineContentLimit {
-		body = agentbase.HardCutRunes(body, inlineContentLimit)
+		body = agentbase.CutRunes(body, inlineContentLimit)
 	}
 	return scope, "【正文（仅指定范围）】\n" + body
 }
@@ -260,7 +260,7 @@ func buildContentBlock(doc *docContext) string {
 	}
 	return fmt.Sprintf("【正文】\n文件超过 %d 字，未整体注入。请先用 chunk_plan 取得分批区间，"+
 		"再用 read_chunk 或 read_lines 逐片读取（单次 ≤ %d 字）。\n开头片段如下：\n%s",
-		inlineContentLimit, maxToolReadChars, agentbase.HardCutRunes(doc.Text, 1200))
+		inlineContentLimit, maxToolReadChars, agentbase.CutRunes(doc.Text, 1200))
 }
 
 // resourceKindLabel 类型码中文名

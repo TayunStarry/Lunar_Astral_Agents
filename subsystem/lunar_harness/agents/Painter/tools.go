@@ -10,11 +10,6 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
-// ToolDefinitions 导出绘制者工具声明（控制台目录展示用）。
-func ToolDefinitions() []agentbase.ToolDefinition {
-	return toolDefinitions()
-}
-
 // tools 返回本次任务用的工具声明，并把角色目录占位符替换为当前可用角色。
 func (s *session) tools() []agentbase.ToolDefinition {
 	catalog := characterCatalog(mergeProfiles(s.prompts.Builtin, s.custom))

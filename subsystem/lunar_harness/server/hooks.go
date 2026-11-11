@@ -17,12 +17,3 @@ func messageBatchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	MessageBatchHandlerFunc(w, r)
 }
-
-// proxyHandler 代理访问处理器（未注入时明确失败）。
-func proxyHandler(w http.ResponseWriter, r *http.Request) {
-	if ProxyHandlerFunc == nil {
-		http.Error(w, "代理访问能力未装配", http.StatusServiceUnavailable)
-		return
-	}
-	ProxyHandlerFunc(w, r)
-}

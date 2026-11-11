@@ -10,6 +10,7 @@ import (
 	"context"
 
 	desktopos "LunarSubsystem/LunarHarness/engine/desktop"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // uiaTreeResult UIA 树读取结果（用于带超时调用）
@@ -29,12 +30,12 @@ func uiaReaderPhase(ctx context.Context, plan editorTask) (string, []string) {
 	}
 	tree := result.tree
 	elements := []string{}
-	msg := chatMessage{Role: "user", Content: buildPlanContext(plan) + "\n\n【UI 树】\n" + truncateStr(tree, 4096) + "\n\n请整理与任务相关的元素清单与摘要 JSON。"}
+	msg := chatMessage{Role: "user", Content: buildPlanContext(plan) + "\n\n【UI 树】\n" + textutil.TruncateRunes(tree, 4096) + "\n\n请整理与任务相关的元素清单与摘要 JSON。"}
 	text, err := autoChatText(ctx, autoRoleUIA, []chatMessage{{Role: "system", Content: promptUIAReader}, msg})
 	if err != nil {
 		elements = append(elements, "(UIA 理解失败)")
 	} else {
 		elements = append(elements, text)
 	}
-	return truncateStr(tree, 512), elements
+	return textutil.TruncateRunes(tree, 512), elements
 }

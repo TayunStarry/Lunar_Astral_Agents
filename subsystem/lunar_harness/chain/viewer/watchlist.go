@@ -24,9 +24,10 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/bilibili"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 // EnsureWatchlist 生活链入口：内部完成四项条件判定与五步补齐。
@@ -267,15 +268,18 @@ func reviewWatchItem(ctx context.Context, item *watchItem, deps watchlistDeps) {
 }
 
 // readCommentPages 分页读取评论，单条超长直接硬截断；抽不到接口数据时退回 DOM 读取。
+//
+// 接口分页在 engine/bilibili；这里保留去重、截断与 DOM 兜底等业务口径。
 func readCommentPages(reader commentReader, aid int64, limit int) []commentItem {
 	if aid <= 0 || limit <= 0 {
 		return nil
 	}
 	out := make([]commentItem, 0, limit)
 	seen := make(map[string]bool, limit)
-	for page := 1; page <= collectPageCount && len(out) < limit; page++ {
-		items, err := reader.readCommentsAPIPage(1, aid, page, collectPageSize, false)
-		if err != nil || len(items) == 0 {
+	pager := bilibili.NewCommentPager(reader, 1, aid, collectPageSize, false)
+	for page := 0; page < collectPageCount && len(out) < limit; page++ {
+		items, ok := pager.Next()
+		if !ok {
 			break
 		}
 		for _, item := range items {
@@ -284,7 +288,7 @@ func readCommentPages(reader commentReader, aid int64, limit int) []commentItem 
 				continue
 			}
 			seen[key] = true
-			item.Content = hardTruncate(item.Content, collectCommentMaxRunes)
+			item.Content = truncate(item.Content, collectCommentMaxRunes)
 			out = append(out, item)
 			if len(out) >= limit {
 				break
@@ -294,7 +298,7 @@ func readCommentPages(reader commentReader, aid int64, limit int) []commentItem 
 	if len(out) == 0 {
 		if dom, err := reader.readComments(limit); err == nil {
 			for _, item := range dom {
-				item.Content = hardTruncate(item.Content, collectCommentMaxRunes)
+				item.Content = truncate(item.Content, collectCommentMaxRunes)
 				out = append(out, item)
 				if len(out) >= limit {
 					break
@@ -303,4 +307,9 @@ func readCommentPages(reader commentReader, aid int64, limit int) []commentItem 
 		}
 	}
 	return out
+}
+
+// bvidOf 从视频链接里提取 BV 号（无法提取时返回空串）
+func bvidOf(href string) string {
+	return viewerstore.ExtractBVID(href)
 }

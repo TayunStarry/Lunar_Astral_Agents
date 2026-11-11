@@ -173,7 +173,7 @@ func renderFolderDigest(rel string, files []folderFile, dirs int, totalBytes int
 		builder.WriteString(excerpt)
 		builder.WriteByte('\n')
 	}
-	return agentbase.HardCutRunes(strings.TrimRight(builder.String(), "\n"), maxFolderResultRunes)
+	return agentbase.CutRunes(strings.TrimRight(builder.String(), "\n"), maxFolderResultRunes)
 }
 
 // folderExcerpt 按需求关注词在文本文件中摘录命中行。

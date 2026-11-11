@@ -218,7 +218,7 @@ func storeResourceSummary(res resource.Resource, text string) {
 	if text == "" {
 		return
 	}
-	if err := resource.SetSummary(res.ID, agentbase.HardCutRunes(text, summaryStoreChars), nil); err != nil {
+	if err := resource.SetSummary(res.ID, agentbase.CutRunes(text, summaryStoreChars), nil); err != nil {
 		logger.Warn("CrystalAstral", "视觉理解：写入 %s 描述失败: %v", res.Handle, err)
 	}
 }

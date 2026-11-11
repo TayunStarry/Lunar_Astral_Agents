@@ -174,7 +174,7 @@ func docSummary(doc *docContext) string {
 		builder.WriteString("\n")
 	}
 	builder.WriteString("【开头片段】\n")
-	builder.WriteString(agentbase.HardCutRunes(firstMeaningfulLines(doc.Lines, 8), 800))
+	builder.WriteString(agentbase.CutRunes(firstMeaningfulLines(doc.Lines, 8), 800))
 	builder.WriteString("\n（尚无现成摘要：请结合结构要点与正文片段给出简述）")
 	return builder.String()
 }
@@ -216,7 +216,7 @@ func readChunk(doc *docContext, index int) string {
 	text := strings.Join(doc.Lines[start-1:end], "\n")
 	truncated := false
 	if len([]rune(text)) > maxToolReadChars {
-		text = agentbase.HardCutRunes(text, maxToolReadChars)
+		text = agentbase.CutRunes(text, maxToolReadChars)
 		truncated = true
 	}
 	note := ""
@@ -250,7 +250,7 @@ func readLineRange(doc *docContext, start, end int) string {
 	text := strings.Join(doc.Lines[start-1:end], "\n")
 	truncated := false
 	if len([]rune(text)) > maxToolReadChars {
-		text = agentbase.HardCutRunes(text, maxToolReadChars)
+		text = agentbase.CutRunes(text, maxToolReadChars)
 		truncated = true
 	}
 	note := ""

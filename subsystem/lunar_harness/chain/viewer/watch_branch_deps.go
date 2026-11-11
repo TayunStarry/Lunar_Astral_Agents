@@ -16,10 +16,11 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/ViewerRemark"
 	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
+	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/engine/activity"
+	"LunarSubsystem/LunarHarness/engine/bilibili"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
-	"LunarSubsystem/LunarHarness/prompts"
 )
 
 // watchDeps 看视频分支的依赖集合。
@@ -48,16 +49,19 @@ type watchDeps struct {
 // defaultWatchDeps 生产依赖。
 func defaultWatchDeps() watchDeps {
 	return watchDeps{
-		pause:          pauseRequested,
-		now:            time.Now,
-		nextSegment:    viewerstore.NextUnwatchedSegment,
-		loadVideo:      viewerstore.LoadVideo,
-		loadSegments:   viewerstore.LoadSegments,
-		understand:     understandClip,
-		remark:         remarkOnVideo,
-		rollRemark:     rollSegmentRemark,
-		postComment:    postVideoComment,
-		markWatched:    viewerstore.MarkSegmentWatched,
+		pause:        pauseRequested,
+		now:          time.Now,
+		nextSegment:  viewerstore.NextUnwatchedSegment,
+		loadVideo:    viewerstore.LoadVideo,
+		loadSegments: viewerstore.LoadSegments,
+		understand:   understandClip,
+		remark:       remarkOnVideo,
+		rollRemark:   rollSegmentRemark,
+		postComment:  postVideoComment,
+		markWatched: func(bv string, index int, at int64) (viewerstore.SegmentWatchResult, error) {
+			// 完成回调在存储侧的标记事务内执行，偏好策略（watch_topic.go）与完成状态同事务落盘。
+			return viewerstore.MarkSegmentWatched(bv, index, at, bumpWatchedTopics)
+		},
 		removeClip:     discardWatchedClip,
 		countCompleted: viewerstore.CountCompletedVideos,
 		setActivity:    activity.Set,
@@ -95,14 +99,10 @@ func understandClip(ctx context.Context, seg viewerstore.WatchSegment, video vie
 	if err != nil {
 		return "", "", fmt.Errorf("抽帧失败: %w", err)
 	}
-	persona, err := prompts.Read("lifeRole.md")
-	if err != nil {
-		return "", "", fmt.Errorf("读取人设提示词失败: %w", err)
-	}
 	scene := fmt.Sprintf("你正在看《%s》，UP主：%s。这是第 %d/%d 个片段。", video.Title, video.AuthorName, seg.Index+1, total)
 	slice := module.WatchSlice{Index: seg.Index + 1, Start: 0, End: duration, Images: images}
-	task := module.WatchTask(seg.Index+1, total, slice, scene)
-	text, err := ViewerScreening.Slice(ctx, string(persona), task, modelPrimary, images)
+	task := Vision.WatchTask(seg.Index+1, total, slice, scene)
+	text, err := ViewerScreening.Slice(ctx, task, modelPrimary, images)
 	if err != nil {
 		return "", "", err
 	}
@@ -111,12 +111,8 @@ func understandClip(ctx context.Context, seg viewerstore.WatchSegment, video vie
 
 // remarkOnVideo 基于画面理解与视频印象写一条观感评论。
 func remarkOnVideo(ctx context.Context, _ viewerstore.WatchVideo, material string) (string, error) {
-	persona, err := prompts.Read("lifeRole.md")
-	if err != nil {
-		return "", fmt.Errorf("读取人设提示词失败: %w", err)
-	}
 	return ViewerRemark.Remark(ctx, ViewerRemark.RemarkInput{
-		Persona: string(persona), Material: material, Model: modelPrimary,
+		Material: material, Model: modelPrimary,
 	})
 }
 
@@ -130,7 +126,7 @@ func postVideoComment(video viewerstore.WatchVideo, message string, closing bool
 	if err := session.ensureLogin(); err != nil {
 		return false, false, err
 	}
-	info, err := fetchVideoInfo(video.BV)
+	info, err := bilibili.FetchVideo(video.BV)
 	if err != nil {
 		return false, false, err
 	}

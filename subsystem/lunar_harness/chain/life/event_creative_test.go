@@ -4,10 +4,11 @@ package life
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 	"LunarSubsystem/LunarHarness/internal/testenv"
 )
 
@@ -48,10 +49,29 @@ func TestCreativeInstructionKeepsWishText(t *testing.T) {
 	if !strings.Contains(instruction, "写一篇关于月亮的散文") {
 		t.Fatalf("创作指令应保留愿望正文: %s", instruction)
 	}
-	for _, unwanted := range []string{"当前愿望清单", "输出根目录", "-20"} {
+	for _, unwanted := range []string{"当前愿望清单", "输出根目录"} {
 		if strings.Contains(instruction, unwanted) {
 			t.Fatalf("创作指令不应包含 %q: %s", unwanted, instruction)
 		}
+	}
+	// 愿望行按「P<优先级>｜期限｜正文｜ID:<id>」给出：定位正文包含愿望的那一行再按字段核对，
+	// 而不是对整段做裸子串匹配（UUID 的段边界可能恰好拼出 "-20" 之类的片段）。
+	wishLine := lineContaining(instruction, "写一篇关于月亮的散文")
+	if wishLine == "" {
+		t.Fatalf("创作指令缺少愿望清单行: %s", instruction)
+	}
+	fields := strings.Split(wishLine, "｜")
+	if len(fields) != 4 {
+		t.Fatalf("愿望行应为 4 个字段，实际 %d 个: %q", len(fields), wishLine)
+	}
+	if !isPriorityField(fields[0]) {
+		t.Fatalf("优先级字段应位于行首且为 0-15 的非负整数，实际 %q（整行: %q）", fields[0], wishLine)
+	}
+	if fields[2] != "写一篇关于月亮的散文" {
+		t.Fatalf("愿望正文应完整保留，实际 %q", fields[2])
+	}
+	if !strings.HasPrefix(fields[3], "ID:") {
+		t.Fatalf("愿望行末应带 ID 字段，实际 %q", fields[3])
 	}
 	for _, want := range []string{"只做下面这一个主题", "documents/<标题>/", "这次开始一个新作品"} {
 		if !strings.Contains(instruction, want) {
@@ -106,6 +126,26 @@ func TestCreativeInstructionPositiveMoodWithoutPrevious(t *testing.T) {
 	if !strings.Contains(instruction, "这次开始一个新作品") {
 		t.Fatalf("没有上次作品时应开始新作品: %s", instruction)
 	}
+}
+
+// lineContaining 返回首行包含 want 的文本行；没有命中时返回空串。
+func lineContaining(text, want string) string {
+	for _, line := range strings.Split(text, "\n") {
+		if strings.Contains(line, want) {
+			return line
+		}
+	}
+	return ""
+}
+
+// isPriorityField 判断愿望行的优先级字段是否为「P + 0-15 的非负整数」。
+func isPriorityField(field string) bool {
+	value, ok := strings.CutPrefix(field, "P")
+	if !ok {
+		return false
+	}
+	priority, err := strconv.Atoi(value)
+	return err == nil && priority >= 0 && priority <= 15
 }
 
 func resetCreationState() {

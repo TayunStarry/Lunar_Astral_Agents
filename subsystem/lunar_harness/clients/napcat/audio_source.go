@@ -1,6 +1,9 @@
 package napcat
 
-// audio_source.go 演奏音频地址归一与降级辅助。
+// audio_source.go 演奏音频地址归一（传输适配）。
+//
+// 只负责把内部音频地址翻译成 NapCat 能消费的 file 值或用户可访问的地址；
+// 发不出去之后降级到哪一级，由调用方的投递策略决定。
 
 import (
 	"os"
@@ -10,9 +13,9 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 )
 
-// audioMediaSource 把内部音频地址归一为 NapCat 可消费的 file 值：
+// AudioSource 把内部音频地址归一为 NapCat 可消费的 file 值：
 // 本机内容仓库路径优先给绝对路径（避免多余下载），远程地址原样交给 NapCat。
-func audioMediaSource(audio string) (string, bool) {
+func AudioSource(audio string) (string, bool) {
 	raw := strings.TrimSpace(audio)
 	if raw == "" {
 		return "", false
@@ -32,9 +35,9 @@ func audioMediaSource(audio string) (string, bool) {
 	return "", false
 }
 
-// localAudioFile 取本机音频绝对路径（远程地址无法走文件上传时返回 false）
-func localAudioFile(audio string) (string, bool) {
-	source, ok := audioMediaSource(audio)
+// LocalAudioFile 取本机音频绝对路径（远程地址无法走文件上传时返回 false）
+func LocalAudioFile(audio string) (string, bool) {
+	source, ok := AudioSource(audio)
 	if !ok {
 		return "", false
 	}
@@ -45,8 +48,8 @@ func localAudioFile(audio string) (string, bool) {
 	return source, true
 }
 
-// audioLink 构造可供用户直接访问的音频地址（用于降级文字说明）
-func audioLink(audio string) string {
+// AudioLink 构造可供用户直接访问的音频地址（用于降级文字说明）
+func AudioLink(audio string) string {
 	raw := strings.TrimSpace(audio)
 	if raw == "" {
 		return ""
@@ -62,12 +65,4 @@ func audioLink(audio string) string {
 		return config.LocalBaseURL() + "/file/read/" + filepath.ToSlash(rel)
 	}
 	return ""
-}
-
-// fileSizeOf 返回本机文件大小，失败时返回 0
-func fileSizeOf(path string) int64 {
-	if info, err := os.Stat(path); err == nil {
-		return info.Size()
-	}
-	return 0
 }

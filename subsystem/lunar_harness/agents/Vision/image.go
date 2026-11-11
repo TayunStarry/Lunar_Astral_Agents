@@ -6,7 +6,6 @@ package Vision
 // 原图字节不出 Go 侧（见 docs/adr/0008）。
 
 import (
-	"LunarSubsystem/LunarHarness/engine/multimodal"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
@@ -47,5 +46,5 @@ func imageTask(question string) string {
 	} else {
 		task = agentbase.PromptText("visionImageTask.md")
 	}
-	return multimodal.WithVisualRules(task)
+	return WithVisualRules(task)
 }

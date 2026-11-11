@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // SetBroadcast 注入 WebSocket 结构化广播（由装配层调用；nil 表示不广播）。
@@ -167,8 +168,8 @@ func insertRecord(tx *sql.Tx, path string, notice EditNotice, at time.Time, seq 
 	_, err := tx.Exec(`INSERT INTO `+editTable+` (
 		seq, path, op, added, removed, start_line, lines, handle, failed, at, created_at
 	) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-		int64(seq), path, notice.Op, clipRunes(notice.Added, maxSnippetRunes),
-		clipRunes(notice.Removed, maxSnippetRunes), notice.StartLine, notice.Lines,
+		int64(seq), path, notice.Op, textutil.TruncateRunesTrimmed(notice.Added, maxSnippetRunes),
+		textutil.TruncateRunesTrimmed(notice.Removed, maxSnippetRunes), notice.StartLine, notice.Lines,
 		notice.Handle, boolInt(notice.Failed), at.Unix(), at.Unix())
 	return err
 }

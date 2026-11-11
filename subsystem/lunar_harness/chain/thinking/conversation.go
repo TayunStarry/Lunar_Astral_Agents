@@ -337,9 +337,9 @@ func pushAssistantContext(kind, content, audio string, auto bool) bool {
 	return ok
 }
 
-// pushAssistantMusic 推送一条音乐消息并写入缓存。
+// PushAssistantMusic 推送一条音乐消息并写入缓存。
 // 两个前端共用同一份数据：音频地址 + 标题 + 描述 + 时长，历史消息据此重放。
-func pushAssistantMusic(title, summary string, duration float64, audio string) bool {
+func PushAssistantMusic(title, summary string, duration float64, audio string) bool {
 	PushMessageFunc("context", PushContextData{
 		Type: "music", Audio: audio, Title: title, Summary: summary, Duration: duration,
 	})

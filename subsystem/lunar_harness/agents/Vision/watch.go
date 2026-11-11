@@ -64,7 +64,7 @@ func watchSlices(res resource.Resource, slices []multimodal.WatchSlice, label, q
 
 // watchSlice 观看一个切片（失败自动重试一次）
 func watchSlice(system, label string, slice multimodal.WatchSlice, index, total int) (string, error) {
-	task := multimodal.WatchTask(index, total, slice, "这是"+label+"画面。")
+	task := WatchTask(index, total, slice, "这是"+label+"画面。")
 	parts := make([]agentbase.ContentPart, 0, len(slice.Images)+1)
 	parts = append(parts, agentbase.ContentPart{Type: "text", Text: task})
 	for _, image := range slice.Images {
@@ -88,7 +88,7 @@ func watchQuestion(system string, slices []multimodal.WatchSlice, question strin
 		return "", fmt.Errorf("定向提问缺少可用画面")
 	}
 	parts := make([]agentbase.ContentPart, 0, len(images)+1)
-	parts = append(parts, agentbase.ContentPart{Type: "text", Text: multimodal.WatchQuestionTask(question)})
+	parts = append(parts, agentbase.ContentPart{Type: "text", Text: WatchQuestionTask(question)})
 	for _, image := range images {
 		parts = append(parts, agentbase.ContentPart{Type: "image_url", ImageURL: &agentbase.ImageURL{URL: image}})
 	}
@@ -145,7 +145,7 @@ func cacheSliceFrames(res resource.Resource, slices []multimodal.WatchSlice) {
 // mergeImpressions 把多片观看感受合成为一段整体感受
 func mergeImpressions(system string, total int, concatenated string) (string, error) {
 	task := fmt.Sprintf("%s\n\n以上是同一段影像按时间顺序的 %d 段观看记录：\n%s",
-		multimodal.WatchMergeTask(), total, concatenated)
+		WatchMergeTask(), total, concatenated)
 	merged, err := agentbase.ChatWithRetry(roleLabel, []agentbase.Message{
 		{Role: "system", Content: system},
 		{Role: "user", Content: task},

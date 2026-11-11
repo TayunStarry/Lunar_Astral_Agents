@@ -15,6 +15,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/archive"
 	"LunarSubsystem/LunarHarness/engine/console/channel"
 	"LunarSubsystem/LunarHarness/engine/sound"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // Publish 发布更新包：收集资源 → 打包 → 创建 Release → 上传附件。
@@ -216,7 +217,7 @@ func createRelease(cfg Config, version, body string) (int64, error) {
 		return 0, fmt.Errorf("解析 Release 响应失败: %w", err)
 	}
 	if release.ID == 0 {
-		return 0, fmt.Errorf("Release 创建异常: %s", truncate(string(resp), 512))
+		return 0, fmt.Errorf("Release 创建异常: %s", textutil.TruncateRunes(string(resp), 512))
 	}
 	logf("  Release 已创建: %s（ID=%d）", version, release.ID)
 	return release.ID, nil
@@ -249,7 +250,7 @@ func uploadAsset(cfg Config, releaseID int64, filePath string) error {
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(data), 512))
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, textutil.TruncateRunes(string(data), 512))
 	}
 	return nil
 }
@@ -460,7 +461,7 @@ func postJSON(path string, payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(body), 512))
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, textutil.TruncateRunes(string(body), 512))
 	}
 	return body, nil
 }

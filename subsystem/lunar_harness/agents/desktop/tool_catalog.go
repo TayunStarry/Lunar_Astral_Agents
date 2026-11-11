@@ -24,7 +24,7 @@ func ToolCatalog() []agentinfo.Agent {
 		tools = append(tools, agentinfo.Tool{Name: def.Function.Name, Description: def.Function.Description})
 	}
 	return []agentinfo.Agent{{
-		ID: "desktop_operator", Name: DisplayName,
+		ID: AgentID, Name: DisplayName,
 		Note:  "桌面操控智能体：按自然语言要求操作真实桌面键鼠。",
 		Tools: tools,
 	}}

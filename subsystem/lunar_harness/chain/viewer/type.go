@@ -4,13 +4,13 @@ package viewer
 //
 // 观影流程由生活链的五步回合编排驱动（见 chain/life）：
 // 待看列表补齐 → 选片 → 切片理解 → 里程碑 → 被动回应。
-// 待看列表与记忆的持久化由 engine/viewerstore 负责。
+// 待看列表与记忆的持久化由 engine/viewerstore 负责，
+// B 站接口协议与响应字段映射由 engine/bilibili 负责。
+
+import "LunarSubsystem/LunarHarness/engine/bilibili"
 
 // MentionTarget 分享时 @ 的目标：来自当前账号的特别关注列表。
-type MentionTarget struct {
-	Name string `json:"name"`
-	UID  int64  `json:"uid,omitempty"`
-}
+type MentionTarget = bilibili.MentionTarget
 
 // Config 哔哩观影的长期配置（local_data/config/bilibili.json）。
 //
@@ -38,34 +38,10 @@ type videoLink struct {
 }
 
 // videoInfo 视频的基础信息（详情接口）。
-type videoInfo struct {
-	Bvid  string
-	Aid   int64
-	Cid   int64
-	Title string
-	Owner string
-	// OwnerMid 作者 UID（待看列表入库要求同时保留 UID 与昵称）
-	OwnerMid    int64
-	Duration    int
-	URL         string
-	Desc        string
-	Pic         string
-	PublishTime int64
-	// 热度指标：参与候选综合匹配度加权
-	View     int64
-	Like     int64
-	Coin     int64
-	Favorite int64
-	ReplyNum int64
-	Danmaku  int64
-}
+type videoInfo = bilibili.Video
 
 // commentItem 一条评论（视频印象与风险复核共用）。
-type commentItem struct {
-	User    string `json:"user"`
-	Content string `json:"content"`
-	Like    int    `json:"like"`
-}
+type commentItem = bilibili.Comment
 
 // videoImpression 结构化「视频印象」：由轻量模型依据视频可采集信息整理。
 type videoImpression struct {

@@ -12,7 +12,6 @@ import (
 	"LunarSubsystem/LunarHarness/agents/MemoryTagger"
 	"LunarSubsystem/LunarHarness/agents/Painter"
 	"LunarSubsystem/LunarHarness/agents/filesupport"
-	"LunarSubsystem/LunarHarness/agents/ltpxhost"
 	"LunarSubsystem/LunarHarness/chain/search"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking"
@@ -31,6 +30,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/websocket"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 	"LunarSubsystem/LunarHarness/server"
+	"LunarSubsystem/LunarHarness/server/ltpxhost"
 )
 
 // Assemble 装配各子系统：传输层 → HTTP 服务 → 服务层（月华生产者 / 琉璃）→ 消费层（Go 思维链）。
@@ -114,7 +114,8 @@ func Assemble() {
 			websocket.Instance.TryBroadcastMessageToChannel(libraryTerminalChannel, "storyboard_task", view)
 		}
 	}
-	// 对话者工具执行器已归 agents/Dialogue，生活 / 检索能力由 thinking 装配期注入。
+	// 对话者工具执行器与资源解读能力：链侧只提供实现，注入点与顺序在这里显式决定。
+	wireChainHooks()
 
 	// ==== 跨层注入：HTTP 层所需能力 ====
 	// 必须在 server.Start 之前接线：消息写入 / 代理 / 视觉读取 / 外部推理排队。

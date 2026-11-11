@@ -790,8 +790,8 @@
       "post": {
         "summary": "资源库自然语言转 SQL（携带当前库表结构，只生成一条只读语句）",
         "description": "资源库自然语言转 SQL（携带当前库表结构，只生成一条只读语句）",
-        "operationId": "library.DBAISQLHandler",
-        "x-handler": "library.DBAISQLHandler",
+        "operationId": "DBAISQLHandler",
+        "x-handler": "DBAISQLHandler",
         "responses": {
           "200": {
             "description": "成功"

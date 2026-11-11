@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
-	"LunarSubsystem/LunarHarness/chain/search/crawler"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/executors/WebCrawler"
 	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
@@ -48,7 +48,7 @@ func composeReportFallback(in reportInput) string {
 
 	if strings.TrimSpace(in.SearchPageText) != "" {
 		b.WriteString("\n◆ 搜索页概览：\n")
-		b.WriteString(textutil.HardCutRunes(in.SearchPageText, 1500))
+		b.WriteString(textutil.HardCutRunesWithNotice(in.SearchPageText, 1500))
 		b.WriteString("\n")
 	}
 
@@ -58,7 +58,7 @@ func composeReportFallback(in reportInput) string {
 			if i >= 8 {
 				break
 			}
-			fmt.Fprintf(&b, "%d. %s（%s）\n", i+1, hit.Title, crawler.DomainOf(hit.URL))
+			fmt.Fprintf(&b, "%d. %s（%s）\n", i+1, hit.Title, WebCrawler.DomainOf(hit.URL))
 		}
 	}
 
@@ -76,7 +76,7 @@ func composeReportFallback(in reportInput) string {
 			if text == "" {
 				continue
 			}
-			fmt.Fprintf(&b, "【%s】\n%s\n\n", textutil.FirstNonEmpty(p.Title, p.Domain), textutil.HardCutRunes(text, 800))
+			fmt.Fprintf(&b, "【%s】\n%s\n\n", textutil.FirstNonEmpty(p.Title, p.Domain), textutil.HardCutRunesWithNotice(text, 800))
 		}
 	} else {
 		b.WriteString("\n◆ 打开的页面：本次未获取到可用的详情页内容。\n")

@@ -120,5 +120,5 @@ func AppendAttempt(list []ActionAttempt, attempt ActionAttempt) []ActionAttempt 
 
 // ReportFailure 把编排失败上报给智能修复（人工中断不算故障）。
 func ReportFailure(err error) {
-	agentbase.ReportRun("desktop", err)
+	agentbase.ReportRun(AgentID, err)
 }

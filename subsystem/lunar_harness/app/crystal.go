@@ -3,7 +3,6 @@ package app
 import (
 	"net/http"
 
-	"LunarSubsystem/LunarHarness/agents/ltpxhost"
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
@@ -11,6 +10,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/memory"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/protocol/ltpx"
+	"LunarSubsystem/LunarHarness/server/ltpxhost"
 )
 
 // assembleCrystal 装配琉璃人格格：知识库/记忆库、LTPX 协调与前端总线消费。

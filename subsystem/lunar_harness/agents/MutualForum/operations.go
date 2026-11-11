@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	engineforum "LunarSubsystem/LunarHarness/engine/forum"
 )
 
 var topicIDPattern = regexp.MustCompile(`^t_[0-9a-f]{8,32}$`)
@@ -79,7 +77,7 @@ func Poll(ctx context.Context, sinceSeq int64, status string) (*PollResult, erro
 		return nil, err
 	}
 	// 领取轮次会改动服务端轮次与本地账号文件，必须进入唯一写锁。
-	return engineforum.WithWrite(ctx, func() (*PollResult, error) {
+	return withWrite(ctx, func() (*PollResult, error) {
 		acct, err := signedInWriteLocked(ctx, cfg, c)
 		if err != nil {
 			return nil, err
@@ -169,7 +167,7 @@ func isPollRetryCode(code string) bool {
 }
 
 // ensureRound 返回当前可用轮次；没有、已用过或临近过期时自动轮询续领。
-// 调用方必须已持有 engine/forum 的唯一写锁（目前只有 Reply 在此前提下调用）。
+// 调用方必须已持有本包的唯一写锁（目前只有 Reply 在此前提下调用）。
 func ensureRound(ctx context.Context, cfg Config, c *Client, acct *Account) (string, error) {
 	ttl := acct.RoundTTL
 	if ttl <= 0 {
@@ -290,7 +288,7 @@ func CreateTopic(ctx context.Context, title, body, requestID string) (*CreateTop
 	if requestID = strings.TrimSpace(requestID); requestID == "" {
 		requestID = newRequestID("lm-topic")
 	}
-	return engineforum.WithWrite(ctx, func() (*CreateTopicResult, error) {
+	return withWrite(ctx, func() (*CreateTopicResult, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return nil, err
 		}
@@ -319,7 +317,7 @@ func Reply(ctx context.Context, topicID, body, requestID string) (*CreatePostRes
 		return nil, err
 	}
 	// 「领轮 → 发帖 → 落盘」必须在同一写锁内完成，否则两条路径会看到同一轮次。
-	return engineforum.WithWrite(ctx, func() (*CreatePostResult, error) {
+	return withWrite(ctx, func() (*CreatePostResult, error) {
 		acct, err := signedInWriteLocked(ctx, cfg, c)
 		if err != nil {
 			return nil, err
@@ -386,7 +384,7 @@ func ManageTopic(ctx context.Context, topicID, action string) (*ActionResult, er
 	if err != nil {
 		return nil, err
 	}
-	return engineforum.WithWrite(ctx, func() (*ActionResult, error) {
+	return withWrite(ctx, func() (*ActionResult, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return nil, err
 		}

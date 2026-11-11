@@ -14,6 +14,7 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/StoryboardResearch"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // advanceResearching 推进资料准备：先规划检索意图，再逐条执行。
@@ -58,7 +59,7 @@ func advanceResearching(ctx context.Context, taskID string) {
 				Status:       statusResearching,
 				Progress:     4,
 				Event:        eventThinking,
-				ThoughtDelta: fmt.Sprintf("【资料准备】未能生成检索意图（%s），直接进入分镜规划。\n", clipRunes(err.Error(), 120)),
+				ThoughtDelta: fmt.Sprintf("【资料准备】未能生成检索意图（%s），直接进入分镜规划。\n", textutil.TruncateRunes(err.Error(), 120)),
 			})
 			commitVolatileLocked(state)
 			return
@@ -120,7 +121,7 @@ func advanceResearching(ctx context.Context, taskID string) {
 	if err != nil {
 		note = "检索失败：" + err.Error()
 	}
-	note = clipRunes(strings.TrimSpace(note), maxResearchNoteRunes)
+	note = textutil.TruncateRunes(strings.TrimSpace(note), maxResearchNoteRunes)
 	state.research.notes = append(state.research.notes,
 		fmt.Sprintf("【检索 %d｜%s】\n%s", state.research.index+1, query, note))
 	state.research.index++

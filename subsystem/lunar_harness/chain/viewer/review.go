@@ -13,9 +13,10 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/ViewerCensor"
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/bilibili"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 // reviewVideo 主模型审核：内置风险词先挡一层，再让主模型复核并生成评价与切片数。
@@ -69,7 +70,7 @@ func aiReviewVideo(video *videoRecord) (videoReview, error) {
 	material := riskMaterial(video.Info, video.Comments) +
 		"\n\n【视频印象】\n" + truncate(video.Impression.Summary, 512) +
 		fmt.Sprintf("\n\n时长：%d 秒\n最多可看切片：%d 个（每片 60 秒）", video.Info.Duration, maxSlices)
-	cover := fetchCoverDataURL(video.Info.Pic)
+	cover := bilibili.FetchCoverDataURL(video.Info.Pic)
 	text, err := ViewerCensor.Review(context.Background(), ViewerCensor.ReviewInput{
 		Title:         video.Info.Title,
 		Material:      material,

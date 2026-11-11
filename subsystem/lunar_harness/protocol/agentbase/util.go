@@ -48,6 +48,6 @@ func StringOf(content any) string {
 // 实现唯一收敛在 internal/textutil，此处仅保留包级入口供既有调用方使用。
 func TruncateRunes(text string, limit int) string { return textutil.TruncateRunes(text, limit) }
 
-// HardCutRunes 按字符硬切断（超长时以省略号收尾）。
-// 与 textutil.HardCutRunes（带「已截断」标记）语义不同，唯一实现在 internal/textutil.CutRunes。
-func HardCutRunes(text string, limit int) string { return textutil.CutRunes(text, limit) }
+// CutRunes 按字符硬切断（超长时以省略号收尾，总长度不超过 limit）。
+// 名字与行为一致：唯一实现在 internal/textutil.CutRunes，不再借用 HardCutRunes 之名。
+func CutRunes(text string, limit int) string { return textutil.CutRunes(text, limit) }

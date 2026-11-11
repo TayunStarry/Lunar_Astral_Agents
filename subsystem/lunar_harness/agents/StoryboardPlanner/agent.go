@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
@@ -36,7 +37,7 @@ func Plan(ctx context.Context, req Request) (result Result, err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	story := clipRunes(strings.TrimSpace(req.Story), maxStoryRunes)
+	story := textutil.TruncateRunes(strings.TrimSpace(req.Story), maxStoryRunes)
 	if story == "" {
 		return Result{}, fmt.Errorf("故事正文为空")
 	}
@@ -219,7 +220,7 @@ func ComposePrompt(shot Shot) string {
 		b.WriteString("【镜头衔接】" + shot.Continuity + "\n")
 	}
 	b.WriteString("【画面要求】" + shot.Prompt + "\n")
-	return clipRunes(b.String(), maxPaintPromptRunes)
+	return textutil.TruncateRunes(b.String(), maxPaintPromptRunes)
 }
 
 // extractJSONObject 从正文中截取第一个 JSON 对象。
@@ -234,16 +235,4 @@ func extractJSONObject(text string) string {
 		return ""
 	}
 	return text[start : end+1]
-}
-
-// clipRunes 按字符数截断。
-func clipRunes(text string, limit int) string {
-	if limit <= 0 {
-		return ""
-	}
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	return string(runes[:limit]) + "…"
 }

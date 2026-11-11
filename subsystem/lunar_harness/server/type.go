@@ -46,6 +46,29 @@ type MediaPlatformHostsResponse struct {
 	VideoPlatformHosts []string `json:"video_platform_hosts"`
 }
 
+// ProxyRequest 代理请求结构（/proxy 入参）
+type ProxyRequest struct {
+	URL         string      `json:"url"`
+	RequestInit RequestInit `json:"requestInit"`
+}
+
+// RequestInit 请求初始化参数
+type RequestInit struct {
+	Method      string            `json:"method,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	Body        any               `json:"body,omitempty"`
+	Redirect    string            `json:"redirect,omitempty"`
+	Credentials string            `json:"credentials,omitempty"`
+}
+
+// ProxyResponse 代理响应结构
+type ProxyResponse struct {
+	Status     int               `json:"status"`
+	StatusText string            `json:"statusText"`
+	Headers    map[string]string `json:"headers"`
+	Body       json.RawMessage   `json:"body"`
+}
+
 // SystemEndpoint 单条系统端点定义（统一路由注册表的元素）。
 // Handler 与 Path 由 server 装配层消费，Method/Description 供 /api-docs 与自检使用。
 type SystemEndpoint struct {
@@ -284,4 +307,18 @@ type DataDumpRequest struct {
 	Agent string
 	// IncludeImages 是否保留图片原始 base64（仅 DataDumpContext 使用）
 	IncludeImages bool
+}
+
+// DBSQLRequest 自然语言转 SQL 请求。
+type DBSQLRequest struct {
+	Path     string `json:"path"`
+	Question string `json:"question"`
+}
+
+// DBSQLResponse 自然语言转 SQL 回执：只返回一条只读 SQL，不执行。
+type DBSQLResponse struct {
+	OK    bool   `json:"ok"`
+	Path  string `json:"path"`
+	SQL   string `json:"sql"`
+	Error string `json:"error,omitempty"`
 }

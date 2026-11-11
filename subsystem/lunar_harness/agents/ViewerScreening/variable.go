@@ -11,10 +11,13 @@ const (
 	Role = agentinfo.NameViewerScreening
 
 	// 提示词文件名
-	promptImpress  = "viewerScreeningImpress.md"
-	promptQuick    = "viewerScreeningQuick.md"
-	promptDirect   = "viewerScreeningDirect.md"
+	promptImpress = "viewerScreeningImpress.md"
+	promptQuick   = "viewerScreeningQuick.md"
+	promptDirect  = "viewerScreeningDirect.md"
+	// promptKeywords 选片关键词提示词
 	promptKeywords = "viewerScreeningKeywords.md"
+	// personaFile 人设提示词文件名（切片观看的人设）
+	personaFile = "lifeRole.md"
 
 	// impressAttempts 印象整理的尝试次数
 	impressAttempts = 3

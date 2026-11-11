@@ -13,6 +13,8 @@ const (
 	promptDynamic = "viewerShareDynamic.md"
 	// promptShare 分享评论提示词
 	promptShare = "viewerShareComment.md"
+	// personaFile 人设提示词文件名
+	personaFile = "lifeRole.md"
 	// attempts 分享类调用的尝试次数
 	attempts = 3
 	// taskBlock 人设与任务的分隔格式

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/chain/search/crawler"
+	"LunarSubsystem/LunarHarness/executors/WebCrawler"
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 
@@ -35,7 +35,7 @@ func exportContext(includeImages bool) (any, error) {
 			"generated_at":  time.Now().Format(time.RFC3339),
 			"message_count": 0,
 			"note":          "本次进程内还没有执行过网络搜索",
-			"config":        crawler.LoadConfig(),
+			"config":        WebCrawler.LoadConfig(),
 		}, nil
 	}
 	return map[string]any{

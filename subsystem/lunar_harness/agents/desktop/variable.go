@@ -13,6 +13,9 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
+// AgentID 智能体唯一标识：推理实况、故障修复、数据导出与工具目录共用这一个 ID。
+const AgentID = "desktop_operator"
+
 // DisplayName 导出、维修与工具目录展示用的显示名。
 const DisplayName = agentinfo.NameDesktopOperator
 

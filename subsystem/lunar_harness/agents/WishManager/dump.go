@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 	"LunarSubsystem/LunarHarness/protocol/agentdump"
 )
 

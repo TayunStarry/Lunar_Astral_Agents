@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 

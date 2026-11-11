@@ -24,7 +24,7 @@ func autoChat(ctx context.Context, role string, messages []chatMessage, tools []
 		return chatMessage{}, ErrCanceled
 	}
 	reply, err := agentbase.StreamWithRetry(ctx, agentbase.StreamRequest{
-		Agent:    "desktop",
+		Agent:    AgentID,
 		Role:     role,
 		Messages: messages,
 		Tools:    tools,
@@ -68,9 +68,4 @@ func autoChatText(ctx context.Context, role string, messages []chatMessage) (str
 // StringOfChatContent 从消息 content（字符串或片段数组）中提取纯文本。
 func StringOfChatContent(content any) string {
 	return agentbase.StringOf(content)
-}
-
-// truncateStr 以 rune 为单位截断字符串，超长部分以省略号结尾。
-func truncateStr(s string, n int) string {
-	return agentbase.TruncateRunes(s, n)
 }

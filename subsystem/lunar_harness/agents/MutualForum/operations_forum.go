@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	engineforum "LunarSubsystem/LunarHarness/engine/forum"
 )
 
 var (
@@ -42,7 +40,7 @@ func CreateComment(ctx context.Context, postID, body, quoteUID string, mentions 
 	if err != nil {
 		return nil, err
 	}
-	return engineforum.WithWrite(ctx, func() (*Comment, error) {
+	return withWrite(ctx, func() (*Comment, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return nil, err
 		}
@@ -91,7 +89,7 @@ func React(ctx context.Context, target, id, action string) (*ReactResult, error)
 	if err != nil {
 		return nil, err
 	}
-	return engineforum.WithWrite(ctx, func() (*ReactResult, error) {
+	return withWrite(ctx, func() (*ReactResult, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return nil, err
 		}
@@ -141,7 +139,7 @@ func advanceEventCursor(ctx context.Context, cfg Config, acct *Account, cursor U
 	if acct == nil {
 		return nil
 	}
-	return engineforum.WithWriteErr(ctx, func() error {
+	return withWriteErr(ctx, func() error {
 		if fresh, loadErr := loadAccount(cfg); loadErr == nil && fresh != nil {
 			acct = fresh
 		}
@@ -196,7 +194,7 @@ func AckGuidance(ctx context.Context, guidanceID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return engineforum.WithWrite(ctx, func() (bool, error) {
+	return withWrite(ctx, func() (bool, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return false, err
 		}
@@ -240,7 +238,7 @@ func CreatePoll(ctx context.Context, topicID, question string, options []string,
 	if err != nil {
 		return nil, err
 	}
-	return engineforum.WithWrite(ctx, func() (*PollView, error) {
+	return withWrite(ctx, func() (*PollView, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return nil, err
 		}
@@ -261,7 +259,7 @@ func VotePoll(ctx context.Context, pollID string, optionIDs []int) (*PollResults
 	if err != nil {
 		return nil, err
 	}
-	return engineforum.WithWrite(ctx, func() (*PollResults, error) {
+	return withWrite(ctx, func() (*PollResults, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return nil, err
 		}
@@ -295,7 +293,7 @@ func ClosePoll(ctx context.Context, pollID string) (*PollResults, error) {
 	if err != nil {
 		return nil, err
 	}
-	return engineforum.WithWrite(ctx, func() (*PollResults, error) {
+	return withWrite(ctx, func() (*PollResults, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return nil, err
 		}
@@ -328,7 +326,7 @@ func EditContent(ctx context.Context, target, id, body string) (map[string]any, 
 	if err != nil {
 		return nil, err
 	}
-	return engineforum.WithWrite(ctx, func() (map[string]any, error) {
+	return withWrite(ctx, func() (map[string]any, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return nil, err
 		}
@@ -350,7 +348,7 @@ func DeleteContent(ctx context.Context, target, id string) (*DeleteResult, error
 	if err != nil {
 		return nil, err
 	}
-	return engineforum.WithWrite(ctx, func() (*DeleteResult, error) {
+	return withWrite(ctx, func() (*DeleteResult, error) {
 		if _, err := signedInWriteLocked(ctx, cfg, c); err != nil {
 			return nil, err
 		}
@@ -369,7 +367,7 @@ func Rename(ctx context.Context, name string) (*Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	return engineforum.WithWrite(ctx, func() (*Instance, error) {
+	return withWrite(ctx, func() (*Instance, error) {
 		acct, err := signedInWriteLocked(ctx, cfg, c)
 		if err != nil {
 			return nil, err

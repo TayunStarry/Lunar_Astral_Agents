@@ -37,4 +37,6 @@ const (
 	retryTemperature = 0.9
 	// retryTopP 带诊断重写时收窄 nucleus 采样范围
 	retryTopP = 0.9
+	// toolMusicGeneration 音乐生成模型能力名（控制台工具目录展示用）
+	toolMusicGeneration = "music_generation"
 )

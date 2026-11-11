@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
+	"LunarSubsystem/LunarHarness/engine/bilibili"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
@@ -23,10 +24,6 @@ const (
 	directImpressionCommentMax = 60
 	// directImpressionDanmakuMax 直驱印象采集的弹幕条数（已去重）
 	directImpressionDanmakuMax = 80
-	// quickCommentPageSize 评论接口单页条数
-	quickCommentPageSize = 20
-	// quickCommentMaxPages 评论最多翻几页（高赞榜前三页足够覆盖）
-	quickCommentMaxPages = 3
 )
 
 // DirectImpression 指定视频的 URL 直驱印象（规范三的 BilibiliSearch 直驱模式）。
@@ -39,17 +36,17 @@ func DirectImpression(rawURL, instruction string) (string, error) {
 	if bvid == "" {
 		return "", fmt.Errorf("不是有效的 B 站视频地址")
 	}
-	info, err := fetchVideoInfo(bvid)
+	info, err := bilibili.FetchVideo(bvid)
 	if err != nil {
 		return "", fmt.Errorf("读取视频信息失败: %w", err)
 	}
-	tags, tagErr := fetchVideoTags(bvid)
+	tags, tagErr := bilibili.FetchTags(bvid)
 	if tagErr != nil {
 		logger.Warn("BilibiliViewer", "直驱印象读取标签失败（继续）: %v", tagErr)
 	}
 	// 评论翻页聚合 + 弹幕均按内容去重，失败不影响主材料
 	comments := fetchQuickComments(info.Aid, directImpressionCommentMax)
-	danmaku := fetchDanmaku(info.Cid, directImpressionDanmakuMax)
+	danmaku := bilibili.FetchDanmaku(info.Cid, directImpressionDanmakuMax)
 	material := quickDigestMaterial(info, tags, comments, danmaku, directImpressionCommentMax)
 	// 卸主模型 → light_reasoning 写印象 → 收尾卸载
 	unloadModel(modelPrimary)
@@ -66,35 +63,24 @@ func DirectImpression(rawURL, instruction string) (string, error) {
 	return truncate(summary, 1200), nil
 }
 
-// fetchQuickComments 公开评论接口读取高赞评论（按内容去重，最多翻三页）；失败返回 nil。
+// fetchQuickComments 公开评论接口读取高赞评论（按内容去重）；失败返回 nil。
+//
+// 分页与响应解析在 engine/bilibili，这里只保留「去重 + 截断到 max」的业务口径。
 func fetchQuickComments(aid int64, max int) []commentItem {
 	if aid <= 0 || max <= 0 {
 		return nil
 	}
-	pages := (max + quickCommentPageSize - 1) / quickCommentPageSize
-	if pages > quickCommentMaxPages {
-		pages = quickCommentMaxPages
-	}
 	out := make([]commentItem, 0, max)
 	seen := make(map[string]bool, max)
-	for page := 1; page <= pages; page++ {
-		items, ok := fetchQuickCommentPage(aid, page, quickCommentPageSize)
-		if !ok || len(items) == 0 {
-			break
+	for _, item := range bilibili.HighLikeComments(aid, max) {
+		// 去重键：折叠空白并忽略大小写，挡住「第一」「666」这类重复刷屏
+		key := commentDedupeKey(item.Content)
+		if key == "" || seen[key] {
+			continue
 		}
-		for _, item := range items {
-			// 去重键：折叠空白并忽略大小写，挡住「第一」「666」这类重复刷屏
-			key := commentDedupeKey(item.Content)
-			if key == "" || seen[key] {
-				continue
-			}
-			seen[key] = true
-			out = append(out, item)
-			if len(out) >= max {
-				return out
-			}
-		}
-		if len(items) < quickCommentPageSize {
+		seen[key] = true
+		out = append(out, item)
+		if len(out) >= max {
 			break
 		}
 	}
@@ -104,47 +90,6 @@ func fetchQuickComments(aid int64, max int) []commentItem {
 // commentDedupeKey 评论去重键：折叠空白并忽略大小写。
 func commentDedupeKey(content string) string {
 	return strings.ToLower(strings.Join(strings.Fields(content), " "))
-}
-
-// fetchQuickCommentPage 读取评论高赞榜的指定页；ok=false 表示接口不可用。
-func fetchQuickCommentPage(aid int64, page, pageSize int) ([]commentItem, bool) {
-	target := fmt.Sprintf("https://api.bilibili.com/x/v2/reply?type=1&oid=%d&sort=2&ps=%d&pn=%d",
-		aid, pageSize, page)
-	var resp struct {
-		Code int `json:"code"`
-		Data struct {
-			Replies []struct {
-				Member struct {
-					Uname string `json:"uname"`
-				} `json:"member"`
-				Content struct {
-					Message string `json:"message"`
-				} `json:"content"`
-				Like int `json:"like"`
-			} `json:"replies"`
-		} `json:"data"`
-	}
-	if err := biliHTTPGetJSON(target, &resp); err != nil {
-		logger.Warn("BilibiliViewer", "速览读取评论失败（继续）: %v", err)
-		return nil, false
-	}
-	if resp.Code != 0 {
-		logger.Warn("BilibiliViewer", "速览评论接口 code=%d（第 %d 页）", resp.Code, page)
-		return nil, false
-	}
-	out := make([]commentItem, 0, len(resp.Data.Replies))
-	for _, item := range resp.Data.Replies {
-		content := strings.TrimSpace(item.Content.Message)
-		if content == "" {
-			continue
-		}
-		out = append(out, commentItem{
-			User:    strings.TrimSpace(item.Member.Uname),
-			Content: truncate(content, 512),
-			Like:    item.Like,
-		})
-	}
-	return out, true
 }
 
 // quickDigestMaterial 把采集到的材料排版成轻量模型的输入。

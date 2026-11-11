@@ -94,15 +94,12 @@ var dialogueModelRun ModelRunFunc = defaultModelRun
 // ==== 广播 ====
 
 var (
-	// PushMessageFunc 结构化广播函数，由装配层注入为统一集线器的 BroadcastMessage
-	PushMessageFunc func(msgType string, data any)
-)
-
-func init() {
-	PushMessageFunc = func(msgType string, data any) {
+	// PushMessageFunc 结构化广播函数，由装配层注入为统一集线器的 BroadcastMessage。
+	// 未注入时打一条明确错误，避免推送静默丢失让对话表现为「模型说了但前端没收到」。
+	PushMessageFunc func(msgType string, data any) = func(msgType string, data any) {
 		logger.Error(lunarCoreModule, "PushMessageFunc 未初始化, 消息类型: %s", msgType)
 	}
-}
+)
 
 // ==== 对话缓存 ====
 

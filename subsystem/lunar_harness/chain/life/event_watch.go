@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/chain/viewer"
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 type watchEvent struct{ params eventParams }

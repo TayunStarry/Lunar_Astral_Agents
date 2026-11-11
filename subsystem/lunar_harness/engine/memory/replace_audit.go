@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // replace_audit.go 记忆整理事务的快照、指纹校验与回滚。
@@ -65,7 +66,7 @@ func (d *Store) findExactTextDoc(content string, exclude map[string]struct{}) (s
 func (d *Store) verifyReplacementTexts(texts []string, oldSet map[string]struct{}) error {
 	for _, text := range texts {
 		if _, ok := d.findExactTextDoc(text, oldSet); !ok {
-			return fmt.Errorf("内容未落库: %s", truncateForError(text))
+			return fmt.Errorf("内容未落库: %s", textutil.TruncateRunes(text, 512))
 		}
 	}
 	return nil
@@ -155,14 +156,4 @@ func (d *Store) restoreTextDoc(ctx context.Context, snap docSnapshot) error {
 	}
 	d.keywordIndexAdd(target, doc)
 	return nil
-}
-
-// truncateForError 仅用于错误信息，避免超长正文刷屏（512 字符起步，不丢实际数据）。
-func truncateForError(text string) string {
-	const limit = 512
-	runes := []rune(text)
-	if len(runes) <= limit {
-		return text
-	}
-	return string(runes[:limit]) + "…"
 }

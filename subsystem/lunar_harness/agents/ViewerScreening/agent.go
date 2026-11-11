@@ -72,11 +72,15 @@ func DirectSummary(ctx context.Context, material, instruction, model string) (te
 	})
 }
 
-// Slice 观看一个 60 秒切片：单次调用、不重试，命中防死循环时直接放弃该切片。
-func Slice(ctx context.Context, system, prompt, model string, images []string) (text string, err error) {
+// Slice 观看一个 60 秒切片：人设在包内注入，单次调用、不重试，命中防死循环时直接放弃该切片。
+func Slice(ctx context.Context, task, model string, images []string) (text string, err error) {
 	defer func() { agentbase.ReportRun(AgentID, err) }()
+	persona := loadPersona()
+	if strings.TrimSpace(persona) == "" {
+		return "", fmt.Errorf("读取人设提示词失败")
+	}
 	return viewbase.Chat(ctx, viewbase.ChatRequest{
-		Agent: AgentID, Role: Role, Model: model, System: system, User: prompt, Images: images, Attempts: onceAttempts,
+		Agent: AgentID, Role: Role, Model: model, System: persona, User: task, Images: images, Attempts: onceAttempts,
 	})
 }
 

@@ -51,7 +51,7 @@ type dumpOption struct {
 }
 
 // dumpOptionList 可导出的数据清单：按「运行数据 / Go 智能体」分组。
-// 快捷键统一为两位数字编号（01-13）：第一键定分组，第二键定条目，既不与
+// 快捷键统一为两位数字编号（01-16）：第一键定分组，第二键定条目，既不与
 // 「↑/↓ 选择」冲突，也不会因为新增智能体而让既有编号位移。
 var dumpOptionList = []dumpOption{
 	{kind: dumpKindLogs, hotkey: "01", group: "运行数据", title: "原始日志",
@@ -83,6 +83,8 @@ var dumpOptionList = []dumpOption{
 		desc: "文献解析的文件查询工具清单与分批策略（按次执行，不保留上下文）"},
 	{kind: dumpKindContext, key: "archive_reader", hotkey: "15", title: "归档解析",
 		desc: "归档解析的压缩包结构 / 条目读取 / GGUF 元数据工具清单"},
+	{kind: dumpKindContext, key: "web_crawler", hotkey: "16", title: "网页抓取",
+		desc: "网页抓取的检索配置、引擎降级顺序与工具清单（不发起模型调用）"},
 }
 
 // dumpState 数据导出屏状态

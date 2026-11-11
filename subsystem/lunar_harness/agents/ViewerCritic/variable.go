@@ -13,6 +13,8 @@ const (
 	promptInbox = "viewerCriticInbox.md"
 	// promptMemory 观后回顾提示词
 	promptMemory = "viewerCriticMemory.md"
+	// personaFile 人设提示词文件名
+	personaFile = "lifeRole.md"
 	// attempts 评论类调用的尝试次数
 	attempts = 3
 	// taskBlock 人设与任务的分隔格式

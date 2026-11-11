@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 // Result 一次愿望管理操作的结构化结果。

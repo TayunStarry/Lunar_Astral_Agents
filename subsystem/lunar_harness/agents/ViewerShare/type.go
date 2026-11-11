@@ -4,8 +4,6 @@ package ViewerShare
 
 // DynamicInput 观影动态的输入。
 type DynamicInput struct {
-	// Persona 人设提示词
-	Persona string
 	// Material 本轮视频印象、观看感受与互动材料
 	Material string
 	// Model 模型名

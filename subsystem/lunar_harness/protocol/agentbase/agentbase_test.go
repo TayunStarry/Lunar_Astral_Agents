@@ -32,13 +32,13 @@ func TestStringOfParts(t *testing.T) {
 	}
 }
 
-// TestHardCutRunes 超长文本按字符截断并保留省略号。
-func TestHardCutRunes(t *testing.T) {
+// TestCutRunes 超长文本按字符截断并保留省略号。
+func TestCutRunes(t *testing.T) {
 	text := "一二三四五"
-	if got := HardCutRunes(text, 10); got != text {
+	if got := CutRunes(text, 10); got != text {
 		t.Fatalf("未超限不应截断: %q", got)
 	}
-	got := HardCutRunes(text, 3)
+	got := CutRunes(text, 3)
 	if got != "一二…" {
 		t.Fatalf("截断结果错误: %q", got)
 	}

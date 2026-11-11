@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/chain/wishchain"
 	"LunarSubsystem/LunarHarness/engine/activity"
+	"LunarSubsystem/LunarHarness/engine/wishchain"
 )
 
 func currentGlobalMessage() RuntimeGlobalMessage {
@@ -30,7 +30,7 @@ func buildRuntimeGlobalMessage() PostMessage {
 		activity.Line(),
 		wishchain.FormatList(),
 	)
-	if obsession := wishchain.Obsession(); obsession != "" {
+	if obsession := obsessionText(); obsession != "" {
 		text += "\n\n【执念】" + obsession
 	}
 	if len(message.EmotionMarks) > 0 {

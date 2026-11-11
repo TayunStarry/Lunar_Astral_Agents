@@ -6,7 +6,7 @@ package MutualForum
 // api_key，随后把凭证与轮次状态写入独立的账号文件，后续调用直接复用。
 // 配置文件里也允许直接填 api_key（适合固定部署或迁移已有身份）。
 //
-// 账号文件的磁盘格式、v2 幂等迁移、.bak 回滚副本与写互斥均由 engine/forum 负责；
+// 账号文件的磁盘格式、v2 幂等迁移与 .bak 回滚副本由 engine/forum 负责；
 // 本文件只保留申领口径与凭证复验：
 //   - 申领只发送 name / join_code / qq / uid，不再发送 model / client_version / meta；
 //   - 账号文件升级到 schema_version=2，移除 model，新增 qq_masked / avatar_* / kind / test_mode；
@@ -35,7 +35,7 @@ func loadAccount(cfg Config) (*Account, error) {
 	return engineforum.LoadAccount(cfg.AccountPath(), cfg.Endpoint())
 }
 
-// saveAccount 写入账号文件（原子落盘、.bak 回滚副本与写互斥由 engine/forum 保证）。
+// saveAccount 写入账号文件（原子落盘、.bak 回滚副本由 engine/forum 保证，调用方需已持写锁）。
 func saveAccount(cfg Config, acct *Account) error {
 	return engineforum.SaveAccount(cfg.AccountPath(), acct)
 }
@@ -157,7 +157,7 @@ func enrollWithWriteLock(ctx context.Context, cfg Config, c *Client, existing *A
 	if writeLocked {
 		return enrollAndSave(ctx, cfg, c, existing)
 	}
-	return engineforum.WithWrite(ctx, func() (*Account, error) {
+	return withWrite(ctx, func() (*Account, error) {
 		fresh, err := loadAccount(cfg)
 		if err != nil {
 			return nil, err

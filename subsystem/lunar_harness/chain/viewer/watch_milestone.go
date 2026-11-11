@@ -18,7 +18,6 @@ import (
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
-	"LunarSubsystem/LunarHarness/prompts"
 )
 
 const (
@@ -125,12 +124,8 @@ func stageDynamicText(ctx context.Context, count int) (string, error) {
 		material += "- " + title + "\n"
 	}
 	material += "\n写一条阶段性的小总结动态，像随手发在 B 站的一条日常动态。"
-	persona, err := prompts.Read("lifeRole.md")
-	if err != nil {
-		return "", fmt.Errorf("读取人设提示词失败: %w", err)
-	}
 	text, err := ViewerShare.Dynamic(ctx, ViewerShare.DynamicInput{
-		Persona: string(persona), Material: material, Model: modelPrimary,
+		Material: material, Model: modelPrimary,
 	})
 	if err != nil {
 		return "", err

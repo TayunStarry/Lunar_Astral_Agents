@@ -8,12 +8,11 @@ package viewer
 //   - 回读根评论的子评论，确认回应真的可见，而不是只信接口 code=0。
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/bilibili"
 )
 
 // replyIDs 从消息中心条目推出评论接口需要的 root / parent。
@@ -67,49 +66,16 @@ func (w *webSession) replyByAPI(item inboxItem, message string) error {
 // postReplyAPI 调 x/v2/reply/add 发布评论/回复，是全模块唯一的接口发布实现。
 //
 // root/parent 同时为空表示发布根评论；targets 非空时写入 at_name/at_mid 产生真实 @。
+// 表单组装、csrf 与响应解包在 engine/bilibili。
 func (w *webSession) postReplyAPI(typ int, oid, message, root, parent string, targets []MentionTarget) error {
-	message = strings.TrimSpace(message)
-	if message == "" {
-		return fmt.Errorf("评论内容为空")
-	}
-	csrf := w.csrf()
-	if csrf == "" {
-		return fmt.Errorf("页面里读不到 bili_jct，无法发布评论")
-	}
-
-	form := url.Values{}
-	form.Set("type", strconv.Itoa(typ))
-	form.Set("oid", oid)
-	form.Set("message", message)
-	form.Set("plat", "1")
-	form.Set("csrf", csrf)
-	if root != "" {
-		form.Set("root", root)
-	}
-	if parent != "" {
-		form.Set("parent", parent)
-	}
-	if names, mids := mentionAtFields(targets); names != "" {
-		form.Set("at_name", names)
-		form.Set("at_mid", mids)
-	}
-
-	raw, err := w.pageFetchText("POST", "https://api.bilibili.com/x/v2/reply/add",
-		"application/x-www-form-urlencoded", form.Encode(), 25*time.Second)
-	if err != nil {
-		return err
-	}
-	var resp struct {
-		Code int    `json:"code"`
-		Msg  string `json:"message"`
-	}
-	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
-		return err
-	}
-	if resp.Code != 0 {
-		return fmt.Errorf("B站拒绝发布: code=%d %s", resp.Code, resp.Msg)
-	}
-	return nil
+	return bilibili.PostReply(w, bilibili.ReplyRequest{
+		Type:    typ,
+		Oid:     oid,
+		Message: message,
+		Root:    root,
+		Parent:  parent,
+		Targets: targets,
+	})
 }
 
 // replyVisible 回读根评论下的子评论，确认刚才的回应已经出现。
@@ -118,28 +84,12 @@ func (w *webSession) replyVisible(item inboxItem, root, message string) bool {
 	if fingerprint == "" {
 		return false
 	}
-	target := fmt.Sprintf(
-		"https://api.bilibili.com/x/v2/reply/reply?type=%d&oid=%s&root=%s&ps=20&pn=1",
-		item.Type, url.QueryEscape(item.Oid), url.QueryEscape(root))
-	raw, err := w.pageFetchText("GET", target, "", "", 20*time.Second)
+	replies, err := bilibili.SubReplies(w, item.Type, item.Oid, root, 20)
 	if err != nil {
 		return false
 	}
-	var resp struct {
-		Code int `json:"code"`
-		Data struct {
-			Replies []struct {
-				Content struct {
-					Message string `json:"message"`
-				} `json:"content"`
-			} `json:"replies"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(raw), &resp); err != nil || resp.Code != 0 {
-		return false
-	}
-	for _, reply := range resp.Data.Replies {
-		if strings.Contains(normalizeInline(reply.Content.Message), fingerprint) {
+	for _, reply := range replies {
+		if strings.Contains(normalizeInline(reply.Content), fingerprint) {
 			return true
 		}
 	}
