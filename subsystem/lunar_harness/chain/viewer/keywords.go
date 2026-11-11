@@ -2,14 +2,14 @@ package viewer
 
 // keywords.go 选片关键词的读取与合并。
 //
-// 静态词来自 local_data/config/bilibili.json，动态词来自 viewerstore 的观看主题词池。
-// 合并只在这里做一次：打分统一走 titleScore，不区分词是静态还是动态。
+// 静态词来自 local_data/config/bilibili.json，动态词来自 viewer.db 的观看主题词池
+// （衰减与筛选取自 watch_topic.go）。合并只在这里做一次：打分统一走 titleScore，
+// 不区分词是静态还是动态。
 
 import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
 
 // preferenceKeywords 取配置文件里的长期偏好词（去重后最多 preferenceKeywordLimit 个）。
@@ -21,7 +21,7 @@ func preferenceKeywords() []string {
 //
 // 读取失败或无历史主题词时返回空列表：选片自动退化为仅用静态偏好，不阻断本轮。
 func dynamicKeywords(at int64) []string {
-	words, err := viewerstore.ActiveTopics(watchDynamicKeywordLimit, at)
+	words, err := activeWatchedTopics(watchDynamicKeywordLimit, at)
 	if err != nil {
 		logger.Warn("BilibiliViewer", "待看列表：读取动态主题词失败，退回静态偏好: %v", err)
 		return nil

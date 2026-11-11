@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // EnqueueVideos 批量入队；同 BV 已存在时整条跳过（幂等），不覆盖已有审核结果与观看进度。
@@ -93,7 +95,7 @@ func SetVideoReview(bv string, status WatchStatus, reason string) error {
 	if status != WatchStatusRejected {
 		reason = ""
 	}
-	reason = cutRunes(strings.TrimSpace(reason), WatchRejectReasonMaxRunes)
+	reason = textutil.ClipRunes(strings.TrimSpace(reason), WatchRejectReasonMaxRunes)
 	db, err := openStore()
 	if err != nil {
 		return err

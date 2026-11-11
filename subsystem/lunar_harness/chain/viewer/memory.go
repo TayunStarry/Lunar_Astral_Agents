@@ -2,7 +2,8 @@ package viewer
 
 // memory.go 观影记忆的渲染。
 //
-// 记忆的存取、上限维持见 engine/viewerstore；这里只负责把记忆渲染进提示词。
+// 记忆的存取与上限维持见 engine/viewerstore；这里负责把记忆渲染进提示词，
+// 以及判定哪些正文是机械过程文本（词表见 variable.go 的 mechanicalMemoryMarkers）。
 
 import (
 	"strings"
@@ -23,16 +24,27 @@ func cleanMemoryText(text string) string {
 		if line == "" || strings.HasPrefix(line, "```") || strings.HasPrefix(line, "【") {
 			continue
 		}
-		if viewerstore.LooksMechanical(line) {
+		if looksMechanical(line) {
 			continue
 		}
 		kept = append(kept, line)
 	}
 	out := truncate(strings.Join(kept, " "), viewerstore.TextMaxRunes)
-	if viewerstore.LooksMechanical(out) {
+	if looksMechanical(out) {
 		return ""
 	}
 	return out
+}
+
+// looksMechanical 判断一段文本是不是机械过程/运行统计，而不是人格化记忆。
+func looksMechanical(text string) bool {
+	lower := strings.ToLower(text)
+	for _, marker := range mechanicalMemoryMarkers {
+		if strings.Contains(lower, strings.ToLower(marker)) {
+			return true
+		}
+	}
+	return false
 }
 
 // normalizeDynamic 清理动态正文：去掉代码块/列表符号与多余空行，控制长度。

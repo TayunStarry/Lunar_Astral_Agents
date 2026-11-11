@@ -1,77 +1,31 @@
 package viewerstore
 
-// watchtopic.go 观看主题词偏好池（watch_topic）的读写。
+// watchtopic.go 观看主题词偏好池（watch_topic）的行级读写。
 //
-// 反馈环：视频看完时把印象主题词按 +1 权重并入池 → 选片时读衰减后的高频词作为动态偏好。
-// 池只在写入时增量聚合；读取只对 ≤128 行做时间衰减算术，不回扫 watch_video 历史。
+// 存储层只负责表结构与按行读写：衰减、加权、淘汰、排序与筛选等偏好策略在 chain/viewer。
+// 池的每条记录由主题词、权重与最后一次写入时间组成，读取一律带行数上限。
 
 import (
 	"database/sql"
 	"fmt"
-	"math"
-	"sort"
-	"strings"
-	"time"
 )
 
-// ActiveTopics 返回当前有效主题词，按衰减后的权重降序取前 limit 个。
-//
-// at 为用于衰减计算的 Unix 秒；<=0 时取当前时间。
-func ActiveTopics(limit int, at int64) ([]string, error) {
-	if limit <= 0 {
-		return nil, nil
-	}
-	if at <= 0 {
-		at = time.Now().Unix()
-	}
+// LoadTopicRows 读取主题词池，最多 limit 行（limit <= 0 返回错误，避免一次拉全表）。
+func LoadTopicRows(limit int) ([]TopicRow, error) {
 	db, err := openStore()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(`SELECT topic, weight, updated_at FROM watch_topic`)
-	if err != nil {
-		return nil, fmt.Errorf("读取主题词池失败: %w", err)
-	}
-	defer rows.Close()
-
-	list := make([]topicWeight, 0, watchTopicPoolMax)
-	for rows.Next() {
-		var (
-			topic     string
-			weight    float64
-			updatedAt int64
-		)
-		if err := rows.Scan(&topic, &weight, &updatedAt); err != nil {
-			return nil, fmt.Errorf("解析主题词池失败: %w", err)
-		}
-		effective := decayTopicWeight(weight, updatedAt, at)
-		if effective < watchTopicActiveMinWeight {
-			continue
-		}
-		list = append(list, topicWeight{Topic: topic, Weight: effective})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("读取主题词池失败: %w", err)
-	}
-	sortTopicWeights(list)
-	if len(list) > limit {
-		list = list[:limit]
-	}
-	out := make([]string, 0, len(list))
-	for _, item := range list {
-		out = append(out, item.Topic)
-	}
-	return out, nil
+	return loadTopicRows(db, limit)
 }
 
-// recordWatchedTopics 把一个已看完视频的主题词并入偏好池（补偿与测试复用同一份聚合实现）。
-func recordWatchedTopics(topics []string, at int64) error {
-	normalized := normalizeTopics(topics)
-	if len(normalized) == 0 {
+// UpdateTopicPool 在单个事务内执行回调，回调里的 Load / Replace 共享同一事务。
+//
+// 回调返回错误时整个事务回滚；这是偏好池「读全池 → 算 → 写回」的唯一入口，
+// 不允许调用方拆成两次独立事务，否则并发写会丢更新。
+func UpdateTopicPool(fn func(TopicPool) error) error {
+	if fn == nil {
 		return nil
-	}
-	if at <= 0 {
-		at = time.Now().Unix()
 	}
 	db, err := openStore()
 	if err != nil {
@@ -82,7 +36,7 @@ func recordWatchedTopics(topics []string, at int64) error {
 		return fmt.Errorf("开始主题词事务失败: %w", err)
 	}
 	defer tx.Rollback()
-	if err := bumpTopicWeights(tx, normalized, at); err != nil {
+	if err := fn(topicPoolTx{tx: tx}); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -91,92 +45,55 @@ func recordWatchedTopics(topics []string, at int64) error {
 	return nil
 }
 
-// bumpTopicWeights 在事务内把主题词并入池：先全池衰减到 at，再逐个加权，最后淘汰与截断。
-func bumpTopicWeights(tx *sql.Tx, topics []string, at int64) error {
-	normalized := normalizeTopics(topics)
-	if len(normalized) == 0 {
-		return nil
-	}
-	if at <= 0 {
-		at = time.Now().Unix()
-	}
-	entries := make(map[string]*topicWeight, watchTopicPoolMax)
-	rows, err := tx.Query(`SELECT topic, weight, updated_at FROM watch_topic`)
-	if err != nil {
-		return fmt.Errorf("读取主题词池失败: %w", err)
-	}
-	for rows.Next() {
-		var (
-			topic     string
-			weight    float64
-			updatedAt int64
-		)
-		if err := rows.Scan(&topic, &weight, &updatedAt); err != nil {
-			rows.Close()
-			return fmt.Errorf("解析主题词池失败: %w", err)
-		}
-		entries[strings.ToLower(topic)] = &topicWeight{
-			Topic:  topic,
-			Weight: decayTopicWeight(weight, updatedAt, at),
-		}
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return fmt.Errorf("读取主题词池失败: %w", err)
-	}
-	rows.Close()
+// topicPoolTx 把一个事务绑定成 TopicPool。
+type topicPoolTx struct {
+	tx *sql.Tx
+}
 
-	for _, topic := range normalized {
-		key := strings.ToLower(topic)
-		if entry, ok := entries[key]; ok {
-			entry.Weight += watchTopicBump
-			continue
-		}
-		entries[key] = &topicWeight{Topic: topic, Weight: watchTopicBump}
-	}
+// Load 在事务内读取主题词池。
+func (p topicPoolTx) Load(limit int) ([]TopicRow, error) {
+	return loadTopicRows(p.tx, limit)
+}
 
-	list := make([]topicWeight, 0, len(entries))
-	for _, entry := range entries {
-		if entry.Weight < watchTopicMinWeight {
-			continue
-		}
-		list = append(list, *entry)
-	}
-	sortTopicWeights(list)
-	if len(list) > watchTopicPoolMax {
-		list = list[:watchTopicPoolMax]
-	}
-
-	if _, err := tx.Exec(`DELETE FROM watch_topic`); err != nil {
+// Replace 在事务内用 rows 整体覆盖主题词池。
+func (p topicPoolTx) Replace(rows []TopicRow) error {
+	if _, err := p.tx.Exec(`DELETE FROM watch_topic`); err != nil {
 		return fmt.Errorf("清理主题词池失败: %w", err)
 	}
-	for _, entry := range list {
-		if _, err := tx.Exec(`INSERT INTO watch_topic (topic, weight, updated_at)
-			VALUES (?, ?, ?)`, entry.Topic, entry.Weight, at); err != nil {
+	for _, row := range rows {
+		if _, err := p.tx.Exec(`INSERT INTO watch_topic (topic, weight, updated_at)
+			VALUES (?, ?, ?)`, row.Topic, row.Weight, row.UpdatedAt); err != nil {
 			return fmt.Errorf("写入主题词池失败: %w", err)
 		}
 	}
 	return nil
 }
 
-// decayTopicWeight 按半衰期把权重衰减到 at 时刻。
-func decayTopicWeight(weight float64, updatedAt, at int64) float64 {
-	if weight <= 0 {
-		return 0
-	}
-	if updatedAt <= 0 || at <= updatedAt {
-		return weight
-	}
-	halfLife := float64(watchTopicHalfLifeDays * 24 * 60 * 60)
-	return weight * math.Pow(0.5, float64(at-updatedAt)/halfLife)
+// topicQueryer 事务内与事务外共用的查询入口（*sql.DB 与 *sql.Tx 都满足）。
+type topicQueryer interface {
+	Query(query string, args ...any) (*sql.Rows, error)
 }
 
-// sortTopicWeights 按权重降序排列，权重相同按主题词字典序保证结果稳定。
-func sortTopicWeights(list []topicWeight) {
-	sort.SliceStable(list, func(i, j int) bool {
-		if list[i].Weight == list[j].Weight {
-			return list[i].Topic < list[j].Topic
+// loadTopicRows 读取最多 limit 行原始记录。
+func loadTopicRows(q topicQueryer, limit int) ([]TopicRow, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("主题词池读取上限必须为正: %d", limit)
+	}
+	rows, err := q.Query(`SELECT topic, weight, updated_at FROM watch_topic LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("读取主题词池失败: %w", err)
+	}
+	defer rows.Close()
+	out := make([]TopicRow, 0, limit)
+	for rows.Next() {
+		var row TopicRow
+		if err := rows.Scan(&row.Topic, &row.Weight, &row.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("解析主题词池失败: %w", err)
 		}
-		return list[i].Weight > list[j].Weight
-	})
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("读取主题词池失败: %w", err)
+	}
+	return out, nil
 }

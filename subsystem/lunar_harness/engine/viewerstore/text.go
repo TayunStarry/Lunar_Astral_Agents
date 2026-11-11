@@ -1,25 +1,12 @@
 package viewerstore
 
-// text.go 观影正文的通用文本处理：机械内容识别与 BV 号转调。
+// text.go 观影正文的通用文本处理：BV 号转调。
 //
-// 规则同时被编排层的记忆清洗使用，因此放在存储层统一维护。
+// 机械内容判定属于观影偏好策略，已上移到 chain/viewer。
 
 import (
-	"strings"
-
 	"LunarSubsystem/LunarHarness/internal/textutil"
 )
-
-// LooksMechanical 判断一段文本是不是机械过程/运行统计，而不是人格化记忆。
-func LooksMechanical(text string) bool {
-	lower := strings.ToLower(text)
-	for _, marker := range mechanicalMemoryMarkers {
-		if strings.Contains(lower, strings.ToLower(marker)) {
-			return true
-		}
-	}
-	return false
-}
 
 // ==== BV 号规则 ====
 // 唯一实现在 internal/textutil/bvid.go：它是无依赖的叶子包，

@@ -146,7 +146,7 @@ func TestWatchStateSurvivesReopen(t *testing.T) {
 	if err := SetVideoReview("BV1persist", WatchStatusApproved, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := MarkSegmentWatched("BV1persist", 0, 300); err != nil {
+	if _, err := MarkSegmentWatched("BV1persist", 0, 300, nil); err != nil {
 		t.Fatal(err)
 	}
 	Close()
@@ -164,7 +164,7 @@ func TestWatchStateSurvivesReopen(t *testing.T) {
 	if count, err := CountCompletedVideos(); err != nil || count != 0 {
 		t.Fatalf("重开后完整视频数应为 0，实际 %d err=%v", count, err)
 	}
-	if _, err := MarkSegmentWatched(segment.BV, segment.Index, 301); err != nil {
+	if _, err := MarkSegmentWatched(segment.BV, segment.Index, 301, nil); err != nil {
 		t.Fatal(err)
 	}
 	if count, err := CountCompletedVideos(); err != nil || count != 1 {

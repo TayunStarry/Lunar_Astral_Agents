@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
 // normalizeCandidates 清洗入队候选：BV 去重、文本截断、片段按时间排序并校验不重叠。
@@ -27,11 +29,11 @@ func normalizeCandidates(items []WatchCandidate) ([]WatchCandidate, error) {
 		}
 		seen[item.BV] = true
 		item.Title = strings.TrimSpace(item.Title)
-		item.Intro = cutRunes(strings.TrimSpace(item.Intro), WatchIntroMaxRunes)
+		item.Intro = textutil.ClipRunes(strings.TrimSpace(item.Intro), WatchIntroMaxRunes)
 		item.AuthorUID = strings.TrimSpace(item.AuthorUID)
 		item.AuthorName = strings.TrimSpace(item.AuthorName)
 		item.Comments = normalizeComments(item.Comments)
-		item.Topics = normalizeTopics(item.Topics)
+		item.Topics = NormalizeTopics(item.Topics)
 		if item.DurationSec < 0 {
 			item.DurationSec = 0
 		}
@@ -63,12 +65,14 @@ func normalizeComments(comments []string) []string {
 	return out
 }
 
-// normalizeTopics 清洗主题词：去空白、按大小写不敏感去重、截断超长，保留前 WatchTopicsMax 个。
-func normalizeTopics(topics []string) []string {
+// NormalizeTopics 清洗主题词：去空白、按大小写不敏感去重、截断超长，保留前 WatchTopicsMax 个。
+//
+// 入队写入与主题词回流共用这一份规范化规则，保证两处对同一组主题词的判定一致。
+func NormalizeTopics(topics []string) []string {
 	out := make([]string, 0, len(topics))
 	seen := make(map[string]bool, len(topics))
 	for _, topic := range topics {
-		topic = cutRunes(strings.TrimSpace(topic), WatchTopicMaxRunes)
+		topic = textutil.ClipRunes(strings.TrimSpace(topic), WatchTopicMaxRunes)
 		if topic == "" {
 			continue
 		}
@@ -125,13 +129,4 @@ func validWatchStatus(status WatchStatus) bool {
 	default:
 		return false
 	}
-}
-
-// cutRunes 按字符数截断（不切坏多字节字符）。
-func cutRunes(text string, limit int) string {
-	runes := []rune(text)
-	if limit <= 0 || len(runes) <= limit {
-		return text
-	}
-	return string(runes[:limit])
 }

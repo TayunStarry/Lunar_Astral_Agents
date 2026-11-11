@@ -106,8 +106,10 @@ func NextUnwatchedSegment() (WatchSegment, bool, error) {
 
 // MarkSegmentWatched 标记片段已看；该视频全部片段看完时同步置为完成。
 //
-// 重复标记同一片段按幂等处理（保留首次观看时间），并重新核对完成状态。
-func MarkSegmentWatched(bv string, index int, at int64) (SegmentWatchResult, error) {
+// onCompleted 在「完成状态刚从 0 翻到 1」的同一事务内调用，供调用方把主题词并入偏好池；
+// 传 nil 表示只做存储标记、不记录偏好。重复标记同一片段按幂等处理（保留首次观看时间），
+// 并重新核对完成状态。
+func MarkSegmentWatched(bv string, index int, at int64, onCompleted TopicBumpFunc) (SegmentWatchResult, error) {
 	result := SegmentWatchResult{}
 	bv = strings.TrimSpace(bv)
 	if bv == "" {
@@ -163,12 +165,13 @@ func MarkSegmentWatched(bv string, index int, at int64) (SegmentWatchResult, err
 		if err != nil {
 			return result, fmt.Errorf("读取完成状态结果失败: %w", err)
 		}
-		if changed > 0 {
+		if changed > 0 && onCompleted != nil {
 			var topics string
 			if err := tx.QueryRow(`SELECT topics FROM watch_video WHERE bv = ?`, bv).Scan(&topics); err != nil {
 				return result, fmt.Errorf("读取视频主题词失败: %w", err)
 			}
-			if err := bumpTopicWeights(tx, decodeWatchTopics(topics), at); err != nil {
+			// 偏好策略由调用方注入，但必须复用本事务，保证完成状态与偏好加权原子落盘。
+			if err := onCompleted(topicPoolTx{tx: tx}, decodeWatchTopics(topics), at); err != nil {
 				return result, fmt.Errorf("更新主题词偏好失败: %w", err)
 			}
 		}

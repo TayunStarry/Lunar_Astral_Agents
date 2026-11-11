@@ -14,11 +14,27 @@ type columnAdd struct {
 	SQL    string
 }
 
-// topicWeight 主题词偏好池的一条聚合记录。
-type topicWeight struct {
-	Topic  string
-	Weight float64
+// TopicRow 主题词偏好池的一行原始存储值（不做衰减、加权或筛选）。
+type TopicRow struct {
+	Topic     string
+	Weight    float64
+	UpdatedAt int64
 }
+
+// TopicPool 主题词池在一个事务内的读写入口。
+//
+// Load / Replace 绑定同一事务，调用方可以原子地完成「读全池 → 算 → 写回」。
+type TopicPool interface {
+	// Load 读取池内最多 limit 行；limit <= 0 时报错，避免一次拉全表。
+	Load(limit int) ([]TopicRow, error)
+	// Replace 用 rows 整体覆盖池内内容。
+	Replace(rows []TopicRow) error
+}
+
+// TopicBumpFunc 视频刚看完时把主题词并入偏好池的策略实现。
+//
+// 由 chain/viewer 提供，在片段标记事务内执行，保证「完成状态翻转」与「偏好加权」同事务。
+type TopicBumpFunc func(pool TopicPool, topics []string, at int64) error
 
 // SegmentInput 入队 / 重切时提交的一个片段（序号由存储层按时间顺序分配）。
 type SegmentInput struct {

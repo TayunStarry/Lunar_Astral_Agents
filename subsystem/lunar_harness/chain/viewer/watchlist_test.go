@@ -36,8 +36,12 @@ func (f *fakeWatchSession) collectVideoLinks(max int) ([]videoLink, error) {
 func (f *fakeWatchSession) navigate(string, time.Duration) error { return nil }
 func (f *fakeWatchSession) wait(time.Duration)                   {}
 
-func (f *fakeWatchSession) readCommentsAPIPage(int, int64, int, int, bool) ([]commentItem, error) {
-	return []commentItem{{User: "观众甲", Content: "这个讲得挺清楚", Like: 8}}, nil
+func (f *fakeWatchSession) FetchText(string, string, string, string, time.Duration) (string, error) {
+	return `{"code":0,"data":{"replies":[{"member":{"uname":"观众甲"},"content":{"message":"这个讲得挺清楚"},"like":8}]}}`, nil
+}
+
+func (f *fakeWatchSession) FetchForm(string, map[string]string, time.Duration) (string, error) {
+	return `{"code":0}`, nil
 }
 
 func (f *fakeWatchSession) readComments(int) ([]commentItem, error) { return nil, nil }
@@ -295,7 +299,7 @@ func TestEnsureWatchlistPersistsImpressionTopics(t *testing.T) {
 		t.Fatalf("印象主题词未随入队落库: %v", approved[0].Topics)
 	}
 	// 入队 ≠ 看过：偏好看板在看完之前保持为空。
-	if topics, err := viewerstore.ActiveTopics(watchDynamicKeywordLimit, time.Now().Unix()); err != nil || len(topics) != 0 {
+	if topics, err := activeWatchedTopics(watchDynamicKeywordLimit, time.Now().Unix()); err != nil || len(topics) != 0 {
 		t.Fatalf("未看完不应产生动态偏好，实际 %v err=%v", topics, err)
 	}
 }

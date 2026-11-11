@@ -1,46 +1,51 @@
-package viewerstore
+package viewer
 
-// watchtopic_test.go 观影主题词回流：完成才加权、重复标记不重复计、按半衰期过期。
+// watch_topic_test.go 观影主题词偏好池：完成才加权、重复标记不重复计、按半衰期过期。
+//
+// 池的衰减、加权与淘汰策略在 watch_topic.go，因此断言全部留在本包；
+// 存储侧（engine/viewerstore）只保留行级读写，不再断言偏好语义。
 
 import (
 	"math"
 	"testing"
 	"time"
+
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
 
 // TestWatchedTopicsFeedPoolOnlyAfterCompletion 只看完的视频才入池，重复标记同一片段不重复加权。
 func TestWatchedTopicsFeedPoolOnlyAfterCompletion(t *testing.T) {
 	isolateViewerDB(t)
 	now := time.Now().Unix()
-	candidate := watchCandidate("BV1topic", segments(2)...)
+	candidate := topicCandidate("BV1topic", 2)
 	candidate.Topics = []string{"人工智能", "编程", "人工智能"}
-	if _, err := EnqueueVideos([]WatchCandidate{candidate}); err != nil {
+	if _, err := viewerstore.EnqueueVideos([]viewerstore.WatchCandidate{candidate}); err != nil {
 		t.Fatal(err)
 	}
-	video, ok, err := LoadVideo("BV1topic")
+	video, ok, err := viewerstore.LoadVideo("BV1topic")
 	if err != nil || !ok {
 		t.Fatalf("读取视频失败 ok=%v err=%v", ok, err)
 	}
 	if len(video.Topics) != 2 {
 		t.Fatalf("主题词应去重后保留 2 个，实际 %v", video.Topics)
 	}
-	if err := SetVideoReview("BV1topic", WatchStatusApproved, ""); err != nil {
+	if err := viewerstore.SetVideoReview("BV1topic", viewerstore.WatchStatusApproved, ""); err != nil {
 		t.Fatal(err)
 	}
 
 	// 只看了第一段：还没「看完」，不应进入偏好池。
-	if _, err := MarkSegmentWatched("BV1topic", 0, now); err != nil {
+	if _, err := viewerstore.MarkSegmentWatched("BV1topic", 0, now, bumpWatchedTopics); err != nil {
 		t.Fatal(err)
 	}
-	if topics, err := ActiveTopics(6, now); err != nil || len(topics) != 0 {
+	if topics, err := activeWatchedTopics(6, now); err != nil || len(topics) != 0 {
 		t.Fatalf("未看完不应入池，实际 %v err=%v", topics, err)
 	}
 
 	// 看完最后一段：主题词入池。
-	if _, err := MarkSegmentWatched("BV1topic", 1, now); err != nil {
+	if _, err := viewerstore.MarkSegmentWatched("BV1topic", 1, now, bumpWatchedTopics); err != nil {
 		t.Fatal(err)
 	}
-	topics, err := ActiveTopics(6, now)
+	topics, err := activeWatchedTopics(6, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +54,7 @@ func TestWatchedTopicsFeedPoolOnlyAfterCompletion(t *testing.T) {
 	}
 
 	// 重复标记同一片段：完成状态不再翻转，权重不应叠加。
-	if _, err := MarkSegmentWatched("BV1topic", 1, now); err != nil {
+	if _, err := viewerstore.MarkSegmentWatched("BV1topic", 1, now, bumpWatchedTopics); err != nil {
 		t.Fatal(err)
 	}
 	if weight := topicWeightOf(t, "人工智能"); math.Abs(weight-1) > 1e-9 {
@@ -64,15 +69,15 @@ func TestTopicWeightsDecayAndRevive(t *testing.T) {
 	if err := recordWatchedTopics([]string{"科幻"}, now); err != nil {
 		t.Fatal(err)
 	}
-	if topics, err := ActiveTopics(6, now); err != nil || len(topics) != 1 {
+	if topics, err := activeWatchedTopics(6, now); err != nil || len(topics) != 1 {
 		t.Fatalf("刚写入应有效，实际 %v err=%v", topics, err)
 	}
 
 	halfLife := int64(watchTopicHalfLifeDays * 24 * 60 * 60)
-	if topics, err := ActiveTopics(6, now+halfLife); err != nil || len(topics) != 1 {
+	if topics, err := activeWatchedTopics(6, now+halfLife); err != nil || len(topics) != 1 {
 		t.Fatalf("一个半衰期后权重 0.5 仍应有效，实际 %v err=%v", topics, err)
 	}
-	if topics, err := ActiveTopics(6, now+2*halfLife); err != nil || len(topics) != 0 {
+	if topics, err := activeWatchedTopics(6, now+2*halfLife); err != nil || len(topics) != 0 {
 		t.Fatalf("两个半衰期后权重 0.25 应过期，实际 %v err=%v", topics, err)
 	}
 
@@ -98,22 +103,53 @@ func TestTopicPoolAccumulates(t *testing.T) {
 	if weight := topicWeightOf(t, "科幻"); math.Abs(weight-2) > 1e-9 {
 		t.Fatalf("同视频内重复词只计一次、跨视频累加，实际权重 %f", weight)
 	}
-	topics, err := ActiveTopics(6, now)
+	topics, err := activeWatchedTopics(6, now)
 	if err != nil || len(topics) != 2 || topics[0] != "科幻" {
 		t.Fatalf("高权重主题应排在前面，实际 %v err=%v", topics, err)
 	}
 }
 
-// topicWeightOf 读取主题词池里某个词的权重（测试辅助）。
+// recordWatchedTopics 直接驱动「读全池 → 算 → 写回」的单事务入口（测试与一次性补偿共用）。
+func recordWatchedTopics(topics []string, at int64) error {
+	return viewerstore.UpdateTopicPool(func(pool viewerstore.TopicPool) error {
+		return bumpWatchedTopics(pool, topics, at)
+	})
+}
+
+// topicWeightOf 读取主题词池里某个词的存储权重（测试辅助）。
 func topicWeightOf(t *testing.T, topic string) float64 {
 	t.Helper()
-	db, err := openStore()
+	rows, err := viewerstore.LoadTopicRows(watchTopicPoolMax)
 	if err != nil {
-		t.Fatalf("取连接失败: %v", err)
+		t.Fatalf("读取主题词池失败: %v", err)
 	}
-	var weight float64
-	if err := db.QueryRow(`SELECT weight FROM watch_topic WHERE topic = ?`, topic).Scan(&weight); err != nil {
-		t.Fatalf("读取主题词权重失败: %v", err)
+	for _, row := range rows {
+		if row.Topic == topic {
+			return row.Weight
+		}
 	}
-	return weight
+	t.Fatalf("读取主题词权重失败: 未找到 %q", topic)
+	return 0
+}
+
+// topicCandidate 构造一条带片段的入队候选。
+func topicCandidate(bv string, count int) viewerstore.WatchCandidate {
+	out := viewerstore.WatchCandidate{
+		BV:          bv,
+		Title:       "标题 " + bv,
+		Intro:       "简介",
+		AuthorUID:   "1001",
+		AuthorName:  "作者",
+		Comments:    []string{"评论一", "评论二"},
+		DurationSec: 600,
+	}
+	for index := 0; index < count; index++ {
+		out.Segments = append(out.Segments, viewerstore.SegmentInput{
+			StartSec:   index * 30,
+			EndSec:     index*30 + 20,
+			Path:       "segments/" + string(rune('a'+index)) + ".mp4",
+			Downloaded: true,
+		})
+	}
+	return out
 }

@@ -31,7 +31,7 @@ func TestNextUnwatchedSegmentOrder(t *testing.T) {
 			t.Fatalf("第 %d 步应取 %s#%d，实际 %s#%d",
 				step, expect.bv, expect.index, segment.BV, segment.Index)
 		}
-		if _, err := MarkSegmentWatched(segment.BV, segment.Index, 0); err != nil {
+		if _, err := MarkSegmentWatched(segment.BV, segment.Index, 0, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -84,7 +84,7 @@ func TestCompletedVideoCountIsVideoLevel(t *testing.T) {
 		t.Fatalf("有未看完视频时待看列表应非空 empty=%v err=%v", empty, err)
 	}
 	for index := 0; index < 2; index++ {
-		result, err := MarkSegmentWatched("BV1cnt", index, int64(100+index))
+		result, err := MarkSegmentWatched("BV1cnt", index, int64(100+index), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,7 +92,7 @@ func TestCompletedVideoCountIsVideoLevel(t *testing.T) {
 			t.Fatalf("看 2/3 段不应算完整视频: %+v", result)
 		}
 	}
-	result, err := MarkSegmentWatched("BV1cnt", 2, 200)
+	result, err := MarkSegmentWatched("BV1cnt", 2, 200, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestReplaceSegmentsAfterEnqueue(t *testing.T) {
 		t.Fatal(err)
 	}
 	for index := 0; index < 2; index++ {
-		if _, err := MarkSegmentWatched("BV1late", index, 400+int64(index)); err != nil {
+		if _, err := MarkSegmentWatched("BV1late", index, 400+int64(index), nil); err != nil {
 			t.Fatal(err)
 		}
 	}

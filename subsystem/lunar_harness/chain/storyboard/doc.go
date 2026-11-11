@@ -138,11 +138,17 @@ func buildMarkdown(plan storyboardPlan, shots []ShotView) string {
 		}
 	}
 	var b strings.Builder
-	b.WriteString("# " + plan.Title + " · 分镜脚本\n\n")
-	b.WriteString("- 生成时间：" + time.Now().Format("2006-01-02 15:04:05") + "\n")
+	b.WriteString("# ")
+	b.WriteString(plan.Title)
+	b.WriteString(" · 分镜脚本\n\n")
+	b.WriteString("- 生成时间：")
+	b.WriteString(time.Now().Format("2006-01-02 15:04:05"))
+	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("- 分镜总数：%d（成功 %d / 失败 %d）\n", len(shots), success, failed))
 	if plan.Style != "" {
-		b.WriteString("- 画风约束：" + plan.Style + "\n")
+		b.WriteString("- 画风约束：")
+		b.WriteString(plan.Style)
+		b.WriteString("\n")
 	}
 	b.WriteString("\n")
 
@@ -165,16 +171,31 @@ func buildMarkdown(plan storyboardPlan, shots []ShotView) string {
 	for _, shot := range shots {
 		b.WriteString(fmt.Sprintf("\n### 第 %d 镜", shot.Index))
 		if shot.Act != "" {
-			b.WriteString(" · " + shot.Act)
+			b.WriteString(" · ")
+			b.WriteString(shot.Act)
 		}
-		b.WriteString(" · 镜次 " + shot.Scene + "\n\n")
-		b.WriteString("**叙事**：" + shot.Narration + "\n\n")
-		b.WriteString("**提示词**：\n\n```text\n" + shot.Prompt + "\n```\n\n")
+		b.WriteString(" · 镜次 ")
+		b.WriteString(shot.Scene)
+		b.WriteString("\n\n")
+		b.WriteString("**叙事**：")
+		b.WriteString(shot.Narration)
+		b.WriteString("\n\n")
+		b.WriteString("**提示词**：\n\n```text\n")
+		b.WriteString(shot.Prompt)
+		b.WriteString("\n```\n\n")
 		if shot.Status == shotPainted && shot.File != "" {
-			b.WriteString("![第 " + strconv.Itoa(shot.Index) + " 镜](<" + shot.File + ">)\n\n")
-			b.WriteString("> 文件：`" + shot.File + "`")
+			b.WriteString("![第 ")
+			b.WriteString(strconv.Itoa(shot.Index))
+			b.WriteString(" 镜](<")
+			b.WriteString(shot.File)
+			b.WriteString(">)\n\n")
+			b.WriteString("> 文件：`")
+			b.WriteString(shot.File)
+			b.WriteString("`")
 			if shot.Handle != "" {
-				b.WriteString("（句柄 `" + shot.Handle + "`）")
+				b.WriteString("（句柄 `")
+				b.WriteString(shot.Handle)
+				b.WriteString("`）")
 			}
 			b.WriteString("\n")
 		} else {
@@ -182,7 +203,9 @@ func buildMarkdown(plan storyboardPlan, shots []ShotView) string {
 			if reason == "" {
 				reason = "未产出图片文件"
 			}
-			b.WriteString("> ⚠ 本镜生成失败：" + reason + "（没有可指向的图片文件）\n")
+			b.WriteString("> ⚠ 本镜生成失败：")
+			b.WriteString(reason)
+			b.WriteString("（没有可指向的图片文件）\n")
 		}
 	}
 	return b.String()
