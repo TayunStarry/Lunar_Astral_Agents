@@ -6,9 +6,9 @@
 //     executors/ArchiveReader 归档解析、agents/SearchPlanner 搜索者-规划、
 //     agents/SearchSummarizer 搜索者-摘要、chain/viewer 哔哩观影、agents/desktop 桌面操纵、
 //     agents/DialogueBridging 通讯桥接、agents/MutualForum 互助论坛、
-//     agents/ManipulateFiles 文件操纵、agents/ManipulateArchive 归档操纵、
-//     agents/CodeExecution 代码执行、agents/ContentRollback 内容回滚、
-//     agents/FileOperations 文件操作）。
+//     agents/file/ManipulateFiles 文件操纵、agents/file/ManipulateArchive 归档操纵、
+//     agents/file/CodeExecution 代码执行、agents/file/ContentRollback 内容回滚、
+//     agents/file/FileOperations 文件操作）。
 //
 // 提示词是数据而不是代码，集中到独立的 prompts/；运行期间提示词经 prompts.Read
 // 以 "prompts/xxx.md" 的虚拟路径读取，调用方无需感知真实文件布局。

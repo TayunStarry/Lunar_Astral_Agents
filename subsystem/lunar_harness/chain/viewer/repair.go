@@ -12,8 +12,8 @@ import (
 
 func init() {
 	agentrepair.RegisterReadonly(
-		"bilibili",
-		"哔哩观影",
+		chainScopeID,
+		chainScopeLabel,
 		"无跨轮运行期状态：待看列表与待回应队列由生活回合按 viewer.db 续跑（只读）",
 	)
 }

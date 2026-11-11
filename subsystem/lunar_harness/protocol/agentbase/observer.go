@@ -25,10 +25,69 @@ type Observer struct {
 	End func(role string)
 	// Tool 工具调用登记（名称 + 原始参数串），由装配层桥接到控制台实况。
 	Tool func(role, name, args string)
+	// ToolResult 工具结果登记（名称 + 三态 + 一句人话），与 Tool 成对出现；nil 时行为不变。
+	ToolResult func(role, name string, state ToolResultState, summary string)
 	// Meter 模型调用计量
 	Meter func(prompt, completion, cached int64, generation time.Duration, estimated bool)
 	// Report 重试耗尽后的失败上报（交给智能修复；role 为实况角色标签）
 	Report func(role string, err error)
+}
+
+// ToolResultState 工具结果三态：只描述「动作是否有证据表明在桌面上生效」。
+//
+// 未知不是失败：超时、取消、证据不足都归入 Unknown，既不当成功也不当失败。
+type ToolResultState string
+
+const (
+	// ToolApplied 有证据（前后指纹变化、查询式核对成功）表明动作已生效。
+	ToolApplied ToolResultState = "applied"
+	// ToolNotApplied 有证据表明动作未生效（工具明确拒绝/失败）。
+	ToolNotApplied ToolResultState = "not_applied"
+	// ToolUnknown 证据不足（超时、取消、无法观测），既不当成功也不当失败。
+	ToolUnknown ToolResultState = "unknown"
+)
+
+// Label 返回三态的实况显示文案。
+func (s ToolResultState) Label() string {
+	switch s {
+	case ToolApplied:
+		return "已生效"
+	case ToolNotApplied:
+		return "未生效"
+	default:
+		return "⚠ 状态未确认"
+	}
+}
+
+// Normalize 把空值/非法值归一为 Unknown，避免调用方误把未知当成功。
+func (s ToolResultState) Normalize() ToolResultState {
+	switch s {
+	case ToolApplied, ToolNotApplied:
+		return s
+	default:
+		return ToolUnknown
+	}
+}
+
+// ReportToolCall 上报一次真正派发的工具调用（名称 + 原始参数串）。
+//
+// 供不经过模型、但确实执行了桌面查询的链级动作登记实况，必须与
+// ReportToolResult 成对使用；未注入 Tool 回调时静默（行为不变）。
+func ReportToolCall(role, name, args string) {
+	observeTool(strings.TrimSpace(role), strings.TrimSpace(name), args)
+}
+
+// ReportToolResult 上报一次工具结果（名称 + 三态 + 一句人话）。
+//
+// 与 observeTool 上报的调用行成对出现；未注入 ToolResult 回调时静默（行为不变）。
+func ReportToolResult(role, name string, state ToolResultState, summary string) {
+	observerMu.Lock()
+	fn := observer.ToolResult
+	observerMu.Unlock()
+	if fn == nil {
+		return
+	}
+	fn(strings.TrimSpace(role), strings.TrimSpace(name), state.Normalize(), strings.TrimSpace(summary))
 }
 
 // SetObserver 注入实况观察者与计量回调（app 层启动时调用）

@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/ViewerRemark"
-	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
 	"LunarSubsystem/LunarHarness/agents/Vision"
+	"LunarSubsystem/LunarHarness/agents/viewer/ViewerRemark"
+	"LunarSubsystem/LunarHarness/agents/viewer/ViewerScreening"
 	"LunarSubsystem/LunarHarness/engine/activity"
 	"LunarSubsystem/LunarHarness/engine/bilibili"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"

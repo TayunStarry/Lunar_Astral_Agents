@@ -3,7 +3,7 @@
 package desktop
 
 // ==== 跨轮交接与尝试记录 ====
-// HandoffRecord 是角色之间唯一的信息介质；编排层额外维护目标应用与最近尝试，
+// HandoffRecord 是族成员之间唯一的信息介质；编排层额外维护目标应用与最近尝试，
 // 让规划者能看到「哪些路已经走不通」，而不是每轮从零开始重复同一操作。
 
 import (
@@ -14,22 +14,22 @@ import (
 	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
-// buildPlanContext 组装任务目标/验收标准/预期步骤，供各角色提示词复用。
-func buildPlanContext(plan editorTask) string {
+// BuildPlanContext 组装任务目标/验收标准/预期步骤，供各成员提示词复用。
+func BuildPlanContext(plan EditorTask) string {
 	return fmt.Sprintf("【任务目标】%s\n【验收标准】%s\n【预期步骤】%s",
 		plan.Goal, strings.Join(plan.Acceptance, "；"), strings.Join(plan.StepsExpected, " → "))
 }
 
-// stringifyProgress 汇总当前进度（不含历史尝试，供视觉/书记使用）。
-func stringifyProgress(h HandoffRecord) string {
+// StringifyProgress 汇总当前进度（不含历史尝试）。
+func StringifyProgress(h HandoffRecord) string {
 	return fmt.Sprintf("目标=%s；前台=%s（进程 %s）；画面=%s；输入框=%s；动作=%s；进度=%s",
 		h.TargetApp, h.Foreground, h.ForegroundProcess, textutil.TruncateRunes(h.VisualSummary, 512), h.InputBoxText, h.LastAction, h.Progress)
 }
 
-// stringifyHandoff 在进度之外追加最近尝试记录，供规划者避免重复无效操作。
-func stringifyHandoff(h HandoffRecord) string {
+// StringifyHandoff 在进度之外追加最近尝试记录，供规划者避免重复无效操作。
+func StringifyHandoff(h HandoffRecord) string {
 	var sb strings.Builder
-	sb.WriteString(stringifyProgress(h))
+	sb.WriteString(StringifyProgress(h))
 	if len(h.Attempts) == 0 {
 		return sb.String()
 	}
@@ -53,8 +53,8 @@ func stringifyHandoff(h HandoffRecord) string {
 	return sb.String()
 }
 
-// appendAttempt 追加一次尝试并只保留最近 autoMaxAttempts 条。
-func appendAttempt(list []ActionAttempt, attempt ActionAttempt) []ActionAttempt {
+// AppendAttempt 追加一次尝试并只保留最近 autoMaxAttempts 条。
+func AppendAttempt(list []ActionAttempt, attempt ActionAttempt) []ActionAttempt {
 	list = append(list, attempt)
 	if len(list) > autoMaxAttempts {
 		list = list[len(list)-autoMaxAttempts:]
@@ -62,9 +62,9 @@ func appendAttempt(list []ActionAttempt, attempt ActionAttempt) []ActionAttempt 
 	return list
 }
 
-// advanceHandoff 由编排层确定性推进交接记录（替代原先依赖截图的「书记者」模型调用）：
+// AdvanceHandoff 由编排层确定性推进交接记录（替代原先依赖截图的「书记者」模型调用）：
 // 状态只来自真实前台窗口与工具返回值，避免模型臆测出「桌面 / 记事本未打开」之类的错误画面描述。
-func advanceHandoff(h HandoffRecord, attempt ActionAttempt) HandoffRecord {
+func AdvanceHandoff(h HandoffRecord, attempt ActionAttempt) HandoffRecord {
 	h.Round = attempt.Round
 	h.Foreground = desktopos.ForegroundTitle()
 	h.ForegroundProcess = desktopos.ForegroundProcess()

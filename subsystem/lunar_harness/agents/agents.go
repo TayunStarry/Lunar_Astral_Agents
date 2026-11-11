@@ -1,29 +1,28 @@
-// Package agents 收纳月华与琉璃两个人格局及其内部智能体，Go 实现集中在本目录：
+// Package agents 收纳全部智能体：通常一个智能体一个子包，模型推理只允许从这里发起。
 //
-//	agents/Screenshoter/  截图智能体（Go：显示器/窗口枚举、区域截图、多帧推送与主帧回传）
-//	agents/desktop/        桌面操纵智能体（Go：UIA / 输入 / 进程 / 窗口）
-//	agents/SearchPlanner/    搜索者-规划智能体（Go：结构化管线决策）
-//	agents/SearchSummarizer/ 搜索者-摘要智能体（Go：多页正文一次提炼）
-//	executors/WebCrawler/   网页抓取执行体（Go：引擎降级 / 详情页采集 / 缓存；不发起模型调用）
-//	agents/Vision/           视觉理解智能体（Go：图片 / 动图 / 视频的视觉副本、观看与描述）
-//	agents/DocumentReader/   文献解析智能体（Go：格式识别、按行 / 分批解析超大规模文本）
-//	executors/ArchiveReader/ 归档解析执行体（Go：压缩包结构 / 条目读取 / GGUF 元数据；不发起模型调用）
-//	agents/ArchiveOps/       归档写操作工具库（Go：压缩包创建 / 删除 / 条目新增 / 移除；不发起模型调用）
-//	agents/DialogueBridging/ 通讯桥接智能体（Go：向群/好友发送文本、图片、文件）
-//	agents/MutualForum/      互助论坛智能体（Go：论坛浏览/发帖/回复的多轮工具执行）
-//	agents/FileEditor/       文档库读写工具库（Go：/document 读写与项目运行；不发起模型调用）
-//	agents/WishManager/      愿望管理智能体（Go：愿望新增 / 改写 / 完成 / 删除 / 优先级 / 查询）
-//	agents/SQLWriter/        语句生成智能体（Go：自然语言 → 一条只读 SQL，不执行）
+// 子包一般按 type.go（导出类型）、variable.go（AgentID / 角色 / 超时 / 轮次上限）、
+// agent.go（唯一的模型入口）、catalog.go（工具注册与工具目录）组织。新增智能体还须
+// 把 AgentID 与显示名登记到 protocol/agentinfo，并在 app/tui_hooks.go 的
+// roleAgentIDs 与 buildToolCatalog 挂上，否则推理实况里看不到它、故障也修不到它。
 //
-// 跨多轮 / 跨多智能体的系统级链路编排不在本目录，统一收纳于 chain/：
+// 有四个子包不是智能体，按用途分两类：
+//   - 发起模型调用、但只作为共用基座：toolagent（工具型智能体的通用工具循环）；
+//   - 不发起模型调用、只提供原子能力：filesupport（文件版本存储）、
+//     ArchiveOps（归档写操作）、FileEditor（文档库读写与项目运行）。
 //
-//	chain/thinking/ 思维链（对话者 Dialogue + 单 Tick 循环与特许响应车道）
-//	chain/search/   搜索链（规划 → 抓取 → 摘要三段调度）
-//	chain/life/     生活链路（生活事件编排）
-//	chain/viewer/   观影链路（哔哩观影编排）
+// 硬边界：全仓只有 protocol/agentbase 能发起推理，请求组装、流式解析、tool_calls
+// 分片聚合、重试、超时、推理实况与失败上报都在那里。chain/、engine/、server/、
+// executors/ 不得自行拼模型请求、解析流式输出或持有 StreamRequest；链只做编排，
+// 需要模型能力时调用本目录的智能体，引擎侧只能声明函数钩子由装配层注入。
 //
-// 页面注入型智能体脚本（Mini-LTP / Self-LTP / SharedInput）与下发它们的 LTPX 宿主
-// 同处 server/ltpxhost（脚本在 server/ltpxhost/scripts，经 go:embed 内嵌）：脚本不是
-// 前端页面的一部分，而是由三个 handler 单独下发、注入到 iframe 里运行的智能体本体，
-// 因此与宿主放在一起，前缀错配在结构上不再可能发生。
+// 本文件不再维护逐条目录清单，权威来源是：
+//   - 智能体分层与职责：docs/code-wiki/09-调度与智能体分层.md
+//   - 智能体 ID 与显示名：protocol/agentinfo
+//   - 边界自查命令与新增智能体清单：.trae/rules/agent-chain-boundary.md
+//
+// 跨多智能体的链路编排不在本目录，而在 chain/ 的七条链：thinking（思维链）、
+// search（搜索链）、life（生活链）、viewer（观影链）、storyboard（分镜链）、
+// forum（论坛链）、desktop（桌控链，包名 desktopchain）。页面注入型智能体脚本
+// （Mini-LTP / Self-LTP / SharedInput）由 server/ltpxhost 经 go:embed 内嵌在
+// scripts/*.js 中单独下发，源码与下发方同包，随二进制一起发布。
 package agents

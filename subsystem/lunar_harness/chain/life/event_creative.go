@@ -13,7 +13,7 @@ import (
 	"path"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/agents/FileOperations"
+	"LunarSubsystem/LunarHarness/agents/file/FileOperations"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/engine/activity"
 	"LunarSubsystem/LunarHarness/engine/wishchain"

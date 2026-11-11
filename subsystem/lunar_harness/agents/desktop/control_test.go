@@ -14,14 +14,14 @@ import (
 func TestCallDesktopHonorsCancelAndTimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := callDesktop(ctx, time.Second, "测试", func() (int, error) { return 1, nil }); !errors.Is(err, ErrCanceled) {
+	if _, err := CallDesktop(ctx, time.Second, "测试", func() (int, error) { return 1, nil }); !errors.Is(err, ErrCanceled) {
 		t.Fatalf("已取消的上下文应返回 ErrCanceled，实际 %v", err)
 	}
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
 	started := time.Now()
-	_, err := callDesktop(ctx2, 30*time.Millisecond, "阻塞测试", func() (int, error) {
+	_, err := CallDesktop(ctx2, 30*time.Millisecond, "阻塞测试", func() (int, error) {
 		time.Sleep(200 * time.Millisecond)
 		return 1, nil
 	})

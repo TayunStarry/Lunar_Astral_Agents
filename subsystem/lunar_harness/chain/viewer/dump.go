@@ -12,8 +12,8 @@ import (
 
 func init() {
 	agentdump.Register(agentdump.Provider{
-		ID:          "bilibili",
-		Label:       "哔哩观影",
+		ID:          chainScopeID,
+		Label:       chainScopeLabel,
 		Group:       "Go 智能体",
 		Description: "哔哩观影的选片配置与已看视频规模",
 		Export: func(includeImages bool) (any, error) {

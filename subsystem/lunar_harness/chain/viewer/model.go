@@ -1,7 +1,7 @@
 package viewer
 
 // model.go 观影链的模型生命周期：按阶段主动卸载模型释放显存。
-// 模型调用本身由四个观影者智能体（agents/Viewer*）承担，链侧只负责编排与切换。
+// 模型调用本身由五个观影者智能体（agents/viewer/Viewer*）承担，链侧只负责编排与切换。
 
 import (
 	"strings"

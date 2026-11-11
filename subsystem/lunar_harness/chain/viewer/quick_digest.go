@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
+	"LunarSubsystem/LunarHarness/agents/viewer/ViewerScreening"
 	"LunarSubsystem/LunarHarness/engine/bilibili"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"

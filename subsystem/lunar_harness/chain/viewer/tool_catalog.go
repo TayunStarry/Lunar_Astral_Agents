@@ -2,13 +2,11 @@ package viewer
 
 // tool_catalog.go 哔哩观影的能力目录（供控制台「工具列表」屏展示）。
 //
-// 目录内容不再在链侧硬编码：由四个观影者智能体在 protocol/toolreg 登记的阶段能力派生。
+// 目录内容不再在链侧硬编码：由观影族成员的汇总入口派生，
+// 链侧只依赖族根下的 catalog，不直接 import 各成员包。
 
 import (
-	"LunarSubsystem/LunarHarness/agents/ViewerCensor"
-	"LunarSubsystem/LunarHarness/agents/ViewerCritic"
-	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
-	"LunarSubsystem/LunarHarness/agents/ViewerShare"
+	viewercatalog "LunarSubsystem/LunarHarness/agents/viewer/catalog"
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
@@ -19,12 +17,7 @@ import (
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
 		ID: "bilibili_viewer", Name: "哔哩观影", Kind: agentinfo.KindChain,
-		Note: "观影智能体：选片、观看、评论与观影记忆整理。",
-		Tools: agentinfo.ToolsFromRegistry(
-			ViewerScreening.AgentID,
-			ViewerCensor.AgentID,
-			ViewerCritic.AgentID,
-			ViewerShare.AgentID,
-		),
+		Note:  "观影智能体：选片、观看、评论与观影记忆整理。",
+		Tools: agentinfo.ToolsFromRegistry(viewercatalog.AgentIDs()...),
 	}}
 }

@@ -2,7 +2,7 @@
 
 package desktop
 
-// prompts.go 提示词加载：角色提示词统一放在 prompts/ 下，代码只保留角色与工具边界。
+// prompts.go 提示词加载：各成员提示词统一放在 prompts/ 下，代码只保留角色与工具边界。
 //
 // 提示词是数据而不是代码：改语气、改输出格式不需要动 Go 逻辑；文件由 prompts
 // 包 embed 进二进制，运行期按名称读取。文件缺失属于构建配置错误，直接 panic，
@@ -14,11 +14,11 @@ import (
 	"LunarSubsystem/LunarHarness/prompts"
 )
 
-// mustPrompt 读取内嵌提示词；缺失或为空时立即失败（提示词是必需依赖）。
-func mustPrompt(name string) string {
+// MustPrompt 读取内嵌提示词；缺失或为空时立即失败（提示词是必需依赖）。
+func MustPrompt(name string) string {
 	data, err := prompts.Read(name)
 	if err != nil {
-		panic(fmt.Sprintf("加载"+DisplayName+"提示词 %s 失败: %v", name, err))
+		panic(fmt.Sprintf("加载桌面族提示词 %s 失败: %v", name, err))
 	}
 	return string(data)
 }

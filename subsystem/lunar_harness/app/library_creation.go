@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/FileOperations"
+	"LunarSubsystem/LunarHarness/agents/file/FileOperations"
 	"LunarSubsystem/LunarHarness/engine/websocket"
 	"LunarSubsystem/LunarHarness/server"
 )

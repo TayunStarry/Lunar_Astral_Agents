@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
+	"LunarSubsystem/LunarHarness/agents/viewer/ViewerScreening"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 

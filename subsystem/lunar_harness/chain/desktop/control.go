@@ -22,7 +22,6 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/desktop"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
 // RunState 桌面操纵当前/最近一次运行状态（供控制台「运行状态」屏展示）。
@@ -58,13 +57,13 @@ var (
 func Start(instruction string) error {
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" {
-		return errors.New("请先填写要" + agentinfo.NameDesktopOperator + "执行的桌面任务")
+		return errors.New("请先填写要" + chainScopeLabel + "执行的桌面任务")
 	}
 
 	runMu.Lock()
 	if runState.Running {
 		runMu.Unlock()
-		return errors.New(agentinfo.NameDesktopOperator + "正在运行，请先中断当前任务")
+		return errors.New(chainScopeLabel + "正在运行，请先中断当前任务")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	runSeq++
@@ -75,7 +74,7 @@ func Start(instruction string) error {
 	runState = RunState{Running: true, Instruction: instruction, StartedAt: time.Now()}
 	runMu.Unlock()
 
-	logger.Info("LunarHarness", agentinfo.NameDesktopOperator+"已启动（控制台）：%s", instruction)
+	logger.Info("LunarHarness", chainScopeLabel+"已启动（控制台）：%s", instruction)
 	go func() {
 		text, err := Run(ctx, instruction)
 
@@ -104,11 +103,11 @@ func Start(instruction string) error {
 
 		switch {
 		case err == nil:
-			logger.Info("LunarHarness", agentinfo.NameDesktopOperator+"执行完成: %s", text)
+			logger.Info("LunarHarness", chainScopeLabel+"执行完成: %s", text)
 		case errors.Is(err, desktop.ErrCanceled):
-			logger.Warn("LunarHarness", agentinfo.NameDesktopOperator+"已中断")
+			logger.Warn("LunarHarness", chainScopeLabel+"已中断")
 		default:
-			logger.Error("LunarHarness", agentinfo.NameDesktopOperator+"执行失败: %v", err)
+			logger.Error("LunarHarness", chainScopeLabel+"执行失败: %v", err)
 		}
 
 		cancel() // 释放上下文资源
@@ -129,7 +128,7 @@ func Stop() bool {
 	if runState.Stopping {
 		forceFinishLocked("已中断（强制结束）")
 		runMu.Unlock()
-		logger.Warn("LunarHarness", agentinfo.NameDesktopOperator+"被强制结束（第二次中断请求）")
+		logger.Warn("LunarHarness", chainScopeLabel+"被强制结束（第二次中断请求）")
 		return true
 	}
 	cancel := runCancel
@@ -138,7 +137,7 @@ func Stop() bool {
 	runState.Stopping = true
 	runMu.Unlock()
 
-	logger.Warn("LunarHarness", agentinfo.NameDesktopOperator+"收到中断请求，正在停止")
+	logger.Warn("LunarHarness", chainScopeLabel+"收到中断请求，正在停止")
 	if cancel != nil {
 		cancel()
 	}
@@ -159,7 +158,7 @@ func waitDesktopStop(seq int64, done chan struct{}) {
 	runMu.Lock()
 	if runSeq == seq && runState.Running {
 		forceFinishLocked("已中断（超时强制结束）")
-		logger.Warn("LunarHarness", agentinfo.NameDesktopOperator+"未在 %s 内退出，已强制收尾", stopWaitTimeout)
+		logger.Warn("LunarHarness", chainScopeLabel+"未在 %s 内退出，已强制收尾", stopWaitTimeout)
 	}
 	runMu.Unlock()
 }

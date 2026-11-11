@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/agents/ViewerCensor"
+	"LunarSubsystem/LunarHarness/agents/viewer/ViewerCensor"
 	"LunarSubsystem/LunarHarness/engine/bilibili"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	module "LunarSubsystem/LunarHarness/engine/multimodal"

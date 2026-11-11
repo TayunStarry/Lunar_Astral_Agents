@@ -14,7 +14,7 @@ import (
 	"sort"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/ViewerShare"
+	"LunarSubsystem/LunarHarness/agents/viewer/ViewerShare"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/persistence"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"

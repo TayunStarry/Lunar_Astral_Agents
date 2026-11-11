@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
 	"LunarSubsystem/LunarHarness/agents/Vision"
+	"LunarSubsystem/LunarHarness/agents/file/ArchiveOps"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/executors/ArchiveReader"
 	"LunarSubsystem/LunarHarness/internal/testenv"

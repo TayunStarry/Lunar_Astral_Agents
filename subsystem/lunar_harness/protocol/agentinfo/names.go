@@ -51,6 +51,12 @@ const (
 	NameLifeMemorizer = "记忆整理"
 	// NameDesktopOperator 桌面操作
 	NameDesktopOperator = "桌面操作"
+	// NameDesktopPerceive 桌面感知
+	NameDesktopPerceive = "桌面感知"
+	// NameDesktopPlan 桌面规划
+	NameDesktopPlan = "桌面规划"
+	// NameDesktopExecute 桌面执行
+	NameDesktopExecute = "桌面执行"
 	// NameSQLWriter 语句生成
 	NameSQLWriter = "语句生成"
 	// NameStoryboardResearch 分镜规划-资料
@@ -80,7 +86,6 @@ var DisplayNames = map[string]string{
 	"vision":            NameVision,
 	"archive_ops":       NameArchiveOps,
 	"document_reader":   NameDocumentReader,
-	"file_editor":       NameFileEditor,
 	"wish_manager":      NameWishManager,
 	"dialogue_bridging": NameDialogueBridging,
 	"mutual_forum":      NameMutualForum,
@@ -99,6 +104,9 @@ var DisplayNames = map[string]string{
 	"dialogue":          NameDialogue,
 	"life_memorizer":    NameLifeMemorizer,
 	"desktop_operator":  NameDesktopOperator,
+	"desktop_perceive":  NameDesktopPerceive,
+	"desktop_plan":      NameDesktopPlan,
+	"desktop_execute":   NameDesktopExecute,
 	"sql_writer":        NameSQLWriter,
 
 	"storyboard_research": NameStoryboardResearch,

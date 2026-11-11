@@ -123,3 +123,13 @@ const (
 )
 
 // 观影记忆的存储、上限与迁移规则见 engine/viewerstore（viewer.db 全部由该包负责）。
+
+// ==== 导出与只读诊断 ====
+// bilibili 是链级故障归属 ID，不是智能体身份：它只用于 agentdump / agentrepair
+// 的条目登记（与 app/tui_hooks.go 的 roleAgentIDs 白名单一致），因此定义在链侧而非智能体族。
+const (
+	// chainScopeID 链级导出与只读诊断条目的 ID
+	chainScopeID = "bilibili"
+	// chainScopeLabel 链级导出与只读诊断条目的显示名
+	chainScopeLabel = "哔哩观影"
+)

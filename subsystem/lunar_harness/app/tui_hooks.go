@@ -6,13 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/CodeExecution"
-	"LunarSubsystem/LunarHarness/agents/ContentRollback"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
-	"LunarSubsystem/LunarHarness/agents/FileOperations"
-	"LunarSubsystem/LunarHarness/agents/ManipulateArchive"
-	"LunarSubsystem/LunarHarness/agents/ManipulateFiles"
 	"LunarSubsystem/LunarHarness/agents/Musician"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
 	"LunarSubsystem/LunarHarness/agents/Painter"
@@ -22,13 +17,13 @@ import (
 	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
 	"LunarSubsystem/LunarHarness/agents/StoryboardPlanner"
 	"LunarSubsystem/LunarHarness/agents/StoryboardResearch"
-	"LunarSubsystem/LunarHarness/agents/ViewerCensor"
-	"LunarSubsystem/LunarHarness/agents/ViewerCritic"
-	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
-	"LunarSubsystem/LunarHarness/agents/ViewerShare"
 	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/agents/WishManager"
-	"LunarSubsystem/LunarHarness/agents/desktop"
+	desktopexecute "LunarSubsystem/LunarHarness/agents/desktop/execute"
+	desktopperceive "LunarSubsystem/LunarHarness/agents/desktop/perceive"
+	desktopplan "LunarSubsystem/LunarHarness/agents/desktop/plan"
+	filecatalog "LunarSubsystem/LunarHarness/agents/file/catalog"
+	viewercatalog "LunarSubsystem/LunarHarness/agents/viewer/catalog"
 	"LunarSubsystem/LunarHarness/chain/desktop"
 	"LunarSubsystem/LunarHarness/chain/search"
 	"LunarSubsystem/LunarHarness/chain/thinking"
@@ -152,6 +147,9 @@ func WireTUIEngineHooks() {
 		Delta: streamDelta,
 		End:   streamEnd,
 		Tool:  streamTool,
+		ToolResult: func(role, name string, state agentbase.ToolResultState, summary string) {
+			console.StreamToolResult(role, state.Label()+" "+name+"："+summary)
+		},
 		Meter: meter,
 	})
 	// 重试仍失败时交给智能修复：优先走结构化简报，缺失字段由修复层降级。
@@ -159,11 +157,6 @@ func WireTUIEngineHooks() {
 		detail.Agent = agentIDByRole(detail.Agent)
 		Savior.ReportDetail(detail)
 	})
-	// 桌面操纵的工具调用也进实况（工具名 + 参数），复盘时看得出它到底有没有真正去启动应用
-	desktop.SetToolObserver(func(role, name, args string) {
-		console.StreamTool(role, name, args)
-	})
-
 	// 桌面操纵智能体：唯一入口在控制台「运行状态」屏（人工输入要求启动、随时中断）。
 	// 同时把中断器注入对话者：对话者开始推理与应答前会自动终止桌面操纵，
 	// 避免它继续抢占桌面键鼠、与本轮响应互相干扰。
@@ -203,8 +196,9 @@ var roleAgentIDs = map[string]string{
 	agentinfo.NameScreenshoter:       "screenshoter",
 	"截图者":                            "screenshoter",
 	agentinfo.NameDesktopOperator:    "desktop_operator",
-	"桌面操作-模型":                        "desktop_operator",
-	"桌面操纵":                           "desktop_operator",
+	agentinfo.NameDesktopPerceive:    "desktop_perceive",
+	agentinfo.NameDesktopPlan:        "desktop_plan",
+	agentinfo.NameDesktopExecute:     "desktop_execute",
 	agentinfo.NameMusician:           "musician",
 	"演奏者":                            "musician",
 	agentinfo.NameDialogueBridging:   "dialogue_bridging",
@@ -279,22 +273,17 @@ func buildToolCatalog() []agentinfo.Agent {
 	out = append(out, DocumentReader.ToolCatalog()...)
 	out = append(out, ArchiveReader.ToolCatalog()...)
 	out = append(out, WebCrawler.ToolCatalog()...)
-	out = append(out, ManipulateFiles.ToolCatalog()...)
-	out = append(out, ManipulateArchive.ToolCatalog()...)
-	out = append(out, CodeExecution.ToolCatalog()...)
-	out = append(out, ContentRollback.ToolCatalog()...)
-	out = append(out, FileOperations.ToolCatalog()...)
+	out = append(out, filecatalog.ToolCatalogs()...)
 	out = append(out, WishManager.ToolCatalog()...)
 	out = append(out, DialogueBridging.ToolCatalog()...)
 	out = append(out, search.ToolCatalog()...)
 	out = append(out, SearchPlanner.ToolCatalog()...)
 	out = append(out, SearchSummarizer.ToolCatalog()...)
-	out = append(out, ViewerScreening.ToolCatalog()...)
-	out = append(out, ViewerCensor.ToolCatalog()...)
-	out = append(out, ViewerCritic.ToolCatalog()...)
-	out = append(out, ViewerShare.ToolCatalog()...)
+	out = append(out, viewercatalog.ToolCatalogs()...)
 	out = append(out, viewer.ToolCatalog()...)
-	out = append(out, desktop.ToolCatalog()...)
+	out = append(out, desktopperceive.ToolCatalog()...)
+	out = append(out, desktopplan.ToolCatalog()...)
+	out = append(out, desktopexecute.ToolCatalog()...)
 	out = append(out, MutualForum.ToolCatalog()...)
 	out = append(out, StoryboardResearch.ToolCatalog()...)
 	out = append(out, StoryboardPlanner.ToolCatalog()...)

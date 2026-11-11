@@ -19,8 +19,8 @@ type desktopCallResult[T any] struct {
 	err   error
 }
 
-// callDesktop 在 ctx 取消或超时后立即返回；fn 在独立 goroutine 中执行。
-func callDesktop[T any](ctx context.Context, timeout time.Duration, label string, fn func() (T, error)) (T, error) {
+// CallDesktop 在 ctx 取消或超时后立即返回；fn 在独立 goroutine 中执行。
+func CallDesktop[T any](ctx context.Context, timeout time.Duration, label string, fn func() (T, error)) (T, error) {
 	var zero T
 	if err := ctx.Err(); err != nil {
 		return zero, ErrCanceled

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/FileOperations"
 	"LunarSubsystem/LunarHarness/agents/WishManager"
+	"LunarSubsystem/LunarHarness/agents/file/FileOperations"
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
 )
 

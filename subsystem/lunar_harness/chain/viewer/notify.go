@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"LunarSubsystem/LunarHarness/agents/ViewerCritic"
+	"LunarSubsystem/LunarHarness/agents/viewer/ViewerCritic"
 )
 
 // inboxBrief 通知条目的关键字段摘要（失败日志排查用）

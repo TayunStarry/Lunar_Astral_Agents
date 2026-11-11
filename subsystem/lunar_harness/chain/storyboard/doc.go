@@ -17,7 +17,7 @@ import (
 	"time"
 	"unicode"
 
-	"LunarSubsystem/LunarHarness/agents/FileEditor"
+	"LunarSubsystem/LunarHarness/agents/file/FileEditor"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/resource"
 )

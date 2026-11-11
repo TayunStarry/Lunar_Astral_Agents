@@ -12,9 +12,8 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 )
 
-// 桌面操纵可观测性：逐角色 trace 日志。
-// 记录每个角色（编纂者/启动者/视觉/UIA/规划/操作/书记）「读到什么、想了什么、决定做什么、做了什么」，
-// 便于复盘。
+// 桌面操纵可观测性：逐成员 trace 日志。
+// 记录各成员「读到什么、想了什么、决定做什么、做了什么」，便于复盘。
 
 var (
 	autoTraceOnce sync.Once
@@ -33,8 +32,8 @@ func autoTraceInitPath() {
 	_ = os.MkdirAll(autoTraceDir, 0755)
 }
 
-// traceAuto 写一条桌面操纵 trace 日志（时间 + 说明文字）
-func traceAuto(format string, args ...any) {
+// Trace 写一条桌面操纵 trace 日志（时间 + 说明文字）。
+func Trace(format string, args ...any) {
 	autoTraceOnce.Do(autoTraceInitPath)
 	line := time.Now().Format("15:04:05.000") + " | " + fmt.Sprintf(format, args...)
 	autoTraceMu.Lock()

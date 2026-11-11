@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
+	"LunarSubsystem/LunarHarness/agents/viewer/ViewerScreening"
 )
 
 func TestManualModelProbe(t *testing.T) {

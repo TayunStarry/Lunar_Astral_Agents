@@ -190,6 +190,11 @@ func Stream(ctx context.Context, req StreamRequest) (Reply, error) {
 		if readErr != nil {
 			return Reply{}, readErr
 		}
+		// 只登记最终被采纳的回复：循环截断后重试的回复不登记，避免出现
+		// 「实况里有调用、实际没有派发」的悬空工具行。
+		if req.ReportTools {
+			reportToolCalls(role, reply.ToolCalls)
+		}
 		reportReplyCall(body, reply, time.Since(start))
 		return reply, nil
 	}
@@ -197,6 +202,9 @@ func Stream(ctx context.Context, req StreamRequest) (Reply, error) {
 	reply, err := readWholeReply(resp.Body, role, req)
 	if err != nil {
 		return Reply{}, err
+	}
+	if req.ReportTools {
+		reportToolCalls(role, reply.ToolCalls)
 	}
 	reportReplyCall(body, reply, time.Since(start))
 	return reply, nil
@@ -347,9 +355,6 @@ func readStreamReply(body io.Reader, role string, guard *loopguard.Guard, req St
 		}
 	}
 	normalizeToolCalls(toolCalls)
-	if req.ReportTools {
-		reportToolCalls(role, toolCalls)
-	}
 	message := Message{Role: "assistant", Content: text}
 	if len(toolCalls) > 0 {
 		message.ToolCalls = toolCalls
@@ -449,9 +454,6 @@ func buildWholeReply(completion wholeResponse, role string, req StreamRequest) (
 	observeDelta(role, "content", displayText(req.Display, text))
 	notifyDelta(req.OnDelta, "think", reasoning)
 	notifyDelta(req.OnDelta, "content", text)
-	if req.ReportTools {
-		reportToolCalls(role, message.ToolCalls)
-	}
 	baseMessage := Message{Role: "assistant", Content: text}
 	if len(message.ToolCalls) > 0 {
 		baseMessage.ToolCalls = message.ToolCalls

@@ -11,7 +11,7 @@ import (
 	"LunarSubsystem/LunarHarness/agents/MemoryFuser"
 	"LunarSubsystem/LunarHarness/agents/MemoryTagger"
 	"LunarSubsystem/LunarHarness/agents/Painter"
-	"LunarSubsystem/LunarHarness/agents/filesupport"
+	"LunarSubsystem/LunarHarness/agents/file/filesupport"
 	"LunarSubsystem/LunarHarness/chain/search"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking"
