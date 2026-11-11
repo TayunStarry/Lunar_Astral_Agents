@@ -1,9 +1,14 @@
 package storyboard
 
-// persist.go 任务视图落盘与重启恢复。
+// persist.go 任务现场落盘与重启恢复。
 //
-// 演绎任务的绘制现场（图片句柄、外部会话）在进程重启后不可恢复，
-// 因此恢复策略是：把上次未完成的任务标记为中断并推送原因，不做续跑。
+// 落盘的不只是对外视图，还包括续跑所需的内部状态：请求、故事正文、资料检索进度、
+// 分镜计划、逐镜结果与下一个待绘制镜头。重启后：
+//   - 已完成 / 已失败：原样恢复供查询；
+//   - 已取消：保持取消，不续跑；
+//   - 暂停 / 审查：恢复现场并停在原状态等待用户操作；
+//   - 其余未完成任务：从落盘阶段继续推进，绘制从下一个未完成镜头接上；
+//   - 旧格式（只有任务视图）或关键状态缺失：按中断处理并推送原因。
 
 import (
 	"encoding/json"
@@ -14,26 +19,33 @@ import (
 	"LunarSubsystem/LunarHarness/engine/persistence"
 )
 
-// persistTasksLocked 把当前任务视图写入磁盘；调用方必须持有 taskMu。
+// persistTasksLocked 把全部任务的完整现场写入磁盘；调用方必须持有 taskMu。
 func persistTasksLocked() {
-	views := make([]TaskView, 0, len(taskOrder))
+	records := make([]json.RawMessage, 0, len(taskOrder))
 	for _, id := range taskOrder {
-		if state, ok := tasks[id]; ok {
-			views = append(views, state.view)
+		state, ok := tasks[id]
+		if !ok {
+			continue
 		}
+		raw, err := json.Marshal(snapshotTaskLocked(state))
+		if err != nil {
+			logger.Warn(Module, "任务现场序列化失败（%s）: %v", id, err)
+			continue
+		}
+		records = append(records, raw)
 	}
-	raw, err := json.MarshalIndent(persistedTasks{Version: 1, Tasks: views}, "", "  ")
+	raw, err := json.MarshalIndent(persistedTasks{Version: 2, Tasks: records}, "", "  ")
 	if err != nil {
-		logger.Warn(Module, "任务视图序列化失败: %v", err)
+		logger.Warn(Module, "任务现场落盘序列化失败: %v", err)
 		return
 	}
 	if err := persistence.WriteFileAtomic(storyboardTasksFile, raw); err != nil {
-		logger.Warn(Module, "任务视图落盘失败: %v", err)
+		logger.Warn(Module, "任务现场落盘失败: %v", err)
 	}
 }
 
-// RecoverInterrupted 读取上次进程遗留的任务视图：
-// 未结束的任务一律标记为失败并推送中断原因，已结束的任务原样恢复供查询。
+// RecoverInterrupted 读取上次进程遗留的任务：
+// 能还原现场的继续推进，无法还原的标记中断并推送原因。
 func RecoverInterrupted() {
 	raw, ok := persistence.ReadFileBytes(storyboardTasksFile)
 	if !ok {
@@ -41,36 +53,64 @@ func RecoverInterrupted() {
 	}
 	var stored persistedTasks
 	if err := json.Unmarshal(raw, &stored); err != nil {
-		logger.Warn(Module, "任务视图文件损坏，跳过中断恢复: %v", err)
+		logger.Warn(Module, "任务现场文件损坏，跳过恢复: %v", err)
 		return
 	}
 	if len(stored.Tasks) == 0 {
 		return
 	}
 
-	now := time.Now().Format(time.RFC3339)
-	interrupted := make([]TaskView, 0, len(stored.Tasks))
+	now := time.Now()
+	interrupted := make([]TaskView, 0)
+	resumed := make([]TaskView, 0)
 
 	taskMu.Lock()
-	for _, view := range stored.Tasks {
+	for _, rawTask := range stored.Tasks {
+		record, view, full := decodePersistedTask(rawTask)
 		view.TaskID = strings.TrimSpace(view.TaskID)
 		if view.TaskID == "" {
 			continue
 		}
-		if view.Status != statusCompleted && view.Status != statusFailed {
-			view.Status = statusFailed
-			view.Stage = "已中断"
-			view.Progress = 100
-			view.Summary = recoverReason
-			view.Error = recoverReason
-			view.Event = eventInterrupted
-			view.UpdatedAt = now
-			interrupted = append(interrupted, view)
+		if _, exists := tasks[view.TaskID]; exists {
+			continue
 		}
-		if _, exists := tasks[view.TaskID]; !exists {
+		if view.Status == statusCompleted || view.Status == statusFailed {
 			tasks[view.TaskID] = &taskState{view: view, stage: stageDone}
 			taskOrder = append(taskOrder, view.TaskID)
+			continue
 		}
+		if !full {
+			// 旧格式只有视图，没有可续跑的现场。
+			markInterruptedLocked(&view, now)
+			tasks[view.TaskID] = &taskState{view: view, stage: stageDone}
+			taskOrder = append(taskOrder, view.TaskID)
+			interrupted = append(interrupted, view)
+			continue
+		}
+		if record.Canceled {
+			view.Status = statusCanceled
+			view.Stage = "已取消"
+			view.Progress = 100
+			view.Summary = "任务已取消，不再续跑"
+			view.Event = eventInterrupted
+			view.UpdatedAt = now.Format(time.RFC3339)
+			view.Shots = nil
+			tasks[view.TaskID] = &taskState{view: view, stage: stageDone, canceled: true}
+			taskOrder = append(taskOrder, view.TaskID)
+			continue
+		}
+		state := restoreTaskState(record, now)
+		if state == nil {
+			markInterruptedLocked(&view, now)
+			tasks[view.TaskID] = &taskState{view: view, stage: stageDone}
+			taskOrder = append(taskOrder, view.TaskID)
+			interrupted = append(interrupted, view)
+			continue
+		}
+		tasks[view.TaskID] = state
+		taskOrder = append(taskOrder, view.TaskID)
+		pushView, _ := buildPushLocked(state, true)
+		resumed = append(resumed, pushView)
 	}
 	trimTasksLocked()
 	persistTasksLocked()
@@ -80,4 +120,20 @@ func RecoverInterrupted() {
 		logger.Warn(Module, "演绎任务 %s 因系统重启中断", view.TaskID)
 		emitTask(view)
 	}
+	for _, view := range resumed {
+		logger.Info(Module, "演绎任务 %s 已恢复并继续推进: %s", view.TaskID, view.Stage)
+		emitTask(view)
+	}
+}
+
+// markInterruptedLocked 把无法续跑的任务标记为中断；调用方必须持有 taskMu。
+func markInterruptedLocked(view *TaskView, now time.Time) {
+	view.Status = statusFailed
+	view.Stage = "已中断"
+	view.Progress = 100
+	view.Summary = recoverReason
+	view.Error = recoverReason
+	view.Event = eventInterrupted
+	view.UpdatedAt = now.Format(time.RFC3339)
+	view.Shots = nil
 }

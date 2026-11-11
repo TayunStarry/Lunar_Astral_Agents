@@ -42,6 +42,7 @@ func registerBuiltinLocked() {
 		newWatchEvent(),
 		newForumEvent(),
 		newCreativeEvent(),
+		newStoryboardEvent(),
 	}
 	for _, event := range builtins {
 		if eventByIDLocked(event.ID()) != nil {

@@ -9,10 +9,10 @@
 //	agents/Vision/           视觉理解智能体（Go：图片 / 动图 / 视频的视觉副本、观看与描述）
 //	agents/DocumentReader/   文献解析智能体（Go：格式识别、按行 / 分批解析超大规模文本）
 //	executors/ArchiveReader/ 归档解析执行体（Go：压缩包结构 / 条目读取 / GGUF 元数据；不发起模型调用）
-//	agents/ArchiveOps/       归档操作智能体（Go：压缩包创建 / 删除 / 条目新增 / 移除）
+//	agents/ArchiveOps/       归档写操作工具库（Go：压缩包创建 / 删除 / 条目新增 / 移除；不发起模型调用）
 //	agents/DialogueBridging/ 通讯桥接智能体（Go：向群/好友发送文本、图片、文件）
 //	agents/MutualForum/      互助论坛智能体（Go：论坛浏览/发帖/回复的多轮工具执行）
-//	agents/FileEditor/       文件编辑智能体（Go：/document 文档库读写与项目运行）
+//	agents/FileEditor/       文档库读写工具库（Go：/document 读写与项目运行；不发起模型调用）
 //	agents/WishManager/      愿望管理智能体（Go：愿望新增 / 改写 / 完成 / 删除 / 优先级 / 查询）
 //	agents/SQLWriter/        语句生成智能体（Go：自然语言 → 一条只读 SQL，不执行）
 //	agents/*.js            页面注入型智能体（JS：Mini-LTP / Self-LTP / SharedInput）
@@ -23,7 +23,6 @@
 //	chain/search/   搜索链（规划 → 抓取 → 摘要三段调度）
 //	chain/life/     生活链路（生活事件编排）
 //	chain/viewer/   观影链路（哔哩观影编排）
-//	chain/creation/ 创作链路（自由创作编排）
 //
 // 之所以把 JS 脚本从"前端静态资源"里搬出来：它们不是前端页面的一部分，而是
 // 由三个 handler 单独下发、注入到 iframe 里运行的智能体本体。放在前端目录里时，

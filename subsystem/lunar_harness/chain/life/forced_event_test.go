@@ -70,7 +70,7 @@ func TestRequestEventCarriesInstructionAndClears(t *testing.T) {
 	resetLifeForTest(t)
 	event := &forcedTestEvent{}
 	RegisterEvent(event)
-	if !RequestEvent("forced_test", "用户想看猫咪视频") {
+	if !RequestEvent("forced_test", "用户想看猫咪视频", nil) {
 		t.Fatal("强制事件登记失败")
 	}
 	if !HasPendingEvent() {
@@ -96,7 +96,7 @@ func TestStepPrefersForcedEventOverWeights(t *testing.T) {
 	resetLifeForTest(t)
 	event := &forcedTestEvent{}
 	RegisterEvent(event)
-	if !RequestEvent("forced_test", "写一段关于星空的诗") {
+	if !RequestEvent("forced_test", "写一段关于星空的诗", nil) {
 		t.Fatal("强制事件登记失败")
 	}
 	if err := stepWholeRound(t); err != nil {
@@ -119,7 +119,7 @@ func TestStepPrefersForcedEventOverWeights(t *testing.T) {
 
 func TestRequestEventRejectsUnknown(t *testing.T) {
 	resetLifeForTest(t)
-	if RequestEvent("missing", "随便") {
+	if RequestEvent("missing", "随便", nil) {
 		t.Fatal("未注册事件不应登记成功")
 	}
 	if HasPendingEvent() {

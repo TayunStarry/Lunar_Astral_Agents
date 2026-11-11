@@ -30,10 +30,11 @@ func newTickScheduler() *tickScheduler {
 				SalvagePending: Savior.Pending(),
 			}
 		},
-		Permit:        tickpermit.Default(),
-		Forced:        life.HasPendingEvent,
-		NotifyIdle:    func() { notifyIdleHook() },
-		IdleThreshold: life.IdleThreshold,
+		Permit:                 tickpermit.Default(),
+		AllowResponseWhileBusy: true,
+		Forced:                 life.HasPendingEvent,
+		NotifyIdle:             func() { notifyIdleHook() },
+		IdleThreshold:          life.IdleThreshold,
 		OnError: func(systemID string, err error) {
 			reportTickError(systemID, err)
 		},

@@ -218,7 +218,6 @@ func ResetTurns() {
 // cachedTokens 表示其中命中提示缓存的输入 token，估算调用固定为 0）。
 func RecordModelCall(promptTokens, completionTokens, cachedTokens int64, generation time.Duration, estimated bool) {
 	meterMu.Lock()
-	defer meterMu.Unlock()
 	meterStats.Calls++
 	meterStats.PromptTokens += promptTokens
 	meterStats.CompletionTokens += completionTokens
@@ -238,6 +237,9 @@ func RecordModelCall(promptTokens, completionTokens, cachedTokens int64, generat
 	meterStats.LastCallAt = time.Now()
 	meterStats.LastDuration = generation
 	meterStats.LastCompletion = completionTokens
+	meterDirty = true
+	meterMu.Unlock()
+	scheduleMeterSave()
 }
 
 // GetModelCallStats 返回计量数据副本

@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"LunarSubsystem/LunarHarness/agents/Musician"
 	"LunarSubsystem/LunarHarness/agents/Painter"
@@ -27,14 +26,6 @@ const (
 	TechniqueMusician = "musician"
 	// TechniqueScreenshoter 截图子工具
 	TechniqueScreenshoter = "screenshoter"
-	// TechniqueFileOperations 文件操作编排分支：统一承接文件读写、归档处理、文献读取与脚本运行
-	TechniqueFileOperations = "file_operations"
-	// TechniqueCreatorLegacy 旧创作分支（兼容保留，内部同样转文件操作编排）
-	TechniqueCreatorLegacy = "creator"
-	// TechniqueFileEditorLegacy 旧文件编辑分支（兼容保留，内部同样转文件操作编排）
-	TechniqueFileEditorLegacy = "file_editor"
-	// fileOperationsTimeout 单次文件操作编排任务的超时上限
-	fileOperationsTimeout = 20 * time.Minute
 )
 
 // ExecuteDispatchTechnique 技法创作聚合工具：按 type 分派给对应子智能体。
@@ -48,7 +39,7 @@ func ExecuteDispatchTechnique(args map[string]any) ToolResult {
 		if text, ok := techniqueScope(kind); ok {
 			return toolJSON(agentdispatch.Success(text, nil))
 		}
-		return toolJSON(agentdispatch.Failure("type 只能取 painter / musician / screenshoter / file_operations", nil))
+		return toolJSON(agentdispatch.Failure("type 只能取 painter / musician / screenshoter", nil))
 	}
 	if call.Instruction == "" {
 		return toolJSON(agentdispatch.Failure("instruction 不能为空，请用自然语言说明要做什么", nil))
@@ -63,36 +54,9 @@ func ExecuteDispatchTechnique(args map[string]any) ToolResult {
 		outcome := toolJSON(result)
 		outcome.Image = image
 		return outcome
-	case TechniqueFileOperations, TechniqueCreatorLegacy, TechniqueFileEditorLegacy:
-		return toolJSON(dispatchFileOperations(call.Instruction, call.Handle))
 	default:
-		return toolJSON(agentdispatch.Failure("type 只能取 painter / musician / screenshoter / file_operations", nil))
+		return toolJSON(agentdispatch.Failure("type 只能取 painter / musician / screenshoter", nil))
 	}
-}
-
-// dispatchFileOperations 把任务交给文件操作编排：由它统一编排、路由与执行全部文件操作。
-// 旧 creator / file_editor 分支同样转这里，不再直接触发文件编辑智能体。
-func dispatchFileOperations(instruction string, handles []string) agentdispatch.Result {
-	if strings.TrimSpace(instruction) == "" {
-		return agentdispatch.Failure("文件操作编排失败：操作要求不能为空", nil)
-	}
-	if RunFileOperations == nil {
-		return agentdispatch.Failure("文件操作编排失败：创作链未接入", nil)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), fileOperationsTimeout)
-	defer cancel()
-	summary, usedHandles, reviewFailures, err := RunFileOperations(ctx, instruction, handles)
-	if err != nil {
-		return agentdispatch.PartialFailure("文件操作任务失败："+err.Error(), strings.TrimSpace(summary), usedHandles)
-	}
-	summary = strings.TrimSpace(summary)
-	if summary == "" {
-		summary = "文件操作已完成"
-	}
-	if reviewFailures > 0 {
-		summary += fmt.Sprintf("（%d 次校验失败，已按快照回滚或上报回滚错误）", reviewFailures)
-	}
-	return agentdispatch.Success(summary, usedHandles)
 }
 
 // dispatchPainter 把绘画需求交给绘制者子智能体。
@@ -109,7 +73,7 @@ func dispatchPainter(instruction string, handles []string) agentdispatch.Result 
 		}
 		handle, source, desc, ok := ResolveImageRef(tag)
 		if !ok {
-			return agentdispatch.Failure("绘画任务调度失败：图片句柄 "+tag+" 不存在，请用 fetch_resources（type=\"list\", query=[\"I\"]）查看可引用的图片句柄后重试", nil)
+			return agentdispatch.Failure("绘画任务调度失败：图片句柄 "+tag+" 不存在，请用 fetch_resources（type=[\"list\"], query=[\"I\"]）查看可引用的图片句柄后重试", nil)
 		}
 		if source == "" {
 			note := ""
@@ -219,8 +183,6 @@ func techniqueScope(kind string) (string, bool) {
 		return agentinfo.NameMusician + "子智能体：创作音乐作品，输出旋律、和弦与乐器编排说明。", true
 	case TechniqueScreenshoter:
 		return agentinfo.NameScreenshoter + "子智能体：截取屏幕、窗口或指定区域，并把截图展示给用户。", true
-	case TechniqueFileOperations, TechniqueCreatorLegacy, TechniqueFileEditorLegacy:
-		return "文件操作子智能体：统一编排文件读写、文档整理、压缩包处理、文献读取与脚本运行；按目标自动路由到文件编辑、归档解析 / 操作与文献解析，写入自动快照、审查与回滚。", true
 	}
 	return "", false
 }

@@ -4,6 +4,7 @@ package tickloop
 //
 // 规则：
 //  1. 任一主链运行中（busy=true）→ 当前 Tick 不再触发其他主链，也不推进空闲计数；
+//     开启 AllowResponseWhileBusy 时响应链仍可插入，避免长步骤挡住外部请求；
 //  2. 特许运行有效（思考链阻塞在 LTPX 工具等待）→ 只允许响应链并行，其他主链一律不选；
 //  3. 存在强制事件 → 只允许 life 体系；
 //  4. 无就绪体系 → 空闲 Tick：生活冷却 +1，并通知空闲钩子；
@@ -92,9 +93,15 @@ func (s *Scheduler[S]) Tick() {
 
 	s.mu.Lock()
 	if s.busy {
-		// 特许期间：对话步骤阻塞在工具等待上，只允许响应链并行
-		if permit != nil && permit.Active() && !s.responseBusy {
-			s.tryResponseLocked(permit)
+		// 特许期间：对话步骤阻塞在工具等待上，只允许响应链并行。
+		// 非特许的主链长步骤（创作 / 分镜规划）同样不应挡住外部请求：
+		// 开启 AllowResponseWhileBusy 后响应链照常插入，主链之间仍串行。
+		if !s.responseBusy {
+			if permit != nil && permit.Active() {
+				s.tryResponseLocked(permit)
+			} else if s.hooks.AllowResponseWhileBusy {
+				s.startResponseWhileBusyLocked()
+			}
 		}
 		s.mu.Unlock()
 		return
@@ -186,6 +193,28 @@ func (s *Scheduler[S]) tryResponseLocked(_ *tickpermit.Controller) {
 	}
 }
 
+// startResponseWhileBusyLocked 在主链步骤在途时启动一个响应步骤；调用方必须持有锁。
+//
+// 响应链只处理外部请求，不读写主链状态；模型服务若为单槽会自然排队，
+// 但外部请求不会再被整条长步骤挡住。
+func (s *Scheduler[S]) startResponseWhileBusyLocked() {
+	var snap S
+	if s.hooks.Snapshot != nil {
+		snap = s.hooks.Snapshot(s.state.IdleTicks)
+	}
+	for _, system := range s.systems {
+		if KindOf(system) != KindResponse {
+			continue
+		}
+		ready, reason := system.Ready(snap)
+		if !ready {
+			return
+		}
+		s.startResponseLocked(system, reason)
+		return
+	}
+}
+
 // startResponseLocked 置响应忙、记录状态并启动 goroutine；调用方必须持有锁。
 // 响应在途标记由调用方在启动前完成（特许路径走 TryBeginResponse）。
 func (s *Scheduler[S]) startResponseLocked(system System[S], reason string) {
@@ -256,15 +285,34 @@ func (s *Scheduler[S]) runResponse(seq int64, system System[S]) {
 // Status 返回调度状态快照与当前是否忙碌（只读观测用）。
 func (s *Scheduler[S]) Status() (State, bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state, s.busy || s.responseBusy
+	state := s.state
+	busy := s.busy || s.responseBusy
+	s.mu.Unlock()
+	return state, busy || s.hasActiveStep()
 }
 
 // Available 报告调度器是否处于空档期。
 func (s *Scheduler[S]) Available() bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return !s.busy && !s.responseBusy && !s.paused
+	idle := !s.busy && !s.responseBusy && !s.paused
+	s.mu.Unlock()
+	return idle && !s.hasActiveStep()
+}
+
+// hasActiveStep 报告是否有体系的后台步骤在途。
+//
+// 后台步骤不占调度器的 busy 标记，但空闲判定与维护暂停必须把它们算进忙碌，
+// 否则 WaitIdle 会在模型调用尚未结束时误报空闲。
+func (s *Scheduler[S]) hasActiveStep() bool {
+	s.mu.Lock()
+	systems := append([]System[S](nil), s.systems...)
+	s.mu.Unlock()
+	for _, system := range systems {
+		if waiter, ok := system.(StepWaiter); ok && waiter.StepActive() {
+			return true
+		}
+	}
+	return false
 }
 
 // Paused 报告调度器是否处于维护暂停态。
@@ -295,7 +343,7 @@ func (s *Scheduler[S]) WaitIdle(timeout time.Duration) bool {
 		s.mu.Lock()
 		busy := s.busy || s.responseBusy
 		s.mu.Unlock()
-		if !busy {
+		if !busy && !s.hasActiveStep() {
 			return true
 		}
 		if time.Now().After(deadline) {
@@ -308,6 +356,16 @@ func (s *Scheduler[S]) WaitIdle(timeout time.Duration) bool {
 // Stop 取消在跑任务并等待退出。
 func (s *Scheduler[S]) Stop() {
 	s.cancel()
+	// 后台步骤（演绎 / 生活）可能仍在模型调用中：先等它们收尾，再等前台 goroutine。
+	for _, system := range s.systems {
+		waiter, ok := system.(StepWaiter)
+		if !ok {
+			continue
+		}
+		if !waiter.WaitStep(stopStepTimeout) {
+			logger.Warn(s.hooks.Module, "[Tick] %s 的后台步骤未在 %s 内结束", system.ID(), stopStepTimeout)
+		}
+	}
 	s.wg.Wait()
 	s.mu.Lock()
 	s.persistLocked()

@@ -63,10 +63,6 @@ var dumpOptionList = []dumpOption{
 
 	{kind: dumpKindContext, key: "dialogue", hotkey: "03", group: "Go 智能体", title: agentinfo.NameDialogue,
 		desc: agentinfo.NameDialogue + "与月华主上下文的合并快照"},
-	{kind: dumpKindContext, key: "file_editor", hotkey: "04", title: "文件编辑",
-		desc: "文件编辑的系统提示词、工具清单与文档库现状（按次执行，不保留上下文）"},
-	{kind: dumpKindContext, key: "creative", hotkey: "05", title: "自由创作",
-		desc: "自由创作体系的规划日志：上一轮计划、备忘、参考资料、错误与收尾简述"},
 	{kind: dumpKindContext, key: "responder", hotkey: "06", title: "通用应答",
 		desc: "通用应答的队列与运行状态：待处理数、特许运行、忙碌标记"},
 	{kind: dumpKindContext, key: "savior", hotkey: "07", title: agentinfo.NameSavior,
@@ -87,8 +83,6 @@ var dumpOptionList = []dumpOption{
 		desc: "文献解析的文件查询工具清单与分批策略（按次执行，不保留上下文）"},
 	{kind: dumpKindContext, key: "archive_reader", hotkey: "15", title: "归档解析",
 		desc: "归档解析的压缩包结构 / 条目读取 / GGUF 元数据工具清单"},
-	{kind: dumpKindContext, key: "archive_ops", hotkey: "16", title: "归档操作",
-		desc: "归档操作的压缩包创建 / 删除 / 条目新增 / 移除工具清单"},
 }
 
 // dumpState 数据导出屏状态

@@ -1,6 +1,6 @@
 package thinking
 
-// tick_systems.go 内建 Tick 体系适配器（对话 / 后勤 / 响应 / 创作 / 演绎 / 生活）。
+// tick_systems.go 内建 Tick 体系适配器（对话 / 后勤 / 响应 / 演绎 / 生活）。
 //
 // 所有链都向同一个调度器注册，由调度器统一保证「同一时刻只有一条链执行一个原子步骤」；
 // 新增链只需要实现 System 接口并注册优先级，不需要在调度器里增加分支。
@@ -9,14 +9,63 @@ package thinking
 import (
 	"context"
 	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"LunarSubsystem/LunarHarness/agents/Responder"
 	"LunarSubsystem/LunarHarness/agents/Savior"
-	"LunarSubsystem/LunarHarness/chain/creation"
 	"LunarSubsystem/LunarHarness/chain/life"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking/tickloop"
 )
+
+// asyncStep 后台步骤执行器：同一时刻最多一个步骤在途。
+//
+// 演绎与生活的单步可能包含几十秒到几分钟的模型调用。同步执行会一直占着
+// 调度器的忙碌标记，把对话和其他链一起挡住；放到后台后，Run 立即返回，
+// Ready 在步骤结束前保持 false，其他链可以正常推进。
+type asyncStep struct {
+	running atomic.Bool
+	wg      sync.WaitGroup
+}
+
+func newAsyncStep() *asyncStep { return &asyncStep{} }
+
+// active 报告是否已有步骤在途。
+func (a *asyncStep) active() bool { return a.running.Load() }
+
+// start 启动一个后台步骤；已有步骤在途时直接忽略本次触发。
+func (a *asyncStep) start(ctx context.Context, step func(context.Context) error, onError func(error)) {
+	if !a.running.CompareAndSwap(false, true) {
+		return
+	}
+	a.wg.Add(1)
+	go func() {
+		defer func() {
+			a.running.Store(false)
+			a.wg.Done()
+		}()
+		if err := step(ctx); err != nil && onError != nil {
+			onError(err)
+		}
+	}()
+}
+
+// wait 等待在途步骤结束；超时返回 false。
+func (a *asyncStep) wait(timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		a.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
 
 type dialogueSystem struct{}
 
@@ -85,50 +134,65 @@ func (responseSystem) Run(ctx context.Context) error {
 	return nil
 }
 
-type creationSystem struct{}
+type storyboardSystem struct{ step *asyncStep }
 
-func (creationSystem) ID() string          { return "creation" }
-func (creationSystem) Priority() int       { return 220 }
-func (creationSystem) Kind() tickloop.Kind { return tickloop.KindJob }
-func (creationSystem) IdleReset() int      { return 0 }
-
-func (creationSystem) Ready(TickSnapshot) (bool, string) {
-	if creation.HasWork() {
-		return true, "待执行的资源库创作任务"
-	}
-	return false, ""
+// newStoryboardSystem 创建异步推进的演绎体系：长步骤不再独占 Tick。
+func newStoryboardSystem() storyboardSystem {
+	return storyboardSystem{step: newAsyncStep()}
 }
-
-func (creationSystem) Run(ctx context.Context) error {
-	return creation.Step(ctx)
-}
-
-type storyboardSystem struct{}
 
 func (storyboardSystem) ID() string          { return "storyboard" }
 func (storyboardSystem) Priority() int       { return 200 }
 func (storyboardSystem) Kind() tickloop.Kind { return tickloop.KindJob }
 func (storyboardSystem) IdleReset() int      { return 0 }
 
-func (storyboardSystem) Ready(TickSnapshot) (bool, string) {
+func (s storyboardSystem) Ready(TickSnapshot) (bool, string) {
+	if s.step != nil && s.step.active() {
+		return false, ""
+	}
 	if storyboard.HasWork() {
 		return true, "待推进的演绎任务"
 	}
 	return false, ""
 }
 
-func (storyboardSystem) Run(ctx context.Context) error {
-	return storyboard.Advance(ctx)
+func (s storyboardSystem) Run(ctx context.Context) error {
+	if s.step == nil {
+		return storyboard.Advance(ctx)
+	}
+	s.step.start(ctx, storyboard.Advance, func(err error) { reportTickError("storyboard", err) })
+	return nil
 }
 
-type lifeSystem struct{}
+// StepActive 报告演绎步骤是否在途。
+func (s storyboardSystem) StepActive() bool {
+	return s.step != nil && s.step.active()
+}
+
+// WaitStep 退出时等待在途的演绎步骤收尾。
+func (s storyboardSystem) WaitStep(timeout time.Duration) bool {
+	if s.step == nil {
+		return true
+	}
+	return s.step.wait(timeout)
+}
+
+type lifeSystem struct{ step *asyncStep }
+
+// newLifeSystem 创建异步推进的生活体系：创作等长事件不再独占 Tick。
+func newLifeSystem() lifeSystem {
+	return lifeSystem{step: newAsyncStep()}
+}
 
 func (lifeSystem) ID() string          { return "life" }
 func (lifeSystem) Priority() int       { return 100 }
 func (lifeSystem) Kind() tickloop.Kind { return tickloop.KindLife }
 func (lifeSystem) IdleReset() int      { return lifeIdleReset }
 
-func (lifeSystem) Ready(snapshot TickSnapshot) (bool, string) {
+func (s lifeSystem) Ready(snapshot TickSnapshot) (bool, string) {
+	if s.step != nil && s.step.active() {
+		return false, ""
+	}
 	if life.HasPendingEvent() {
 		return true, "工具触发的强制生活事件"
 	}
@@ -141,6 +205,23 @@ func (lifeSystem) Ready(snapshot TickSnapshot) (bool, string) {
 	return false, ""
 }
 
-func (lifeSystem) Run(ctx context.Context) error {
-	return life.Step(ctx)
+func (s lifeSystem) Run(ctx context.Context) error {
+	if s.step == nil {
+		return life.Step(ctx)
+	}
+	s.step.start(ctx, life.Step, func(err error) { reportTickError("life", err) })
+	return nil
+}
+
+// StepActive 报告生活步骤是否在途。
+func (s lifeSystem) StepActive() bool {
+	return s.step != nil && s.step.active()
+}
+
+// WaitStep 退出时等待在途的生活步骤收尾。
+func (s lifeSystem) WaitStep(timeout time.Duration) bool {
+	if s.step == nil {
+		return true
+	}
+	return s.step.wait(timeout)
 }

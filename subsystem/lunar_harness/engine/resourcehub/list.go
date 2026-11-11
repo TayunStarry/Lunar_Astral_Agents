@@ -53,7 +53,7 @@ func runList(q Query) Result {
 	emptyHint := "资源目录为空：当前没有已收录的资源"
 	if len(keywords) > 0 {
 		head = "匹配的资源"
-		emptyHint = "没有匹配「" + strings.Join(keywords, "、") + "」的资源；可用 fetch_resources（type=\"list\"）查看全部目录"
+		emptyHint = "没有匹配「" + strings.Join(keywords, "、") + "」的资源；可用 fetch_resources（type=[\"list\"]）查看全部目录"
 	}
 	text, handles := renderResourceList(entries, head, emptyHint)
 	return Result{Text: text, Handle: handles}
@@ -108,6 +108,6 @@ func renderResourceList(entries []resource.Resource, head, emptyHint string) (st
 		statsNote = "；目录总计 " + strconv.FormatInt(stats.Total, 10) + " 条 / " + formatBytes(stats.Bytes)
 	}
 	header := "（共 " + strconv.Itoa(len(valid)) + " 条，按收录时间倒序，越靠前越新" + purgeNote + statsNote + "）："
-	tail := "\n需要内容时用 fetch_resources（type=\"handle\", query=[句柄]）取回。"
+	tail := "\n需要内容时用 fetch_resources（type=[\"handle\"], query=[句柄]）取回，可一次传多个句柄。"
 	return head + header + "\n" + strings.Join(lines, "\n") + tail, handles
 }

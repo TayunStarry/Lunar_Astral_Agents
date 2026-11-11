@@ -15,7 +15,7 @@ import {
     confirmStoryboard, pauseStoryboard, resumeStoryboard, cancelStoryboard,
 } from './storyboard.js';
 import { connectSocket, onPush, onSocketStatus } from './socket.js';
-import { toast, confirmDialog, promptDialog, folderDialog, helpDialog } from './dialog.js';
+import { toast, confirmDialog, promptDialog, folderDialog, helpDialog, updateRunStatus, dismissRunStatus, clearRunStatus } from './dialog.js';
 import { runInSandbox, hideSandbox } from './sandbox.js';
 
 const THEME_KEY = 'libraryTheme';
@@ -57,12 +57,8 @@ const storyboardBaselines = new Map();
 const storyboardJumped = new Set();
 
 // 演绎进度：只保留当前任务引用（暂停 / 终止按钮需要任务标识与状态）。
-// 进度与阶段文案全部走 toast 轻提示，不再向页面注入会撑开的文本块。
+// 阶段与百分比一律写入运行态浮窗，页面内不再出现任何进度文本。
 let storyboardActiveTask = null;
-// 推送提示限流：同一任务的最短提示间隔，避免逐镜事件把提示刷屏。
-const NOTICE_MIN_INTERVAL_MS = 1200;
-const storyboardNotice = { key: '', at: 0 };
-const creationNotice = { key: '', at: 0 };
 
 // 分镜审查面板：只在任务进入审查态时出现，编辑内容以本地状态为准。
 const storyboardReview = {
@@ -144,7 +140,6 @@ function cacheElements() {
     els.reqText = document.getElementById('requirement-text');
     els.reqPick = document.getElementById('requirement-pick');
     els.reqSubmit = document.getElementById('requirement-submit');
-    els.reqState = document.getElementById('requirement-state');
     els.storyForm = document.getElementById('storyboard-form');
     els.storyText = document.getElementById('storyboard-text');
     els.storyHandle = document.getElementById('storyboard-handle');
@@ -153,7 +148,6 @@ function cacheElements() {
     els.storyStyle = document.getElementById('storyboard-style');
     els.storyRatio = document.getElementById('storyboard-ratio');
     els.storySubmit = document.getElementById('storyboard-submit');
-    els.storyState = document.getElementById('storyboard-state');
     els.storyPause = document.getElementById('storyboard-pause');
     els.storyCancel = document.getElementById('storyboard-cancel');
     els.storyReviewOpen = document.getElementById('storyboard-review-open');
@@ -171,6 +165,7 @@ function bindEvents() {
     document.getElementById('details-btn').addEventListener('click', toggleDetails);
     document.getElementById('details-close').addEventListener('click', closeDetails);
     document.getElementById('sandbox-close').addEventListener('click', hideSandbox);
+    document.getElementById('run-status-close').addEventListener('click', dismissRunStatus);
     els.detailsBackdrop.addEventListener('click', closeDetails);
     narrowQuery.addEventListener('change', () => {
         if (!isNarrow()) closeDetails();
@@ -701,22 +696,22 @@ async function pickRequirementHandle(notify) {
     const known = handleOf(entry);
     if (known) {
         els.reqHandle.value = known;
-        renderRequirement('idle', `已带入 ${known}`);
+        toast(`已带入 ${known}`, 'success');
         return;
     }
-    renderRequirement('idle', '正在读取资源句柄…');
+    toast('正在读取资源句柄…');
     try {
         const res = await fetchMeta(entry.path);
         state.meta.set(entry.path, res.meta);
         const handle = handleOf(entry);
         if (handle) {
             els.reqHandle.value = handle;
-            renderRequirement('idle', `已带入 ${handle}`);
+            toast(`已带入 ${handle}`, 'success');
         } else {
-            renderRequirement('idle', '该文件尚未登记资源句柄，可手动填写');
+            toast('该文件尚未登记资源句柄，可手动填写');
         }
     } catch (err) {
-        renderRequirement('idle', `读取句柄失败，可手动填写：${err.message}`);
+        toast(`读取句柄失败，可手动填写：${err.message}`, 'error');
     }
 }
 
@@ -734,10 +729,19 @@ async function onSubmitRequirement(event) {
     try {
         prepareRequirement(handle, description);
     } catch (err) {
-        renderRequirement('failed', err.message);
+        toast(err.message, 'error');
         return;
     }
-    renderRequirement('submitting', '正在提交到创作系统…');
+    els.reqSubmit.disabled = true;
+    updateRunStatus({
+        key: 'creation:submit',
+        title: '创作任务',
+        stage: '正在提交…',
+        progress: 0,
+        detail: '',
+        tone: '',
+        terminal: false,
+    });
     // 记录提交瞬间的选中项，用于判断任务完成时是否适合自动跳转。
     const baseline = state.selectedPath;
     try {
@@ -746,80 +750,52 @@ async function onSubmitRequirement(event) {
         renderCreationTask(task);
         void maybeJumpToOutput(task);
     } catch (err) {
-        renderRequirement('failed', err.message || String(err));
+        els.reqSubmit.disabled = false;
+        setRequirementButtonLabel('重试');
+        toast(`提交失败：${err.message || err}`, 'error');
+        clearRunStatus();
     }
 }
 
-// renderRequirement 只更新页脚状态行：提交态与失败原因都在这一行内收敛，
-// 不再插入结果块，避免推送内容把表单撑开、挤掉提交按钮。
-function renderRequirement(status, text) {
-    els.reqState.className = `requirement-state${status === 'idle' ? '' : ` is-${status}`}`;
-    els.reqState.textContent = text || '';
-    els.reqSubmit.disabled = status === 'submitting';
-    setRequirementButtonLabel(status === 'failed' ? '重试' : '提交需求');
-}
-
+// renderCreationTask 把一次创作任务快照写进运行态浮窗。
 function renderCreationTask(task) {
     if (!task) return;
-    const text = taskStatusText(task);
-    els.reqState.className = `requirement-state ${taskStateClass(task.status)}`;
-    els.reqState.textContent = text;
     els.reqSubmit.disabled = false;
     setRequirementButtonLabel(task.status === 'failed' ? '重试' : '提交需求');
-    noticeTask(creationNotice, task, '创作');
+    updateRunStatus(runStatusPayload(task, '创作任务'));
 }
 
-function taskStateClass(status) {
-    if (status === 'failed') return 'is-failed';
-    if (status === 'planning' || status === 'painting' || status === 'writing' || status === 'executing') {
-        return 'is-submitting';
-    }
-    return 'is-accepted';
-}
-
-function taskStatusText(task) {
+// runStatusPayload 把任务视图映射成浮窗内容：
+// 状态与阶段进标题行，失败原因 / 完成结论 / 产出去说明行。
+function runStatusPayload(task, title) {
     const label = TASK_STATUS_LABELS[task.status] || task.status || '已受理';
-    const parts = [label, `${task.progress}%`];
+    const stage = String(task.stage || '').trim();
+    let detail = '';
     if (task.status === 'failed') {
-        const reason = task.error || task.summary;
-        if (reason) parts.push(reason);
-        return parts.join(' · ');
+        detail = task.error || task.summary || '';
+    } else if (task.status === 'canceled') {
+        detail = task.summary || '';
+    } else if (task.status === 'completed') {
+        detail = task.summary || '';
+        const handles = (task.handles || [])
+            .map((item) => (typeof item === 'string' ? item : item && item.handle))
+            .filter(Boolean);
+        if (handles.length) {
+            const produced = `产出 ${handles.join(' ')}`;
+            detail = detail ? `${detail} · ${produced}` : produced;
+        }
+    } else if (task.event === 'long_running' && task.summary) {
+        detail = task.summary;
     }
-    if (task.stage) parts.push(task.stage);
-    if (task.status === 'completed' && task.summary) parts.push(task.summary);
-    if (task.handles && task.handles.length) parts.push(`产出 ${task.handles.join(' ')}`);
-    return parts.join(' · ');
-}
-
-// noticeTask 把后端推送的阶段变化收敛成 toast 轻提示：
-// 同一条文案只提示一次；非终态限流，终态（完成 / 失败 / 终止）立即提示。
-function noticeTask(bucket, task, prefix) {
-    if (!task) return;
-    const terminal = task.status === 'completed' || task.status === 'failed'
-        || task.status === 'canceled';
-    const key = `${task.taskId}|${task.status}|${task.stage}|${task.summary}|${task.error}`;
-    if (key === bucket.key) return;
-    const now = Date.now();
-    if (!terminal && now - bucket.at < NOTICE_MIN_INTERVAL_MS) return;
-    bucket.key = key;
-    bucket.at = now;
-    const text = noticeText(task, prefix);
-    if (!text) return;
-    toast(text, terminal ? (task.status === 'failed' ? 'error' : 'success') : '');
-}
-
-// noticeText 生成一条提示文案：阶段优先，终态给结论。
-function noticeText(task, prefix) {
-    if (task.status === 'failed') return `${prefix}失败：${task.error || task.summary || '未知原因'}`;
-    if (task.status === 'canceled') return `${prefix}已终止`;
-    if (task.status === 'completed') {
-        return task.summary ? `${prefix}完成：${task.summary}` : `${prefix}已完成`;
-    }
-    // 长耗时提醒：后端已把结论写进 summary（预算顺延 / 接近上限），直接展示
-    if (task.event === 'long_running' && task.summary) return task.summary;
-    const label = TASK_STATUS_LABELS[task.status] || task.status || '';
-    const detail = task.stage || task.summary || '';
-    return detail ? `${prefix}${label} · ${detail}` : `${prefix}${label}`;
+    return {
+        key: task.taskId,
+        title,
+        stage: stage ? `${label} · ${stage}` : label,
+        progress: task.progress,
+        detail,
+        tone: task.status === 'failed' ? 'error' : task.status === 'completed' ? 'success' : '',
+        terminal: task.status === 'completed' || task.status === 'failed' || task.status === 'canceled',
+    };
 }
 
 // onRequirementEvent 接收 requirement.js 的推送/轮询结果。
@@ -886,22 +862,22 @@ async function pickStoryboardHandle(notify) {
     const known = handleOf(entry);
     if (known) {
         els.storyHandle.value = known;
-        renderStoryboardState('idle', `已带入 ${known}`);
+        toast(`已带入 ${known}`, 'success');
         return;
     }
-    renderStoryboardState('idle', '正在读取资源句柄…');
+    toast('正在读取资源句柄…');
     try {
         const res = await fetchMeta(entry.path);
         state.meta.set(entry.path, res.meta);
         const handle = handleOf(entry);
         if (handle) {
             els.storyHandle.value = handle;
-            renderStoryboardState('idle', `已带入 ${handle}`);
+            toast(`已带入 ${handle}`, 'success');
         } else {
-            renderStoryboardState('idle', '该文件尚未登记资源句柄，可手动填写');
+            toast('该文件尚未登记资源句柄，可手动填写');
         }
     } catch (err) {
-        renderStoryboardState('idle', `读取句柄失败，可手动填写：${err.message}`);
+        toast(`读取句柄失败，可手动填写：${err.message}`, 'error');
     }
 }
 
@@ -918,14 +894,22 @@ async function onSubmitStoryboard(event) {
     try {
         prepareStoryboard(input);
     } catch (err) {
-        renderStoryboardState('failed', err.message);
+        toast(err.message, 'error');
         return;
     }
-    renderStoryboardState('submitting', '正在提交到演绎系统…');
-    // 新任务开始：清掉上一个任务的审查面板与提示去重标记。
+    els.storySubmit.disabled = true;
+    updateRunStatus({
+        key: 'storyboard:submit',
+        title: '演绎任务',
+        stage: '正在提交…',
+        progress: 0,
+        detail: '',
+        tone: '',
+        terminal: false,
+    });
+    // 新任务开始：清掉上一个任务的审查面板。
     storyboardActiveTask = null;
     resetStoryboardReview();
-    storyboardNotice.key = '';
     // 记录提交瞬间的选中项，用于判断任务完成时是否适合自动跳转。
     const baseline = state.selectedPath;
     try {
@@ -934,58 +918,32 @@ async function onSubmitStoryboard(event) {
         applyStoryboardTask(task);
         void maybeJumpToStoryboardDoc(task);
     } catch (err) {
-        renderStoryboardState('failed', err.message || String(err));
+        els.storySubmit.disabled = false;
+        setStoryboardButtonLabel('重试');
+        toast(`提交失败：${err.message || err}`, 'error');
+        clearRunStatus();
     }
 }
 
-// renderStoryboardState 只更新页脚状态行：提交中与失败原因都在一行内收敛。
-function renderStoryboardState(status, text) {
-    els.storyState.className = `requirement-state${status === 'idle' ? '' : ` is-${status}`}`;
-    els.storyState.textContent = text || '';
-    els.storySubmit.disabled = status === 'submitting';
-    setStoryboardButtonLabel(status === 'failed' ? '重试' : '开始演绎');
-}
-
-// applyStoryboardTask 应用一次任务更新：页脚状态行 + 控制按钮 + 审查面板 + 轻提示。
+// applyStoryboardTask 应用一次任务更新：运行态浮窗 + 控制按钮 + 审查面板。
 //
 // 这里刻意不向页面插入任何进度文本块：旧实现把阶段、过程文本与逐镜列表
 // 全部写进右侧表单，内容一变就撑开／挤压表单，页面排版随之跳动。
-// 现在进度只更新一行状态与 toast，任何量级的推送都不改变页面结构。
+// 现在进度只写进常驻浮窗，任何量级的推送都不改变页面结构。
 function applyStoryboardTask(task) {
     if (!task || !task.taskId || typeof task.status !== 'string') return;
-    if (!els.storyState || !els.storySubmit) return;
+    if (!els.storySubmit) return;
     const view = { ...task, shots: Array.isArray(task.shots) ? task.shots : [] };
     storyboardActiveTask = view;
-    const text = storyboardTaskText(view);
-    els.storyState.className = `requirement-state ${taskStateClass(view.status)}`;
-    els.storyState.textContent = text;
-    els.storyState.title = text;
     els.storySubmit.disabled = false;
     setStoryboardButtonLabel(view.status === 'failed' ? '重试' : '开始演绎');
+    updateRunStatus(runStatusPayload(view, '演绎任务'));
     renderStoryboardControls(view);
     try {
         renderStoryboardReviewTask(view);
     } catch (err) {
         console.error('[library] 分镜审查渲染失败', err);
     }
-    noticeTask(storyboardNotice, view, '演绎');
-}
-
-function storyboardTaskText(task) {
-    const label = TASK_STATUS_LABELS[task.status] || task.status || '已受理';
-    const parts = [label, `${task.progress}%`];
-    if (task.status === 'failed') {
-        const reason = task.error || task.summary;
-        if (reason) parts.push(reason);
-        return parts.join(' · ');
-    }
-    if (task.status === 'canceled' && task.summary) {
-        parts.push(task.summary);
-        return parts.join(' · ');
-    }
-    if (task.stage) parts.push(task.stage);
-    if (task.status === 'completed' && task.summary) parts.push(task.summary);
-    return parts.join(' · ');
 }
 
 // onStoryboardEvent 推送入口：一帧最多渲染一次，帧内多次推送只保留最新状态。

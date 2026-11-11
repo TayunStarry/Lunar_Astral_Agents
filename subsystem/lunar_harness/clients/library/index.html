@@ -129,7 +129,6 @@
                     <textarea id="requirement-text" class="requirement-text"
                         placeholder="描述希望创作系统如何编排这个资源…（Enter 提交，Shift+Enter 换行）"></textarea>
                     <div class="requirement-foot">
-                        <span id="requirement-state" class="requirement-state" role="status"></span>
                         <button id="requirement-submit" class="btn-glass primary btn-sm" type="submit">
                             <i class="fas fa-paper-plane"></i><span>提交需求</span>
                         </button>
@@ -173,7 +172,6 @@
                         </button>
                     </div>
                     <div class="requirement-foot">
-                        <span id="storyboard-state" class="requirement-state" role="status"></span>
                         <button id="storyboard-submit" class="btn-glass primary btn-sm" type="submit">
                             <i class="fas fa-film"></i><span>开始演绎</span>
                         </button>
@@ -198,6 +196,27 @@
             </button>
         </header>
         <iframe id="sandbox" sandbox="allow-scripts" title="代码运行沙箱"></iframe>
+    </div>
+
+    <!-- ==== 运行态浮窗：任务运行期间常驻，终态后自动收起 ==== -->
+    <div id="run-status" class="run-status hidden" role="status" aria-live="polite">
+        <header class="run-status-head">
+            <span class="run-status-title">
+                <i class="fas fa-compass-drafting"></i>
+                <span id="run-status-title">运行中</span>
+            </span>
+            <button id="run-status-close" class="run-status-close" type="button" title="收起">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </header>
+        <div class="run-status-meta">
+            <span id="run-status-stage" class="run-status-stage"></span>
+            <span id="run-status-percent" class="run-status-percent">0%</span>
+        </div>
+        <div class="run-status-track">
+            <div id="run-status-bar" class="run-status-bar"></div>
+        </div>
+        <p id="run-status-detail" class="run-status-detail hidden"></p>
     </div>
 
     <!-- ==== 弹窗与提示 ==== -->

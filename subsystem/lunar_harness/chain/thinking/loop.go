@@ -39,8 +39,8 @@ func Start() error {
 	})
 
 	life.Init()
-	// 演绎任务视图落盘后，启动时把上次进程遗留的未完成任务标记为中断并推送，
-	// 不做静默续跑（绘制现场与外部句柄在重启后不可恢复）。
+	// 演绎任务现场落盘后，启动时恢复上次进程遗留的未完成任务：
+	// 能还原现场的从原阶段继续，无法还原的标记中断并推送原因。
 	storyboard.RecoverInterrupted()
 	life.SetWishHooks(pushDueWishItems, upcomingWishSummary)
 	life.SetDialogueRoundsProvider(recentAffectionRounds)
@@ -92,11 +92,9 @@ func buildTickScheduler() *tickScheduler {
 	scheduler.Register(logisticsSystem{})
 	// 外部响应链：无主链运行时按优先级调度；特许运行期间由调度器单独放行。
 	scheduler.Register(responseSystem{})
-	// 资源库创作链：受理即入队，由 Tick 调度器按优先级逐个推进。
-	scheduler.Register(creationSystem{})
 	// 演绎链：用户发起的后台任务，按原子步骤推进，镜头之间立即让出 Tick。
-	scheduler.Register(storyboardSystem{})
-	scheduler.Register(lifeSystem{})
+	scheduler.Register(newStoryboardSystem())
+	scheduler.Register(newLifeSystem())
 	return scheduler
 }
 

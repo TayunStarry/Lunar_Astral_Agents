@@ -25,8 +25,36 @@ func StartTaskProcessor() {
 	}()
 }
 
+// normalizeOutputSubdir 归一化输出子目录名：只保留单层目录，去掉路径分隔符、
+// 上级目录与 Windows 非法字符，避免调用方把图片写到多媒体目录之外。
+func normalizeOutputSubdir(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	cleaned := strings.Map(func(r rune) rune {
+		switch r {
+		case '<', '>', ':', '"', '/', '\\', '|', '?', '*':
+			return -1
+		}
+		if r < 0x20 {
+			return -1
+		}
+		return r
+	}, raw)
+	cleaned = strings.Trim(cleaned, " .")
+	if cleaned == "" || cleaned == "." || cleaned == ".." {
+		return ""
+	}
+	runes := []rune(cleaned)
+	if len(runes) > 60 {
+		cleaned = string(runes[:60])
+	}
+	return strings.TrimSpace(cleaned)
+}
+
 // CreateGenerateTask 创建生成任务
-func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool) (*GenerateTask, int) {
+func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool, outputSubdir string) (*GenerateTask, int) {
 	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
 	task := &GenerateTask{
 		ID:                   taskID,
@@ -41,6 +69,7 @@ func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height,
 		CfgScale:             cfgScale,
 		InitImg:              initImg,
 		AllowSuperResolution: allowSuperResolution,
+		OutputSubdir:         outputSubdir,
 		CreatedAt:            time.Now(),
 		Status:               "queued",
 	}
@@ -79,10 +108,14 @@ func ProcessTask(task GenerateTask) {
 	// 构建输出文件名
 	timestamp := time.Now().Format("20060102_150405")
 	outputFilename := fmt.Sprintf("%s.png", timestamp)
-	outputPath := filepath.Join(config.LocalDir, "multimedia/generated", outputFilename)
+	outputDir := filepath.Join(config.LocalDir, "multimedia/generated")
+	if subdir := normalizeOutputSubdir(task.OutputSubdir); subdir != "" {
+		outputDir = filepath.Join(outputDir, subdir)
+	}
+	outputPath := filepath.Join(outputDir, outputFilename)
 
 	// 确保输出目录存在
-	os.MkdirAll(filepath.Join(config.LocalDir, "multimedia/generated"), 0755)
+	os.MkdirAll(outputDir, 0755)
 
 	// 归一化请求参数：尺寸对齐到 32 的倍数（Qwen-Image 系列为 16× VAE 压缩 + 2×2 patch，官方要求
 	// 宽高可被 32 整除；官方 2K 比例如 2528×1696 也是 32 的倍数而非 64），步数收进合理区间；
@@ -396,7 +429,7 @@ func RemoveWaitClient(taskID string) {
 }
 
 // GenerateImage 生成图片并等待完成，返回图片路径和base64编码
-func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool) (map[string]any, error) {
+func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool, outputSubdir string) (map[string]any, error) {
 	// 检查是否允许使用扩散生成
 	if !config.AllowDiffusion {
 		return nil, fmt.Errorf("未启用[扩散生成]功能")
@@ -408,7 +441,7 @@ func GenerateImage(prompt, negativePrompt string, batchSize, width, height, step
 	}
 
 	// 创建任务（模型路径在任务执行时按启动时应用的默认方案解析）
-	task, _ := CreateGenerateTask(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, allowSuperResolution)
+	task, _ := CreateGenerateTask(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, allowSuperResolution, outputSubdir)
 
 	if task == nil {
 		return nil, fmt.Errorf("任务队列已满")

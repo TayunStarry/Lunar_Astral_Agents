@@ -55,6 +55,4 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace LunarSubsystem/LunarDecoder => ../lunar_decoder
-
 replace LunarSubsystem/EndpointDocs => ../endpoint_docs

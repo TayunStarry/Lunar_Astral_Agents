@@ -10,7 +10,6 @@ import (
 
 	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
-	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/engine/resource"
 	"LunarSubsystem/LunarHarness/executors/ArchiveReader"
@@ -93,7 +92,6 @@ func TestAgentCatalogsAreDisjoint(t *testing.T) {
 		"vision":          toolsOf(Vision.ToolCatalog()),
 		"document_reader": toolsOf(DocumentReader.ToolCatalog()),
 		"archive_reader":  toolsOf(ArchiveReader.ToolCatalog()),
-		"archive_ops":     toolsOf(ArchiveOps.ToolCatalog()),
 	}
 	for agent, tools := range catalogs {
 		if len(tools) == 0 {
@@ -114,20 +112,6 @@ func TestAgentCatalogsAreDisjoint(t *testing.T) {
 		if strings.Contains(tool, "file_") || strings.Contains(tool, "archive_") || tool == "gguf_metadata" {
 			t.Fatalf("视觉理解越界持有 %s", tool)
 		}
-	}
-	// 文件编辑只保留 task_scheduling，归档能力全部由调度入口承担
-	fileTools := toolsOf(FileEditor.ToolCatalog())
-	hasSchedule := false
-	for _, tool := range fileTools {
-		if tool == "task_scheduling" {
-			hasSchedule = true
-		}
-		if strings.HasPrefix(tool, "archive_") || tool == "gguf_metadata" {
-			t.Fatalf("文件编辑不应再持有归档工具 %s", tool)
-		}
-	}
-	if !hasSchedule {
-		t.Fatal("文件编辑缺少 task_scheduling 调度入口")
 	}
 }
 

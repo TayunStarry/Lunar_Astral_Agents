@@ -121,7 +121,7 @@ func TaskList(limit int) []TaskView {
 
 // oldestActionableLocked 返回最早创建、当前可推进的任务；调用方必须持有锁。
 //
-// 只有 queued / researching / planning / revising / painting / writing 可推进；
+// 只有 queued / researching / planning / painting / writing 可推进；
 // reviewing 与 paused 直接跳过，让后续任务和其他链继续运行。
 func oldestActionableLocked() *taskState {
 	for _, id := range taskOrder {
@@ -133,7 +133,7 @@ func oldestActionableLocked() *taskState {
 			continue
 		}
 		switch state.stage {
-		case stageQueued, stageResearching, stagePlanning, stageRevising, stagePainting, stageWriting:
+		case stageQueued, stageResearching, stagePlanning, stagePainting, stageWriting:
 			return state
 		}
 	}

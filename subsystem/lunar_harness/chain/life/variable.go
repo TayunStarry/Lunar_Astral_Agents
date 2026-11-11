@@ -76,6 +76,8 @@ var defaultEvents = map[string]struct {
 	"watch":    {Weight: 26, Quota: 12},
 	"forum":    {Weight: 20, Quota: 6},
 	"creative": {Weight: 14, Quota: 32},
+	// 工具/命令触发的子链路不参与权重抽签，只接受强制事件。
+	"storyboard": {Weight: 0, Quota: 0},
 }
 
 // eventParams 单个事件的权重与额度。

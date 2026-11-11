@@ -6,6 +6,7 @@ package wishchain
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/persistence"
 )
 
 // fakeEmbed 把情绪标签 / 态度锚点映射到确定性单位向量。
@@ -366,5 +368,71 @@ func TestUnifiedPersistenceFile(t *testing.T) {
 	}
 	if saved.Mood.Label == "" || len(saved.Attitude.Users) == 0 {
 		t.Fatalf("心情与态度应写入同一文件: mood=%q users=%d", saved.Mood.Label, len(saved.Attitude.Users))
+	}
+}
+
+func TestAttitudePointsAccumulateAndClamp(t *testing.T) {
+	newChain(t)
+	ctx := context.Background()
+	evaluate := func(key, userText, replyText string) {
+		t.Helper()
+		if _, err := UpdateAttitudeWindows(ctx, []Round{{
+			Key: key, UserName: "钛宇星光阁", UserText: userText, ReplyText: replyText,
+		}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 首次正向交互：默认 20 + 10 = 30，进入「喜欢」。
+	evaluate("p1", "我今天很喜欢你", "我也很喜欢你")
+	if points, ok := AttitudeScore("钛宇星光阁"); !ok || points != 30 {
+		t.Fatalf("首次正向交互后应为 30 分，实际 %d（%v）", points, ok)
+	}
+	if label, _ := AttitudeLabel("钛宇星光阁"); label != "喜欢" {
+		t.Fatalf("30 分应为「喜欢」，实际 %s", label)
+	}
+
+	// 同一轮重复提交不重复加分。
+	evaluate("p1", "我今天很喜欢你", "我也很喜欢你")
+	if points, _ := AttitudeScore("钛宇星光阁"); points != 30 {
+		t.Fatalf("重复评估同一轮不应加分，实际 %d", points)
+	}
+
+	// 持续正向封顶 50。
+	for i := 0; i < 5; i++ {
+		evaluate(fmt.Sprintf("p%d", i+2), "我今天很喜欢你", "我也很喜欢你")
+	}
+	if points, _ := AttitudeScore("钛宇星光阁"); points != attitudeMaxPoints {
+		t.Fatalf("正向累积应封顶 %d，实际 %d", attitudeMaxPoints, points)
+	}
+
+	// 持续负向触底，标签转为「讨厌」。
+	for i := 0; i < 12; i++ {
+		evaluate(fmt.Sprintf("n%d", i), "我讨厌你", "我不想理你")
+	}
+	if points, _ := AttitudeScore("钛宇星光阁"); points != attitudeMinPoints {
+		t.Fatalf("负向累积应触底 %d，实际 %d", attitudeMinPoints, points)
+	}
+	if label, _ := AttitudeLabel("钛宇星光阁"); label != "讨厌" {
+		t.Fatalf("%d 分应为「讨厌」，实际 %s", attitudeMinPoints, label)
+	}
+}
+
+func TestLegacyAttitudeScoreMigrates(t *testing.T) {
+	newChain(t)
+	legacy := `{"version":1,"attitude":{"users":{"旧友":{"score":-0.8,"label":"平淡","samples":2}}}}`
+	if err := persistence.WriteFileAtomic(stateFile, []byte(legacy)); err != nil {
+		t.Fatal(err)
+	}
+	Load()
+	points, ok := AttitudeScore("旧友")
+	if !ok {
+		t.Fatal("旧版好感度应迁移为态度积分")
+	}
+	if points != -4 {
+		t.Fatalf("-0.8 应换算为 -4 分，实际 %d", points)
+	}
+	if label, _ := AttitudeLabel("旧友"); label != "疏离" {
+		t.Fatalf("-4 分应为「疏离」，实际 %s", label)
 	}
 }

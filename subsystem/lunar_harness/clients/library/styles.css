@@ -1017,22 +1017,9 @@ body {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 8px;
 }
-
-.requirement-state {
-    min-width: 0;
-    font-size: 0.72rem;
-    line-height: 1.4;
-    color: var(--text-tertiary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.requirement-state.is-submitting { color: var(--accent); }
-.requirement-state.is-accepted { color: var(--success); }
-.requirement-state.is-failed { color: var(--danger); }
 
 /* 演绎链：可选的标题 / 画风 / 画幅并排 */
 .storyboard-options {
@@ -1045,12 +1032,6 @@ body {
 .storyboard-options .requirement-input {
     flex: 1 1 30%;
     min-width: 90px;
-}
-
-#requirement-state,
-#storyboard-state {
-    /* 状态行固定单行：推送文案再长也只做省略，不改变表单高度 */
-    white-space: nowrap;
 }
 
 /* ===== 演绎控制与审查 ===== */
@@ -1448,6 +1429,145 @@ body {
 
 .toast.success { color: var(--success); border-color: rgba(31, 157, 107, 0.35); }
 .toast.error { color: var(--danger); border-color: rgba(207, 59, 74, 0.35); }
+
+/* ===== 运行态浮窗 =====
+   任务运行期间常驻左下角，页面内不再出现任何进度文本：
+   固定定位、不参与文档流，推送再密也不会撑开或挤动表单。 */
+.run-status {
+    position: fixed;
+    left: 18px;
+    bottom: 18px;
+    /* 低于模态遮罩（30），打开确认弹窗时浮窗不会压住弹窗 */
+    z-index: 26;
+    width: min(320px, calc(100vw - 36px));
+    padding: 10px 12px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--shadow-float);
+    color: var(--text-primary);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.run-status.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.run-status-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.run-status-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.run-status-title i { color: var(--accent); }
+
+.run-status.is-success .run-status-title i { color: var(--success); }
+.run-status.is-error .run-status-title i { color: var(--danger); }
+
+#run-status-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.run-status-close {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.run-status-close:hover {
+    background: var(--hover-bg);
+    color: var(--danger);
+}
+
+.run-status-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 6px;
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+}
+
+.run-status-stage {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.run-status-percent {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+}
+
+.run-status-track {
+    height: 5px;
+    margin-top: 7px;
+    border-radius: 999px;
+    background: var(--active-bg);
+    overflow: hidden;
+}
+
+.run-status-bar {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+    transition: width 0.3s ease;
+}
+
+.run-status.is-success .run-status-bar { background: var(--success); }
+.run-status.is-error .run-status-bar { background: var(--danger); }
+
+/* 进度仍为 0 时的游走条：表示任务在跑，但还拿不到确定百分比 */
+.run-status-bar.is-indeterminate {
+    width: 38%;
+    animation: run-status-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes run-status-slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(265%); }
+}
+
+.run-status-detail {
+    margin: 8px 0 0;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    word-break: break-word;
+}
+
+.run-status.is-error .run-status-detail { color: var(--danger); }
 
 /* ===== 响应式：详情转为抽屉 ===== */
 @media (max-width: 1120px) {

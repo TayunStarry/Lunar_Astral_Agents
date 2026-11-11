@@ -170,7 +170,7 @@ func TestWatchBranchWeightIncluded(t *testing.T) {
 	if total != 100 {
 		t.Fatalf("加入看视频后的权重总和应为 100，实际 %d", total)
 	}
-	if len(defaultEvents) != len(want) {
-		t.Fatalf("不应残留额外事件，实际 %v", defaultEvents)
+	if len(defaultEvents) != len(want)+1 {
+		t.Fatalf("强制事件表应包含 4 个权重事件 + storyboard，实际 %v", defaultEvents)
 	}
 }

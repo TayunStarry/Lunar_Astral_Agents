@@ -22,17 +22,11 @@ const (
 	ToolDispatchTechnique = "dispatch_technique"
 	// ToolFetchResources 统一资源工具名
 	ToolFetchResources = "fetch_resources"
-	// ToolWishManager 愿望管理工具名
-	ToolWishManager = "wish_manager"
 	// ToolNetworkExplore 联网探索聚合工具名
 	ToolNetworkExplore = "network_explore"
 
 	// networkWebSearch 网页检索子工具
 	networkWebSearch = "web_search"
-	// networkBilibili 哔哩观影子工具
-	networkBilibili = "bilibili_viewer"
-	// networkForum 互助论坛子工具
-	networkForum = "mutual_forum"
 	// networkQQSend 通讯桥接子工具
 	networkQQSend = "qq_send"
 )
@@ -41,12 +35,12 @@ func init() {
 	toolreg.Register("dialogue",
 		toolreg.Schema{
 			Name:        ToolDispatchTechnique,
-			Description: "使用自然语言去调度专用子智能体进行技法创作或文件操作",
+			Description: "使用自然语言去调度专用子智能体进行技法创作",
 			Parameters: agentdispatch.Schema(
-				"painter=绘画创作、musician=音乐创作、screenshoter=屏幕截图、file_operations=文件操作（读写、整理、压缩包、脚本运行与多步骤任务编排）",
-				[]string{"painter", "musician", "screenshoter", "file_operations"},
-				"例如: 画一张赛博朋克风格的自画像；创作一段安静的钢琴曲；截取当前屏幕上弹出的对话框；把文档库里的笔记整理成一篇文章；把 notes 目录打包成压缩包",
-				"painter 分支可传入图生图基座图句柄（如 @I.003）；file_operations 分支传入任务涉及的资源句柄；其他分支按任务需要传入目标句柄。",
+				"painter=绘画创作、musician=音乐创作、screenshoter=屏幕截图",
+				[]string{"painter", "musician", "screenshoter"},
+				"例如: 画一张赛博朋克风格的自画像；创作一段安静的钢琴曲；截取当前屏幕上弹出的对话框",
+				"painter 分支可传入图生图基座图句柄（如 @I.003）；其他分支按任务需要传入目标句柄。",
 			),
 		},
 		toolreg.Schema{
@@ -55,13 +49,18 @@ func init() {
 			Parameters:  resourcehub.ToolSchema(),
 		},
 		toolreg.Schema{
-			Name:        ToolWishManager,
-			Description: "愿望管理：按 type 新增、改写、完成、删除月华的愿望或调整优先级（待实现最多 16 条，优先级 0-15，0 最高）",
+			Name:        ToolLifePlanning,
+			Description: "生活规划：愿望管理、演绎、文件操作、观影与互助论坛",
 			Parameters: agentdispatch.Schema(
-				"add=新增愿望；update=改写愿望；complete=标记完成；delete=删除愿望；priority=调整优先级（0 最高）",
-				wishTypeOrder,
-				"例如: 新增「下周三前看完一部科幻电影」，优先级最高；把看科幻电影那条改到下周五；标记看电影的愿望已完成；删掉写诗那条；把看科幻电影提到 P0",
-				"愿望管理不使用资源句柄，handle 传空数组。",
+				"write_wish=用自然语言描述你的愿望或什么时候想去做什么事；"+
+					"wish_complete=用自然语言描述你的什么愿望已达成；"+
+					"storyboard=演绎创作（把故事拆成分镜并逐镜绘制）；"+
+					"file_operations=文件操作（读写、整理、压缩包、脚本运行与多步骤任务编排）；"+
+					"bilibili_viewer=哔哩观影；mutual_forum=互助论坛",
+				lifeTypeOrder,
+				"storyboard 提交故事正文或故事文件句柄；file_operations 传入任务涉及的资源句柄；"+
+					"bilibili_viewer / mutual_forum 用自然语言说明想看或想聊什么；愿望类指令不使用资源句柄。",
+				"愿望类 handle 传空数组；演绎 / 文件操作把真实句柄放进 handle；观影与论坛没有目标时传空数组。",
 			),
 		},
 	)
@@ -78,8 +77,8 @@ func registerExecutors() {
 	toolreg.RegisterExecutor(ToolFetchResources, func(_ context.Context, args map[string]any) (any, error) {
 		return ExecuteFetchResources(args), nil
 	})
-	toolreg.RegisterExecutor(ToolWishManager, func(_ context.Context, args map[string]any) (any, error) {
-		return ExecuteWishManager(args), nil
+	toolreg.RegisterExecutor(ToolLifePlanning, func(_ context.Context, args map[string]any) (any, error) {
+		return ExecuteLifePlanning(args), nil
 	})
 	toolreg.RegisterExecutor(ToolNetworkExplore, func(_ context.Context, args map[string]any) (any, error) {
 		return ExecuteNetworkExplore(args), nil
@@ -91,12 +90,8 @@ func registerExecutors() {
 
 // networkExploreSchemas 联网探索工具声明：qq_send 仅在通讯桥接就绪时加入枚举。
 func networkExploreSchemas() []toolreg.Schema {
-	subTools := []string{networkWebSearch, networkBilibili, networkForum}
-	descriptionParts := []string{
-		"bilibili_viewer=哔哩观影",
-		"mutual_forum=互助论坛",
-		"web_search=网页检索",
-	}
+	subTools := []string{networkWebSearch}
+	descriptionParts := []string{"web_search=网页检索"}
 	if DialogueBridging.Ready() {
 		subTools = append(subTools, networkQQSend)
 		descriptionParts = append(descriptionParts, "qq_send=向指定 QQ 群/好友发送文本、图片或文件（图片/文件使用句柄）")
@@ -107,8 +102,8 @@ func networkExploreSchemas() []toolreg.Schema {
 		Parameters: agentdispatch.Schema(
 			strings.Join(descriptionParts, "；"),
 			subTools,
-			"例如: 查一下今天的 AI 新闻；去 B 站看看有趣的猫咪视频；在互助论坛发帖问问 WebView 超时怎么排查；把这个文件 @D.012 发给群「测试群」",
-			"qq_send 分支可传入待发送的图片 / 文件句柄（如 @I.007、@D.012）；其他分支按任务需要传入目标句柄。",
+			"例如: 查一下今天的 AI 新闻；把这个文件 @D.012 发给群「测试群」",
+			"qq_send 分支可传入待发送的图片 / 文件句柄（如 @I.007、@D.012）；web_search 按任务需要传入目标句柄。",
 		),
 	}}
 }

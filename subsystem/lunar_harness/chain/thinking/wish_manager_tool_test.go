@@ -27,25 +27,25 @@ func decodeToolResult(t *testing.T, result ToolResult) agentdispatch.Result {
 
 // TestWishManagerRequiresInstruction 缺失 instruction 必须返回标准错误。
 func TestWishManagerRequiresInstruction(t *testing.T) {
-	decoded := decodeToolResult(t, Dialogue.ExecuteWishManager(map[string]any{
-		"type": "add", "handle": []any{}, "details": false,
+	decoded := decodeToolResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
+		"type": "write_wish", "handle": []any{}, "details": false,
 	}))
 	if !strings.Contains(decoded.Error, "instruction 不能为空") {
 		t.Fatalf("缺失 instruction 应报错: %+v", decoded)
 	}
-	decoded = decodeToolResult(t, Dialogue.ExecuteWishManager(map[string]any{
-		"type": "add", "instruction": "   ", "handle": []any{}, "details": false,
+	decoded = decodeToolResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
+		"type": "write_wish", "instruction": "   ", "handle": []any{}, "details": false,
 	}))
 	if !strings.Contains(decoded.Error, "instruction 不能为空") {
 		t.Fatalf("空白 instruction 应报错: %+v", decoded)
 	}
 }
 
-// TestWishManagerRejectsUnknownType 未知 type 必须返回标准错误；
-// query 不在对话侧提供，愿望清单直接来自运行时消息。
+// TestWishManagerRejectsUnknownType 对话侧只提供 write_wish / wish_complete；
+// 新增、改写、删除、调整优先级与查询都由 write_wish 自然语言承载。
 func TestWishManagerRejectsUnknownType(t *testing.T) {
-	for _, kind := range []string{"bad", "query"} {
-		decoded := decodeToolResult(t, Dialogue.ExecuteWishManager(map[string]any{
+	for _, kind := range []string{"bad", "add", "update", "delete", "priority", "query"} {
+		decoded := decodeToolResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
 			"type": kind, "instruction": "x", "handle": []any{}, "details": false,
 		}))
 		if !strings.Contains(decoded.Error, "type 只能取") {
@@ -57,14 +57,11 @@ func TestWishManagerRejectsUnknownType(t *testing.T) {
 // TestWishManagerDetails 聚合工具的 details 只读返回各机能描述。
 func TestWishManagerDetails(t *testing.T) {
 	cases := map[string]string{
-		"add":      "新增愿望",
-		"update":   "改写愿望",
-		"complete": "完成愿望",
-		"delete":   "删除愿望",
-		"priority": "调整优先级",
+		"write_wish":    "用自然语言描述你的愿望或什么时候想去做什么事",
+		"wish_complete": "用自然语言描述你的什么愿望已达成",
 	}
 	for kind, want := range cases {
-		decoded := decodeToolResult(t, Dialogue.ExecuteWishManager(map[string]any{
+		decoded := decodeToolResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
 			"type": kind, "instruction": "x", "handle": []any{}, "details": true,
 		}))
 		if decoded.Error != "" || !strings.Contains(decoded.Result, want) {
@@ -73,8 +70,8 @@ func TestWishManagerDetails(t *testing.T) {
 	}
 }
 
-// TestDialogueCatalogUsesWishManager 愿望管理是唯一的生活规划入口。
-func TestDialogueCatalogUsesWishManager(t *testing.T) {
+// TestDialogueCatalogUsesLifePlanning 生活规划是唯一的生活入口。
+func TestDialogueCatalogUsesLifePlanning(t *testing.T) {
 	catalog := ToolCatalog()
 	var dialogueTools []string
 	for _, agent := range catalog {
@@ -85,41 +82,46 @@ func TestDialogueCatalogUsesWishManager(t *testing.T) {
 			dialogueTools = append(dialogueTools, tool.Name)
 		}
 	}
-	hasWishManager := false
+	hasLifePlanning := false
 	for _, name := range dialogueTools {
 		switch name {
-		case Dialogue.ToolWishManager:
-			hasWishManager = true
-		case "life_planning", "schedule":
+		case Dialogue.ToolLifePlanning:
+			hasLifePlanning = true
+		case "wish_manager", "life_planning_legacy", "schedule":
 			t.Fatalf("对话者工具目录仍残留旧入口 %s: %v", name, dialogueTools)
 		}
 	}
-	if !hasWishManager {
-		t.Fatalf("对话者工具目录缺少 wish_manager: %v", dialogueTools)
+	if !hasLifePlanning {
+		t.Fatalf("对话者工具目录缺少 life_planning: %v", dialogueTools)
 	}
 }
 
-// TestDialoguePromptUsesWishManager 提示词只保留愿望管理，不再提最近活动与创作意图。
-func TestDialoguePromptUsesWishManager(t *testing.T) {
+// TestDialoguePromptUsesLifePlanning 提示词只保留生活规划，不再提旧愿望入口。
+func TestDialoguePromptUsesLifePlanning(t *testing.T) {
 	raw, err := prompts.Read("dialogueRole.md")
 	if err != nil {
 		t.Fatalf("读取对话者提示词失败: %v", err)
 	}
 	prompt := string(raw)
-	if !strings.Contains(prompt, "`wish_manager`") {
-		t.Fatalf("提示词未使用 wish_manager: %s", prompt)
+	if !strings.Contains(prompt, "`life_planning`") {
+		t.Fatalf("提示词未使用 life_planning: %s", prompt)
 	}
-	for _, kind := range []string{"add", "update", "complete", "delete", "priority"} {
-		if !strings.Contains(prompt, "`type`=`"+kind+"`") {
-			t.Fatalf("提示词缺少愿望机能 %s", kind)
+	for _, description := range []string{
+		"用自然语言描述你的愿望或什么时候想去做什么事",
+		"用自然语言描述你的什么愿望已达成",
+	} {
+		if !strings.Contains(prompt, description) {
+			t.Fatalf("提示词缺少愿望机能描述 %q", description)
 		}
 	}
-	if strings.Contains(prompt, "`type`=`query`") {
-		t.Fatal("提示词不应再提供对话侧查询入口")
-	}
-	for _, banned := range []string{"life_planning", "recent_activity", "record_intent"} {
+	for _, banned := range []string{"`wish_manager`", "recent_activity", "record_intent", "`type`=`query`"} {
 		if strings.Contains(prompt, banned) {
 			t.Fatalf("提示词仍残留旧入口 %s", banned)
+		}
+	}
+	for _, banned := range []string{"`type`=`add`", "`type`=`update`", "`type`=`delete`", "`type`=`priority`"} {
+		if strings.Contains(prompt, banned) {
+			t.Fatalf("提示词仍残留细分愿望类型 %s", banned)
 		}
 	}
 }
@@ -157,22 +159,27 @@ func TestRuntimeMessageCarriesObsession(t *testing.T) {
 	}
 }
 
-// TestFileOperationsBranchAndLegacyAlias 文件操作分支可用，旧值仍兼容。
-func TestFileOperationsBranchAndLegacyAlias(t *testing.T) {
-	for _, kind := range []string{Dialogue.TechniqueFileOperations, Dialogue.TechniqueCreatorLegacy, Dialogue.TechniqueFileEditorLegacy} {
-		decoded := decodeToolResult(t, Dialogue.ExecuteDispatchTechnique(map[string]any{
-			"type": kind, "details": true, "handle": []any{},
-		}))
-		if decoded.Error != "" || !strings.Contains(decoded.Result, "文件操作") {
-			t.Fatalf("分支 %s 的职能描述不正确: %+v", kind, decoded)
-		}
+// TestFileOperationsBranchMigratedToLifePlanning 文件操作已迁移到生活规划入口。
+func TestFileOperationsBranchMigratedToLifePlanning(t *testing.T) {
+	decoded := decodeToolResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
+		"type": "file_operations", "details": true, "handle": []any{},
+	}))
+	if decoded.Error != "" || !strings.Contains(decoded.Result, "文件操作") {
+		t.Fatalf("file_operations 职能描述不正确: %+v", decoded)
+	}
+	// 旧的技法聚合入口不再暴露 storyboard / file_operations。
+	legacy := decodeToolResult(t, Dialogue.ExecuteDispatchTechnique(map[string]any{
+		"type": "file_operations", "details": true, "handle": []any{},
+	}))
+	if legacy.Error == "" {
+		t.Fatalf("dispatch_technique 不应再接受 file_operations: %+v", legacy)
 	}
 	raw, err := prompts.Read("dialogueRole.md")
 	if err != nil {
 		t.Fatalf("读取对话者提示词失败: %v", err)
 	}
 	prompt := string(raw)
-	if !strings.Contains(prompt, "`type`=`file_operations`") {
+	if !strings.Contains(prompt, "`file_operations`") {
 		t.Fatalf("对话者提示词未使用 file_operations: %s", prompt)
 	}
 	if strings.Contains(prompt, "`type`=`creator`") {

@@ -47,8 +47,6 @@ const (
 	NameViewerRemark = "观影观感"
 	// NameDialogue 人格对话
 	NameDialogue = "人格对话"
-	// NameCreator 创作调度
-	NameCreator = "创作调度"
 	// NameLifeMemorizer 记忆整理（三字例外）
 	NameLifeMemorizer = "记忆整理"
 	// NameDesktopOperator 桌面操作
@@ -59,8 +57,16 @@ const (
 	NameStoryboardResearch = "分镜规划-资料"
 	// NameStoryboardPlan 分镜规划-拆解
 	NameStoryboardPlan = "分镜规划-拆解"
-	// NameStoryboardRevise 分镜规划-修订
-	NameStoryboardRevise = "分镜规划-修订"
+	// NameManipulateFiles 文件操纵
+	NameManipulateFiles = "文件操纵"
+	// NameManipulateArchive 归档操纵
+	NameManipulateArchive = "归档操纵"
+	// NameCodeExecution 代码执行
+	NameCodeExecution = "代码执行"
+	// NameContentRollback 内容回滚
+	NameContentRollback = "内容回滚"
+	// NameFileOperations 文件操作
+	NameFileOperations = "文件操作"
 	// NameMemoryTagger 记忆标签
 	NameMemoryTagger = "记忆标签"
 	// NameMemoryFuser 记忆融合
@@ -91,14 +97,18 @@ var DisplayNames = map[string]string{
 	"viewer_share":      NameViewerShare,
 	"viewer_remark":     NameViewerRemark,
 	"dialogue":          NameDialogue,
-	"creator":           NameCreator,
 	"life_memorizer":    NameLifeMemorizer,
 	"desktop_operator":  NameDesktopOperator,
 	"sql_writer":        NameSQLWriter,
 
 	"storyboard_research": NameStoryboardResearch,
 	"storyboard_planner":  NameStoryboardPlan,
-	"storyboard_revise":   NameStoryboardRevise,
+
+	"manipulate_files":   NameManipulateFiles,
+	"manipulate_archive": NameManipulateArchive,
+	"code_execution":     NameCodeExecution,
+	"content_rollback":   NameContentRollback,
+	"file_operations":    NameFileOperations,
 
 	"memory_tagger":     NameMemoryTagger,
 	"memory_fuser":      NameMemoryFuser,

@@ -31,11 +31,12 @@ func Perform(ctx context.Context, instruction string, ref *Reference, env Env, o
 	defer stateMu.Unlock()
 
 	s := &session{
-		ctx:     ctx,
-		env:     env,
-		prompts: library,
-		custom:  CustomCharacters(),
-		silent:  opts.Silent,
+		ctx:          ctx,
+		env:          env,
+		prompts:      library,
+		custom:       CustomCharacters(),
+		silent:       opts.Silent,
+		outputFolder: opts.OutputFolder,
 	}
 	history := &state.history
 	if opts.Silent {
@@ -77,25 +78,6 @@ func (s *session) pushImages(images []string) []string {
 		return s.env.(SilentEnv).PushImagesSilently(images)
 	}
 	return s.env.PushImages(images)
-}
-
-// UpdateArtworkPath 在外部迁移画作文件后同步运行时画作与最近作品路径。
-// 只改内部记录的本地相对路径，视觉副本与资源句柄保持不变；
-// 避免图片被移动后，「把刚才那张图改成…」仍指向旧路径。
-func UpdateArtworkPath(oldRel, newRel string) {
-	oldRel = strings.TrimSpace(oldRel)
-	newRel = strings.TrimSpace(newRel)
-	if oldRel == "" || newRel == "" || oldRel == newRel {
-		return
-	}
-	stateMu.Lock()
-	defer stateMu.Unlock()
-	if state.artwork.Image == oldRel {
-		state.artwork.Image = newRel
-	}
-	if state.path == oldRel {
-		state.path = newRel
-	}
 }
 
 // bindReference 绑定本次任务的参考图。

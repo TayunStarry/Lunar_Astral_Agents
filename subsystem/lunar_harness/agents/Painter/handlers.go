@@ -40,6 +40,7 @@ func (s *session) paint(params GenerateImageParams, label string) string {
 	result, err := multimodal.GenerateImage(
 		params.Prompt, params.NegativePrompt, 1, params.Width, params.Height,
 		params.Steps, params.Strength, params.CfgScale, params.Seed, params.InitImg, params.SuperResolution,
+		s.outputFolder,
 	)
 	if err != nil {
 		logger.Error(module, "["+roleLabel+"] %s失败: %v", label, err)

@@ -4,6 +4,7 @@ package logbuf
 
 import (
 	"sync"
+	"time"
 )
 
 // ==== 缓冲容量常量 ====
@@ -92,11 +93,24 @@ var (
 
 // ==== 模型调用计量 ====
 
+const (
+	// meterFileName 模型调用计量的持久化文件名（保存在 <LocalDir>/database 下）
+	meterFileName = "model_stats.json"
+	// meterSaveInterval 入账后的自动落盘间隔：意外关闭最多丢该间隔内的累计值
+	meterSaveInterval = 5 * time.Second
+)
+
 var (
 	// meterMu 保护计量数据
 	meterMu sync.Mutex
 	// meterStats 计量数据
 	meterStats ModelCallStats
+	// meterDirty 是否存在尚未落盘的累计值
+	meterDirty bool
+	// meterSaving 是否已有后台落盘任务在执行（避免并发写同一文件）
+	meterSaving bool
+	// meterLastSave 上次成功进入落盘流程的时刻
+	meterLastSave time.Time
 )
 
 // ==== 构建版本 ====

@@ -68,6 +68,17 @@ type idleKeeper interface {
 	KeepIdle() bool
 }
 
+// StepWaiter 可选能力：体系把长步骤放到后台执行，Stop 时需要等待其收尾。
+//
+// 异步步骤让调度器的忙碌标记只覆盖编排开销，模型调用与工具执行期间
+// 其他链和响应链仍可运行；实现方必须保证同一时刻只有一个步骤在途。
+type StepWaiter interface {
+	// StepActive 报告后台步骤是否在途（不阻塞）。
+	StepActive() bool
+	// WaitStep 等待后台步骤结束；超时返回 false。
+	WaitStep(timeout time.Duration) bool
+}
+
 // Hooks 宿主注入的运行时钩子。除 Snapshot 外均可为空，空钩子按零值语义处理。
 type Hooks[S any] struct {
 	// Module 日志模块名（如 TickLoop）。
@@ -80,6 +91,12 @@ type Hooks[S any] struct {
 	Snapshot func(idleTicks int) S
 	// Permit 特许运行控制器：思考链让出 Tick 期间只允许响应链并行。
 	Permit *tickpermit.Controller
+	// AllowResponseWhileBusy 主链步骤在途时是否允许响应链并行。
+	//
+	// 创作、分镜规划这类单步可能执行几十秒到几分钟；若响应链也被挡住，
+	// 外部请求会表现为「后端卡死」。开启后响应链可在主链执行期间插入，
+	// 主链之间仍保持串行。
+	AllowResponseWhileBusy bool
 	// Forced 报告是否存在需要抢占执行的强制事件（为 true 时只允许 life 体系）。
 	Forced func() bool
 	// NotifyIdle 空闲 Tick 通知（不放行任何体系时调用）。

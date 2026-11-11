@@ -6,7 +6,6 @@ package Dialogue
 // 必须由装配层以函数变量注入，本包不 import 任何 chain 包。
 
 import (
-	"context"
 	"encoding/json"
 
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
@@ -21,12 +20,10 @@ type ToolResult struct {
 // 能力注入面：由装配层（app / chain/thinking）在启动前赋值。
 // 未注入时执行器返回明确的失败原因，不静默降级。
 var (
-	// RunFileOperations 文件操作编排（创作链）
-	RunFileOperations func(ctx context.Context, instruction string, handles []string) (summary string, usedHandles []string, reviewFailures int, err error)
 	// WebSearch 联网检索（检索链）
 	WebSearch func(query string) (string, error)
-	// RequestLifeEvent 登记强制生活事件（生活链）
-	RequestLifeEvent func(eventID, instruction string) bool
+	// RequestLifeEvent 登记强制生活事件（生活链），handles 为任务涉及的资源句柄
+	RequestLifeEvent func(eventID, instruction string, handles []string) bool
 	// PushImages 推送图片消息并返回可引用句柄（月华宿主）
 	PushImages func(images []string) []string
 	// PushMusic 推送可播放音乐消息（月华宿主）

@@ -12,20 +12,25 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
 )
 
-func TestNetworkExploreExposesLifeCategories(t *testing.T) {
+func TestNetworkExploreExposesOnlySearchAndQQ(t *testing.T) {
 	enum := networkExploreEnum(t)
-	for _, want := range []string{"web_search", "bilibili_viewer", "mutual_forum"} {
+	for _, want := range []string{"web_search"} {
 		if !enumContains(t, enum, want) {
 			t.Fatalf("联网探索应始终暴露 %s，实际 %v", want, enum)
 		}
 	}
+	for _, migrated := range []string{"bilibili_viewer", "mutual_forum"} {
+		if enumContains(t, enum, migrated) {
+			t.Fatalf("%s 已迁移到 life_planning，不应出现在 network_explore: %v", migrated, enum)
+		}
+	}
 }
 
-func TestNetworkExploreLifeTriggersFixedReply(t *testing.T) {
+func TestLifePlanningForumTriggersLifeEvent(t *testing.T) {
 	prepareExploreLifeDir(t)
 
-	result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(map[string]any{
-		"type":        Dialogue.NetworkMutualForumTool,
+	result := decodeExploreResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
+		"type":        "mutual_forum",
 		"instruction": "想看看大家在聊什么",
 		"handle":      []any{},
 		"details":     false,
@@ -41,13 +46,13 @@ func TestNetworkExploreLifeTriggersFixedReply(t *testing.T) {
 	}
 }
 
-// TestNetworkExploreBilibiliTriggersLifeEvent 观影回到生活链：
+// TestLifePlanningBilibiliTriggersLifeEvent 观影回到生活链：
 // 工具只登记 watch 强制事件，真正流程由生活链事件调用 viewer.WatchNextSegment 执行。
-func TestNetworkExploreBilibiliTriggersLifeEvent(t *testing.T) {
+func TestLifePlanningBilibiliTriggersLifeEvent(t *testing.T) {
 	prepareExploreLifeDir(t)
 
-	result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(map[string]any{
-		"type":        Dialogue.NetworkBilibiliTool,
+	result := decodeExploreResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
+		"type":        "bilibili_viewer",
 		"instruction": "想看点猫咪视频",
 		"handle":      []any{},
 		"details":     false,
@@ -107,8 +112,8 @@ func TestNetworkExploreRejectsMalformedInput(t *testing.T) {
 func TestNetworkExploreDetailsHasNoSideEffect(t *testing.T) {
 	prepareExploreLifeDir(t)
 
-	result := decodeExploreResult(t, Dialogue.ExecuteNetworkExplore(map[string]any{
-		"type":    Dialogue.NetworkBilibiliTool,
+	result := decodeExploreResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
+		"type":    "bilibili_viewer",
 		"details": true,
 		"handle":  []any{},
 	}))

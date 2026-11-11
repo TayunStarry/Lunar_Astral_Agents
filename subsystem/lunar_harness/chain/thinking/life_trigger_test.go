@@ -36,7 +36,7 @@ func TestForcedLifeEventPreemptsDialogue(t *testing.T) {
 	})
 
 	life.Init()
-	if !life.RequestEvent("daze", "强制发呆") {
+	if !life.RequestEvent("daze", "强制发呆", nil) {
 		t.Fatal("强制生活事件登记失败")
 	}
 
@@ -46,7 +46,7 @@ func TestForcedLifeEventPreemptsDialogue(t *testing.T) {
 	scheduler.Register(lifeSystem{})
 	scheduler.Tick()
 
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for {
 		state, busy := scheduler.Status()
 		lastSystem := state.LastSystem

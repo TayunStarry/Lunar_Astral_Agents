@@ -150,7 +150,7 @@ func wsStoryboardAction(action string, raw json.RawMessage) (any, error) {
 
 func wsCreationSubmit(raw json.RawMessage) (any, error) {
 	if LibraryCreationSubmitFunc == nil {
-		return nil, fmt.Errorf("创作链尚未就绪")
+		return nil, fmt.Errorf("文件操作任务入口尚未就绪")
 	}
 	var req LibraryCreationRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -165,7 +165,7 @@ func wsCreationSubmit(raw json.RawMessage) (any, error) {
 
 func wsCreationStatus(raw json.RawMessage) (any, error) {
 	if LibraryCreationStatusFunc == nil {
-		return nil, fmt.Errorf("创作链尚未就绪")
+		return nil, fmt.Errorf("文件操作任务入口尚未就绪")
 	}
 	query := decodeTaskQuery(raw)
 	if query.TaskID == "" {
@@ -180,7 +180,7 @@ func wsCreationStatus(raw json.RawMessage) (any, error) {
 
 func wsCreationList(raw json.RawMessage) (any, error) {
 	if LibraryCreationListFunc == nil {
-		return nil, fmt.Errorf("创作链尚未就绪")
+		return nil, fmt.Errorf("文件操作任务入口尚未就绪")
 	}
 	query := decodeTaskQuery(raw)
 	return LibraryCreationListResponse{OK: true, Tasks: LibraryCreationListFunc(query.Limit)}, nil

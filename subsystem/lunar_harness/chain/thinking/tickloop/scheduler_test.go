@@ -245,6 +245,143 @@ func TestSchedulerForcedEventOnlyRunsLife(t *testing.T) {
 	}
 }
 
+// TestSchedulerResponseRunsWhileMainBusy 主链长步骤在途时，响应链仍可插入执行。
+func TestSchedulerResponseRunsWhileMainBusy(t *testing.T) {
+	s := New(Hooks[testSnapshot]{
+		StateFile:              "",
+		Snapshot:               func(int) testSnapshot { return testSnapshot{} },
+		AllowResponseWhileBusy: true,
+	})
+	main := &fakeSystem{id: "life", priority: 100, ready: true, reason: "cooldown", started: make(chan struct{}), block: make(chan struct{})}
+	resp := &fakeSystem{id: "response", priority: 260, ready: false, reason: "pending"}
+	s.Register(resp)
+	s.Register(main)
+
+	s.Tick()
+	<-main.started
+	resp.ready = true
+	s.Tick()
+	time.Sleep(20 * time.Millisecond)
+	if resp.runCount() != 1 {
+		t.Fatalf("主链忙碌时响应链应执行，实际 %d 次", resp.runCount())
+	}
+	if main.runCount() != 1 {
+		t.Fatalf("主链仍应只运行一次，实际 %d 次", main.runCount())
+	}
+	close(main.block)
+	s.wg.Wait()
+}
+
+// TestSchedulerResponseBlockedWhileMainBusyByDefault 默认保持旧语义：主链忙碌时不插入响应链。
+func TestSchedulerResponseBlockedWhileMainBusyByDefault(t *testing.T) {
+	s := newTestScheduler(t, nil)
+	main := &fakeSystem{id: "life", priority: 100, ready: true, reason: "cooldown", started: make(chan struct{}), block: make(chan struct{})}
+	resp := &fakeSystem{id: "response", priority: 260, ready: false, reason: "pending"}
+	s.Register(resp)
+	s.Register(main)
+
+	s.Tick()
+	<-main.started
+	resp.ready = true
+	s.Tick()
+	time.Sleep(20 * time.Millisecond)
+	if resp.runCount() != 0 {
+		t.Fatalf("未开启并行时响应链不应执行，实际 %d 次", resp.runCount())
+	}
+	close(main.block)
+	s.wg.Wait()
+}
+
+// backgroundSystem 模拟把长步骤放到后台的体系：Run 立即返回，步骤在后台阻塞。
+type backgroundSystem struct {
+	id       string
+	priority int
+	ready    bool
+
+	mu      sync.Mutex
+	running bool
+	runs    int
+	started chan struct{}
+	block   chan struct{}
+}
+
+func (b *backgroundSystem) ID() string     { return b.id }
+func (b *backgroundSystem) Priority() int  { return b.priority }
+func (b *backgroundSystem) IdleReset() int { return 0 }
+func (b *backgroundSystem) KeepIdle() bool { return false }
+func (b *backgroundSystem) StepActive() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.running
+}
+
+func (b *backgroundSystem) Ready(testSnapshot) (bool, string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.running {
+		return false, ""
+	}
+	return b.ready, "test"
+}
+
+func (b *backgroundSystem) Run(context.Context) error {
+	b.mu.Lock()
+	if b.running {
+		b.mu.Unlock()
+		return nil
+	}
+	b.running = true
+	b.runs++
+	b.mu.Unlock()
+	close(b.started)
+	go func() {
+		<-b.block
+		b.mu.Lock()
+		b.running = false
+		b.mu.Unlock()
+	}()
+	return nil
+}
+
+func (b *backgroundSystem) WaitStep(timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !b.StepActive() {
+			return true
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return !b.StepActive()
+}
+
+// TestSchedulerRunsOtherSystemsWhileBackgroundStepActive 后台长步骤在途时不占 busy 标记：
+// 其它链照常运行，空闲判定仍视其为忙碌。
+func TestSchedulerRunsOtherSystemsWhileBackgroundStepActive(t *testing.T) {
+	s := newTestScheduler(t, nil)
+	bg := &backgroundSystem{id: "storyboard", priority: 200, ready: true, started: make(chan struct{}), block: make(chan struct{})}
+	other := &fakeSystem{id: "viewing", priority: 150, ready: true, reason: "slices"}
+	s.Register(bg)
+	s.Register(other)
+
+	s.Tick()
+	<-bg.started
+	s.Tick()
+	s.wg.Wait()
+	if other.runCount() != 1 {
+		t.Fatalf("后台步骤在途时其它链应运行，实际 %d 次", other.runCount())
+	}
+	if !s.hasActiveStep() {
+		t.Fatal("后台步骤应被识别为忙碌")
+	}
+	if s.WaitIdle(30 * time.Millisecond) {
+		t.Fatal("后台步骤未结束时不应判定空闲")
+	}
+	close(bg.block)
+	if !s.WaitIdle(time.Second) {
+		t.Fatal("后台步骤结束后应判定空闲")
+	}
+}
+
 // TestSchedulerDialoguePreemptsViewingAcrossTicks 用户消息到达后，下一个 Tick 由对话抢占，
 // 回应结束后观影才继续（观影步骤在安全边界让出，任务保留）。
 func TestSchedulerDialoguePreemptsViewingAcrossTicks(t *testing.T) {

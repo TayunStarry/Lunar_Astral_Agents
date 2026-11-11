@@ -87,13 +87,19 @@ func formatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %s", value, units[unit])
 }
 
-// stringArg 读取字符串参数
-func stringArg(args map[string]any, key string) string {
-	if args == nil {
-		return ""
+// dedupeStrings 去重并保持首次出现顺序。
+func dedupeStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := make(map[string]bool, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
 	}
-	value, _ := args[key].(string)
-	return value
+	return out
 }
 
 // numberArg 读取数值参数

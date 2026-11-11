@@ -81,8 +81,6 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 		{"01", dumpKindLogs},
 		{"02", dumpKindTranscript},
 		{"03", dumpKindContext},
-		{"04", dumpKindContext},
-		{"05", dumpKindContext},
 		{"06", dumpKindContext},
 		{"07", dumpKindContext},
 		{"08", dumpKindContext},
@@ -93,7 +91,6 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 		{"13", dumpKindContext},
 		{"14", dumpKindContext},
 		{"15", dumpKindContext},
-		{"16", dumpKindContext},
 	}
 	for _, want := range wantKeys {
 		got := dumpHotkeyIndex(want.hotkey)
@@ -103,12 +100,6 @@ func TestDumpHotkeyIndexIsFieldBased(t *testing.T) {
 	}
 	if got := dumpHotkeyIndex("03"); dumpOptionList[got].key != "dialogue" {
 		t.Fatal("编号 03 应指向对话者")
-	}
-	if got := dumpHotkeyIndex("04"); dumpOptionList[got].key != "file_editor" {
-		t.Fatal("编号 04 应指向文件编辑")
-	}
-	if got := dumpHotkeyIndex("05"); dumpOptionList[got].key != "creative" {
-		t.Fatal("编号 05 应指向自由创作")
 	}
 	if got := dumpHotkeyIndex("06"); dumpOptionList[got].key != "responder" {
 		t.Fatal("编号 06 应指向通用应答")

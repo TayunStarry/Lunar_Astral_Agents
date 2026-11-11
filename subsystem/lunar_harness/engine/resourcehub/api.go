@@ -52,8 +52,9 @@ func PathToHandle(input string) (handle, relPath string, err error) {
 
 // ToolDescription 返回统一资源聚合工具的描述文本。
 func ToolDescription() string {
-	return "对文件内容与长期记忆进行统一检索：type=memory 查记忆、type=handle 按句柄读内容、" +
-		"type=path 按文件名或路径读内容、type=list 列出符合标准的句柄。系统默认以句柄传递文件信息；" +
+	return "对文件内容与长期记忆进行统一检索：type 是模式数组，可传 memory（查记忆）、handle（按句柄读内容）、" +
+		"path（按文件名或路径读内容）、list（列出符合标准的句柄）；一次可传多个模式，例如 [\"handle\"] 或 [\"handle\",\"memory\"]。" +
+		"多个句柄同时查询时放进 query 数组，例如 query=[\"@D.077\",\"@D.078\"]。系统默认以句柄传递文件信息；" +
 		"只有 path 模式接受文件名或路径，并会自动解析并登记为句柄后返回结果。"
 }
 
@@ -63,14 +64,18 @@ func ToolSchema() map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"type": map[string]any{
-				"type":        "string",
-				"enum":        []string{TypeMemory, TypeHandle, TypePath, TypeList},
-				"description": "memory=检索长期记忆；handle=按句柄读取内容；path=按文件名或路径读取内容；list=列出句柄",
+				"type":     "array",
+				"minItems": 1,
+				"items": map[string]any{
+					"type": "string",
+					"enum": []string{TypeMemory, TypeHandle, TypePath, TypeList},
+				},
+				"description": "查询模式数组：memory=检索长期记忆；handle=按句柄读取内容；path=按文件名或路径读取内容；list=列出句柄。可同时传多个模式。",
 			},
 			"query": map[string]any{
 				"type":  "array",
 				"items": map[string]any{"type": "string"},
-				"description": "memory 填 1-4 个搜索关键词；handle 只填句柄（如 @D.003）；" +
+				"description": "memory 填 1-4 个搜索关键词；handle 只填句柄（如 @D.003），可一次传多个句柄同时查询；" +
 					"path 填文件名或相对路径；list 留空列全部，填类型码 D/I/G/A/V/U 只列该类型，填文件名 / 路径则按名称与路径过滤",
 			},
 			"limit": map[string]any{

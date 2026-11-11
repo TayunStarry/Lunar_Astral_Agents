@@ -4,6 +4,7 @@ package storyboard
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -22,6 +23,11 @@ type SubmitRequest struct {
 	Style string
 	// Ratio 统一画幅（空时默认 16:9）
 	Ratio string
+	// ReviewRequired 为 true 时，分镜规划完成后进入人工审查；
+	// 生活系统自动触发与月华命令触发的演绎跳过审查，直接开始分镜合成。
+	ReviewRequired bool
+	// OutputFolder 指定图片与文档的标题目录；为空时按分镜标题自动生成。
+	OutputFolder string
 }
 
 // ReviewShot 审查稿里的一镜：用户改写、删除、新增后由确认接口回传。
@@ -80,7 +86,7 @@ type TaskView struct {
 	ShotPatch []ShotView `json:"shot_patch,omitempty"`
 	// ShotCount 任务当前镜头总数：前端据此裁剪本地多出的镜头
 	ShotCount int `json:"shot_count,omitempty"`
-	// DocPath 分镜文档相对 LocalDir 的路径（documents/演绎/.../分镜.md）
+	// DocPath 分镜文档相对 LocalDir 的路径（documents/lens/.../分镜.md）
 	DocPath string `json:"doc_path,omitempty"`
 	// DocHandle 分镜文档的资源句柄
 	DocHandle string     `json:"doc_handle,omitempty"`
@@ -135,6 +141,8 @@ type PaintRequest struct {
 	Output     string
 	Task       string
 	References []string
+	// OutputFolder 图片输出子文件夹（multimedia/generated/<OutputFolder>）
+	OutputFolder string
 	// Silent 静默产出：只登记资源并返回句柄，不推送前端、不写记忆、不发 QQ
 	Silent bool
 }
@@ -197,6 +205,8 @@ type taskState struct {
 	research researchState
 	// plan 分镜规划结果
 	plan storyboardPlan
+	// outputFolder 本次演绎的图片输出子文件夹（标题归一化后生成，图片与文档共用）
+	outputFolder string
 	// shots 逐镜执行视图（与 plan.Shots 顺序一致）
 	shots []ShotView
 	// nextShot 下一个待绘制镜头下标
@@ -219,8 +229,53 @@ type taskState struct {
 	cancel context.CancelFunc
 }
 
-// persistedTasks 任务视图落盘结构。
+// persistedTasks 任务落盘结构。
+//
+// Tasks 保留为原始 JSON：旧版本落的是纯 TaskView，新版本落的是 persistedTask，
+// 恢复时按能否解出 View.TaskID 区分，旧数据按「中断」处理。
 type persistedTasks struct {
-	Version int        `json:"version"`
-	Tasks   []TaskView `json:"tasks"`
+	Version int               `json:"version"`
+	Tasks   []json.RawMessage `json:"tasks"`
+}
+
+// persistedTask 单个任务的完整现场：视图 + 续跑所需的内部状态。
+type persistedTask struct {
+	View         TaskView          `json:"view"`
+	Request      SubmitRequest     `json:"request"`
+	Stage        string            `json:"stage"`
+	Story        string            `json:"story,omitempty"`
+	Thought      string            `json:"thought,omitempty"`
+	Research     persistedResearch `json:"research"`
+	Plan         persistedPlan     `json:"plan"`
+	OutputFolder string            `json:"output_folder,omitempty"`
+	Shots        []ShotView        `json:"shots,omitempty"`
+	NextShot     int               `json:"next_shot"`
+	Paused       bool              `json:"paused"`
+	Canceled     bool              `json:"canceled"`
+}
+
+// persistedResearch 资料准备进度的落盘形式。
+type persistedResearch struct {
+	Planned bool     `json:"planned"`
+	Queries []string `json:"queries,omitempty"`
+	Index   int      `json:"index"`
+	Notes   []string `json:"notes,omitempty"`
+}
+
+// persistedPlan 分镜规划的落盘形式。
+type persistedPlan struct {
+	Title string          `json:"title,omitempty"`
+	Style string          `json:"style,omitempty"`
+	Shots []persistedShot `json:"shots,omitempty"`
+}
+
+// persistedShot 规划结果中单镜的落盘形式。
+type persistedShot struct {
+	Index      int    `json:"index"`
+	Act        string `json:"act,omitempty"`
+	Scene      string `json:"scene"`
+	Narration  string `json:"narration"`
+	Continuity string `json:"continuity,omitempty"`
+	Prompt     string `json:"prompt"`
+	Ratio      string `json:"ratio,omitempty"`
 }

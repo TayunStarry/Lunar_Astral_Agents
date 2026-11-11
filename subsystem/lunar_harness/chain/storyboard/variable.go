@@ -18,7 +18,6 @@ const (
 	statusResearching = "researching"
 	statusPlanning    = "planning"
 	statusReviewing   = "reviewing"
-	statusRevising    = "revising"
 	statusPainting    = "painting"
 	statusWriting     = "writing"
 	statusPaused      = "paused"
@@ -31,7 +30,6 @@ const (
 	stageResearching = "researching"
 	stagePlanning    = "planning"
 	stageReviewing   = "reviewing"
-	stageRevising    = "revising"
 	stagePainting    = "painting"
 	stageWriting     = "writing"
 	stageDone        = "done"
@@ -54,7 +52,6 @@ const (
 	eventPlanCompleted   = "plan_completed"
 	eventReviewReady     = "review_ready"
 	eventReviewConfirmed = "review_confirmed"
-	eventRevising        = "revising"
 	eventShotStarted     = "shot_started"
 	eventShotCompleted   = "shot_completed"
 	eventShotFailed      = "shot_failed"
@@ -97,11 +94,11 @@ const (
 	defaultRatio = "16:9"
 
 	// docRootRel 分镜文档在 LocalDir 下的物理根目录
-	docRootRel = "documents/演绎"
+	docRootRel = "documents/lens"
 	// docDisplayRoot 分镜文档相对 /document 的目录前缀
-	docDisplayRoot = "演绎"
+	docDisplayRoot = "lens"
 
-	// storyboardTasksFile 任务视图落盘路径：用于进程重启后标记中断，不做续跑。
+	// storyboardTasksFile 任务现场落盘路径：重启后据此恢复未完成任务。
 	storyboardTasksFile = "database/storyboard/tasks.json"
 	// recoverReason 重启遗留任务的失败原因。
 	recoverReason = "系统重启，演绎任务已中断；请重新提交"
@@ -116,8 +113,6 @@ var (
 	PaintHook func(ctx context.Context, req PaintRequest) (PaintResult, error)
 	// TaskEventHook 任务状态推送，由装配层注入 WebSocket 广播。
 	TaskEventHook func(view TaskView)
-	// ArtworkMoveHook 图片迁移后的运行时画作路径同步，由装配层注入绘制智能体。
-	ArtworkMoveHook func(oldRel, newRel string)
 
 	// taskMu 保护任务表
 	taskMu sync.Mutex
@@ -136,13 +131,12 @@ var taskEpoch = strconv.FormatInt(time.Now().UnixNano(), 36)
 
 var (
 	// researchPlanTimeout 生成检索意图的模型调用超时
-	researchPlanTimeout = 90 * time.Second
+	// 资料准备是可降级阶段：判不出来就直接进入分镜规划，不该长时间占住 Tick。
+	researchPlanTimeout = 30 * time.Second
 	// searchTimeout 单条网络搜索超时
 	searchTimeout = 4 * time.Minute
 	// planTimeout 分镜规划单次模型调用超时
 	planTimeout = 3 * time.Minute
-	// reviseTimeout 审查后修订分镜的单次模型调用超时
-	reviseTimeout = 3 * time.Minute
 	// shotPaintTimeout 单镜绘制超时
 	shotPaintTimeout = 8 * time.Minute
 	// runWarnTimeout 长耗时预警阈值：到达后只提醒，绝不终止
@@ -178,9 +172,4 @@ func stagePlanTimeout() time.Duration {
 // stageResearchTimeout 资料准备原子步骤的总超时。
 func stageResearchTimeout() time.Duration {
 	return researchPlanTimeout + searchTimeout + 30*time.Second
-}
-
-// stageReviseTimeout 审查后修订原子步骤的总超时。
-func stageReviseTimeout() time.Duration {
-	return reviseTimeout + 30*time.Second
 }

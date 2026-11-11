@@ -6,17 +6,19 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/LunarHarness/agents/ArchiveOps"
+	"LunarSubsystem/LunarHarness/agents/CodeExecution"
+	"LunarSubsystem/LunarHarness/agents/ContentRollback"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
 	"LunarSubsystem/LunarHarness/agents/DocumentReader"
-	"LunarSubsystem/LunarHarness/agents/FileEditor"
+	"LunarSubsystem/LunarHarness/agents/FileOperations"
+	"LunarSubsystem/LunarHarness/agents/ManipulateArchive"
+	"LunarSubsystem/LunarHarness/agents/ManipulateFiles"
 	"LunarSubsystem/LunarHarness/agents/MutualForum"
 	"LunarSubsystem/LunarHarness/agents/Savior"
 	"LunarSubsystem/LunarHarness/agents/SearchPlanner"
 	"LunarSubsystem/LunarHarness/agents/SearchSummarizer"
 	"LunarSubsystem/LunarHarness/agents/StoryboardPlanner"
 	"LunarSubsystem/LunarHarness/agents/StoryboardResearch"
-	"LunarSubsystem/LunarHarness/agents/StoryboardReviser"
 	"LunarSubsystem/LunarHarness/agents/ViewerCensor"
 	"LunarSubsystem/LunarHarness/agents/ViewerCritic"
 	"LunarSubsystem/LunarHarness/agents/ViewerScreening"
@@ -24,7 +26,6 @@ import (
 	"LunarSubsystem/LunarHarness/agents/Vision"
 	"LunarSubsystem/LunarHarness/agents/WishManager"
 	"LunarSubsystem/LunarHarness/agents/desktop"
-	"LunarSubsystem/LunarHarness/chain/creation"
 	"LunarSubsystem/LunarHarness/chain/desktop"
 	"LunarSubsystem/LunarHarness/chain/search"
 	"LunarSubsystem/LunarHarness/chain/thinking"
@@ -185,13 +186,12 @@ func WireTUIEngineHooks() {
 var roleAgentIDs = map[string]string{
 	agentinfo.NameVision:             "vision",
 	agentinfo.NameDocumentReader:     "document_reader",
-	agentinfo.NameArchiveOps:         "archive_ops",
 	"归档解析":                           "archive_reader",
-	agentinfo.NameFileEditor:         "file_editor",
-	agentinfo.NameCreator:            "creator",
-	"创作规划者":                          "creator",
-	"自由创作.调度者":                       "creator",
-	"自由创作":                           "creative",
+	agentinfo.NameManipulateFiles:    "manipulate_files",
+	agentinfo.NameManipulateArchive:  "manipulate_archive",
+	agentinfo.NameCodeExecution:      "code_execution",
+	agentinfo.NameContentRollback:    "content_rollback",
+	agentinfo.NameFileOperations:     "file_operations",
 	agentinfo.NameLifeMemorizer:      "life_memorizer",
 	"生活记忆整理者":                        "life_memorizer",
 	agentinfo.NamePainter:            "painter",
@@ -233,7 +233,6 @@ var roleAgentIDs = map[string]string{
 	"网络搜索":                           "web_search",
 	agentinfo.NameStoryboardResearch: "storyboard_research",
 	agentinfo.NameStoryboardPlan:     "storyboard_planner",
-	agentinfo.NameStoryboardRevise:   "storyboard_revise",
 	agentinfo.NameWishManager:        "wish_manager",
 }
 
@@ -250,11 +249,13 @@ func agentIDByRole(role string) string {
 		}
 	}
 	switch role {
-	case "vision", "document_reader", "archive_ops", "archive_reader",
-		"file_editor", "creator", "creative", "life_memorizer", "painter", "screenshoter",
+	case "vision", "document_reader", "archive_reader",
+		"creative", "life_memorizer", "painter", "screenshoter",
+		"manipulate_files", "manipulate_archive", "code_execution", "content_rollback",
+		"file_operations",
 		"desktop", "desktop_agent", "bilibili",
 		"web_search", "search_planner", "search_summarizer", "sql_writer", "mutual_forum", "mutual_forum_agent", "dialogue_bridging",
-		"storyboard_research", "storyboard_planner", "storyboard_revise",
+		"storyboard_research", "storyboard_planner",
 		"viewer_screening", "viewer_censor", "viewer_critic", "viewer_share", "viewer_remark",
 		"responder", "savior", "dialogue", "unknown",
 		"memory_tagger", "memory_fuser", "audio_transcriber", "wish_manager":
@@ -269,9 +270,11 @@ func buildToolCatalog() []agentinfo.Agent {
 	out = append(out, Vision.ToolCatalog()...)
 	out = append(out, DocumentReader.ToolCatalog()...)
 	out = append(out, ArchiveReader.ToolCatalog()...)
-	out = append(out, ArchiveOps.ToolCatalog()...)
-	out = append(out, FileEditor.ToolCatalog()...)
-	out = append(out, creation.ToolCatalog()...)
+	out = append(out, ManipulateFiles.ToolCatalog()...)
+	out = append(out, ManipulateArchive.ToolCatalog()...)
+	out = append(out, CodeExecution.ToolCatalog()...)
+	out = append(out, ContentRollback.ToolCatalog()...)
+	out = append(out, FileOperations.ToolCatalog()...)
 	out = append(out, WishManager.ToolCatalog()...)
 	out = append(out, DialogueBridging.ToolCatalog()...)
 	out = append(out, search.ToolCatalog()...)
@@ -286,7 +289,6 @@ func buildToolCatalog() []agentinfo.Agent {
 	out = append(out, MutualForum.ToolCatalog()...)
 	out = append(out, StoryboardResearch.ToolCatalog()...)
 	out = append(out, StoryboardPlanner.ToolCatalog()...)
-	out = append(out, StoryboardReviser.ToolCatalog()...)
 	return out
 }
 

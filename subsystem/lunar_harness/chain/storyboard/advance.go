@@ -6,12 +6,12 @@ package storyboard
 //  1. queued      → 读取故事正文并校验字数；
 //  2. researching → 调用「分镜规划-资料」生成检索意图，每 Tick 执行一条网络搜索；
 //  3. planning    → 调用「分镜规划-拆解」推演故事并逐镜拆分；
-//  4. reviewing   → 等待用户审查确认（不占用 Tick）；
-//  5. revising    → 调用「分镜规划-修订」整理用户确认后的最终稿；
-//  6. painting    → 每次只绘制一镜，镜头之间立即让出 Tick；
-//  7. writing     → 迁移图片并写出分镜文档；
-//  8. done        → 任务结束，不再参与调度。
+//  4. reviewing   → 仅手动提交的作品等待用户审查确认（不占用 Tick）；
+//  5. painting    → 每次只绘制一镜，镜头之间立即让出 Tick；
+//  6. writing     → 写出分镜文档并收尾；
+//  7. done        → 任务结束，不再参与调度。
 //
+// 生活系统自动触发与月华命令触发的演绎跳过审查，规划完成即进入绘制。
 // 所有阶段推进都通过增量事件推送，前端据此逐条追加渲染。
 
 import (
@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/StoryboardPlanner"
-	"LunarSubsystem/LunarHarness/agents/StoryboardReviser"
+	"LunarSubsystem/LunarHarness/engine/activity"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
@@ -62,8 +62,6 @@ func Advance(ctx context.Context) error {
 		advanceResearching(ctx, taskID)
 	case stagePlanning:
 		advancePlanning(ctx, taskID)
-	case stageRevising:
-		advanceRevising(ctx, taskID)
 	case stagePainting:
 		advancePainting(ctx, taskID)
 	case stageWriting:
@@ -300,85 +298,44 @@ func advancePlanning(ctx context.Context, taskID string) {
 	if titleOverride != "" {
 		plan.Title = titleOverride
 	}
-	shots := shotsFromPlan(plan, shotPending)
-
-	taskMu.Lock()
-	state, ok = tasks[taskID]
-	if !ok || state.stage != stagePlanning || state.paused || state.canceled {
-		taskMu.Unlock()
-		return
-	}
+	// 画面描述缺失时先用分镜叙事兜底，保证可以直接进入绘制。
+	plan.Shots = fillMissingPrompts(plan.Shots)
 	state.plan = plan
+	state.outputFolder = strings.TrimSpace(state.req.OutputFolder)
+	if state.outputFolder == "" {
+		state.outputFolder = prepareOutputFolder(plan.Title)
+	}
+	state.nextShot = 0
+	state.cancel = nil
+	if state.req.ReviewRequired {
+		shots := shotsFromPlan(plan, shotPending)
+		state.shots = shots
+		state.stage = stageReviewing
+		state.restedAt = time.Now()
+		applyEventLocked(state, ProgressEvent{
+			Status:   statusReviewing,
+			Stage:    fmt.Sprintf("分镜已生成，共 %d 镜，等待你的审查确认", len(shots)),
+			Progress: 12,
+			Summary:  "审查确认后开始逐镜绘制",
+			Title:    plan.Title,
+			Event:    eventReviewReady,
+			Shots:    cloneShots(shots),
+		})
+		commitSnapshotLocked(state)
+		return
+	}
+	// 生活系统自动触发与月华命令触发：跳过人工审查，直接开始分镜合成。
+	shots := shotsFromPlan(plan, shotPlanned)
 	state.shots = shots
-	state.nextShot = 0
-	state.stage = stageReviewing
-	state.cancel = nil
-	state.restedAt = time.Now()
-	applyEventLocked(state, ProgressEvent{
-		Status:   statusReviewing,
-		Stage:    fmt.Sprintf("分镜已生成，共 %d 镜，等待你的审查确认", len(shots)),
-		Progress: 12,
-		Summary:  "审查确认后开始逐镜绘制",
-		Title:    plan.Title,
-		Event:    eventReviewReady,
-		Shots:    cloneShots(shots),
-	})
-	commitSnapshotLocked(state)
-}
-
-// advanceRevising 调用「分镜规划-修订」整理审查稿，完成后进入逐镜绘制。
-//
-// 修订失败不阻断绘制：按用户确认稿原样进入绘制，避免用户内容被卡住。
-func advanceRevising(ctx context.Context, taskID string) {
-	taskMu.Lock()
-	state, ok := tasks[taskID]
-	if !ok || state.stage != stageRevising || state.paused || state.canceled {
-		taskMu.Unlock()
-		return
-	}
-	req := state.req
-	title := state.plan.Title
-	shots := reviserShots(state.plan.Shots)
-	stepCtx, cancel := taskStepContext(ctx, state, stageReviseTimeout())
-	state.cancel = cancel
-	taskMu.Unlock()
-	defer cancel()
-
-	result, err := StoryboardReviser.Revise(stepCtx, StoryboardReviser.Request{
-		Title: title,
-		Style: req.Style,
-		Ratio: req.Ratio,
-		Shots: shots,
-	})
-
-	taskMu.Lock()
-	state, ok = tasks[taskID]
-	if !ok || state.stage != stageRevising || state.paused || state.canceled {
-		taskMu.Unlock()
-		return
-	}
-	state.cancel = nil
-	summary := "审查已确认，开始逐镜绘制"
-	if err != nil {
-		logger.Warn(Module, "演绎任务 %s 修订分镜失败，按审查稿直接绘制: %v", taskID, err)
-		summary = "分镜修订失败，按审查稿直接绘制"
-	} else {
-		state.plan.Title = result.Title
-		state.plan.Shots = plannedShotsFromReviser(result.Shots, req.Style)
-	}
-	// 修订未补全或修订失败时，用分镜叙事兜底出可绘制的画面描述。
-	state.plan.Shots = fillMissingPrompts(state.plan.Shots)
-	state.shots = shotsFromPlan(state.plan, shotPlanned)
-	state.nextShot = 0
 	state.stage = stagePainting
 	applyEventLocked(state, ProgressEvent{
 		Status:   statusPainting,
-		Stage:    "审查已确认，开始逐镜绘制",
+		Stage:    fmt.Sprintf("分镜已生成，共 %d 镜，开始逐镜绘制", len(shots)),
 		Progress: 12,
-		Summary:  summary,
-		Title:    state.plan.Title,
-		Event:    eventRevising,
-		Shots:    cloneShots(state.shots),
+		Summary:  "无需人工审查，直接进入分镜合成",
+		Title:    plan.Title,
+		Event:    eventPlanCompleted,
+		Shots:    cloneShots(shots),
 	})
 	commitSnapshotLocked(state)
 }
@@ -396,7 +353,7 @@ func advancePainting(ctx context.Context, taskID string) {
 		state.stage = stageWriting
 		applyEventLocked(state, ProgressEvent{
 			Status:   statusWriting,
-			Stage:    "正在迁移分镜图片并生成文档",
+			Stage:    "正在生成分镜文档",
 			Progress: 90,
 			Event:    eventWriting,
 			Shots:    cloneShots(state.shots),
@@ -407,6 +364,7 @@ func advancePainting(ctx context.Context, taskID string) {
 
 	index := state.nextShot
 	shot := state.plan.Shots[index]
+	outputFolder := state.outputFolder
 	state.shots[index].Status = shotDrawing
 	state.shots[index].Error = ""
 	applyEventLocked(state, ProgressEvent{
@@ -424,7 +382,7 @@ func advancePainting(ctx context.Context, taskID string) {
 	taskMu.Unlock()
 	defer cancel()
 
-	result, paintErr := paintShot(stepCtx, shot)
+	result, paintErr := paintShot(stepCtx, shot, outputFolder)
 
 	taskMu.Lock()
 	state, ok = tasks[taskID]
@@ -489,7 +447,7 @@ func advancePainting(ctx context.Context, taskID string) {
 	commitVolatileLocked(state)
 }
 
-// advanceWriting 迁移图片、生成分镜文档并收尾。
+// advanceWriting 生成分镜文档并收尾。
 func advanceWriting(taskID string) {
 	taskMu.Lock()
 	state, ok := tasks[taskID]
@@ -499,11 +457,12 @@ func advanceWriting(taskID string) {
 	}
 	plan := state.plan
 	shots := cloneShots(state.shots)
+	outputFolder := state.outputFolder
 	stopGuard := beginStepGuard(state, writingStepTimeout)
 	taskMu.Unlock()
 	defer stopGuard()
 
-	doc, updated, err := writeStoryboardDoc(plan, shots)
+	doc, updated, err := writeStoryboardDoc(plan, shots, outputFolder)
 	if err != nil {
 		if isPausedOrCanceled(taskID) {
 			return
@@ -532,6 +491,10 @@ func advanceWriting(taskID string) {
 		stage = "全部镜头绘制失败"
 		event = eventFailed
 		failure = summary
+	} else {
+		// 全部分镜合成完成：把标题与句柄写入月华的「刚刚在做什么」运行时消息。
+		activity.Set(fmt.Sprintf("刚演绎完《%s》，分镜与图片句柄：%s",
+			plan.Title, strings.Join(handles, "、")))
 	}
 
 	taskMu.Lock()

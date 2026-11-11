@@ -121,14 +121,22 @@ type MoodSnapshot struct {
 	Vector  []float32
 }
 
-// UserAffection 月华对单个用户的情感认知（好感度与标签）。
+// UserAffection 月华对单个用户的态度积分与情感标签。
 type UserAffection struct {
-	Score        float64 `json:"score"`
-	Label        string  `json:"label"`
-	Samples      int     `json:"samples"`
-	WindowRounds int     `json:"window_rounds,omitempty"`
-	LastKey      string  `json:"last_key,omitempty"`
-	UpdatedAt    int64   `json:"updated_at"`
+	// Points 态度积分，范围 [-50, 50]，新对话者默认 20
+	Points int `json:"points"`
+	// Label 情感标签
+	Label string `json:"label"`
+	// Samples 已执行的态度评估次数
+	Samples int `json:"samples"`
+	// WindowRounds 本次评估使用的新增轮数
+	WindowRounds int `json:"window_rounds,omitempty"`
+	// LastKey 最近一轮交互标识，用于去重
+	LastKey string `json:"last_key,omitempty"`
+	// UpdatedAt 最后更新时间（Unix 秒）
+	UpdatedAt int64 `json:"updated_at"`
+	// LegacyScore 旧版 [-1, 1] 好感度，仅用于兼容载入；换算为积分后清空
+	LegacyScore *float64 `json:"score,omitempty"`
 }
 
 // AttitudeState 态度状态：两极锚点与按用户保存的情感认知。

@@ -164,8 +164,10 @@ func takeForcedEventLocked(env *Env) Event {
 	}
 	id := state.PendingEvent
 	env.Instruction = state.PendingInstruction
+	env.Handles = append([]string(nil), state.PendingHandles...)
 	state.PendingEvent = ""
 	state.PendingInstruction = ""
+	state.PendingHandles = nil
 	saveStateLocked()
 	event := eventByIDLocked(id)
 	if event == nil {
@@ -194,6 +196,8 @@ func failureRecord(eventID string) string {
 		return "逛了论坛（未完成）"
 	case "watch":
 		return "看视频没看成（未完成）"
+	case "storyboard":
+		return "想演绎一段故事（未完成）"
 	default:
 		return "发呆中"
 	}

@@ -45,6 +45,7 @@ func Plan(ctx context.Context, story string) (result Result, err error) {
 			{"role": "user", "content": userPrompt(story)},
 		},
 		Temperature: &temperature,
+		MaxTokens:   maxOutputTokens,
 	})
 	if err != nil {
 		return Result{}, err

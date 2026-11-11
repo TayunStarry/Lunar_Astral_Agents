@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// ConfirmTask 用用户审查后的分镜替换规划稿，并进入修订阶段。
+// ConfirmTask 用用户审查后的分镜替换规划稿，直接进入逐镜绘制。
 func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 	taskID = strings.TrimSpace(taskID)
 	if taskID == "" {
@@ -56,7 +56,7 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 		if shotRatio == "" {
 			shotRatio = ratio
 		}
-		// 画面描述留空交给「分镜规划-修订」补全；用户已写的内容原样保留。
+		// 画面描述留空时按分镜叙事兜底，审查确认后直接进入绘制。
 		prompt := clipRunes(strings.TrimSpace(item.Prompt), maxPaintPromptRunes)
 		shots = append(shots, ShotView{
 			Index:     index + 1,
@@ -83,16 +83,20 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 		viewTitle = state.plan.Title
 	}
 
-	state.plan = storyboardPlan{Title: viewTitle, Style: style, Shots: planShots}
+	state.plan = storyboardPlan{Title: viewTitle, Style: style, Shots: fillMissingPrompts(planShots)}
+	state.outputFolder = strings.TrimSpace(state.req.OutputFolder)
+	if state.outputFolder == "" {
+		state.outputFolder = prepareOutputFolder(viewTitle)
+	}
 	state.shots = shots
 	state.nextShot = 0
-	state.stage = stageRevising
+	state.stage = stagePainting
 	releaseRestLocked(state)
 	applyEventLocked(state, ProgressEvent{
-		Status:   statusRevising,
-		Stage:    "审查已确认，正在梳理分镜衔接",
+		Status:   statusPainting,
+		Stage:    "审查已确认，开始逐镜绘制",
 		Progress: 12,
-		Summary:  "分镜修订完成后开始逐镜绘制",
+		Summary:  "分镜审查完成，直接进入逐镜绘制",
 		Title:    viewTitle,
 		Event:    eventReviewConfirmed,
 		Shots:    cloneShots(shots),
@@ -154,9 +158,6 @@ func PauseTask(taskID string) (TaskView, error) {
 	if state.stage == stagePainting {
 		stageText = fmt.Sprintf("已暂停，可从第 %d 镜继续", state.nextShot+1)
 	}
-	if state.stage == stageRevising {
-		stageText = "已暂停，继续后重新整理分镜"
-	}
 	applyEventLocked(state, ProgressEvent{
 		Status: statusPaused,
 		Stage:  stageText,
@@ -206,8 +207,6 @@ func ResumeTask(taskID string) (TaskView, error) {
 		state.nextShot = 0
 	case stagePainting:
 		event.Stage = fmt.Sprintf("继续绘制第 %d / %d 镜", state.nextShot+1, len(state.plan.Shots))
-	case stageRevising:
-		event.Stage = "继续整理审查后的分镜"
 	}
 	applyEventLocked(state, event)
 	view := takeViewLocked(state)
@@ -294,8 +293,6 @@ func stageStatus(stage string) string {
 		return statusPlanning
 	case stageReviewing:
 		return statusReviewing
-	case stageRevising:
-		return statusRevising
 	case stagePainting:
 		return statusPainting
 	case stageWriting:

@@ -1,15 +1,14 @@
 package storyboard
 
-// doc.go 分镜图片迁移与 Markdown 文档生成。
+// doc.go 演绎文档生成与图片路径整理。
 //
 // 约定：
-//   - 文档与图片落在同一目录，文档用相对文件名指向图片；
-//   - 目标目录/文件写入前做同名检测，冲突时追加序号，绝不覆盖；
-//   - 迁移失败的镜头改记为失败，不生成悬空链接。
+//   - 图片在绘制阶段直接写入 multimedia/generated/<项目标题>/，不再统一迁移；
+//   - 分镜文档写入 documents/lens/<项目标题>/分镜.md，用相对路径指向图片；
+//   - 标题相同的任务复用同一目录，冲突时追加序号，绝不覆盖已有作品。
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -21,7 +20,6 @@ import (
 	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/resource"
-	"LunarSubsystem/LunarHarness/engine/resourcehub"
 )
 
 // docResult 分镜文档的落点。
@@ -32,25 +30,47 @@ type docResult struct {
 	Handle string
 }
 
-// writeStoryboardDoc 把成功镜头图片移动到文档目录，再写出 Markdown 文档。
-func writeStoryboardDoc(plan storyboardPlan, shots []ShotView) (docResult, []ShotView, error) {
-	dirName, dirRel := uniqueDocDir(plan.Title)
+// prepareOutputFolder 生成本次演绎的目录名：优先使用标题，标题目录已存在时追加序号。
+// 图片与文档共用该目录名，保证 multimedia/generated/<标题> 与 documents/lens/<标题> 对齐。
+func prepareOutputFolder(title string) string {
+	base := safeFileName(title)
+	if base == "" {
+		base = "未命名演绎"
+	}
+	folder := base
+	for suffix := 2; suffix < 1000; suffix++ {
+		imagesExist := pathExists(path.Join("multimedia/generated", folder))
+		docsExist := pathExists(path.Join(docRootRel, folder))
+		if !imagesExist && !docsExist {
+			return folder
+		}
+		folder = fmt.Sprintf("%s-%d", base, suffix)
+	}
+	return fmt.Sprintf("%s-%d", base, time.Now().Unix())
+}
+
+// writeStoryboardDoc 生成分镜 Markdown 文档，并把成功镜头映射为相对图片路径。
+func writeStoryboardDoc(plan storyboardPlan, shots []ShotView, folder string) (docResult, []ShotView, error) {
+	if folder == "" {
+		folder = prepareOutputFolder(plan.Title)
+	}
+	docDirRel := path.Join(docRootRel, folder)
 	for index := range shots {
 		if shots[index].Status != shotPainted || shots[index].Handle == "" {
 			continue
 		}
-		file, err := moveShotImage(shots[index].Handle, dirRel, fmt.Sprintf("shot-%02d", shots[index].Index))
+		link, err := shotImageLink(docDirRel, shots[index].Handle)
 		if err != nil {
 			shots[index].Status = shotFailed
-			shots[index].Error = "图片迁移失败：" + err.Error()
+			shots[index].Error = "图片路径解析失败：" + err.Error()
 			shots[index].File = ""
 			continue
 		}
-		shots[index].File = file
+		shots[index].File = link
 	}
 
 	content := buildMarkdown(plan, shots)
-	docRel := path.Join(docDisplayRoot, dirName, "分镜.md")
+	docRel := path.Join(docDisplayRoot, folder, "分镜.md")
 	result := FileEditor.CreateFile(docRel, content)
 	if !result.OK {
 		return docResult{}, shots, fmt.Errorf("分镜文档写入失败：%s", strings.TrimSpace(result.Summary))
@@ -60,25 +80,29 @@ func writeStoryboardDoc(plan storyboardPlan, shots []ShotView) (docResult, []Sho
 		handle = result.Handles[0]
 	}
 	return docResult{
-		Path:   path.Join(docRootRel, dirName, "分镜.md"),
+		Path:   path.Join(docRootRel, folder, "分镜.md"),
 		Handle: handle,
 	}, shots, nil
 }
 
-// uniqueDocDir 生成不冲突的文档目录名。
-func uniqueDocDir(title string) (dirName, dirRel string) {
-	base := safeFileName(title)
-	if base == "" {
-		base = "故事"
+// shotImageLink 把图片句柄解析为相对分镜文档目录的链接。
+func shotImageLink(docDirRel, handle string) (string, error) {
+	entry, err := resource.Resolve(handle)
+	if err != nil {
+		return "", fmt.Errorf("解析资源 %s 失败：%w", handle, err)
 	}
-	stamp := time.Now().Format("20060102-150405")
-	dirName = base + "-" + stamp
-	dirRel = path.Join(docRootRel, dirName)
-	for suffix := 2; pathExists(dirRel); suffix++ {
-		dirName = fmt.Sprintf("%s-%s-%d", base, stamp, suffix)
-		dirRel = path.Join(docRootRel, dirName)
+	srcRel := path.Clean(strings.ReplaceAll(strings.TrimSpace(entry.BlobPath), "\\", "/"))
+	if srcRel == "" || srcRel == "." {
+		return "", fmt.Errorf("资源 %s 没有本地文件", handle)
 	}
-	return dirName, dirRel
+	if _, statErr := os.Stat(filepath.Join(config.LocalDir, filepath.FromSlash(srcRel))); statErr != nil {
+		return "", fmt.Errorf("图片不存在：%w", statErr)
+	}
+	link, err := filepath.Rel(filepath.FromSlash(docDirRel), filepath.FromSlash(srcRel))
+	if err != nil {
+		return "", fmt.Errorf("计算相对路径失败：%w", err)
+	}
+	return filepath.ToSlash(link), nil
 }
 
 // safeFileName 去掉 Windows 文件名非法字符并限制长度。
@@ -100,54 +124,6 @@ func safeFileName(title string) string {
 		cleaned = string(runes[:40])
 	}
 	return strings.TrimSpace(cleaned)
-}
-
-// moveShotImage 把绘制产物迁移到文档目录，返回迁移后的文件名。
-func moveShotImage(handle, dirRel, base string) (string, error) {
-	entry, err := resource.Resolve(handle)
-	if err != nil {
-		return "", fmt.Errorf("解析资源 %s 失败：%w", handle, err)
-	}
-	srcRel := path.Clean(strings.ReplaceAll(strings.TrimSpace(entry.BlobPath), "\\", "/"))
-	if srcRel == "" || srcRel == "." {
-		return "", fmt.Errorf("资源 %s 没有本地文件", handle)
-	}
-	srcAbs := filepath.Join(config.LocalDir, filepath.FromSlash(srcRel))
-	if _, statErr := os.Stat(srcAbs); statErr != nil {
-		return "", fmt.Errorf("源图片不存在：%w", statErr)
-	}
-
-	ext := strings.ToLower(path.Ext(srcRel))
-	if ext == "" {
-		ext = ".png"
-	}
-	name := base + ext
-	targetRel := path.Join(dirRel, name)
-	for suffix := 2; pathExists(targetRel); suffix++ {
-		name = fmt.Sprintf("%s-%d%s", base, suffix, ext)
-		targetRel = path.Join(dirRel, name)
-	}
-	targetAbs := filepath.Join(config.LocalDir, filepath.FromSlash(targetRel))
-	if err := os.MkdirAll(filepath.Dir(targetAbs), 0o755); err != nil {
-		return "", fmt.Errorf("创建目录失败：%w", err)
-	}
-	if err := os.Rename(srcAbs, targetAbs); err != nil {
-		if copyErr := copyFile(srcAbs, targetAbs); copyErr != nil {
-			return "", fmt.Errorf("迁移图片失败：%w", copyErr)
-		}
-		if removeErr := os.Remove(srcAbs); removeErr != nil {
-			return "", fmt.Errorf("清理源图片失败：%w", removeErr)
-		}
-	}
-	if !pathExists(targetRel) {
-		return "", fmt.Errorf("迁移后目标文件不存在：%s", targetRel)
-	}
-	resource.RewriteHandlesForMove(srcRel, targetRel)
-	resourcehub.Invalidate()
-	if ArtworkMoveHook != nil {
-		ArtworkMoveHook(srcRel, targetRel)
-	}
-	return name, nil
 }
 
 // buildMarkdown 生成分镜文档正文。
@@ -195,8 +171,8 @@ func buildMarkdown(plan storyboardPlan, shots []ShotView) string {
 		b.WriteString("**叙事**：" + shot.Narration + "\n\n")
 		b.WriteString("**提示词**：\n\n```text\n" + shot.Prompt + "\n```\n\n")
 		if shot.Status == shotPainted && shot.File != "" {
-			b.WriteString("![第 " + strconv.Itoa(shot.Index) + " 镜](./" + shot.File + ")\n\n")
-			b.WriteString("> 文件：`./" + shot.File + "`")
+			b.WriteString("![第 " + strconv.Itoa(shot.Index) + " 镜](<" + shot.File + ">)\n\n")
+			b.WriteString("> 文件：`" + shot.File + "`")
 			if shot.Handle != "" {
 				b.WriteString("（句柄 `" + shot.Handle + "`）")
 			}
@@ -216,22 +192,4 @@ func buildMarkdown(plan storyboardPlan, shots []ShotView) string {
 func pathExists(rel string) bool {
 	_, err := os.Stat(filepath.Join(config.LocalDir, filepath.FromSlash(rel)))
 	return err == nil
-}
-
-// copyFile 跨卷迁移时的兜底复制。
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
 }

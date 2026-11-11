@@ -12,7 +12,6 @@ import (
 	"fmt"
 
 	"LunarSubsystem/LunarHarness/agents/Responder"
-	"LunarSubsystem/LunarHarness/chain/creation"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking"
 	"LunarSubsystem/LunarHarness/engine/mediaobject"
@@ -42,63 +41,15 @@ func wireServerHooks() {
 	server.LibraryStoryboardCancelFunc = cancelLibraryStoryboard
 }
 
-// submitLibraryCreation 把资源库请求转成创作任务；单个 handle 与 handles 合并去重。
-func submitLibraryCreation(req server.LibraryCreationRequest) (server.LibraryCreationTask, error) {
-	handles := append([]string(nil), req.Handles...)
-	if req.Handle != "" {
-		handles = append(handles, req.Handle)
-	}
-	view, err := creation.SubmitTask(creation.SubmitRequest{
-		Mode:        req.Mode,
-		Description: req.Description,
-		Handles:     handles,
-	})
-	return toLibraryTask(view), err
-}
-
-// libraryCreationStatus 查询单个创作任务。
-func libraryCreationStatus(taskID string) (server.LibraryCreationTask, bool) {
-	view, ok := creation.TaskStatus(taskID)
-	if !ok {
-		return server.LibraryCreationTask{}, false
-	}
-	return toLibraryTask(view), true
-}
-
-// libraryCreationList 查询最近创作任务。
-func libraryCreationList(limit int) []server.LibraryCreationTask {
-	views := creation.TaskList(limit)
-	out := make([]server.LibraryCreationTask, 0, len(views))
-	for _, view := range views {
-		out = append(out, toLibraryTask(view))
-	}
-	return out
-}
-
-// toLibraryTask 把创作链任务视图映射为 HTTP 层结构。
-func toLibraryTask(view creation.TaskView) server.LibraryCreationTask {
-	return server.LibraryCreationTask{
-		TaskID:    view.TaskID,
-		Mode:      view.Mode,
-		Status:    view.Status,
-		Stage:     view.Stage,
-		Progress:  view.Progress,
-		Summary:   view.Summary,
-		Handles:   append([]string(nil), view.Handles...),
-		Error:     view.Error,
-		CreatedAt: view.CreatedAt,
-		UpdatedAt: view.UpdatedAt,
-	}
-}
-
 // submitLibraryStoryboard 把资源库请求转成演绎任务。
 func submitLibraryStoryboard(req server.LibraryStoryboardRequest) (server.LibraryStoryboardTask, error) {
 	view, err := storyboard.SubmitTask(storyboard.SubmitRequest{
-		Text:   req.Text,
-		Handle: req.Handle,
-		Title:  req.Title,
-		Style:  req.Style,
-		Ratio:  req.Ratio,
+		Text:           req.Text,
+		Handle:         req.Handle,
+		Title:          req.Title,
+		Style:          req.Style,
+		Ratio:          req.Ratio,
+		ReviewRequired: true,
 	})
 	return toLibraryStoryboardTask(view), err
 }

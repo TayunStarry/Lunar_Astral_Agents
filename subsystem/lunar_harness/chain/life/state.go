@@ -10,8 +10,8 @@ import (
 )
 
 // RequestEvent 登记一次强制生活事件：下一 Tick 跳过权重选择，直接执行指定事件。
-// instruction 是对话者/用户传入的自然语言要求，会随环境交给事件智能体。
-func RequestEvent(eventID, instruction string) bool {
+// handles 为工具触发时携带的资源句柄。
+func RequestEvent(eventID, instruction string, handles []string) bool {
 	eventID = strings.TrimSpace(eventID)
 	if eventID == "" {
 		return false
@@ -24,9 +24,25 @@ func RequestEvent(eventID, instruction string) bool {
 	}
 	state.PendingEvent = eventID
 	state.PendingInstruction = strings.TrimSpace(instruction)
+	state.PendingHandles = cleanEventHandles(handles)
 	saveStateLocked()
 	logger.Info(Module, "[生活] 已登记强制事件 %s，下一 Tick 跳过权重选择", eventID)
 	return true
+}
+
+// cleanEventHandles 清洗强制事件携带的句柄。
+func cleanEventHandles(handles []string) []string {
+	out := make([]string, 0, len(handles))
+	seen := map[string]bool{}
+	for _, handle := range handles {
+		handle = strings.TrimSpace(handle)
+		if handle == "" || seen[handle] {
+			continue
+		}
+		seen[handle] = true
+		out = append(out, handle)
+	}
+	return out
 }
 
 // HasPendingEvent 是否有等待执行的强制事件。
@@ -46,6 +62,7 @@ func Init() {
 	// 避免升级后仍尝试走事件分发。
 	if state.PendingEvent == "memory" {
 		state.PendingEvent, state.PendingInstruction = "", ""
+		state.PendingHandles = nil
 		saveStateLocked()
 	}
 	used := state.Used

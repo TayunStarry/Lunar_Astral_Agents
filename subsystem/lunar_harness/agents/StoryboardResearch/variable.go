@@ -23,6 +23,10 @@ const (
 	maxQueryRunes = 120
 	// maxStoryRunes 故事正文上限（与演绎链输入约束一致）
 	maxStoryRunes = 4000
+	// maxOutputTokens 单次调用输出上限（含思考）
+	// 资料判断本应 1-3 句 + 一行 JSON；设上限是为了让推理模型在空转时尽快收尾，
+	// 而不是逐词自问自答几十秒后才被循环监管中断。
+	maxOutputTokens = 2048
 	// researchTimeout 单次模型调用超时
-	researchTimeout = 90 * time.Second
+	researchTimeout = 30 * time.Second
 )

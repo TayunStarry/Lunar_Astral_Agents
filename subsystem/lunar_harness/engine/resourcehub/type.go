@@ -10,8 +10,8 @@ package resourcehub
 
 // Query 一次统一资源查询。
 type Query struct {
-	// Type 查询模式：memory / handle / path / list
-	Type string
+	// Types 查询模式数组：memory / handle / path / list，可一次传入多个模式
+	Types []string
 	// Query 目标列表：memory 为关键词，handle 为句柄，path 为文件名或路径，list 为类型码 + 过滤词
 	Query []string
 	// Limit 返回数量上限（<=0 时按模式默认值）

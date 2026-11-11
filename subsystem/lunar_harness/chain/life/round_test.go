@@ -188,7 +188,7 @@ func TestWatchBranchSharesToolPath(t *testing.T) {
 			SegmentIndex: 1, SegmentTotal: 1, LastSegment: true, CommentPosted: true,
 		}, nil
 	}
-	if !RequestEvent("watch", "对话者想看猫咪视频") {
+	if !RequestEvent("watch", "对话者想看猫咪视频", nil) {
 		t.Fatal("watch 强制事件应可登记")
 	}
 	if err := stepWholeRound(t); err != nil {

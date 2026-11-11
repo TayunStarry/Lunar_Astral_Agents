@@ -28,6 +28,16 @@ func advanceResearching(ctx context.Context, taskID string) {
 		story := state.story
 		stepCtx, cancel := taskStepContext(ctx, state, stageResearchTimeout())
 		state.cancel = cancel
+		// 模型调用本身没有任何增量可推：先补一条阶段文本，
+		// 让前端立刻看到「正在判断」，而不是几十秒毫无动静。
+		applyEventLocked(state, ProgressEvent{
+			Status:       statusResearching,
+			Stage:        "正在判断需要补全哪些设定资料",
+			Progress:     3,
+			Event:        eventThinking,
+			ThoughtDelta: "【资料准备】正在判断这条故事是否需要现实资料考据…\n",
+		})
+		commitVolatileLocked(state)
 		taskMu.Unlock()
 
 		plan, err := StoryboardResearch.Plan(stepCtx, story)

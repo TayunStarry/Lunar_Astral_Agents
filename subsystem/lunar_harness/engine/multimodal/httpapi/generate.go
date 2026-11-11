@@ -45,6 +45,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 		req.Seed,
 		req.InitImg,
 		req.AllowSuperResolution,
+		"",
 	)
 
 	if task == nil {

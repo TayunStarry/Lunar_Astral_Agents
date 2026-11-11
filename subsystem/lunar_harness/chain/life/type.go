@@ -20,13 +20,23 @@ type State struct {
 	PendingEvent string `json:"pending_event,omitempty"`
 	// PendingInstruction 强制事件的自然语言要求，用于引导智能体流程
 	PendingInstruction string `json:"pending_instruction,omitempty"`
+	// PendingHandles 强制事件携带的资源句柄（如故事文件、待编辑文件）
+	PendingHandles []string `json:"pending_handles,omitempty"`
 	// Round 正在推进的生活回合；nil 表示没有回合。
 	Round *RoundState `json:"round,omitempty"`
 	// LastRound 最近一次完成的回合摘要，供外部观测。
 	LastRound *RoundSummary `json:"last_round,omitempty"`
 	// ForumPostedAt 上次允许自主发帖的时间（Unix 秒），用于避免每轮都刷帖。
 	ForumPostedAt int64 `json:"forum_posted_at,omitempty"`
-	UpdatedAt     int64 `json:"updated_at"`
+	// CreationTopic 当前延续中的创作主题
+	CreationTopic string `json:"creation_topic,omitempty"`
+	// CreationFolder 当前创作项目的输出目录（相对 LocalDir）
+	CreationFolder string `json:"creation_folder,omitempty"`
+	// CreationHandles 上一次创作涉及的资源句柄
+	CreationHandles []string `json:"creation_handles,omitempty"`
+	// CreationRounds 当前主题已连续的轮次
+	CreationRounds int   `json:"creation_rounds,omitempty"`
+	UpdatedAt      int64 `json:"updated_at"`
 }
 
 // 回合阶段：顺序固定，一次 Tick 只推进一个阶段。
@@ -93,6 +103,8 @@ type Env struct {
 	LastUserText string
 	// Instruction 工具触发的自然语言要求；普通权重事件为空。
 	Instruction string
+	// Handles 工具触发时携带的资源句柄；普通权重事件为空。
+	Handles []string
 }
 
 // Event 可注册的生活事件。

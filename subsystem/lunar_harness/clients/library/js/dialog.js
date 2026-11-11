@@ -48,6 +48,86 @@ function restartToastTimer(el) {
     }, TOAST_LIFE_MS);
 }
 
+// ===== 运行态浮窗 =====
+// RUN_STATUS_HIDE_MS 终态停留时长：任务结束后浮窗再停留一会儿，然后自动收起。
+const RUN_STATUS_HIDE_MS = 6000;
+const RUN_STATUS_EXIT_MS = 200;
+
+let runStatusKey = '';
+let runStatusDismissed = '';
+let runStatusHideTimer = 0;
+
+// updateRunStatus 维护那一条常驻运行态浮窗。
+//
+// 为什么用浮窗而不是页内文本：创作 / 演绎任务高频推送阶段与百分比，
+// 写进表单会撑开布局、挤动按钮；浮窗固定定位、不占文档流，页面结构保持恒定。
+export function updateRunStatus(payload) {
+    const card = document.getElementById('run-status');
+    if (!card || !payload) return;
+    const key = String(payload.key || '');
+    if (key !== runStatusKey) {
+        runStatusKey = key;
+        runStatusDismissed = '';
+    }
+    // 用户手动收起后同一任务不再自动弹回；换任务（key 变化）才会重新出现。
+    if (key && key === runStatusDismissed) return;
+
+    clearTimeout(runStatusHideTimer);
+    const tone = payload.tone === 'success' || payload.tone === 'error' ? payload.tone : '';
+    card.classList.remove('is-success', 'is-error');
+    if (tone) card.classList.add(`is-${tone}`);
+    card.classList.remove('hidden');
+
+    const title = document.getElementById('run-status-title');
+    const stage = document.getElementById('run-status-stage');
+    const percent = document.getElementById('run-status-percent');
+    const bar = document.getElementById('run-status-bar');
+    const detail = document.getElementById('run-status-detail');
+    if (title) title.textContent = payload.title || '运行中';
+    if (stage) stage.textContent = payload.stage || '';
+    const progress = Math.max(0, Math.min(100, Math.round(Number(payload.progress) || 0)));
+    if (percent) percent.textContent = `${progress}%`;
+    if (bar) {
+        bar.classList.toggle('is-indeterminate', progress <= 0 && !payload.terminal);
+        bar.style.width = progress > 0 ? `${progress}%` : '';
+    }
+    if (detail) {
+        const text = String(payload.detail || '').trim();
+        detail.textContent = text;
+        detail.classList.toggle('hidden', !text);
+    }
+
+    // 下一帧再加 visible，保证从隐藏状态出现时入场过渡生效。
+    requestAnimationFrame(() => card.classList.add('visible'));
+    if (payload.terminal) {
+        runStatusHideTimer = setTimeout(() => hideRunStatus(true), RUN_STATUS_HIDE_MS);
+    }
+}
+
+// dismissRunStatus 用户手动收起浮窗，并记住该任务不再自动弹回。
+export function dismissRunStatus() {
+    hideRunStatus(true);
+}
+
+// clearRunStatus 静默收起浮窗：提交失败这类没有任务可跟踪的场景用它，
+// 不记入已收起名单，用户重试时浮窗还能正常出现。
+export function clearRunStatus() {
+    hideRunStatus(false);
+}
+
+// hideRunStatus 收起浮窗；remember 为真时记下当前任务，避免下一次推送又弹回来。
+function hideRunStatus(remember) {
+    clearTimeout(runStatusHideTimer);
+    const card = document.getElementById('run-status');
+    if (!card) return;
+    if (remember) runStatusDismissed = runStatusKey;
+    card.classList.remove('visible');
+    setTimeout(() => {
+        // 期间若来了新任务并重新显示，就不要再补上 hidden。
+        if (!card.classList.contains('visible')) card.classList.add('hidden');
+    }, RUN_STATUS_EXIT_MS);
+}
+
 // openModal 打开一个模态弹窗。
 function openModal({ title, body, actions }) {
     const mask = document.createElement('div');

@@ -61,21 +61,31 @@ var anchorTexts = map[string]string{
 	"冷淡": "我对这个人很冷淡，不愿意接近",
 }
 
-// 好感度标签阈值（双极轴）。
+// 态度积分标签阈值（按积分区间切分）。
 const (
-	strongPositiveThreshold = 0.6
-	positiveThreshold       = 0.2
-	negativeThreshold       = -0.2
-	strongNegativeThreshold = -0.6
+	// attitudeStrongPositiveThreshold 很喜欢
+	attitudeStrongPositiveThreshold = 45
+	// attitudePositiveThreshold 喜欢
+	attitudePositiveThreshold = 30
+	// attitudeStrongNegativeThreshold 讨厌
+	attitudeStrongNegativeThreshold = -30
+	// attitudeNegativeThreshold 疏离
+	attitudeNegativeThreshold = 0
 )
 
-// defaultAttitudeLabel 没有足够极性时的中性标签。
+// defaultAttitudeLabel 未达到任何阈值时的中性标签。
 const defaultAttitudeLabel = "平淡"
 
-// 态度更新参数。
+// 态度积分参数。
 const (
-	// attitudeAlpha 历史好感度的权重（越大越稳定）
-	attitudeAlpha = 0.7
+	// attitudeMinPoints 态度积分下限
+	attitudeMinPoints = -50
+	// attitudeMaxPoints 态度积分上限
+	attitudeMaxPoints = 50
+	// attitudeDefaultPoints 新对话者的初始态度分
+	attitudeDefaultPoints = 20
+	// attitudeMaxStep 单次评估最多加 / 减的分数
+	attitudeMaxStep = 10
 	// attitudeTemperature 极性分布 softmax 温度
 	attitudeTemperature = 0.15
 	// attitudeRoundWindow 单个用户参与一次评估的对话轮数（最近 5 轮）
@@ -118,7 +128,6 @@ var (
 	// 以下参数允许测试覆盖。
 	currentMoodAlpha           = moodAlpha
 	currentMoodTemperature     = moodTemperature
-	currentAttitudeAlpha       = attitudeAlpha
 	currentAttitudeTemperature = attitudeTemperature
 
 	// embedDocumentsHook 嵌入入口；测试可替换。

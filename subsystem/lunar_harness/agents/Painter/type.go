@@ -34,6 +34,9 @@ type Options struct {
 	// Silent 静默产出：成果只登记资源并返回句柄，不对外推送。
 	// 默认 false，人格对话与创作链的行为保持不变。
 	Silent bool
+	// OutputFolder 目标子文件夹（相对 multimedia/generated）。
+	// 为空时写入默认多媒体资源目录；演绎链用它把图片直接落到项目标题目录。
+	OutputFolder string
 }
 
 // Result 一次绘制任务的结果。
@@ -169,11 +172,12 @@ type session struct {
 	forceImg2Img bool
 	fromRuntime  bool
 	// silent 本次任务为静默产出：只登记资源，不推送、不写记忆
-	silent     bool
-	resultPath string
-	runtime    []chatMessage
-	artwork    ReferenceState
-	task       any
+	silent       bool
+	outputFolder string
+	resultPath   string
+	runtime      []chatMessage
+	artwork      ReferenceState
+	task         any
 }
 
 // runtimeState 跨任务保留的运行时画作与最近作品路径。

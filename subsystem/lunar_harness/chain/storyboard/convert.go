@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"LunarSubsystem/LunarHarness/agents/StoryboardPlanner"
-	"LunarSubsystem/LunarHarness/agents/StoryboardReviser"
 )
 
 // appendThoughtBounded 追加过程文本并只保留尾部 maxThoughtBytes 字节。
@@ -73,40 +72,6 @@ func shotsFromPlan(plan storyboardPlan, status string) []ShotView {
 		})
 	}
 	return shots
-}
-
-// reviserShots 把链内分镜计划转成修订智能体的输入。
-func reviserShots(shots []plannedShot) []StoryboardReviser.Shot {
-	out := make([]StoryboardReviser.Shot, 0, len(shots))
-	for _, shot := range shots {
-		out = append(out, StoryboardReviser.Shot{
-			Act:        shot.Act,
-			Scene:      shot.Scene,
-			Narration:  shot.Narration,
-			Continuity: shot.Continuity,
-			Prompt:     shot.Prompt,
-			Ratio:      shot.Ratio,
-		})
-	}
-	return out
-}
-
-// plannedShotsFromReviser 把修订结果转成链内分镜计划。
-func plannedShotsFromReviser(shots []StoryboardReviser.Shot, style string) []plannedShot {
-	out := make([]plannedShot, 0, len(shots))
-	for index, shot := range shots {
-		out = append(out, plannedShot{
-			Index:      index + 1,
-			Act:        shot.Act,
-			Scene:      shot.Scene,
-			Narration:  shot.Narration,
-			Continuity: shot.Continuity,
-			Prompt:     shot.Prompt,
-			Ratio:      shot.Ratio,
-			Style:      style,
-		})
-	}
-	return out
 }
 
 // fillMissingPrompts 为画面描述为空的镜头补上可绘制提示词。

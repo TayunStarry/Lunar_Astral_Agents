@@ -7,14 +7,12 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/AudioTranscriber"
-	"LunarSubsystem/LunarHarness/agents/Dialogue"
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
-	"LunarSubsystem/LunarHarness/agents/FileEditor"
 	"LunarSubsystem/LunarHarness/agents/MemoryFuser"
 	"LunarSubsystem/LunarHarness/agents/MemoryTagger"
 	"LunarSubsystem/LunarHarness/agents/Painter"
+	"LunarSubsystem/LunarHarness/agents/filesupport"
 	"LunarSubsystem/LunarHarness/agents/ltpxhost"
-	"LunarSubsystem/LunarHarness/chain/creation"
 	"LunarSubsystem/LunarHarness/chain/search"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking"
@@ -22,6 +20,7 @@ import (
 	broadcaster "LunarSubsystem/LunarHarness/engine/broadcaster"
 	"LunarSubsystem/LunarHarness/engine/browser"
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/console/logbuf"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/debugsnap"
 	"LunarSubsystem/LunarHarness/engine/knowledge"
@@ -40,6 +39,12 @@ import (
 // 消费层（月华思维链与 LTP9 插件沙箱）排在末段启动，
 // 保证其思考循环/插件加载之时，HTTP、llama 代理、记忆库与 LTPX 协调层均已就绪。
 func Assemble() {
+	// ==== 模型调用计量：读回上次累计值 ====
+	// 调用次数、上下文总量、缓存命中、峰值与平均输出保存在 local_data/database，
+	// 重启后接着累加，而不是从零开始。
+	if err := logbuf.LoadModelStats(); err != nil {
+		logger.Warn("LunarHarness", "读取模型调用计量失败，本次从零累计: %v", err)
+	}
 	// ==== protocol 配置注入：必须在任何智能体调用模型之前 ====
 	// protocol/agentbase 与 loopguard 只消费端点/阈值，不直接 import engine/config。
 	protocolwire.Wire()
@@ -61,34 +66,6 @@ func Assemble() {
 	memory.TagGenerator = MemoryTagger.Generate
 	memory.MemoryMergeFunc = MemoryFuser.Merge
 	resource.TranscribeAudioFunc = AudioTranscriber.Transcribe
-	// 文件编辑智能体同理：联网查询能力注入搜索链，避免智能体层反向依赖链路层。
-	FileEditor.SearchFunc = search.Run
-	// 创作链的联网搜索同样经装配层注入，链包之间不再横向直调。
-	creation.WebSearchHook = search.Run
-	// 创作链的绘图能力交给现有图片绘制智能体，链内不再复制绘制逻辑。
-	creation.PaintHook = func(ctx context.Context, req creation.PaintRequest) (creation.PaintResult, error) {
-		refs, err := thinking.PainterReferences(req.References)
-		if err != nil {
-			return creation.PaintResult{}, fmt.Errorf("参考资源解析失败：%w", err)
-		}
-		// 显式传给绘制者：没有参考图时保持纯文生图，不沿用上一张作品。
-		reference := &Painter.Reference{Explicit: true}
-		if len(refs) > 0 {
-			reference.Handle = refs[0].Handle
-			reference.Source = refs[0].Source
-			reference.Desc = refs[0].Desc
-			reference.Extras = refs[1:]
-		}
-		result, err := Painter.Perform(ctx, creation.PaintInstruction(req), reference, thinking.PainterHost{}, Painter.Options{})
-		if err != nil {
-			return creation.PaintResult{Summary: result.Summary}, err
-		}
-		if len(result.Handles) == 0 {
-			return creation.PaintResult{Summary: result.Summary},
-				fmt.Errorf("图片绘制未产出资源句柄：%s", clipPaintReason(result.Summary))
-		}
-		return creation.PaintResult{Summary: result.Summary, Handles: result.Handles}, nil
-	}
 	// 演绎链复用同一绘制智能体与参考图解析链路，不另起绘图实现。
 	storyboard.PaintHook = func(ctx context.Context, req storyboard.PaintRequest) (storyboard.PaintResult, error) {
 		refs, err := thinking.PainterReferences(req.References)
@@ -102,7 +79,7 @@ func Assemble() {
 			reference.Desc = refs[0].Desc
 			reference.Extras = refs[1:]
 		}
-		paintReq := creation.PaintRequest{
+		paintReq := Painter.InstructionRequest{
 			Prompt:     req.Prompt,
 			Ratio:      req.Ratio,
 			Style:      req.Style,
@@ -116,8 +93,8 @@ func Assemble() {
 		if req.Silent {
 			env = silentPainterHost{}
 		}
-		result, err := Painter.Perform(ctx, creation.PaintInstruction(paintReq), reference, env,
-			Painter.Options{Silent: req.Silent})
+		result, err := Painter.Perform(ctx, Painter.BuildInstruction(paintReq), reference, env,
+			Painter.Options{Silent: req.Silent, OutputFolder: req.OutputFolder})
 		if err != nil {
 			return storyboard.PaintResult{Summary: result.Summary}, err
 		}
@@ -127,15 +104,6 @@ func Assemble() {
 		}
 		return storyboard.PaintResult{Summary: result.Summary, Handles: result.Handles}, nil
 	}
-	// 资源库提交的创作任务状态变化推送给资源库前端（复用现有 WebSocket 频道）。
-	// 进度推送走非阻塞投递：卡住的浏览器不能把后台调度一起拖停。
-	creation.TaskEventHook = func(view creation.TaskView) {
-		if websocket.Instance != nil {
-			websocket.Instance.TryBroadcastMessageToChannel(libraryTerminalChannel, "creation_task", view)
-		}
-	}
-	// 分镜图片被迁移到文档目录后，同步绘制者的运行时画作路径。
-	storyboard.ArtworkMoveHook = Painter.UpdateArtworkPath
 	// 演绎链的资料准备阶段复用现有网络搜索能力。
 	storyboard.WebSearchHook = func(query string) (string, error) {
 		return search.Run("请检索并简明总结以下主题，重点给出可直接用于画面设定的事实：\n" + query)
@@ -146,8 +114,7 @@ func Assemble() {
 			websocket.Instance.TryBroadcastMessageToChannel(libraryTerminalChannel, "storyboard_task", view)
 		}
 	}
-	// 对话者工具执行器已归 agents/Dialogue，跨链能力在此注入。
-	wireDialogueTools()
+	// 对话者工具执行器已归 agents/Dialogue，生活 / 检索能力由 thinking 装配期注入。
 
 	// ==== 跨层注入：HTTP 层所需能力 ====
 	// 必须在 server.Start 之前接线：消息写入 / 代理 / 视觉读取 / 外部推理排队。
@@ -270,16 +237,6 @@ func (silentPainterHost) PushImagesSilently(images []string) []string {
 	return thinking.RegisterPainterImages(images)
 }
 
-// wireDialogueTools 向对话者工具执行器注入创作链能力。
-// 智能体包只声明函数变量，装配层负责把链的具体实现接上，避免智能体反向依赖 chain；
-// 宿主推送 / 生活 / 检索能力由 chain/thinking 在自身装配期注入。
-func wireDialogueTools() {
-	Dialogue.RunFileOperations = func(ctx context.Context, instruction string, handles []string) (string, []string, int, error) {
-		result, err := creation.RunAssigned(ctx, instruction, handles)
-		return result.Summary, result.Handles, len(result.ReviewFailures), err
-	}
-}
-
 // wireDebugSnapshot 装配开发者模式下的告警调试快照。
 //
 // 触发条件由日志层把守（developer 模式 + WARN 及以上），本函数只负责接上钩子；
@@ -355,6 +312,10 @@ func GracefulShutdown(reason string) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		// 模型调用计量：先落盘再关子系统，后续关闭即便卡住也不会丢掉累计值
+		if err := logbuf.SaveModelStats(); err != nil {
+			logger.Warn("LunarHarness", "保存模型调用计量失败: %v", err)
+		}
 		browser.CloseAllDesktopWindows()
 		server.Shutdown(httpServer)
 		shutdownLunar()
@@ -369,6 +330,10 @@ func GracefulShutdown(reason string) {
 		// 资源库变更库（library.db）
 		if err := library.Close(); err != nil {
 			logger.Warn("LunarHarness", "关闭资源库变更库失败: %v", err)
+		}
+		// 文件版本库（versions.db）
+		if err := filesupport.Close(); err != nil {
+			logger.Warn("LunarHarness", "关闭文件版本库失败: %v", err)
 		}
 		if websocket.Instance != nil {
 			websocket.Instance.CloseAll()

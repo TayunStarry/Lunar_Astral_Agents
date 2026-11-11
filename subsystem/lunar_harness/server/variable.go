@@ -153,13 +153,13 @@ var MessageBatchHandlerFunc http.HandlerFunc
 // ProxyHandlerFunc 代理访问处理器（装配层注入 chain/thinking.ProxyHandler）
 var ProxyHandlerFunc http.HandlerFunc
 
-// LibraryCreationSubmitFunc 资源库创作任务受理（装配层注入 chain/creation.SubmitTask）
+// LibraryCreationSubmitFunc 资源库创作任务受理（装配层注入文件操作智能体任务入口）
 var LibraryCreationSubmitFunc func(req LibraryCreationRequest) (LibraryCreationTask, error)
 
-// LibraryCreationStatusFunc 资源库创作任务状态查询（装配层注入 chain/creation.TaskStatus）
+// LibraryCreationStatusFunc 资源库创作任务状态查询（装配层注入文件操作智能体任务入口）
 var LibraryCreationStatusFunc func(taskID string) (LibraryCreationTask, bool)
 
-// LibraryCreationListFunc 资源库创作任务列表（装配层注入 chain/creation.TaskList）
+// LibraryCreationListFunc 资源库创作任务列表（装配层注入文件操作智能体任务入口）
 var LibraryCreationListFunc func(limit int) []LibraryCreationTask
 
 // LibraryStoryboardSubmitFunc 演绎任务受理（装配层注入 chain/storyboard.SubmitTask）

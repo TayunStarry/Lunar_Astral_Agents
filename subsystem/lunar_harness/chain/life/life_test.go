@@ -96,7 +96,7 @@ func TestMemoryIsFixedStepNotWeightEvent(t *testing.T) {
 	if _, ok := defaultEvents["memory"]; ok {
 		t.Fatal("记忆整理不应出现在权重事件表中")
 	}
-	if RequestEvent("memory", "整理一下") {
+	if RequestEvent("memory", "整理一下", nil) {
 		t.Fatal("记忆整理不能再通过事件队列触发")
 	}
 

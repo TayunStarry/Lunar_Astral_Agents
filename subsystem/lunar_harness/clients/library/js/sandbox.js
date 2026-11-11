@@ -4,23 +4,29 @@ import { fileURL } from './api.js';
 
 const MAX_SOURCE_CHARS = 300000;
 
-// runInSandbox 把文件内容装进沙箱 iframe 运行（.js 包一层日志，.html 原样执行）。
+// runInSandbox 把文件装进沙箱 iframe 运行（.js 包一层日志，.html 按文件地址加载）。
 export async function runInSandbox(entry) {
     const frame = document.getElementById('sandbox');
-    let source = '';
-    try {
-        const res = await fetch(fileURL(entry.path));
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        source = await res.text();
-    } catch (err) {
-        throw new Error(`读取文件失败：${err.message || err}`);
-    }
-    if (source.length > MAX_SOURCE_CHARS) {
-        throw new Error('文件过大，沙箱只运行前 30 万字符');
-    }
     const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase();
-    const html = ext === '.js' || ext === '.mjs' ? wrapScript(source) : source;
-    frame.src = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    if (ext === '.html' || ext === '.htm') {
+        // HTML 直接指向文件地址，同目录的 CSS / JS / 图片才能按相对路径一起加载。
+        // 改用 Blob 会让相对路径失去目录基准，只剩单文件内容。
+        frame.src = fileURL(entry.path);
+    } else {
+        let source = '';
+        try {
+            const res = await fetch(fileURL(entry.path));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            source = await res.text();
+        } catch (err) {
+            throw new Error(`读取文件失败：${err.message || err}`);
+        }
+        if (source.length > MAX_SOURCE_CHARS) {
+            throw new Error('文件过大，沙箱只运行前 30 万字符');
+        }
+        const html = ext === '.js' || ext === '.mjs' ? wrapScript(source) : source;
+        frame.src = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    }
     document.getElementById('sandbox-panel').classList.remove('hidden');
     const title = document.getElementById('sandbox-title');
     if (title) title.textContent = entry.name;

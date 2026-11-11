@@ -308,6 +308,10 @@ func TestDefaultEventWeightsSumTo100(t *testing.T) {
 	maxID := ""
 	maxWeight := 0
 	for id, params := range defaultEvents {
+		// 权重为 0 的事件只接受强制触发（如同步演绎 / 文件操作），不参与抽签。
+		if params.Weight == 0 && params.Quota == 0 {
+			continue
+		}
 		if params.Weight <= 0 {
 			t.Fatalf("事件 %s 权重必须为正: %d", id, params.Weight)
 		}

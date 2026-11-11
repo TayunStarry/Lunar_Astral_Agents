@@ -170,4 +170,6 @@ type GenerateTask struct {
 	Error string `json:"error"`
 	// AllowSuperResolution 允许超分
 	AllowSuperResolution bool `json:"allow_super_resolution"`
+	// OutputSubdir 输出子目录（相对 multimedia/generated）；为空时直接写入根目录
+	OutputSubdir string `json:"output_subdir,omitempty"`
 }

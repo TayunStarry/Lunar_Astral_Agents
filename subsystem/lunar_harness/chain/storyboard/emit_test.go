@@ -138,7 +138,7 @@ func TestShotPatchOnlyCarriesChangedShot(t *testing.T) {
 	}
 
 	// 删减镜头：整体变化必须回退全量，前端据此清掉多余行。
-	applyEvent(t, state, ProgressEvent{Event: eventRevising, Shots: cloneShots(next[:2])})
+	applyEvent(t, state, ProgressEvent{Event: eventReviewConfirmed, Shots: cloneShots(next[:2])})
 	third := buildPush(t, state, false)
 	if len(third.Shots) != 2 {
 		t.Fatalf("镜头表缩短时应推送全量 2 镜，实际 %d", len(third.Shots))

@@ -32,6 +32,13 @@ func TestAgentDisplayNames(t *testing.T) {
 			}
 			continue
 		}
+		// 家族式角色名使用「家族-阶段」格式（如 分镜规划-拆解）。
+		if prefix, stage, ok := strings.Cut(name, "-"); ok {
+			if prefix == "" || stage == "" {
+				t.Fatalf("智能体 %s 的家族名格式不正确：%q", id, name)
+			}
+			continue
+		}
 		// 「记忆整理」是用户点名的固定名，按汉字计为 4 个；其余同样统一为 4 个汉字。
 		if got := utf8.RuneCountInString(name); got != 4 {
 			t.Fatalf("智能体 %s 的显示名应为 4 个汉字，实际 %d：%q", id, got, name)

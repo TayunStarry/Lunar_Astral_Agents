@@ -65,6 +65,17 @@ func ensureLoadedLocked() {
 	if saved.Attitude.Users == nil {
 		saved.Attitude.Users = map[string]UserAffection{}
 	}
+	// 旧版好感度是 [-1, 1] 的双极轴，载入时换算为态度积分并校准标签。
+	for name, affection := range saved.Attitude.Users {
+		if affection.LegacyScore != nil {
+			affection.Points = legacyPoints(*affection.LegacyScore)
+			affection.LegacyScore = nil
+		}
+		if affection.Samples > 0 {
+			affection.Label = attitudeLabelFor(affection.Points)
+		}
+		saved.Attitude.Users[name] = affection
+	}
 	// 标签与权重不一致时按权重校准，避免旧文件把错误标签带进来。
 	if len(saved.Mood.Weights) > 0 {
 		if corrected := dominantLabel(saved.Mood.Weights, labels, defaultLabel); corrected != saved.Mood.Label {
