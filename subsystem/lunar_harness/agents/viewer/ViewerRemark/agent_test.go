@@ -1,15 +1,19 @@
 package ViewerRemark
 
-// agent_test.go 评论智能体的解析与候选清单渲染：每条评论可各自用名字或序号指定 @ 目标。
+// agent_test.go 钉住 submit_remark 的参数校验与候选清单渲染：
+// 每条评论各自用名字或序号指定 @ 目标，任何非法参数都直接报错。
 
 import (
 	"strings"
 	"testing"
 )
 
-// TestParseRemarkPerComment 两条评论各自带 @ 决策，互不影响。
-func TestParseRemarkPerComment(t *testing.T) {
-	remark := parseRemark(`{"comments":[{"text":"这条太治愈了","mention":0,"at":[]},{"text":"求个歌单","mention":2,"at":["张三",2]}]}`)
+// TestParseRemarkArgsPerComment 两条评论各自带 @ 决策，互不影响。
+func TestParseRemarkArgsPerComment(t *testing.T) {
+	remark, err := parseRemarkArgs(`{"comments":[{"text":"这条太治愈了","mention":0,"at":[]},{"text":"求个歌单","mention":2,"at":["张三",2]}]}`)
+	if err != nil {
+		t.Fatalf("正常参数不应报错: %v", err)
+	}
 	if len(remark.Comments) != 2 {
 		t.Fatalf("应解析出 2 条评论: %+v", remark.Comments)
 	}
@@ -22,35 +26,37 @@ func TestParseRemarkPerComment(t *testing.T) {
 	}
 }
 
-// TestParseRemarkAtLimit 单条评论的 at 超过 3 个时只保留前 3 个。
-func TestParseRemarkAtLimit(t *testing.T) {
-	remark := parseRemark(`{"comments":[{"text":"a","mention":3,"at":["甲","乙","丙","丁"]}]}`)
-	if len(remark.Comments) != 1 || len(remark.Comments[0].At) != mentionMax {
-		t.Fatalf("at 应截到 %d 个，实际 %+v", mentionMax, remark.Comments)
+// TestParseRemarkArgsInvalid 缺少字段、mention 越界、at 越界都报错，不做静默截断。
+func TestParseRemarkArgsInvalid(t *testing.T) {
+	cases := map[string]string{
+		"缺 comments": `{}`,
+		"空 comments": `{"comments":[]}`,
+		"缺 text":     `{"comments":[{"mention":0}]}`,
+		"缺 mention":  `{"comments":[{"text":"a"}]}`,
+		"mention 越界": `{"comments":[{"text":"a","mention":4}]}`,
+		"at 越界":      `{"comments":[{"text":"a","mention":3,"at":["甲","乙","丙","丁"]}]}`,
+		"at 无法识别":    `{"comments":[{"text":"a","mention":1,"at":[true]}]}`,
+		"评论过多":       `{"comments":[{"text":"a","mention":0},{"text":"b","mention":0},{"text":"c","mention":0}]}`,
+		"非 JSON":     `不是 JSON`,
 	}
-}
-
-// TestParseRemarkStringItems 兼容纯字符串评论（视为不 @）。
-func TestParseRemarkStringItems(t *testing.T) {
-	remark := parseRemark(`{"comments":["第一条","第二条"]}`)
-	if len(remark.Comments) != 2 {
-		t.Fatalf("应解析出 2 条评论: %+v", remark.Comments)
-	}
-	for _, comment := range remark.Comments {
-		if comment.Mention != 0 || len(comment.At) != 0 {
-			t.Fatalf("字符串评论不应带 @: %+v", comment)
+	for name, raw := range cases {
+		if _, err := parseRemarkArgs(raw); err == nil {
+			t.Fatalf("%s 应报错，实际通过了: %s", name, raw)
 		}
 	}
 }
 
-// TestParseRemarkPlainTextFallback 非 JSON 输出退回一条评论且不 @。
-func TestParseRemarkPlainTextFallback(t *testing.T) {
-	remark := parseRemark("这段剪辑太丝滑了")
-	if len(remark.Comments) != 1 || remark.Comments[0].Text != "这段剪辑太丝滑了" {
-		t.Fatalf("纯文本兜底不符: %+v", remark)
+// TestParseRemarkArgsTrims 正文去空白并按上限截断，仍保留自己的 @ 决策。
+func TestParseRemarkArgsTrims(t *testing.T) {
+	remark, err := parseRemarkArgs(`{"comments":[{"text":"  太真实了  ","mention":1,"at":["张三"]}]}`)
+	if err != nil {
+		t.Fatalf("正常参数不应报错: %v", err)
 	}
-	if remark.Comments[0].Mention != 0 || len(remark.Comments[0].At) != 0 {
-		t.Fatalf("纯文本兜底不应 @: %+v", remark.Comments[0])
+	if len(remark.Comments) != 1 || remark.Comments[0].Text != "太真实了" {
+		t.Fatalf("正文应去空白: %+v", remark.Comments)
+	}
+	if remark.Comments[0].Mention != 1 || len(remark.Comments[0].At) != 1 {
+		t.Fatalf("@ 决策应保留: %+v", remark.Comments[0])
 	}
 }
 

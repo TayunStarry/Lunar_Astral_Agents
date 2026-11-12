@@ -13,11 +13,12 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/toolreg"
 )
 
-// lastReviewRecord 最近一次审核结果（原始文本）。
+// lastReviewRecord 最近一次审核结论。
 type lastReviewRecord struct {
-	Title string    `json:"title"`
-	Text  string    `json:"text"`
-	At    time.Time `json:"at"`
+	Title  string    `json:"title"`
+	Pass   bool      `json:"pass"`
+	Reason string    `json:"reason,omitempty"`
+	At     time.Time `json:"at"`
 }
 
 var (
@@ -52,19 +53,20 @@ func init() {
 		ID:          AgentID,
 		Label:       Role,
 		Group:       "Go 智能体",
-		Description: Role + "最近一次合规复核的模型原始输出",
+		Description: Role + "最近一次合规复核的结论",
 		Export:      exportContext,
 	})
 	agentrepair.RegisterReadonly(AgentID, Role,
-		Role+"的最近一次审核输出（只读）",
+		Role+"的最近一次审核结论（只读）",
 		func(int) (any, error) { return exportContext(false) })
 	toolreg.Register(AgentID, toolreg.Schema{
 		Name:        "review_video",
-		Description: "结合文字材料与封面复核合规性，输出 pass / reason / evaluation / slices。",
+		Description: "结合文字材料与封面复核合规性，输出 pass / reason。",
 	})
 }
 
-// ToolCatalog 返回审查的阶段能力（审查不使用 function calling）。
+// ToolCatalog 返回审查的阶段能力。
+// submit_review 只是模型与链之间的提交约定，没有执行器，因此不登记到工具目录。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
 		ID: AgentID, Name: Role,
@@ -73,11 +75,11 @@ func ToolCatalog() []agentinfo.Agent {
 	}}
 }
 
-// recordReview 记录最近一次审核输出。
-func recordReview(title, text string) {
+// recordReview 记录最近一次审核结论。
+func recordReview(title string, review Verdict) {
 	lastReviewMu.Lock()
 	defer lastReviewMu.Unlock()
-	lastReviewItem = &lastReviewRecord{Title: title, Text: text, At: time.Now()}
+	lastReviewItem = &lastReviewRecord{Title: title, Pass: review.Pass, Reason: review.Reason, At: time.Now()}
 }
 
 // resetReviewState 清空最近一次审核记录。

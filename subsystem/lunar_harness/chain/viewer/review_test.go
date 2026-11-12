@@ -2,40 +2,6 @@ package viewer
 
 import "testing"
 
-// TestParseVideoReviewJSON 钉住结构化审核输出：通过/原因都要解析出来。
-func TestParseVideoReviewJSON(t *testing.T) {
-	pass, err := parseVideoReview(`{"pass": true, "reason": ""}`)
-	if err != nil {
-		t.Fatalf("解析审核 JSON 失败: %v", err)
-	}
-	if !pass.Pass || pass.Reason != "" {
-		t.Fatalf("通过结果不符: %#v", pass)
-	}
-
-	blocked, err := parseVideoReview("```json\n{\"pass\": false, \"reason\": \"色情低俗\"}\n```")
-	if err != nil {
-		t.Fatalf("解析代码块包裹的审核 JSON 失败: %v", err)
-	}
-	if blocked.Pass || blocked.Reason != "色情低俗" {
-		t.Fatalf("未通过结果不符: %#v", blocked)
-	}
-}
-
-// TestParseVideoReviewFallback 兼容模型没按 JSON 输出的旧式文本。
-func TestParseVideoReviewFallback(t *testing.T) {
-	safe, err := parseVideoReview("SAFE")
-	if err != nil || !safe.Pass {
-		t.Fatalf("SAFE 兜底解析不符: %#v / %v", safe, err)
-	}
-	risky, err := parseVideoReview("RISK 色情低俗")
-	if err != nil || risky.Pass || risky.Reason == "" {
-		t.Fatalf("RISK 兜底解析不符: %#v / %v", risky, err)
-	}
-	if _, err := parseVideoReview("完全看不懂的输出"); err == nil {
-		t.Fatal("无法解析的输出应返回错误（调用方按高风险处理）")
-	}
-}
-
 // TestFinishComment 钉住评论长度收束：在句子边界收尾，绝不从词中间硬切。
 func TestFinishComment(t *testing.T) {
 	// 不超长时原样返回

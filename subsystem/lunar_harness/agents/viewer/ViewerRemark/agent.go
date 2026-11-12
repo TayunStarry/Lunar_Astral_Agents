@@ -3,6 +3,8 @@ package ViewerRemark
 // agent.go 观影者-观感：基于「视频印象」写 1-2 条可发布到评论区的中文评论，
 // 每条评论各自决定是否想 @ 特别关注（人数 + 可选的候选名字/序号）。
 // 只生成文本与 @ 意图，不发布、不做合规判定；发布与候选校验由 chain/viewer 负责。
+//
+// 结果只从 submit_remark 的参数读取，正文不解析，也不作纯文本兜底。
 
 import (
 	"context"
@@ -28,114 +30,86 @@ func Generate(ctx context.Context, in RemarkInput) (remark Remark, err error) {
 		return Remark{}, fmt.Errorf("读取观感评论提示词失败")
 	}
 	system := withPersona(persona, task)
-	text, err := viewer.Chat(ctx, viewer.ChatRequest{
+	call, err := viewer.Submit(ctx, viewer.SubmitRequest{
 		Agent: AgentID, Role: Role, Model: in.Model, System: system,
-		User: withCandidates(in.Material, in.Candidates), Attempts: attempts,
+		User: withCandidates(in.Material, in.Candidates), Tool: remarkTool, Attempts: attempts,
 	})
 	if err != nil {
 		return Remark{}, err
 	}
-	remark = parseRemark(text)
-	if len(remark.Comments) == 0 {
-		return Remark{}, fmt.Errorf("观感评论为空")
+	remark, err = parseRemarkArgs(call.Function.Arguments)
+	if err != nil {
+		agentbase.ReportToolResult(Role, call.Function.Name, agentbase.ToolNotApplied, err.Error())
+		return Remark{}, err
 	}
+	agentbase.ReportToolResult(Role, call.Function.Name, agentbase.ToolApplied,
+		fmt.Sprintf("观感评论已受理：%d 条", len(remark.Comments)))
 	return remark, nil
 }
 
-// parseRemark 解析结构化输出；JSON 不可用时退回「整段文本算一条评论，不 @」。
-func parseRemark(text string) Remark {
-	if raw := extractJSONObject(text); raw != "" {
-		var payload struct {
-			Comments []json.RawMessage `json:"comments"`
-			Comment  string            `json:"comment"`
-		}
-		if err := json.Unmarshal([]byte(raw), &payload); err == nil {
-			comments := parseComments(payload.Comments)
-			if len(comments) == 0 && strings.TrimSpace(payload.Comment) != "" {
-				comments = []RemarkComment{{Text: payload.Comment}}
-			}
-			if len(comments) > 0 {
-				return Remark{Comments: cleanComments(comments)}
-			}
-		}
+// parseRemarkArgs 校验 submit_remark 的参数：1-2 条评论，每条必须有 text 与 0-3 的 mention。
+func parseRemarkArgs(raw string) (Remark, error) {
+	var payload remarkToolArgs
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return Remark{}, fmt.Errorf("评论参数无法解析: %w", err)
 	}
-	return Remark{Comments: cleanComments([]RemarkComment{{Text: text}})}
-}
-
-// parseComments 解析每条评论：兼容纯字符串（不 @）与带 text / mention / at 的对象。
-func parseComments(raw []json.RawMessage) []RemarkComment {
-	out := make([]RemarkComment, 0, maxComments)
-	for _, item := range raw {
-		var text string
-		if err := json.Unmarshal(item, &text); err == nil {
-			if text = strings.TrimSpace(text); text != "" {
-				out = append(out, RemarkComment{Text: text})
-			}
-			continue
-		}
-		var payload struct {
-			Text    string            `json:"text"`
-			Comment string            `json:"comment"`
-			Content string            `json:"content"`
-			Mention *int              `json:"mention"`
-			At      []json.RawMessage `json:"at"`
-		}
-		if err := json.Unmarshal(item, &payload); err != nil {
-			continue
-		}
-		text = firstNonEmpty(payload.Text, payload.Comment, payload.Content)
+	if len(payload.Comments) == 0 {
+		return Remark{}, fmt.Errorf("评论参数缺少 comments")
+	}
+	if len(payload.Comments) > maxComments {
+		return Remark{}, fmt.Errorf("评论条数超过上限 %d: %d", maxComments, len(payload.Comments))
+	}
+	out := make([]RemarkComment, 0, len(payload.Comments))
+	for index, item := range payload.Comments {
+		text := strings.TrimSpace(item.Text)
 		if text == "" {
-			continue
+			return Remark{}, fmt.Errorf("第 %d 条评论缺少 text", index+1)
 		}
-		mention := 0
-		if payload.Mention != nil {
-			mention = *payload.Mention
+		if item.Mention == nil {
+			return Remark{}, fmt.Errorf("第 %d 条评论缺少 mention", index+1)
+		}
+		if *item.Mention < 0 || *item.Mention > mentionMax {
+			return Remark{}, fmt.Errorf("第 %d 条评论 mention 非法: %d", index+1, *item.Mention)
+		}
+		at, err := parseAt(item.At)
+		if err != nil {
+			return Remark{}, fmt.Errorf("第 %d 条评论 at 非法: %w", index+1, err)
 		}
 		out = append(out, RemarkComment{
-			Text:    text,
-			Mention: clampMention(mention),
-			At:      parseAt(payload.At),
+			Text:    agentbase.TruncateRunes(text, commentMaxRunes),
+			Mention: *item.Mention,
+			At:      at,
 		})
-		if len(out) >= maxComments {
-			break
-		}
 	}
-	return out
+	return Remark{Comments: out}, nil
 }
 
-// firstNonEmpty 返回第一个去空白后非空的文本。
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-// parseAt 解析模型指定的候选：兼容字符串（名字）与数字（候选序号），最多保留 3 个。
-func parseAt(raw []json.RawMessage) []string {
+// parseAt 解析模型指定的候选：兼容字符串（名字）与数字（候选序号），最多 3 个。
+func parseAt(raw []json.RawMessage) ([]string, error) {
 	if len(raw) == 0 {
-		return nil
+		return nil, nil
 	}
-	out := make([]string, 0, mentionMax)
+	if len(raw) > mentionMax {
+		return nil, fmt.Errorf("最多 %d 个候选", mentionMax)
+	}
+	out := make([]string, 0, len(raw))
 	for _, item := range raw {
 		var name string
 		if err := json.Unmarshal(item, &name); err == nil {
 			if name = strings.TrimSpace(name); name != "" {
 				out = append(out, name)
+				continue
 			}
-		} else {
-			var index int
-			if err := json.Unmarshal(item, &index); err == nil && index > 0 {
-				out = append(out, strconv.Itoa(index))
-			}
+			return nil, fmt.Errorf("候选名字为空")
 		}
-		if len(out) >= mentionMax {
-			break
+		var index int
+		if err := json.Unmarshal(item, &index); err == nil && index > 0 {
+			out = append(out, strconv.Itoa(index))
+			continue
 		}
+		return nil, fmt.Errorf("无法识别的候选: %s", string(item))
 	}
-	return out
+	return out, nil
 }
 
 // withCandidates 把特别关注候选清单附在材料末尾；没有候选时明确告诉模型不要指定人。
@@ -150,44 +124,6 @@ func withCandidates(material string, candidates []MentionCandidate) string {
 		fmt.Fprintf(&b, "%d. %s\n", candidate.Index, candidate.Name)
 	}
 	return strings.TrimRight(b.String(), "\n")
-}
-
-// cleanComments 去空白、限长，最多保留 2 条；每条保留自己的 @ 决策。
-func cleanComments(raw []RemarkComment) []RemarkComment {
-	out := make([]RemarkComment, 0, maxComments)
-	for _, comment := range raw {
-		text := agentbase.TruncateRunes(strings.TrimSpace(comment.Text), commentMaxRunes)
-		if text == "" {
-			continue
-		}
-		comment.Text = text
-		out = append(out, comment)
-		if len(out) >= maxComments {
-			break
-		}
-	}
-	return out
-}
-
-// clampMention 把 @ 人数钳制到 0-3。
-func clampMention(value int) int {
-	if value < 0 {
-		return 0
-	}
-	if value > mentionMax {
-		return mentionMax
-	}
-	return value
-}
-
-// extractJSONObject 从模型输出里截出第一个 JSON 对象（容忍代码块包裹）。
-func extractJSONObject(text string) string {
-	start := strings.Index(text, "{")
-	end := strings.LastIndex(text, "}")
-	if start < 0 || end <= start {
-		return ""
-	}
-	return text[start : end+1]
 }
 
 // loadPrompt 读取内嵌提示词（失败返回空串）。

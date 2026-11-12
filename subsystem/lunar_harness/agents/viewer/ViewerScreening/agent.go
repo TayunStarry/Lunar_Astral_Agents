@@ -13,31 +13,26 @@ import (
 	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
-// Impress 依据采集材料整理结构化视频印象。
+// Impress 依据采集材料整理结构化视频印象，结果只从 submit_impression 的参数读取。
 func Impress(ctx context.Context, material, model string) (impression Impression, err error) {
 	defer func() { agentbase.ReportRun(AgentID, err) }()
 	system := loadPrompt(promptImpress)
 	if system == "" {
 		return Impression{}, fmt.Errorf("读取阅片提示词失败")
 	}
-	text, err := viewer.Chat(ctx, viewer.ChatRequest{
-		Agent: AgentID, Role: Role, Model: model, System: system, User: material, Attempts: impressAttempts,
+	call, err := viewer.Submit(ctx, viewer.SubmitRequest{
+		Agent: AgentID, Role: Role, Model: model, System: system, User: material,
+		Tool: impressionTool, Attempts: impressAttempts,
 	})
 	if err != nil {
 		return Impression{}, err
 	}
-	if raw := extractJSONObject(text); raw != "" {
-		if parseErr := json.Unmarshal([]byte(raw), &impression); parseErr != nil {
-			return Impression{}, fmt.Errorf("印象 JSON 解析失败: %w", parseErr)
-		}
+	impression, err = parseImpressionArgs(call.Function.Arguments)
+	if err != nil {
+		agentbase.ReportToolResult(Role, call.Function.Name, agentbase.ToolNotApplied, err.Error())
+		return Impression{}, err
 	}
-	impression.Summary = agentbase.TruncateRunes(strings.TrimSpace(impression.Summary), summaryMaxRunes)
-	if impression.Summary == "" {
-		return Impression{}, fmt.Errorf("印象摘要为空")
-	}
-	for index, topic := range impression.Topics {
-		impression.Topics[index] = strings.TrimSpace(topic)
-	}
+	agentbase.ReportToolResult(Role, call.Function.Name, agentbase.ToolApplied, "视频印象已受理")
 	recordImpression(impression)
 	return impression, nil
 }
@@ -117,12 +112,32 @@ func Keywords(ctx context.Context, in KeywordInput, model string) (text string, 
 	})
 }
 
-// extractJSONObject 从模型输出里截出第一个 JSON 对象（容忍代码块包裹）
-func extractJSONObject(text string) string {
-	start := strings.Index(text, "{")
-	end := strings.LastIndex(text, "}")
-	if start < 0 || end <= start {
-		return ""
+// parseImpressionArgs 校验 submit_impression 的参数：摘要/主题/氛围都必填，主题 2-5 个。
+func parseImpressionArgs(raw string) (Impression, error) {
+	var payload struct {
+		Summary string   `json:"summary"`
+		Topics  []string `json:"topics"`
+		Tone    string   `json:"tone"`
 	}
-	return text[start : end+1]
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return Impression{}, fmt.Errorf("印象参数无法解析: %w", err)
+	}
+	summary := agentbase.TruncateRunes(strings.TrimSpace(payload.Summary), summaryMaxRunes)
+	if summary == "" {
+		return Impression{}, fmt.Errorf("印象参数缺少 summary")
+	}
+	topics := make([]string, 0, len(payload.Topics))
+	for _, topic := range payload.Topics {
+		if topic = strings.TrimSpace(topic); topic != "" {
+			topics = append(topics, topic)
+		}
+	}
+	if len(topics) < 2 || len(topics) > 5 {
+		return Impression{}, fmt.Errorf("印象主题词数量非法: %d", len(topics))
+	}
+	tone := strings.TrimSpace(payload.Tone)
+	if tone == "" {
+		return Impression{}, fmt.Errorf("印象参数缺少 tone")
+	}
+	return Impression{Summary: summary, Topics: topics, Tone: tone}, nil
 }

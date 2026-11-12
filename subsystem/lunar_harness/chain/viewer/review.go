@@ -7,7 +7,6 @@ package viewer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -18,7 +17,7 @@ import (
 )
 
 // reviewVideo 主模型审核：内置风险词先挡一层，再让主模型复核。
-// 模型不可用或输出无法解析时按高风险处理（宁可错杀）。
+// 模型不可用或未按要求提交结论时按高风险处理（宁可错杀）。
 func reviewVideo(video *videoRecord) videoReview {
 	if verdict, hit := ruleRisk(video.Info.Title + "\n" + video.Info.Desc); hit {
 		return videoReview{Reason: verdict.Reason}
@@ -53,7 +52,7 @@ func reviewVideo(video *videoRecord) videoReview {
 	return review
 }
 
-// aiReviewVideo 委托观影者-审查复核合规性；要求结构化 JSON。
+// aiReviewVideo 委托观影者-审查复核合规性；结论由 submit_review 工具提交。
 func aiReviewVideo(video *videoRecord) (videoReview, error) {
 	material := riskMaterial(video.Info, video.Comments)
 	if len(video.Tags) > 0 {
@@ -63,7 +62,7 @@ func aiReviewVideo(video *videoRecord) (videoReview, error) {
 		material += fmt.Sprintf("\n\n【视频时长】%s", formatDuration(video.Info.Duration))
 	}
 	cover := bilibili.FetchCoverDataURL(video.Info.Pic)
-	text, err := ViewerCensor.Review(context.Background(), ViewerCensor.ReviewInput{
+	review, err := ViewerCensor.Review(context.Background(), ViewerCensor.ReviewInput{
 		Title:    video.Info.Title,
 		Material: material,
 		Cover:    cover,
@@ -72,40 +71,5 @@ func aiReviewVideo(video *videoRecord) (videoReview, error) {
 	if err != nil {
 		return videoReview{}, err
 	}
-	return parseVideoReview(text)
-}
-
-// parseVideoReview 解析审核 JSON；兼容模型退回旧式 RISK/SAFE 文本的情况。
-func parseVideoReview(text string) (videoReview, error) {
-	if raw := extractJSONObject(text); raw != "" {
-		var payload struct {
-			Pass   *bool  `json:"pass"`
-			Reason string `json:"reason"`
-		}
-		if err := json.Unmarshal([]byte(raw), &payload); err == nil && payload.Pass != nil {
-			return videoReview{
-				Pass:   *payload.Pass,
-				Reason: strings.TrimSpace(payload.Reason),
-			}, nil
-		}
-	}
-	// 兼容旧式输出：明确 SAFE/RISK 时仍按文本判定。
-	upper := strings.ToUpper(text)
-	if strings.Contains(upper, "SAFE") || strings.Contains(text, "无风险") || strings.Contains(text, "没有风险") {
-		return videoReview{Pass: true}, nil
-	}
-	if strings.Contains(upper, "RISK") || strings.Contains(text, "风险") {
-		return videoReview{Reason: "模型复核：" + truncate(strings.TrimSpace(text), 512)}, nil
-	}
-	return videoReview{}, fmt.Errorf("审核结果无法解析: %s", truncate(strings.TrimSpace(text), 512))
-}
-
-// extractJSONObject 从模型输出里截出第一个 JSON 对象（容忍代码块包裹）
-func extractJSONObject(text string) string {
-	start := strings.Index(text, "{")
-	end := strings.LastIndex(text, "}")
-	if start < 0 || end <= start {
-		return ""
-	}
-	return text[start : end+1]
+	return videoReview{Pass: review.Pass, Reason: review.Reason}, nil
 }

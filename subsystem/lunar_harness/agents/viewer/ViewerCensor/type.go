@@ -1,6 +1,6 @@
 package ViewerCensor
 
-// type.go 观影者-审查的输入类型。
+// type.go 观影者-审查的输入输出类型。
 
 // ReviewInput 一次合规复核的输入。
 type ReviewInput struct {
@@ -12,4 +12,12 @@ type ReviewInput struct {
 	Cover string
 	// Model 模型名
 	Model string
+}
+
+// Verdict 一次合规复核的结论（由 submit_review 参数映射而来）。
+type Verdict struct {
+	// Pass 是否适合让一个女孩子公开讨论
+	Pass bool
+	// Reason 未通过时的具体原因；通过时为空
+	Reason string
 }

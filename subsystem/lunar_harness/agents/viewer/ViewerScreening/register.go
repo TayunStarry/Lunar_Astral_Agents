@@ -66,7 +66,8 @@ func init() {
 	)
 }
 
-// ToolCatalog 返回阅片的阶段能力（阅片不使用 function calling）。
+// ToolCatalog 返回阅片的阶段能力。
+// submit_impression 只是模型与链之间的提交约定，没有执行器，因此不登记到工具目录。
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
 		ID: AgentID, Name: Role,
