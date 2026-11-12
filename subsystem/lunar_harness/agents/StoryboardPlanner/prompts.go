@@ -29,6 +29,7 @@ func userPrompt(story, ratio, research string) string {
 		text += "\n\n画幅约束：" + ratio
 	}
 	text += "\n\n请先输出叙事推演，然后输出分隔行 `" + planDelimiter +
-		"`，最后逐行输出 NDJSON 分镜。"
+		"`，最后逐行输出 NDJSON 分镜。每镜的 original 必须是故事正文中的原文片段（逐字摘录），" +
+		"它会被用于旁白朗读。"
 	return text
 }

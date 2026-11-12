@@ -25,8 +25,8 @@ const TASK_STATUS_LABELS = {
     planning: '规划中',
     reviewing: '待审查',
     revising: '分镜修订',
-    painting: '绘制中',
-    writing: '生成文档',
+    painting: '逐镜合成',
+    writing: '拼接幻灯片',
     paused: '已暂停',
     canceled: '已终止',
     executing: '执行中',
@@ -137,6 +137,7 @@ function cacheElements() {
     els.summary = document.getElementById('content-summary');
     els.reqForm = document.getElementById('requirement-form');
     els.reqHandle = document.getElementById('requirement-handle');
+    els.reqDomain = document.getElementById('requirement-domain');
     els.reqText = document.getElementById('requirement-text');
     els.reqPick = document.getElementById('requirement-pick');
     els.reqSubmit = document.getElementById('requirement-submit');
@@ -726,6 +727,7 @@ async function onSubmitRequirement(event) {
     if (els.reqSubmit.disabled) return;
     const handle = els.reqHandle.value.trim();
     const description = els.reqText.value.trim();
+    const domain = els.reqDomain ? els.reqDomain.value : '';
     try {
         prepareRequirement(handle, description);
     } catch (err) {
@@ -745,7 +747,7 @@ async function onSubmitRequirement(event) {
     // 记录提交瞬间的选中项，用于判断任务完成时是否适合自动跳转。
     const baseline = state.selectedPath;
     try {
-        const task = await submitRequirement({ handle, description });
+        const task = await submitRequirement({ handle, description, domain });
         if (task && task.taskId) creationBaselines.set(task.taskId, baseline);
         renderCreationTask(task);
         void maybeJumpToOutput(task);
@@ -992,7 +994,11 @@ async function maybeJumpToStoryboardDoc(task) {
         if (!entry) return;
         navigate(parentOf(entry.path));
         selectFile(entry.path);
-        toast(`已打开分镜文档：${entry.name}`, 'success');
+        // 最终产物是幻灯片 HTML：先定位文件，再直接在沙箱里播放。
+        if (/\.html?$/i.test(entry.name)) {
+            await runInSandbox(entry);
+        }
+        toast(`已生成演绎幻灯片：${entry.name}`, 'success');
     } catch {
         // 文档尚未进入资源库时保持当前浏览位置，不打断用户。
     }
@@ -1108,6 +1114,7 @@ function toReviewShot(shot) {
         act: shot.act || '',
         scene: shot.scene || '',
         narration: shot.narration || '',
+        original: shot.original || '',
         prompt: shot.prompt || '',
         ratio: shot.ratio || '',
         status: shot.status || 'pending',
@@ -1225,6 +1232,7 @@ function buildReviewShotCard(shot, index, editing) {
         reviewInput('scene', '镜次', shot.scene, editing),
         reviewInput('ratio', '画幅（可选）', shot.ratio, editing),
         reviewTextArea('narration', '本镜叙事', shot.narration, editing),
+        reviewTextArea('original', '朗读原文（取故事正文，配音会读它）', shot.original, editing),
         reviewTextArea('prompt', '画面描述（留空则按叙事自动生成）', shot.prompt, editing),
     );
     card.append(head, grid);
@@ -1279,6 +1287,7 @@ function onReviewAddShot() {
         act: '',
         scene: '',
         narration: '',
+        original: '',
         prompt: '',
         ratio: '',
         status: 'pending',

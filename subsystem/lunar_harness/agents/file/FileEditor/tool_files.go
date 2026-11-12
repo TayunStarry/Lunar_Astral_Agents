@@ -81,6 +81,28 @@ func WriteFile(path, content string) OpResult {
 		handles, map[string]any{"lines": lineCount(content), "bytes": len([]byte(content))})
 }
 
+// AppendText 在文件末尾追加内容，并按增量上报资源库。
+//
+// 与 WriteFile 的区别：只上报新增片段与起始行，不会把整份文件记成一次整体写入；
+// 写入走 O_APPEND，不读入整份文件，可追加超过单次读取上限的大文件。
+func AppendText(path, addition string) OpResult {
+	if addition == "" {
+		return failResult(ToolAppend, path, fmt.Errorf("追加内容不能为空"))
+	}
+	localRel, startLine, err := appendDocument(path, addition)
+	if err != nil {
+		return failResult(ToolAppend, path, err)
+	}
+	publish(localRel, "append", addition, "", startLine, lineCount(addition))
+	handles := []string{}
+	if handle := registerHandle(localRel); handle != "" {
+		handles = append(handles, handle)
+	}
+	return newResult(ToolAppend, path,
+		fmt.Sprintf("向 %s 末尾追加 %d 行 / %d 字节", path, lineCount(addition), len([]byte(addition))),
+		handles, map[string]any{"start_line": startLine, "lines": lineCount(addition), "bytes": len([]byte(addition))})
+}
+
 // CreateFile 新建文件（已存在则报错）。
 func CreateFile(path, content string) OpResult {
 	localRel, handle, err := writeDocument(path, content, true)

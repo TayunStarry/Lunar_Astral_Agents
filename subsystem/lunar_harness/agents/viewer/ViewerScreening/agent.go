@@ -84,14 +84,6 @@ func Slice(ctx context.Context, task, model string, images []string) (text strin
 	})
 }
 
-// WatchSummary 把各切片理解合成为第一人称观影感受（切片理解只作素材）。
-func WatchSummary(ctx context.Context, system, material, model string) (text string, err error) {
-	defer func() { agentbase.ReportRun(AgentID, err) }()
-	return viewer.Chat(ctx, viewer.ChatRequest{
-		Agent: AgentID, Role: Role, Model: model, System: system, User: material, Attempts: impressAttempts,
-	})
-}
-
 // Keywords 综合指令、默认偏好、心情与记忆提炼本轮选片关键词（原样返回模型文本，由链切分）。
 func Keywords(ctx context.Context, in KeywordInput, model string) (text string, err error) {
 	defer func() { agentbase.ReportRun(AgentID, err) }()

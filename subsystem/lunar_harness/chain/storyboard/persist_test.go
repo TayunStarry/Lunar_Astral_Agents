@@ -56,9 +56,10 @@ func TestRecoverResumesPaintingFromNextShot(t *testing.T) {
 		{Index: 2, Scene: "灯下", Narration: "b", Prompt: "p2"},
 		{Index: 3, Scene: "街头", Narration: "c", Prompt: "p3"},
 	}}
+	// 前两镜画面与配音都已完成，第三镜尚未合成。
 	shots := []ShotView{
-		{Index: 1, Scene: "门口", Status: shotPainted, Handle: "@I.001"},
-		{Index: 2, Scene: "灯下", Status: shotPainted, Handle: "@I.002"},
+		{Index: 1, Scene: "门口", Status: shotPainted, Handle: "@I.001", VoiceStatus: voiceReady, VoiceDurationMs: 2400},
+		{Index: 2, Scene: "灯下", Status: shotPainted, Handle: "@I.002", VoiceStatus: voiceReady, VoiceDurationMs: 2600},
 		{Index: 3, Scene: "街头", Status: shotPlanned},
 	}
 	record := persistedTask{

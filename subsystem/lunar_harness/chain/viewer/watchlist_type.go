@@ -32,8 +32,8 @@ type WatchlistResult struct {
 	Reason string `json:"reason,omitempty"`
 	// Candidates 筛出的候选数（目标 watchlistWanted）。
 	Candidates int `json:"candidates,omitempty"`
-	// Impressions 成功抽取视频印象的数量。
-	Impressions int `json:"impressions,omitempty"`
+	// Collected 成功采集到标题/简介/评论/标签的视频数。
+	Collected int `json:"collected,omitempty"`
 	// Approved / Rejected 审核通过数与未通过数。
 	Approved int `json:"approved,omitempty"`
 	Rejected int `json:"rejected,omitempty"`
@@ -51,13 +51,11 @@ type WatchlistResult struct {
 	Skipped int `json:"skipped,omitempty"`
 }
 
-// watchItem 管线内一个候选视频的采集、印象、审核与切片结果。
+// watchItem 管线内一个候选视频的采集与审核结果。
 type watchItem struct {
 	record       *videoRecord
 	approved     bool
 	rejectReason string
-	// slices 审核给出的切片数，下载阶段直接采用（钳制到 1~5）。
-	slices int
 }
 
 // watchlistBudget 整阶段预算：总时长上限 + 单候选子预算。
@@ -105,7 +103,7 @@ type watchlistDeps struct {
 	watchlistEmpty  func() (bool, error)
 	loadVideo       func(bv string) (viewerstore.WatchVideo, bool, error)
 	fetchInfo       func(bv string) (videoInfo, error)
-	impress         func(ctx context.Context, video *videoRecord) videoImpression
+	fetchTags       func(bvid string) ([]string, error)
 	review          func(ctx context.Context, video *videoRecord) videoReview
 	enqueue         func(items []viewerstore.WatchCandidate) (viewerstore.EnqueueReport, error)
 	setReview       func(bv string, status viewerstore.WatchStatus, reason string) error
@@ -133,7 +131,7 @@ func defaultWatchlistDeps() watchlistDeps {
 		watchlistEmpty:  viewerstore.WatchlistEmpty,
 		loadVideo:       viewerstore.LoadVideo,
 		fetchInfo:       bilibili.FetchVideo,
-		impress:         func(_ context.Context, video *videoRecord) videoImpression { return buildOneImpression(video) },
+		fetchTags:       bilibili.FetchTags,
 		review:          func(_ context.Context, video *videoRecord) videoReview { return reviewVideo(video) },
 		enqueue:         viewerstore.EnqueueVideos,
 		setReview:       viewerstore.SetVideoReview,

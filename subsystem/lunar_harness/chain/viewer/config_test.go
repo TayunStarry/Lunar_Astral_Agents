@@ -60,15 +60,16 @@ func TestFilterAndScorePreferences(t *testing.T) {
 }
 
 // TestDefaultLifeMechanism 钉住新机制默认值：
-// 切片 1-5 默认 5；评论 30 条、单条 512 字硬截断；弹幕 30 条。
+// 单视频单切片 60 秒；评论最多 2 条、单条 80 字；单条采集评论 512 字。
 func TestDefaultLifeMechanism(t *testing.T) {
-	if watchSliceMin != 1 || watchSliceMax != 5 || watchSliceDefault != 5 {
-		t.Fatalf("切片数边界应为 1-5、默认 5，实际 %d-%d/%d",
-			watchSliceMin, watchSliceMax, watchSliceDefault)
+	if watchSegmentSeconds != 60 {
+		t.Fatalf("单切片时长应为 60 秒，实际 %d", watchSegmentSeconds)
 	}
-	if collectCommentLimit != 30 || collectCommentMaxRunes != 512 || collectDanmakuLimit != 30 {
-		t.Fatalf("采集机制被改动: 评论 %d 条 / 单条 %d 字 / 弹幕 %d 条",
-			collectCommentLimit, collectCommentMaxRunes, collectDanmakuLimit)
+	if watchRemarkMaxComments != 2 || watchRemarkMaxRunes != 80 {
+		t.Fatalf("评论机制被改动: 最多 %d 条 / 单条 %d 字", watchRemarkMaxComments, watchRemarkMaxRunes)
+	}
+	if collectCommentMaxRunes != 512 {
+		t.Fatalf("采集机制被改动: 单条评论 %d 字", collectCommentMaxRunes)
 	}
 }
 

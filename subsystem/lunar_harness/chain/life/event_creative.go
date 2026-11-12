@@ -1,9 +1,10 @@
 package life
 
-// event_creative.go 生活创作事件：由生活链直接调动「文件操作」智能体完成自由创作。
+// event_creative.go 生活创作事件：由生活链按主题把任务直接交给对应的专业分支。
 //
-// 心情决定延续上一轮主题还是切换随机主题；延续任务会带上上一轮的项目目录与资源句柄，
-// 新主题只下发一个主题，标题与目录由文件操作智能体按内容决定。
+// 故事 / 小说主题走「故事创作」，其余走「文件编辑」，两个领域并行、互不调用；
+// 生活链只做路由与活动记录。心情决定延续上一轮主题还是切换随机主题；
+// 延续任务会带上上一轮的项目目录与资源句柄，新主题只下发一个主题。
 
 import (
 	"context"
@@ -14,6 +15,7 @@ import (
 	"strings"
 
 	"LunarSubsystem/LunarHarness/agents/file/FileOperations"
+	"LunarSubsystem/LunarHarness/agents/file/StoryWriter"
 	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/engine/activity"
 	"LunarSubsystem/LunarHarness/engine/wishchain"
@@ -49,6 +51,7 @@ var creationTopics = []string{
 	"写个随机要求的HTML小程序",
 	"写个歌曲的歌词",
 	"写个带插画的故事",
+	"写个长篇故事（按大纲分章推进）",
 }
 
 func (r *creativeRun) Start(_ context.Context, env Env) error {
@@ -64,35 +67,65 @@ func (r *creativeRun) Start(_ context.Context, env Env) error {
 }
 
 func (r *creativeRun) Next(ctx context.Context, _ Env) (EventStep, error) {
-	result, err := FileOperations.Run(ctx, FileOperations.Request{
-		Instruction:   r.data.Instruction,
-		Handles:       r.data.Handles,
-		WorkspaceRoot: "documents",
-	})
+	story := isStoryTopic(r.data.Topic)
+	var (
+		summary string
+		handles []string
+		folder  string
+		err     error
+	)
+	if story {
+		req := StoryWriter.Request{
+			Instruction:   r.data.Instruction,
+			Handles:       r.data.Handles,
+			WorkspaceRoot: "documents",
+			Mode:          StoryWriter.ModeNew,
+		}
+		// 长篇故事由心情决定新建或延续，直接把模式下发给故事创作，避免模型二次猜测。
+		if r.data.Continuation {
+			req.Mode = StoryWriter.ModeContinue
+			req.Story = path.Base(strings.Trim(r.data.Folder, "/"))
+			if req.Story == "." {
+				req.Story = ""
+			}
+		}
+		result, runErr := StoryWriter.Run(ctx, req)
+		summary, handles, folder, err = result.Summary, result.Handles, result.Folder, runErr
+	} else {
+		result, runErr := FileOperations.Run(ctx, FileOperations.Request{
+			Instruction:   r.data.Instruction,
+			Handles:       r.data.Handles,
+			WorkspaceRoot: "documents",
+		})
+		summary, handles, folder, err = result.Summary, result.Handles, result.Folder, runErr
+	}
 	if err != nil {
 		wishchain.NoteLink(wishchain.LinkFailure, truncateAtSentence(err.Error(), 120))
 		return EventStep{}, fmt.Errorf("创作失败: %w", err)
 	}
-	summary := strings.TrimSpace(result.Summary)
+	summary = strings.TrimSpace(summary)
 	if summary == "" {
 		summary = "完成了一次创作"
 	}
-	folder := strings.TrimSpace(result.Folder)
+	folder = strings.TrimSpace(folder)
 	if folder == "" {
 		folder = strings.TrimSpace(r.data.Folder)
 	}
 	r.data.Folder = folder
 	title := creationTitle(folder, r.data.Topic)
 	if r.data.Illustrate {
-		r.submitIllustration(result.Handles)
+		r.submitIllustration(handles)
 	}
 	activityText := fmt.Sprintf("刚写完《%s》", title)
 	if r.data.Continuation {
 		activityText = fmt.Sprintf("刚把《%s》继续推进了一轮", title)
+		if story {
+			activityText = fmt.Sprintf("刚把《%s》续写了一章", title)
+		}
 	}
 	r.data.Activity = activityText
 	activity.Set(activityText)
-	saveCreationState(r.data.Topic, folder, result.Handles, r.data.Rounds)
+	saveCreationState(r.data.Topic, folder, handles, r.data.Rounds)
 	wishchain.CompleteMatching(title + "\n" + summary)
 	wishchain.NoteLink(wishchain.LinkCreationDone, truncateAtSentence(activityText, 120))
 	return EventStep{
@@ -159,6 +192,14 @@ func buildCreationInstruction(env Env, topic, folder string, handles []string, c
 	b.WriteString("；刚才月华在：")
 	b.WriteString(emptyAs(env.LastRecord, "没做什么"))
 	b.WriteString("。\n")
+	// 故事主题把新建 / 延续写成显式标记，故事创作子智能体都以它为准。
+	if isStoryTopic(topic) {
+		if continuation {
+			b.WriteString("【故事模式】延续\n")
+		} else {
+			b.WriteString("【故事模式】新建\n")
+		}
+	}
 	if continuation {
 		b.WriteString("这是延续上一次的创作，不要另起炉灶。\n")
 		b.WriteString("上一次的作品标题：")
@@ -184,7 +225,7 @@ func buildCreationInstruction(env Env, topic, folder string, handles []string, c
 		b.WriteString(wishes)
 		b.WriteString("\n")
 	}
-	b.WriteString("\n请用文件操作智能体完成本轮创作。")
+	b.WriteString("\n请按本主题的要求完成本轮创作。")
 	if strings.Contains(topic, "插画") || strings.Contains(topic, "配图") {
 		b.WriteString("故事写完后需要交给演绎生成分镜，输出目录与故事目录对齐。")
 	}
@@ -207,6 +248,16 @@ func saveCreationState(topic, folder string, handles []string, rounds int) {
 	state.CreationHandles = append([]string(nil), handles...)
 	state.CreationRounds = rounds
 	saveStateLocked()
+}
+
+// isStoryTopic 是否为按大纲分章推进的故事 / 小说主题。
+func isStoryTopic(topic string) bool {
+	for _, keyword := range []string{"故事", "小说", "长篇"} {
+		if strings.Contains(topic, keyword) {
+			return true
+		}
+	}
+	return false
 }
 
 // creationTitle 取项目目录名作为作品标题；目录未知时回退到主题。

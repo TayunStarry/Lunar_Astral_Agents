@@ -1,9 +1,6 @@
 package life
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"LunarSubsystem/LunarHarness/engine/config"
@@ -42,30 +39,6 @@ func TestViewerPrefixCleanupRemoved(t *testing.T) {
 	}
 	if items[0].Content != "[B站视频] 其实是生活记录" {
 		t.Fatalf("无 Source 的正文前缀不应被清洗: %q", items[0].Content)
-	}
-}
-
-func TestArchiveMemoryBatchWritesJSONL(t *testing.T) {
-	oldDir := config.LocalDir
-	config.LocalDir = t.TempDir()
-	t.Cleanup(func() { config.LocalDir = oldDir })
-
-	batch := memoryBatch{Items: []memoryItem{
-		{ID: "old-1", Content: "旧记忆一", Role: "user", Timestamp: 100},
-		{ID: "old-2", Content: "旧记忆二", Role: "assistant", Timestamp: 200},
-	}}
-	if err := archiveMemoryBatch("mem-001", batch); err != nil {
-		t.Fatalf("归档失败: %v", err)
-	}
-	raw, err := os.ReadFile(filepath.Join(config.LocalDir, filepath.FromSlash(memoryArchiveFile)))
-	if err != nil {
-		t.Fatalf("读取归档失败: %v", err)
-	}
-	text := string(raw)
-	for _, want := range []string{"old-1", "旧记忆一", "old-2", "旧记忆二"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("归档缺少 %q: %s", want, text)
-		}
 	}
 }
 

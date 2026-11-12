@@ -49,8 +49,8 @@ func Transcribe(wavBase64 string) (text string, err error) {
 	}
 
 	raw := reply.Text
-	if index := strings.Index(raw, transcribeMarker); index >= 0 {
-		return strings.TrimSpace(raw[index+len(transcribeMarker):]), nil
+	if _, after, ok := strings.Cut(raw, transcribeMarker); ok {
+		return strings.TrimSpace(after), nil
 	}
 	return strings.TrimSpace(raw), nil
 }

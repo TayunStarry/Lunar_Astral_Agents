@@ -24,7 +24,7 @@ type statsTickMsg struct{}
 // streamEvtMsg 智能体流式事件
 type streamEvtMsg struct{ evt StreamEvent }
 
-// taskDoneMsg 后台任务完成（ports/archive/update/proxy 等共用）
+// taskDoneMsg 后台任务完成（ports/proxy 等共用）
 type taskDoneMsg struct{ err error }
 
 // progressMsg 任务进度（-1 表示准备阶段未知进度）
@@ -62,7 +62,6 @@ const (
 	screenLogs
 	screenProxy
 	screenArchive
-	screenUpdate
 	screenPorts
 	screenDump
 	screenTools
@@ -72,21 +71,27 @@ const (
 // 进入哪个屏由 screen 字段决定（而非下标推算），故调整排版或条目顺序
 // 都不会造成「显示与实际功能对应不上」。
 type menuItem struct {
-	key    string   // 快捷键（单字符，空串=仅回车进入）
+	key    string   // 快捷键标签（单字符可直接按；空串=仅回车进入；退出项为 "X"）
 	title  string   // 条目名称
 	desc   string   // 条目说明（宽屏显示于右侧详情栏）
 	group  string   // 分组（渲染时在该组首条之前插入分隔标题）
 	screen screenID // 目标屏幕；值为 screenMenu 时表示退出程序（哨兵）
 }
 
-// menuItems 主菜单条目表：顺序即显示顺序，按「运行观测 / 系统管理 / 更新与退出」
-// 分组组织：先用得上的是观测与运维，发布与退出沉到最后同一个分区。
+// menuItems 主菜单条目表：顺序即显示顺序，按「运行观测 / 系统管理 / 退出」
+// 分组组织：先用得上的是观测与运维，退出沉到最后。
 //
-// 快捷键按显示顺序依次占用 0-9、a-z：用户只需记住「第几个」即可，不必再记
+// 功能屏的快捷键按显示顺序依次占用 0-9：用户只需记住「第几个」即可，不必再记
 // 每屏各自的历史助记键。新增条目时按顺序追加，不要插空或跳号。
+// 末项「退出程序」是哨兵，不占项号——界面统一显示 X（大小写 x/X 都可按），
+// 与全局退出键一致，避免出现「标签是 8、实际按 x」两套东西不同步。
+//
+// 更新（打包上传 / 下载安装）已整体迁移到独立程序 subsystem/update_applier，主程序不再提供更新入口。
+// 「打包归档」是主程序的本地留存能力，与更新包互不相关：只把当前程序与资源打成 7z 分卷放在本地，
+// 不上传、不安装、不参与版本比对；打包期间会暂停思维链并卸载对话模型。
 var menuItems = []menuItem{
 	{key: "0", title: "推理实况", group: "运行观测", screen: screenAgent,
-		desc: "月华思考 / 输出 / 工具调用的流式显示（" + agentinfo.NameDialogue + " · " + agentinfo.NamePainter + " · " + agentinfo.NameMusician + " · " + agentinfo.NameResponder + " · " + agentinfo.NameSavior + "…）"},
+		desc: "月华思考 / 输出 / 工具调用的流式显示"},
 	{key: "1", title: "运行状态", group: "运行观测", screen: screenStats,
 		desc: "运行环境 / 模型计量 / 前端窗口 / " + agentinfo.NameDesktopOperator + "；状态按绿黄红区分"},
 	{key: "2", title: "系统日志", group: "运行观测", screen: screenLogs,
@@ -99,13 +104,11 @@ var menuItems = []menuItem{
 	{key: "5", title: "局域共享", group: "系统管理", screen: screenProxy,
 		desc: "WSS → WS 反向代理，支持 IP 选择与手机扫码接入"},
 	{key: "6", title: "打包归档", group: "系统管理", screen: screenArchive,
-		desc: "项目文件 7z 分卷打包，支持进度显示"},
+		desc: "本地 7z 分卷留存（不发布、不安装）；打包期间暂停思维链并卸载对话模型"},
 	{key: "7", title: "端口释放", group: "系统管理", screen: screenPorts,
 		desc: "扫描指定端口范围，终止占用进程并验证释放"},
 
-	{key: "8", title: "资源更新", group: "更新与退出", screen: screenUpdate,
-		desc: "发布更新包到 Gitee / 拉取更新包（主程序 + 指定文件夹，覆盖后自动重启）"},
-	{key: "9", title: "退出程序", group: "更新与退出", screen: screenMenu,
+	{key: "X", title: "退出程序", group: "退出", screen: screenMenu,
 		desc: "关闭控制台并优雅停止全部子系统（感谢使用「星月智能 · 控制台」）"},
 }
 
@@ -147,7 +150,6 @@ type appModel struct {
 	frontend frontendState
 	proxy    proxyState
 	archive  archiveState
-	update   updateState
 	ports    portsState
 	dump     dumpState
 	engine   engineState
@@ -167,7 +169,6 @@ func newAppModel() appModel {
 		logView: newLogsState(SourceRaw),
 		proxy:   newProxyState(),
 		archive: newArchiveState(),
-		update:  newUpdateState(),
 		ports:   newPortsState(),
 	}
 }

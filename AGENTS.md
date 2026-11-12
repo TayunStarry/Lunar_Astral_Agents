@@ -8,12 +8,12 @@
 
 ### Issue tracker
 
-Issues tracked as local markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+Issues tracked as local markdown files under `.scratch/`. See `local_data/references/issue-tracker.md`.
 
 ### Triage labels
 
-Default label vocabulary (needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix). See `docs/agents/triage-labels.md`.
+Default label vocabulary (needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix). See `local_data/references/triage-labels.md`.
 
 ### Domain docs
 
-领域术语与架构决策的约定见 `docs/agents/domain.md`。
+领域术语与架构决策的约定见 `local_data/references/domain.md`。

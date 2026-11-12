@@ -14,14 +14,31 @@ func TestPrepareOutputFolderUsesTitleAndSuffix(t *testing.T) {
 	t.Cleanup(func() { config.LocalDir = old })
 
 	if got := prepareOutputFolder("云海:图书馆"); got != "云海图书馆" {
-		t.Fatalf("目录名应取标题并去掉非法字符，实际 %q", got)
+		t.Fatalf("标题名应去掉非法字符，实际 %q", got)
 	}
-	dir := filepath.Join(config.LocalDir, filepath.FromSlash(docRootRel), "云海图书馆")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	doc := filepath.Join(config.LocalDir, filepath.FromSlash(docRootRel), "云海图书馆"+slideFileExt)
+	if err := os.MkdirAll(filepath.Dir(doc), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(doc, []byte("<html></html>"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if got := prepareOutputFolder("云海:图书馆"); got != "云海图书馆-2" {
-		t.Fatalf("同名目录应追加序号，实际 %q", got)
+		t.Fatalf("同名幻灯片已存在应追加序号，实际 %q", got)
+	}
+}
+
+func TestPrepareOutputFolderChecksAudioDir(t *testing.T) {
+	old := config.LocalDir
+	config.LocalDir = t.TempDir()
+	t.Cleanup(func() { config.LocalDir = old })
+
+	audioDir := filepath.Join(config.LocalDir, filepath.FromSlash(voiceOutputRoot), "星海")
+	if err := os.MkdirAll(audioDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := prepareOutputFolder("星海"); got != "星海-2" {
+		t.Fatalf("同名配音目录已存在应追加序号，实际 %q", got)
 	}
 }
 

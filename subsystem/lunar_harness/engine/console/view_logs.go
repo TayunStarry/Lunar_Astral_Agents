@@ -76,8 +76,10 @@ func (m *appModel) syncViewMetrics() {
 		w, _ := m.frameFor("", "", nil).bodySize()
 		m.logView.content(w)
 	case screenAgent:
-		w, _ := m.frameFor("", "", nil).bodySize()
-		m.agent.total = len(m.agentLines(maxInt(20, w-4), m.agent.expand))
+		w, h := m.frameFor("", "", nil).bodySize()
+		streamW, _ := agentStreamWidth(w)
+		turnGap, sectionGap := agentGapsFor(h)
+		m.agent.total = len(m.agentLines(maxInt(20, streamW-4), m.agent.expand, turnGap, sectionGap))
 	}
 }
 
@@ -173,22 +175,20 @@ func (m appModel) viewSystemLogs() string {
 	if len(lines) == 0 {
 		body := append([]string{}, tabs...)
 		body = append(body, strip...)
-		body = append(body, emptyState("暂无日志", "当前通道还没有任何输出。", "启动对应功能后此处实时刷新 · 左右方向键切换分类", w, maxInt(1, h-headRows-1))...)
-		body = append(body, logStatusLine(w, scrollInfo{}, m.logView.follow))
-		f.status = dimStyle.Render("共 0 行")
+		body = append(body, emptyState("暂无日志", "当前通道还没有任何输出。", "启动对应功能后此处实时刷新 · 左右方向键切换分类", w, maxInt(1, h-headRows))...)
+		f.status = logStatusText(scrollInfo{}, m.logView.follow)
 		return f.render(body)
 	}
 
-	winH := maxInt(1, h-headRows-1)
+	winH := maxInt(1, h-headRows)
 	win, offset, info := windowLines(lines, m.logView.offset, winH, m.logView.follow)
 	m.logView.offset = offset
 
 	body := append([]string{}, tabs...)
 	body = append(body, strip...)
 	body = append(body, win...)
-	body = append(body, logStatusLine(w, info, m.logView.follow))
 
-	f.status = dimStyle.Render(fmt.Sprintf("共 %d 行", info.Total))
+	f.status = logStatusText(info, m.logView.follow)
 	return f.render(body)
 }
 
@@ -207,20 +207,19 @@ func logCategoryTabs(width int, current LogSource) []string {
 	return []string{fitWidth(line, width)}
 }
 
-// logStatusLine 日志窗底部状态条：位置百分比 + 跟随状态
-func logStatusLine(w int, info scrollInfo, follow bool) string {
-	pct := 100
-	if info.Total > 0 {
-		pct = clampPercent((info.Top + info.View) * 100 / info.Total)
-	}
-	state := okStyle.Render("● 跟随中")
+// logStatusText 日志屏底栏状态：位置区间 + 跟随状态。
+//
+// 状态只占底栏右侧一行，不再在日志窗底部单开一行——那一行会永久吃掉一条日志的
+// 可视高度，而底栏本来就有位置可放（用户反馈的「状态占掉太多行」）。
+func logStatusText(info scrollInfo, follow bool) string {
+	state := okStyle.Render("● 跟随")
 	if !follow {
-		state = warnStyle.Render("‖ 已暂停（f 恢复跟随）")
+		state = warnStyle.Render("‖ 暂停")
 	}
-	pos := ""
-	if info.Total > info.View {
-		pos = dimStyle.Render(fmt.Sprintf("%d-%d/%d 行 · %d%%",
-			info.Top+1, minInt(info.Top+info.View, info.Total), info.Total, pct))
+	pos := fmt.Sprintf("共 %d 行", info.Total)
+	if info.Total > info.View && info.View > 0 {
+		pos = fmt.Sprintf("%d-%d/%d 行",
+			info.Top+1, minInt(info.Top+info.View, info.Total), info.Total)
 	}
-	return newRow(w, false).L("  ").R(pos, "  ", state).String()
+	return dimStyle.Render(pos) + "  " + state
 }

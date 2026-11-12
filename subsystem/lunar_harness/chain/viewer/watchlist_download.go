@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -24,9 +23,6 @@ import (
 )
 
 const (
-	// watchlistSegmentMinSec / MaxSec 单个随机片段的时长范围（秒）。
-	watchlistSegmentMinSec = 30
-	watchlistSegmentMaxSec = 120
 	// watchlistCacheDirName 片段落盘目录（相对 local_data/cache）。
 	watchlistCacheDirName = "watchlist"
 )
@@ -47,7 +43,7 @@ func persistWatchItems(items []*watchItem, deps watchlistDeps) (int, error) {
 			AuthorName:  record.Info.Owner,
 			Comments:    commentTexts(record.Comments),
 			DurationSec: record.Info.Duration,
-			Topics:      record.Impression.Topics,
+			Topics:      record.Tags,
 		})
 	}
 	if len(candidates) == 0 {
@@ -75,7 +71,7 @@ func downloadWatchItems(ctx context.Context, items []*watchItem, deps watchlistD
 			deferWatchByBudget(bv, deps, result)
 			continue
 		}
-		segments := planWatchSegments(item.record.Info.Duration, watchSegmentCount(item, deps), deps.randInt)
+		segments := planWatchSegment(item.record.Info.Duration, deps.randInt)
 		if len(segments) == 0 {
 			markWatchDownloadFailed(bv, "视频时长未知，无法切片", deps, result)
 			continue
@@ -102,19 +98,8 @@ func downloadWatchItems(ctx context.Context, items []*watchItem, deps watchlistD
 			continue
 		}
 		result.Downloaded++
-		logger.Info("BilibiliViewer", "待看列表：《%s》切出 %d 个片段并置为可播放",
-			item.record.Info.Title, len(downloaded))
+		logger.Info("BilibiliViewer", "待看列表：《%s》切出 1 个片段并置为可播放", item.record.Info.Title)
 	}
-}
-
-// watchSegmentCount 以审核给出的切片数为准（钳制到 1~5，且不超过视频可用片段数）；
-// 审核没给数时才退回随机 1~5。
-func watchSegmentCount(item *watchItem, deps watchlistDeps) int {
-	count := item.slices
-	if count <= 0 {
-		count = 1 + deps.randInt(watchSliceMax)
-	}
-	return clampReviewSlices(item.record.Info.Duration, count)
 }
 
 // deferWatchByBudget 预算耗尽时把已入队但还没下载的视频置为可重试的 rejected 并写明原因，
@@ -153,48 +138,26 @@ func downloadComplete(segments []viewerstore.SegmentInput) bool {
 	return true
 }
 
-// planWatchSegments 按总时长随机生成 count 个互不重叠的片段。
+// planWatchSegment 一个视频只随机抽一个 1 分钟片段；不足 1 分钟取全片。
 //
-// 做法：把时间轴均分为 count 个带，每带内随机放一个 30~120 秒的窗口。
-// 带宽天然大于等于窗口长度，因此片段按构造就不会重叠，也不会越过视频结尾。
-func planWatchSegments(duration, count int, randInt func(int) int) []viewerstore.SegmentInput {
-	if duration <= 0 || count <= 0 {
+// 起点在 [0, duration-watchSegmentSeconds] 内均匀随机，randInt 由调用方注入，
+// 因此随机位置在测试里可复现。视频时长未知时返回 nil，由调用方按失败处理。
+func planWatchSegment(duration int, randInt func(int) int) []viewerstore.SegmentInput {
+	if duration <= 0 {
 		return nil
 	}
 	if randInt == nil {
 		randInt = rand.Intn
 	}
-	if maxByMin := duration / watchlistSegmentMinSec; count > maxByMin {
-		count = maxByMin
+	length := watchSegmentSeconds
+	if duration < length {
+		length = duration
 	}
-	if count > viewerstore.WatchSegmentMax {
-		count = viewerstore.WatchSegmentMax
+	start := 0
+	if slack := duration - length; slack > 0 {
+		start = randInt(slack + 1)
 	}
-	if count < 1 {
-		count = 1
-	}
-	band := duration / count
-	if band <= 0 {
-		return nil
-	}
-	length := band
-	if length > watchlistSegmentMaxSec {
-		span := watchlistSegmentMaxSec - watchlistSegmentMinSec + 1
-		length = watchlistSegmentMinSec + randInt(span)
-	}
-	if length > band {
-		length = band
-	}
-	out := make([]viewerstore.SegmentInput, 0, count)
-	for index := 0; index < count; index++ {
-		start := index * band
-		if slack := band - length; slack > 0 {
-			start += randInt(slack + 1)
-		}
-		out = append(out, viewerstore.SegmentInput{StartSec: start, EndSec: start + length})
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].StartSec < out[j].StartSec })
-	return out
+	return []viewerstore.SegmentInput{{StartSec: start, EndSec: start + length}}
 }
 
 // authorUID 作者 UID 转字符串（缺失时留空，由存储层容忍）。

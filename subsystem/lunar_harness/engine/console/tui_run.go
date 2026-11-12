@@ -4,7 +4,6 @@ package console
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -17,7 +16,6 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/portrelease"
 	"LunarSubsystem/LunarHarness/engine/console/proxy"
-	"LunarSubsystem/LunarHarness/engine/console/updatepack"
 )
 
 // quitCleanup TUI 退出后的统一清理
@@ -29,8 +27,6 @@ func (m *appModel) quitCleanup() {
 	archive.SetProgressHook(nil)
 	proxy.SetLogHook(nil)
 	portrelease.SetLogHook(nil)
-	updatepack.SetLogHook(nil)
-	updatepack.SetProgressHook(nil)
 }
 
 // ErrNoTerminal 控制台输出未连接到终端（无法渲染界面）
@@ -114,10 +110,6 @@ func Run() error {
 		pushScrubbedLog(SourceRaw, "RAW", "", "", "[TUI] 配色档位: "+diag)
 	}
 
-	// 更新器子进程的进度接回真实终端：主程序接管 stdout 后，子进程若继承 NUL 设备，
-	// 用户就完全看不到「更新器已启动 → 正在覆盖 → 已重启」，整条链路成了黑盒。
-	updatepack.SetConsoleWriter(func() io.Writer { return GetRealStdout() })
-
 	// 输入同样不信任继承句柄：句柄不可用时改读控制台设备，否则 TUI 收不到按键
 	prog := tea.NewProgram(model,
 		tea.WithAltScreen(),
@@ -164,8 +156,6 @@ func Run() error {
 	archive.SetProgressHook(func(percent int) { prog.Send(progressMsg(percent)) })
 	proxy.SetLogHook(taskLog)
 	portrelease.SetLogHook(taskLog)
-	updatepack.SetLogHook(taskLog)
-	updatepack.SetProgressHook(func(percent int) { prog.Send(progressMsg(percent)) })
 
 	// 终止信号 → 优雅退出
 	sigCh := make(chan os.Signal, 1)
@@ -178,30 +168,5 @@ func Run() error {
 	_, err := prog.Run()
 	close(done)
 	model.quitCleanup()
-
-	// 交接说明必须写在「退出备用屏幕之后」：此时真实终端已恢复，
-	// 这段话会留在用户可回看的正常缓冲区里（屏上的倒计时画面随退出被清掉）
-	printHandoverNotice()
 	return err
-}
-
-// printHandoverNotice 输出主程序更新交接说明（非交接场景不输出）。
-//
-// 为何值得单独打印：含主程序的更新会让控制台自行退出，用户看到的只是「程序没了」；
-// 把「更新器已接管 / 去哪看日志 / 会否自动重启」写到终端，故障时可自行判断与取证。
-func printHandoverNotice() {
-	note := pendingHandover
-	if note == nil {
-		return
-	}
-	out := GetRealStdout()
-	fmt.Fprintf(out, "\n[星月智能] 主程序更新已交由更新器接续，控制台退出以释放文件占用。\n")
-	fmt.Fprintf(out, "  更新包  : %s\n", note.PackFile)
-	fmt.Fprintf(out, "  覆盖目标: %s\n", note.Root)
-	if len(note.Files) > 0 {
-		fmt.Fprintf(out, "  纳入文件: %s\n", strings.Join(note.Files, "、"))
-	}
-	fmt.Fprintf(out, "  更新器  : %s\n", note.Applier)
-	fmt.Fprintf(out, "  过程日志: %s\n", note.LogPath)
-	fmt.Fprintf(out, "更新器将在此进程退出后解压覆盖并重启程序，请勿关闭本终端窗口。\n\n")
 }

@@ -10,7 +10,6 @@ import (
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
-	"LunarSubsystem/LunarHarness/engine/console/updatepack"
 	"LunarSubsystem/LunarHarness/engine/sound"
 	"LunarSubsystem/LunarHarness/server"
 )
@@ -41,19 +40,12 @@ func main() {
 	// （取自编译时生成并嵌入的端点自述文档 info.version）
 	console.SetBuildVersion(server.DocsVersion())
 
-	// 注入 Gitee Release 发布通道配置（local_data/config/release.json）。
-	console.SetUpdatePackConfig(&updatepack.Config{
-		GiteeOwner:      config.ReleaseGiteeOwner,
-		GiteeRepo:       config.ReleaseGiteeRepo,
-		GiteeToken:      config.ReleaseGiteeToken,
-		Include:         config.ReleaseInclude,
-		Exclude:         config.ReleaseExclude,
-		ExcludeDirsWith: config.ReleaseExcludeDirsWith,
-		BackupKeep:      config.ReleaseBackupKeep,
-		ProgramFiles:    config.ReleaseProgramFiles,
-		RestartArgs:     config.ReleaseRestartArgs,
-		TargetDir:       config.ReleaseTargetDir,
-	})
+	// 版本信标：启动时把本次构建版本写到 local_data/config/version.json。
+	// 这是主程序唯一与更新相关的动作——更新器只读该文件判断当前版本，
+	// 下载 / 安装 / 回滚全部由 subsystem/update_applier 独立完成。
+	if err := writeVersionBeacon(server.DocsVersion()); err != nil {
+		logger.Info("LunarHarness", "版本信标写入失败（更新器将退回安装状态记录）：%v", err)
+	}
 
 	// 端口基准注入 TUI：代理屏的提示值必须来自真实配置，并拦住会与自身服务撞车的端口。
 	// 实测教训：代理屏曾把「代理端口」提示写死为 36790——那正是模型服务端口（BasicPort+1）。
@@ -69,15 +61,13 @@ func main() {
 
 	// 前端管理钩子：在线探针与窗口唤起器注入 TUI 管理屏
 	app.WireTUIFrontendHooks()
+	app.WireTUIMaintenanceHook()
 
 	// 数据导出钩子：控制台「数据导出」屏据此把原始日志 / 智能体上下文落盘
 	app.WireTUIDataDumpHooks()
 
 	// 控制台观测与人工入口钩子：工具列表、核心智能实况计量、桌面操纵入口
 	app.WireTUIEngineHooks()
-
-	// 打包维护钩子：压缩期间暂停 Tick 调度与响应车道并卸载对话模型，避免与 7z 抢资源
-	app.WireTUIMaintenanceHook()
 
 	// 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）。
 	// 开发者模式（system.developer 或 --developer）下**不主动弹出前端**：
@@ -89,7 +79,7 @@ func main() {
 		app.OpenFrontendWindows()
 	}
 
-	// TUI 全屏控制台：阻塞直至用户退出（z / Ctrl+C / 中断信号）
+	// TUI 全屏控制台：阻塞直至用户退出（主菜单 x / Ctrl+C / 中断信号）
 	if err := console.Run(); err != nil {
 		logger.Error("LunarHarness", "TUI 控制台异常退出: %v", err)
 	}

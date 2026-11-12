@@ -26,7 +26,7 @@ type SubmitRequest struct {
 	// ReviewRequired 为 true 时，分镜规划完成后进入人工审查；
 	// 生活系统自动触发与月华命令触发的演绎跳过审查，直接开始分镜合成。
 	ReviewRequired bool
-	// OutputFolder 指定图片与文档的标题目录；为空时按分镜标题自动生成。
+	// OutputFolder 指定图片、配音与幻灯片共用的标题名；为空时按分镜标题自动生成。
 	OutputFolder string
 }
 
@@ -38,6 +38,8 @@ type ReviewShot struct {
 	Scene string
 	// Narration 本镜叙事
 	Narration string
+	// Original 本镜对应的故事原文（配音朗读用它；为空时继承原稿同序号镜头）
+	Original string
 	// Prompt 画面描述（为空时按叙事重新拼装）
 	Prompt string
 	// Ratio 单镜画幅（为空时用任务默认画幅）
@@ -50,15 +52,27 @@ type ShotView struct {
 	Act       string `json:"act,omitempty"`
 	Scene     string `json:"scene"`
 	Narration string `json:"narration"`
-	Prompt    string `json:"prompt"`
-	Ratio     string `json:"ratio,omitempty"`
+	// Original 本镜对应的故事原文（配音朗读用它，而不是分镜叙事）
+	Original string `json:"original,omitempty"`
+	Prompt   string `json:"prompt"`
+	Ratio    string `json:"ratio,omitempty"`
 	// Status pending / planned / drawing / painted / failed
 	Status string `json:"status"`
 	// Handle 产出的图片资源句柄
 	Handle string `json:"handle,omitempty"`
-	// File 图片相对分镜文档目录的文件名（成功迁移后填写）
+	// File 图片相对幻灯片文档目录的文件名（合成幻灯片时填写）
 	File string `json:"file,omitempty"`
-	// Error 失败原因
+	// VoiceStatus 配音状态 pending / voicing / ready / failed
+	VoiceStatus string `json:"voice_status,omitempty"`
+	// VoiceFile 配音 WAV 相对 LocalDir 的路径（落盘后填写）
+	VoiceFile string `json:"voice_file,omitempty"`
+	// VoiceHandle 配音 WAV 的资源句柄
+	VoiceHandle string `json:"voice_handle,omitempty"`
+	// VoiceDurationMs 配音时长（毫秒）：幻灯片展示时长以它为准
+	VoiceDurationMs int `json:"voice_duration_ms,omitempty"`
+	// VoiceError 配音失败原因
+	VoiceError string `json:"voice_error,omitempty"`
+	// Error 画面合成失败原因
 	Error string `json:"error,omitempty"`
 }
 
@@ -86,9 +100,9 @@ type TaskView struct {
 	ShotPatch []ShotView `json:"shot_patch,omitempty"`
 	// ShotCount 任务当前镜头总数：前端据此裁剪本地多出的镜头
 	ShotCount int `json:"shot_count,omitempty"`
-	// DocPath 分镜文档相对 LocalDir 的路径（documents/lens/.../分镜.md）
+	// DocPath 幻灯片 HTML 相对 LocalDir 的路径（documents/lens/<标题>.html）
 	DocPath string `json:"doc_path,omitempty"`
-	// DocHandle 分镜文档的资源句柄
+	// DocHandle 幻灯片 HTML 的资源句柄
 	DocHandle string     `json:"doc_handle,omitempty"`
 	Shots     []ShotView `json:"shots,omitempty"`
 	Handles   []string   `json:"handles,omitempty"`
@@ -153,6 +167,20 @@ type PaintResult struct {
 	Handles []string
 }
 
+// VoiceRequest 交给语音合成能力的结构化需求：朗读文本一律是本镜故事原文。
+type VoiceRequest struct {
+	// Text 要朗读的原文
+	Text string
+	// Task 任务说明（供实况与日志辨识）
+	Task string
+}
+
+// VoiceResult 语音合成的返回：WAV 字节，时长由链内按 WAV 头计算。
+type VoiceResult struct {
+	// Audio WAV 音频字节
+	Audio []byte
+}
+
 // storyboardPlan 分镜规划结果。
 type storyboardPlan struct {
 	// Title 作品标题
@@ -170,6 +198,8 @@ type plannedShot struct {
 	Act       string `json:"act"`
 	Scene     string `json:"scene"`
 	Narration string `json:"narration"`
+	// Original 本镜对应的故事原文（配音朗读文本）
+	Original string `json:"original"`
 	// Continuity 本镜与上一镜的画面衔接
 	Continuity string `json:"continuity"`
 	Prompt     string `json:"prompt"`
@@ -275,6 +305,7 @@ type persistedShot struct {
 	Act        string `json:"act,omitempty"`
 	Scene      string `json:"scene"`
 	Narration  string `json:"narration"`
+	Original   string `json:"original,omitempty"`
 	Continuity string `json:"continuity,omitempty"`
 	Prompt     string `json:"prompt"`
 	Ratio      string `json:"ratio,omitempty"`

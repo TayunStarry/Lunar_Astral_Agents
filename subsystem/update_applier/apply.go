@@ -11,8 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 )
 
@@ -30,13 +28,10 @@ func openLog(path string) {
 	}
 }
 
-// logf 统一日志出口（时间戳 + 标准输出 + 日志文件）
+// logf 统一日志出口（时间戳 + logSink：TUI 接管或写标准输出，并落盘日志文件）
 func logf(format string, v ...any) {
 	msg := time.Now().Format("2006-01-02 15:04:05") + "  " + fmt.Sprintf(format, v...)
-	fmt.Println(msg)
-	if logFile != nil {
-		fmt.Fprintln(logFile, msg)
-	}
+	logSink(msg)
 }
 
 // fileExists 判断文件/目录是否存在
@@ -88,67 +83,6 @@ func waitForUnlock(path string, timeout time.Duration) error {
 	}
 }
 
-// applyTree 将 staging 内容合并到 target：
-//   - keep>0 时，覆盖前先把已有文件备份到 {target}/.backup/<时间戳>/（保留回滚能力）；
-//   - 单文件搬迁带重试，应对主程序退出后句柄释放的延迟；
-//   - 重试用尽仍失败的文件保留原文件并计入 skipped，不中断其余文件的更新。
-func applyTree(staging, target string, keep int) (updated int, skipped []string, err error) {
-	var backupDir string
-	if keep > 0 {
-		backupDir = filepath.Join(target, ".backup", time.Now().Format("20060102-150405"))
-	}
-	backedUp := 0
-
-	walkErr := filepath.Walk(staging, func(path string, fi os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if fi.IsDir() {
-			return nil
-		}
-		rel, rErr := filepath.Rel(staging, path)
-		if rErr != nil {
-			return rErr
-		}
-		dest := filepath.Join(target, rel)
-		if mkErr := os.MkdirAll(filepath.Dir(dest), 0755); mkErr != nil {
-			return mkErr
-		}
-
-		var backup string
-		if backupDir != "" && fileExists(dest) {
-			backup = filepath.Join(backupDir, rel)
-			if mkErr := os.MkdirAll(filepath.Dir(backup), 0755); mkErr != nil {
-				return mkErr
-			}
-			if mvErr := moveWithRetry(dest, backup); mvErr != nil {
-				logf("[WARN] 备份失败，跳过该文件（%s）：%v", rel, mvErr)
-				skipped = append(skipped, rel)
-				return nil
-			}
-			backedUp++
-		}
-
-		if mvErr := moveWithRetry(path, dest); mvErr != nil {
-			if backup != "" {
-				_ = os.Rename(backup, dest) // 尽力回滚
-			}
-			logf("[WARN] 覆盖失败，保留原文件（%s）：%v", rel, mvErr)
-			skipped = append(skipped, rel)
-			return nil
-		}
-		updated++
-		return nil
-	})
-	if walkErr != nil {
-		return updated, skipped, walkErr
-	}
-	if backedUp > 0 {
-		logf("覆盖前已备份 %d 个文件 → %s", backedUp, backupDir)
-	}
-	return updated, skipped, nil
-}
-
 // moveWithRetry 带重试的文件搬迁（先改名，跨卷退回复制后删除）
 func moveWithRetry(src, dest string) error {
 	var last error
@@ -195,50 +129,6 @@ func copyFile(src, dest string) error {
 		return outErr
 	}
 	return inErr
-}
-
-// pruneBackups 只保留最近 n 次备份目录，其余删除（n<=0 时清空全部）。
-// 备份目录名形如 20060102-150405，按字典序即时间序排列。
-func pruneBackups(targetDir string, n int) {
-	root := filepath.Join(targetDir, ".backup")
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return // 无备份目录
-	}
-	var stamps []string
-	for _, e := range entries {
-		if e.IsDir() {
-			stamps = append(stamps, e.Name())
-		}
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(stamps)))
-
-	removed := 0
-	for i := n; i < len(stamps); i++ {
-		if err := os.RemoveAll(filepath.Join(root, stamps[i])); err == nil {
-			removed++
-		}
-	}
-	if removed > 0 {
-		logf("已清理 %d 个过期备份（保留最近 %d 次）", removed, n)
-	}
-}
-
-// localDevShareDir IDE 预览/分享 HTML 时生成的分享包目录名。
-// 它属于开发机残留，不随程序发布；一次更新完成后不应留在程序根目录。
-const localDevShareDir = ".trae-html-share-packages"
-
-// removeLocalDevLeftovers 清理开发期残留目录（失败只记日志，不影响更新结果）。
-func removeLocalDevLeftovers(targetDir string) {
-	dir := filepath.Join(targetDir, localDevShareDir)
-	if !fileExists(dir) {
-		return
-	}
-	if err := os.RemoveAll(dir); err != nil {
-		logf("[WARN] 清理开发期残留目录失败（%s）：%v", localDevShareDir, err)
-		return
-	}
-	logf("已清理开发期残留目录：%s", localDevShareDir)
 }
 
 // restartProgram 启动目标可执行文件（工作目录设为该文件所在目录，随后更新器自身退出）。
@@ -288,49 +178,4 @@ func consoleHandles() (in *os.File, out *os.File) {
 		in = f
 	}
 	return in, out
-}
-
-// extractSevenZ 用 7z 解压更新包到暂存目录（资源释放）。
-// 分卷须与起始卷同目录——7z 会自动顺序查找其余分卷（主程序下载流程已保证齐备）。
-// 7z 在中文 Windows 上的输出为 GBK 编码，本工具保持纯标准库不做转码，失败时原样透传。
-func extractSevenZ(volPath, targetDir string) error {
-	sevenZip, err := findSevenZip()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		return err
-	}
-	cmd := exec.Command(sevenZip, "x", "-y", "-o"+targetDir, volPath)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		if detail := strings.TrimSpace(string(out)); detail != "" {
-			logf("7z 原始输出：%s", detail)
-		}
-		return fmt.Errorf("7z 解压失败: %w", err)
-	}
-	return nil
-}
-
-// findSevenZip 查找 7z 可执行文件：发行版自带（程序根下 local_data/package/archive/7z.exe）
-// 优先，再退回系统安装路径。返回绝对路径（子进程 cwd 可能不同）。
-func findSevenZip() (string, error) {
-	rel := filepath.Join("local_data", "package", "archive", "7z.exe")
-	candidates := []string{filepath.Join(*targetDir, rel)}
-	if exe, err := os.Executable(); err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(exe), rel))
-	}
-	candidates = append(candidates,
-		`C:\Program Files\7-Zip\7z.exe`,
-		`C:\Program Files (x86)\7-Zip\7z.exe`,
-	)
-	for _, p := range candidates {
-		if fileExists(p) {
-			if abs, err := filepath.Abs(p); err == nil {
-				return abs, nil
-			}
-			return p, nil
-		}
-	}
-	return "", fmt.Errorf("未找到 7z 工具（解压更新包需要），请安装 7-Zip 或确认 local_data/package/archive/7z.exe 存在")
 }

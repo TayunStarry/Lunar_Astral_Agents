@@ -13,7 +13,7 @@ import (
 
 // TestTechniqueDetailsHasNoSideEffect details=true 只返回职能描述，不调用子智能体。
 func TestTechniqueDetailsHasNoSideEffect(t *testing.T) {
-	result := Dialogue.ExecuteDispatchTechnique(map[string]any{
+	result := Dialogue.ExecuteCreativeWork(map[string]any{
 		"type":    Dialogue.TechniquePainter,
 		"details": true,
 		"handle":  []any{},
@@ -43,7 +43,7 @@ func TestTechniqueRejectsNonUnifiedInput(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			decoded := decodeToolOutput(t, Dialogue.ExecuteDispatchTechnique(tc.args))
+			decoded := decodeToolOutput(t, Dialogue.ExecuteCreativeWork(tc.args))
 			if !strings.Contains(decoded.Error, tc.want) {
 				t.Fatalf("错误应包含 %q，实际 %q", tc.want, decoded.Error)
 			}

@@ -40,8 +40,6 @@ const (
 	pendingMaxAttempts = 3
 	// pendingMaxAge 待处理条目最长隐身时长；超时后即使仍失败也放行可见
 	pendingMaxAge = 72 * time.Hour
-	// memoryArchiveFile 被整理替换掉的旧条目归档日志（相对 LocalDir）
-	memoryArchiveFile = "database/life/memory_archive.jsonl"
 	// viewerMemorySource 观影链写入来源；生活整理只按 Source 排除，不看正文前缀
 	viewerMemorySource = "bilibili_viewer"
 	// pendingGroupMaxItems 单个待合并组的条目上限（与聚类上限一致，避免模型输入过大）

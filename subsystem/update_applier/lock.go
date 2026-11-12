@@ -2,13 +2,12 @@ package main
 
 // ==== 更新器单实例锁 ====
 //
-// 用户看不到反馈时的第一反应是「再点一次程序」，于是第二次拉取又拉起一个更新器：
-// 两个更新器会同时解压同一批文件、同时覆盖程序根目录、并各自重启主程序——
-// 结果是文件互相覆盖（旧包盖新包）+ 启动出两个实例。
+// 用户看不到反馈时的第一反应是「再点一次程序」，于是第二个更新器也会开始下载/覆盖，
+// 两个进程同时改同一批文件会互相覆盖，并各自拉起主程序——结果是文件错乱 + 双实例。
 //
-// 锁文件放在覆盖目标（程序根目录）下：同一目标天然互斥，锁随进程结束清除；
-// 进程被强杀留下的锁按时间戳判定过期后可由下一个更新器接管，
-// 不会把用户永久挡在更新之外。
+// 锁文件放在 `.update/apply.lock`：同一目标天然互斥，锁随进程结束清除；
+// 进程被强杀留下的锁按时间戳判定过期后可由下一个更新器接管。
+// TUI 长时间开着时由心跳刷新时间戳，避免被误判为过期锁。
 
 import (
 	"fmt"
@@ -18,21 +17,22 @@ import (
 )
 
 const (
-	// applyLockFileName 单实例锁文件名（位于覆盖目标根目录）
-	applyLockFileName = ".update_apply.lock"
 	// applyLockStaleAfter 锁过期时长：进程被强杀/OOM 后残留的锁超过该时长即可接管
 	applyLockStaleAfter = 15 * time.Minute
 )
 
 // lockPath 锁文件路径
 func lockPath(targetDir string) string {
-	return filepath.Join(targetDir, applyLockFileName)
+	return filepath.Join(updateRoot(targetDir), applyLockFile)
 }
 
 // acquireApplyLock 获取单实例锁：返回释放函数与是否获取成功。
 // 已存在且未过期的锁视为「另一个更新器正在工作」，返回 false。
 func acquireApplyLock(targetDir string) (func(), bool) {
 	path := lockPath(targetDir)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, false
+	}
 
 	if fi, err := os.Stat(path); err == nil {
 		if time.Since(fi.ModTime()) < applyLockStaleAfter {
@@ -49,5 +49,22 @@ func acquireApplyLock(targetDir string) (func(), bool) {
 	fmt.Fprintf(f, "pid=%d\ntime=%s\n", os.Getpid(), time.Now().Format(time.RFC3339))
 	_ = f.Close()
 
-	return func() { _ = os.Remove(path) }, true
+	stop := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(lockHeartbeat)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				_ = touch(path)
+			}
+		}
+	}()
+
+	return func() {
+		close(stop)
+		_ = os.Remove(path)
+	}, true
 }

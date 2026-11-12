@@ -27,7 +27,7 @@ const (
 	SourceLife = logbuf.SourceLife
 	// SourceLogistics 后勤：月华-后勤系统（Tick 调度 / 通用应答 / 智能修复）日志
 	SourceLogistics = logbuf.SourceLogistics
-	// SourceTask 功能任务回显（代理/打包/端口释放/更新包）
+	// SourceTask 功能任务回显（代理/端口释放/工具列表）
 	SourceTask = logbuf.SourceTask
 )
 

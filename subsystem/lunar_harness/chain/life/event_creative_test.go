@@ -128,6 +128,35 @@ func TestCreativeInstructionPositiveMoodWithoutPrevious(t *testing.T) {
 	}
 }
 
+// TestCreativeInstructionMarksStoryMode 故事主题必须把新建 / 延续写成显式标记，
+// 供故事创作直接判定，不依赖模型二次猜测。
+func TestCreativeInstructionMarksStoryMode(t *testing.T) {
+	testenv.Isolate(t)
+	resetCreationState()
+	t.Cleanup(resetCreationState)
+	saveCreationState("写个长篇故事（按大纲分章推进）", "documents/雨夜旧书店", []string{"@D.001"}, 2)
+
+	run := &creativeRun{}
+	if err := run.Start(context.Background(), Env{MoodLabel: "开心"}); err != nil {
+		t.Fatalf("准备延续创作失败: %v", err)
+	}
+	if !strings.Contains(run.data.Instruction, "【故事模式】延续") {
+		t.Fatalf("故事延续应带显式标记: %s", run.data.Instruction)
+	}
+
+	instruction := buildCreationInstruction(Env{MoodLabel: "平静"}, "写个长篇故事（按大纲分章推进）", "", nil, false)
+	if !strings.Contains(instruction, "【故事模式】新建") {
+		t.Fatalf("故事新建应带显式标记: %s", instruction)
+	}
+	if !isStoryTopic("写个长篇故事（按大纲分章推进）") ||
+		!isStoryTopic("写个带插画的故事") || !isStoryTopic("写个小说") {
+		t.Fatalf("故事主题识别不正确")
+	}
+	if isStoryTopic("写个随机主题的HTML小游戏") || isStoryTopic("写个歌曲的歌词") {
+		t.Fatalf("非故事主题不应进入故事创作")
+	}
+}
+
 // lineContaining 返回首行包含 want 的文本行；没有命中时返回空串。
 func lineContaining(text, want string) string {
 	for _, line := range strings.Split(text, "\n") {

@@ -33,6 +33,7 @@ func shotViewFromPlanner(shot StoryboardPlanner.Shot, status string) ShotView {
 		Act:       shot.Act,
 		Scene:     shot.Scene,
 		Narration: shot.Narration,
+		Original:  shot.Original,
 		Prompt:    shot.Prompt,
 		Ratio:     shot.Ratio,
 		Status:    status,
@@ -48,6 +49,7 @@ func toStoryboardPlan(plan StoryboardPlanner.Result) storyboardPlan {
 			Act:        shot.Act,
 			Scene:      shot.Scene,
 			Narration:  shot.Narration,
+			Original:   shot.Original,
 			Continuity: shot.Continuity,
 			Prompt:     shot.Prompt,
 			Ratio:      shot.Ratio,
@@ -66,12 +68,25 @@ func shotsFromPlan(plan storyboardPlan, status string) []ShotView {
 			Act:       shot.Act,
 			Scene:     shot.Scene,
 			Narration: shot.Narration,
+			Original:  shot.Original,
 			Prompt:    shot.Prompt,
 			Ratio:     shot.Ratio,
 			Status:    status,
 		})
 	}
 	return shots
+}
+
+// shotComposed 报告单个镜头是否已经走完「画面 + 配音」合成。
+func shotComposed(shot ShotView) bool {
+	switch shot.Status {
+	case shotFailed:
+		return true
+	case shotPainted:
+		return shot.VoiceStatus == voiceReady || shot.VoiceStatus == voiceFailed
+	default:
+		return false
+	}
 }
 
 // fillMissingPrompts 为画面描述为空的镜头补上可绘制提示词。

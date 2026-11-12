@@ -4,7 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"LunarSubsystem/LunarHarness/engine/console/updatepack"
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
@@ -21,23 +20,6 @@ func SetFrontendHooks(lunarProbe, crystalProbe, libraryProbe func() bool,
 	relaunchLunar = lunarRelaunch
 	relaunchCrystal = crystalRelaunch
 	relaunchLibrary = libraryRelaunch
-}
-
-// ==== 更新包配置注入 ====
-
-var (
-	// updatePackCfg 更新包功能配置（宿主从 local_data/config/release.json 读取注入）
-	updatePackCfg *updatepack.Config
-)
-
-// SetUpdatePackConfig 注入更新包配置（nil 表示未配置，更新包屏会提示）
-func SetUpdatePackConfig(cfg *updatepack.Config) {
-	updatePackCfg = cfg
-}
-
-// GetUpdatePackConfig 读取更新包配置
-func GetUpdatePackConfig() *updatepack.Config {
-	return updatePackCfg
 }
 
 // ==== 数据导出钩子注入 ====

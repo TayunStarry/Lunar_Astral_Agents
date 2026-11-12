@@ -3,7 +3,7 @@ package thinking
 // fast_ack.go 复合工具的快速应答。
 //
 // 触发粒度是「本轮工具调用是否请求了复合工具」，只看工具名，不解析分支参数：
-//   - dispatch_technique（技法创作）
+//   - creative_work（创作任务：故事 / 文件 / 演绎 / 绘画 / 音乐 / 截图）
 //   - network_explore（联网探索）
 //   - use_the_program（扩展应用）
 //

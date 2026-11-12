@@ -33,7 +33,7 @@
 
 ## 开始前的准备
 
-1. **阅读文档**: 通读 [README.md](README.md) 与 [系统阅读指南](docs/code-wiki/README.md)（推荐先读 [09 调度与智能体分层](docs/code-wiki/09-调度与智能体分层.md)），了解平台的模块划分与各智能体职责
+1. **阅读文档**: 通读 [README.md](README.md) 与 [系统阅读指南](local_data/references/README.md)（推荐先读 [09 调度与智能体分层](local_data/references/09-调度与智能体分层.md)），了解平台的模块划分与各智能体职责
 2. **分叉仓库**: 将项目 Fork 到你的 GitHub 账户下，在 Fork 后的仓库中进行开发
 3. **创建分支**: 基于 `main` 分支创建功能分支，命名建议 `feat/描述` 或 `fix/描述`
 
@@ -100,7 +100,7 @@ import (
 |------|------|
 | 技术栈 | HTML5 + CSS3 + Vanilla JS (ES6+)，**禁止使用 Python** |
 | 模块 | ES Modules (`type="module"`) |
-| 依赖管控 | 仅限引用 `local_data/package/` 下的正式包（经 `/file/read/package/` 加载），**按需引用**标准依赖清单中的库，禁止从 CDN 引入外部资源；清单见 [07 外部工具与扩展包 §扩展包](docs/code-wiki/07-外部工具与扩展包.md#扩展包) |
+| 依赖管控 | 仅限引用 `local_data/package/` 下的正式包（经 `/file/read/package/` 加载），**按需引用**标准依赖清单中的库，禁止从 CDN 引入外部资源；清单见 [07 外部工具与扩展包 §扩展包](local_data/references/07-外部工具与扩展包.md#扩展包) |
 | 设计风格 | 玻璃拟态 (Glassmorphism)，CSS 变量驱动主题 |
 | 图标 | Font Awesome 6.4.0 |
 | 样式命名 | kebab-case，状态类用 `.active` / `.visible` / `.hidden` |
@@ -200,7 +200,7 @@ git clone https://github.com/你的用户名/Lunar_Astral_Agents.git
 cd Lunar_Astral_Agents
 ```
 
-一键编译全部 / 单独编译 / 交叉编译命令见 [10 运行配置与安全](docs/code-wiki/10-运行配置与安全.md)，此处不重复。
+一键编译全部 / 单独编译 / 交叉编译命令见 [10 运行配置与安全](local_data/references/10-运行配置与安全.md)，此处不重复。
 
 ---
 

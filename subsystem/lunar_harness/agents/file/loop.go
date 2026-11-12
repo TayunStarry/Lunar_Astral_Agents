@@ -67,6 +67,8 @@ func Run(ctx context.Context, req Request) (summary string, err error) {
 		Call: func(ctx context.Context, _ int, messages []agentbase.Message, tools []agentbase.ToolDefinition) (agentbase.Reply, error) {
 			budget := maxTokens
 			switch {
+			case req.KeepFullBudget:
+				// 故事创作需要读大纲后整章生成、写完再追加进度，不压缩输出额度。
 			case mutated:
 				// 修改完成后只需要一句话总结；防止模型继续复述或续写正文。
 				budget = summaryTokens
@@ -75,6 +77,18 @@ func Run(ctx context.Context, req Request) (summary string, err error) {
 				budget = defaultPostToolMaxTokens
 			}
 			reply, callErr := base.Stream(ctx, buildStream(messages, tools, budget))
+			if callErr != nil && isToolArgsParseError(callErr) {
+				// 工具参数过长被截断时，llama-server 会直接把不完整的 JSON 判为 500。
+				// 换用更大的输出额度重来一次，让整段参数有机会完整生成。
+				retryBudget := budget * 2
+				if retryBudget > maxRetryTokens {
+					retryBudget = maxRetryTokens
+				}
+				if retryBudget > budget {
+					budget = retryBudget
+					reply, callErr = base.Stream(ctx, buildStream(messages, tools, budget))
+				}
+			}
 			if callErr != nil {
 				return reply, callErr
 			}
@@ -135,6 +149,16 @@ func hasIncompleteToolCalls(calls []agentbase.ToolCall) bool {
 		}
 	}
 	return false
+}
+
+// isToolArgsParseError 识别 llama-server 因工具参数 JSON 不完整而返回的错误。
+func isToolArgsParseError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := err.Error()
+	return strings.Contains(text, "Failed to parse tool call arguments") ||
+		strings.Contains(text, "parse tool call arguments")
 }
 
 // toolJSON 把值序列化为 JSON 文本。

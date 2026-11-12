@@ -3,7 +3,7 @@ package Vision
 // image.go 静态图片描述：通过视觉读取副本交给模型，结论写回资源目录
 //
 // 图片进入模型的唯一形态是视觉读取管线产物（约束尺寸 + 句柄叠印副本），
-// 原图字节不出 Go 侧（见 docs/adr/0008）。
+// 原图字节不出 Go 侧。
 
 import (
 	"LunarSubsystem/LunarHarness/engine/resource"

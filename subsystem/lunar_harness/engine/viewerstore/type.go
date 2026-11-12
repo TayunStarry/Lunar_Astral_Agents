@@ -5,6 +5,8 @@ package viewerstore
 // 存储层只负责 viewer.db 的读写与上限维持；提示词渲染、选片口味重算、启动时序
 // 等编排逻辑仍留在 chain/viewer。
 
+import "database/sql"
+
 // WatchStatus 待看视频的审核状态。
 type WatchStatus string
 
@@ -12,6 +14,37 @@ type WatchStatus string
 type columnAdd struct {
 	Column string
 	SQL    string
+}
+
+// legacyImportSpec 一份旧版 JSON 的导入规格（文件 → 表）。
+type legacyImportSpec struct {
+	// File 文件名（位于 DataDir）
+	File string
+	// Field JSON 里承载键值映射的字段名（keys / videos）
+	Field string
+	// Table / KeyColumn / TimeColumn 目标表、业务键列与时间列
+	Table      string
+	KeyColumn  string
+	TimeColumn string
+	// Mark viewer_meta 中的一次性标记键
+	Mark string
+}
+
+// legacyImportResult 一次旧版 JSON 导入的对账结果。
+type legacyImportResult struct {
+	Inserted int
+	Skipped  int
+}
+
+// sqlExecer 允许同一段写法同时接受 *sql.DB 与 *sql.Tx。
+type sqlExecer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+// InboxSeenRow 一条已处理消息去重键（inbox_seen）。
+type InboxSeenRow struct {
+	Key    string
+	SeenAt int64
 }
 
 // TopicRow 主题词偏好池的一行原始存储值（不做衰减、加权或筛选）。

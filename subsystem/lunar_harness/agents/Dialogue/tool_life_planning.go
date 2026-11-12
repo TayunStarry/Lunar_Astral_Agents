@@ -1,10 +1,11 @@
 package Dialogue
 
-// tool_life_planning.go 生活规划聚合工具执行器：愿望、演绎、文件操作、观影与论坛。
+// tool_life_planning.go 生活规划聚合工具执行器：愿望、观影与论坛。
 //
 // 统一输入 {type, instruction, handle, details}，输出 {result, handle, error}。
-// 愿望类指令直接交给愿望管理智能体；文件操作由人格对话直接驱动并同步取回结果；
-// 演绎 / 观影 / 论坛仍登记强制生活事件，下一 Tick 由生活链执行。
+// 愿望类指令直接交给愿望管理智能体；观影 / 论坛仍登记强制生活事件，下一 Tick 由生活链执行。
+// 故事创作、文件编辑与演绎已拆成独立顶层工具（write_story / edit_files / perform_storyboard），
+// 不再经本聚合工具转发。
 
 import (
 	"context"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/WishManager"
-	"LunarSubsystem/LunarHarness/agents/file/FileOperations"
 	"LunarSubsystem/LunarHarness/protocol/agentdispatch"
 )
 
@@ -25,10 +25,6 @@ const (
 	lifeTypeWriteWish = "write_wish"
 	// lifeTypeWishComplete 标记愿望完成
 	lifeTypeWishComplete = "wish_complete"
-	// lifeTypeStoryboard 演绎：把故事拆成分镜并逐镜绘制
-	lifeTypeStoryboard = "storyboard"
-	// lifeTypeFileOperations 文件操作编排
-	lifeTypeFileOperations = "file_operations"
 	// lifeTypeBilibili 哔哩观影
 	lifeTypeBilibili = "bilibili_viewer"
 	// lifeTypeMutualForum 互助论坛
@@ -36,8 +32,6 @@ const (
 
 	// lifePlanningTimeout 愿望管理调用超时
 	lifePlanningTimeout = 5 * time.Minute
-	// fileOperationsTimeout 人格对话直接驱动文件操作时的总超时
-	fileOperationsTimeout = 10 * time.Minute
 
 	// StoryboardFixedReply 演绎触发后的固定响应
 	StoryboardFixedReply = "月华这就把这段故事演绎成分镜"
@@ -46,18 +40,15 @@ const (
 // lifeTypeOrder 聚合工具 type 的固定顺序。
 var lifeTypeOrder = []string{
 	lifeTypeWriteWish, lifeTypeWishComplete,
-	lifeTypeStoryboard, lifeTypeFileOperations,
 	lifeTypeBilibili, lifeTypeMutualForum,
 }
 
 // lifeTypeScopes 各机能的职能描述（details=true 专用）。
 var lifeTypeScopes = map[string]string{
-	lifeTypeWriteWish:      "用自然语言描述你的愿望或什么时候想去做什么事",
-	lifeTypeWishComplete:   "用自然语言描述你的什么愿望已达成",
-	lifeTypeStoryboard:     "演绎子智能体：把故事拆成分镜并逐镜绘制，图片输出到多媒体标题目录，分镜文档写入 documents/lens/标题。",
-	lifeTypeFileOperations: "文件操作子智能体：统一编排文件读写、文档整理、压缩包处理与脚本运行，按需调用文件操纵 / 归档操纵 / 代码执行 / 内容回滚子智能体。",
-	lifeTypeBilibili:       "哔哩观影子智能体：登记看视频事件，由生活链播放一个待看片段、理解画面并在原视频评论区留下观感。",
-	lifeTypeMutualForum:    "互助论坛子智能体：登记论坛事件，由生活链进入互助论坛流程。",
+	lifeTypeWriteWish:    "用自然语言描述你的愿望或什么时候想去做什么事",
+	lifeTypeWishComplete: "用自然语言描述你的什么愿望已达成",
+	lifeTypeBilibili:     "哔哩观影子智能体：登记看视频事件，由生活链播放一个待看片段、理解画面并在原视频评论区留下观感。",
+	lifeTypeMutualForum:  "互助论坛子智能体：登记论坛事件，由生活链进入互助论坛流程。",
 }
 
 // lifeTypeDirectives 愿望类 type → 交给愿望管理智能体的操作提示。
@@ -92,10 +83,6 @@ func ExecuteLifePlanning(args map[string]any) (result ToolResult) {
 	switch kind {
 	case lifeTypeWriteWish, lifeTypeWishComplete:
 		return executeWishPlanning(kind, call.Instruction)
-	case lifeTypeStoryboard:
-		return scheduleLifePlanning(lifeTypeStoryboard, call.Instruction, call.Handle, StoryboardFixedReply)
-	case lifeTypeFileOperations:
-		return executeFileOperations(call.Instruction, call.Handle)
 	case lifeTypeBilibili:
 		return scheduleLifePlanning("watch", call.Instruction, call.Handle, WatchFixedReply)
 	case lifeTypeMutualForum:
@@ -133,28 +120,6 @@ func executeWishPlanning(kind, instruction string) ToolResult {
 		summary = "愿望管理已完成"
 	}
 	return toolJSON(agentdispatch.Success(summary, outcome.Handles))
-}
-
-// executeFileOperations 人格对话直接驱动文件操作智能体，并把实际结果作为工具结果返回。
-func executeFileOperations(instruction string, handles []string) ToolResult {
-	ctx, cancel := context.WithTimeout(context.Background(), fileOperationsTimeout)
-	defer cancel()
-	result, err := FileOperations.Run(ctx, FileOperations.Request{
-		Instruction:   instruction,
-		Handles:       append([]string(nil), handles...),
-		WorkspaceRoot: "documents",
-	})
-	summary := strings.TrimSpace(result.Summary)
-	if err != nil {
-		if summary == "" {
-			summary = err.Error()
-		}
-		return toolJSON(agentdispatch.PartialFailure("文件操作未完成："+err.Error(), summary, result.Handles))
-	}
-	if summary == "" {
-		summary = "文件操作已完成"
-	}
-	return toolJSON(agentdispatch.Success(summary, result.Handles))
 }
 
 // scheduleLifePlanning 登记强制生活事件；下一 Tick 由生活链跳过随机选择直接执行。

@@ -159,30 +159,65 @@ func TestRuntimeMessageCarriesObsession(t *testing.T) {
 	}
 }
 
-// TestFileOperationsBranchMigratedToLifePlanning 文件操作已迁移到生活规划入口。
-func TestFileOperationsBranchMigratedToLifePlanning(t *testing.T) {
-	decoded := decodeToolResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
-		"type": "file_operations", "details": true, "handle": []any{},
-	}))
-	if decoded.Error != "" || !strings.Contains(decoded.Result, "文件操作") {
-		t.Fatalf("file_operations 职能描述不正确: %+v", decoded)
+// TestCreativeWorkAggregatesDomains 三个创作领域已聚合为 creative_work 的标准分支，
+// 生活规划不再承接 file_operations / storyboard。
+func TestCreativeWorkAggregatesDomains(t *testing.T) {
+	catalog := ToolCatalog()
+	names := map[string]bool{}
+	for _, agent := range catalog {
+		if agent.ID != "dialogue" {
+			continue
+		}
+		for _, tool := range agent.Tools {
+			names[tool.Name] = true
+		}
 	}
-	// 旧的技法聚合入口不再暴露 storyboard / file_operations。
-	legacy := decodeToolResult(t, Dialogue.ExecuteDispatchTechnique(map[string]any{
-		"type": "file_operations", "details": true, "handle": []any{},
-	}))
-	if legacy.Error == "" {
-		t.Fatalf("dispatch_technique 不应再接受 file_operations: %+v", legacy)
+	if !names[Dialogue.ToolCreativeWork] {
+		t.Fatalf("对话者工具目录缺少 creative_work: %v", names)
+	}
+	for _, legacy := range []string{"write_story", "edit_files", "perform_storyboard"} {
+		if names[legacy] {
+			t.Fatalf("创作领域应聚合进 creative_work，不应保留独立工具 %s: %v", legacy, names)
+		}
+	}
+	for _, kind := range []string{"story", "files", "storyboard", "bad"} {
+		decoded := decodeToolResult(t, Dialogue.ExecuteCreativeWork(map[string]any{
+			"type": kind, "instruction": "x", "handle": []any{}, "details": true,
+		}))
+		if kind == "bad" {
+			if !strings.Contains(decoded.Error, "type 只能取") {
+				t.Fatalf("未知分支应被拒绝: %+v", decoded)
+			}
+			continue
+		}
+		if decoded.Error != "" || decoded.Result == "" {
+			t.Fatalf("creative_work 分支 %s 的 details 应返回职能描述: %+v", kind, decoded)
+		}
+	}
+	for _, kind := range []string{"file_operations", "storyboard"} {
+		decoded := decodeToolResult(t, Dialogue.ExecuteLifePlanning(map[string]any{
+			"type": kind, "instruction": "x", "handle": []any{}, "details": false,
+		}))
+		if !strings.Contains(decoded.Error, "type 只能取") {
+			t.Fatalf("life_planning 不应再接受 %s: %+v", kind, decoded)
+		}
 	}
 	raw, err := prompts.Read("dialogueRole.md")
 	if err != nil {
 		t.Fatalf("读取对话者提示词失败: %v", err)
 	}
 	prompt := string(raw)
-	if !strings.Contains(prompt, "`file_operations`") {
-		t.Fatalf("对话者提示词未使用 file_operations: %s", prompt)
+	if !strings.Contains(prompt, "`creative_work`") {
+		t.Fatalf("对话者提示词未使用 creative_work: %s", prompt)
 	}
-	if strings.Contains(prompt, "`type`=`creator`") {
-		t.Fatal("对话者提示词仍残留 creator 分支名")
+	for _, branch := range []string{"`story`", "`files`", "`storyboard`"} {
+		if !strings.Contains(prompt, branch) {
+			t.Fatalf("对话者提示词缺少分支 %s: %s", branch, prompt)
+		}
+	}
+	for _, legacy := range []string{"`write_story`", "`edit_files`", "`perform_storyboard`"} {
+		if strings.Contains(prompt, legacy) {
+			t.Fatalf("对话者提示词仍残留独立工具 %s", legacy)
+		}
 	}
 }

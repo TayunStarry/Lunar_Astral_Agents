@@ -36,7 +36,7 @@
 		"C:/Program Files/7-Zip/7z.exe",
 		"C:/Program Files (x86)/7-Zip/7z.exe"
 	],
-	"output": "./Lunar-Astral-Agents-Release",
+	"output": "./local_data/archive/Lunar-Astral-Agents-Release",
 	"size": 2048,
 	"level": 5
 }

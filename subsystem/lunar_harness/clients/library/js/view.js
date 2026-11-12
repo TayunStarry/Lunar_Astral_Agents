@@ -7,7 +7,7 @@ import { languageOf, highlightCode, highlightLines } from './syntax.js';
 const MAX_TEXT_CHARS = 400000;
 const OP_LABELS = {
     read: '读取', search: '检索', info: '查看属性', write: '写入', create: '新建',
-    replace: '置换', delete: '删除', copy: '复制', move: '移动', rename: '重命名', run: '运行',
+    replace: '置换', append: '追加', delete: '删除', copy: '复制', move: '移动', rename: '重命名', run: '运行',
 };
 
 // renderPreview 渲染文件预览（文本 / 图片 / 视频 / 音频 / 其他）。

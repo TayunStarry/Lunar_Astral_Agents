@@ -41,6 +41,12 @@ const (
 	shotPainted = "painted"
 	shotFailed  = "failed"
 
+	// 配音执行状态
+	voicePending = "pending"
+	voiceRunning = "voicing"
+	voiceReady   = "ready"
+	voiceFailed  = "failed"
+
 	// 增量事件名（前端据此逐条追加渲染）
 	eventAccepted          = "accepted"
 	eventResearchStarted   = "research_started"
@@ -53,6 +59,8 @@ const (
 	eventReviewReady     = "review_ready"
 	eventReviewConfirmed = "review_confirmed"
 	eventShotStarted     = "shot_started"
+	eventShotPainted     = "shot_painted"
+	eventVoiceStarted    = "voice_started"
 	eventShotCompleted   = "shot_completed"
 	eventShotFailed      = "shot_failed"
 	eventWriting         = "writing"
@@ -89,14 +97,31 @@ const (
 	maxThoughtBytes = 48000
 	// maxPaintAttempts 单镜最多绘制尝试次数（含首次）
 	maxPaintAttempts = 2
+	// maxVoiceAttempts 单镜最多配音尝试次数（含首次）
+	maxVoiceAttempts = 2
+	// maxVoiceRunes 单镜朗读原文上限
+	maxVoiceRunes = 1200
 
 	// defaultRatio 统一画幅
 	defaultRatio = "16:9"
 
-	// docRootRel 分镜文档在 LocalDir 下的物理根目录
+	// docRootRel 幻灯片文档在 LocalDir 下的物理根目录
 	docRootRel = "documents/lens"
-	// docDisplayRoot 分镜文档相对 /document 的目录前缀
+	// docDisplayRoot 幻灯片文档相对 /document 的目录前缀
 	docDisplayRoot = "lens"
+	// slideFileExt 演绎最终产物：documents/lens/<标题>.html
+	slideFileExt = ".html"
+	// imageOutputRoot 分镜图片的产出根目录
+	imageOutputRoot = "multimedia/generated"
+	// voiceOutputRoot 分镜配音的产出根目录：音频自成内容树，不混进 multimedia
+	voiceOutputRoot = "audios/generated"
+
+	// fallbackSlideMs 无配音时单镜幻灯片的最小展示时长
+	fallbackSlideMs = 3200
+	// maxFallbackSlideMs 无配音时单镜幻灯片的最大展示时长
+	maxFallbackSlideMs = 30000
+	// perRuneSpeechMs 无配音时按字数估算朗读时长（毫秒/字）
+	perRuneSpeechMs = 240
 
 	// storyboardTasksFile 任务现场落盘路径：重启后据此恢复未完成任务。
 	storyboardTasksFile = "database/storyboard/tasks.json"
@@ -111,6 +136,9 @@ var WebSearchHook func(query string) (string, error)
 var (
 	// PaintHook 图片绘制能力，由装配层注入现有绘制智能体。
 	PaintHook func(ctx context.Context, req PaintRequest) (PaintResult, error)
+	// VoiceHook 语音合成能力，由装配层注入统一播报链路。
+	// 传入的文本一定是本镜故事原文；返回 WAV 字节。
+	VoiceHook func(ctx context.Context, req VoiceRequest) (VoiceResult, error)
 	// TaskEventHook 任务状态推送，由装配层注入 WebSocket 广播。
 	TaskEventHook func(view TaskView)
 
@@ -139,6 +167,8 @@ var (
 	planTimeout = 3 * time.Minute
 	// shotPaintTimeout 单镜绘制超时
 	shotPaintTimeout = 8 * time.Minute
+	// shotVoiceTimeout 单镜配音超时
+	shotVoiceTimeout = 3 * time.Minute
 	// runWarnTimeout 长耗时预警阈值：到达后只提醒，绝不终止
 	runWarnTimeout = 60 * time.Minute
 	// runWarnInterval 持续运行时的提醒间隔（每次都只提醒）
@@ -162,6 +192,12 @@ var (
 func stagePaintTimeout() time.Duration {
 	return time.Duration(maxPaintAttempts)*shotPaintTimeout +
 		time.Duration(maxPaintAttempts)*retryBackoff + time.Minute
+}
+
+// stageVoiceTimeout 单镜配音原子步骤的总超时：覆盖全部重试与退避。
+func stageVoiceTimeout() time.Duration {
+	return time.Duration(maxVoiceAttempts)*shotVoiceTimeout +
+		time.Duration(maxVoiceAttempts)*retryBackoff + 30*time.Second
 }
 
 // stagePlanTimeout 分镜规划原子步骤的总超时。

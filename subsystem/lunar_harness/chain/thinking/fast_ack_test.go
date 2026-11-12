@@ -38,7 +38,7 @@ func captureFastAck(t *testing.T) func() []fastAckPushRecord {
 
 // TestFastAckTriggersForCompositeTools 三个复合工具各命中一次。
 func TestFastAckTriggersForCompositeTools(t *testing.T) {
-	for _, name := range []string{Dialogue.ToolDispatchTechnique, Dialogue.ToolNetworkExplore, Dialogue.ToolUseTheProgram} {
+	for _, name := range []string{Dialogue.ToolCreativeWork, Dialogue.ToolNetworkExplore, Dialogue.ToolUseTheProgram} {
 		t.Run(name, func(t *testing.T) {
 			resetDialogueGlobals(t)
 			pushes := captureFastAck(t)
@@ -74,8 +74,8 @@ func TestFastAckOncePerRound(t *testing.T) {
 		name  string
 		calls []string
 	}{
-		{"同工具重复", []string{Dialogue.ToolDispatchTechnique, Dialogue.ToolDispatchTechnique}},
-		{"不同复合工具", []string{Dialogue.ToolDispatchTechnique, Dialogue.ToolNetworkExplore}},
+		{"同工具重复", []string{Dialogue.ToolCreativeWork, Dialogue.ToolCreativeWork}},
+		{"不同复合工具", []string{Dialogue.ToolCreativeWork, Dialogue.ToolNetworkExplore}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestFastAckConcurrentCallsPushOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			maybeSendFastAck(Dialogue.ToolDispatchTechnique)
+			maybeSendFastAck(Dialogue.ToolCreativeWork)
 		}()
 	}
 	wg.Wait()
@@ -118,7 +118,7 @@ func TestFastAckSpokenAndAutoMarked(t *testing.T) {
 	pushes := captureFastAck(t)
 	useSpeechSynth(t, func(text string) string { return "audio:" + text })
 
-	maybeSendFastAck(Dialogue.ToolDispatchTechnique)
+	maybeSendFastAck(Dialogue.ToolCreativeWork)
 
 	records := pushes()
 	if len(records) != 1 {
@@ -135,7 +135,7 @@ func TestFastAckSpokenAndAutoMarked(t *testing.T) {
 // TestFastAckLinePoolIsToolLevel 分支参数不再参与台词选择：候选池按工具名固定，
 // 每次随机取用；且每个复合工具至少两条候选。
 func TestFastAckLinePoolIsToolLevel(t *testing.T) {
-	for _, name := range []string{Dialogue.ToolDispatchTechnique, Dialogue.ToolNetworkExplore, Dialogue.ToolUseTheProgram} {
+	for _, name := range []string{Dialogue.ToolCreativeWork, Dialogue.ToolNetworkExplore, Dialogue.ToolUseTheProgram} {
 		t.Run(name, func(t *testing.T) {
 			pool := fastAckLines[name]
 			if len(pool) < 2 {
@@ -194,7 +194,7 @@ func TestFastAckNeverEmptyWhenAllPartsDropped(t *testing.T) {
 	restore := forceAckDrops(t, 1, 1, 1)
 	defer restore()
 
-	for _, name := range []string{Dialogue.ToolDispatchTechnique, Dialogue.ToolNetworkExplore, Dialogue.ToolUseTheProgram} {
+	for _, name := range []string{Dialogue.ToolCreativeWork, Dialogue.ToolNetworkExplore, Dialogue.ToolUseTheProgram} {
 		text := fastAckText(name)
 		if strings.TrimSpace(text) == "" {
 			t.Fatalf("%s 三段全舍弃时应由正文兜底，实际为空", name)
@@ -219,7 +219,7 @@ func TestFastAckPartsDropByChance(t *testing.T) {
 	}
 	openings := dropped(fastAckOpenings, fastAckOpeningDrop)
 	endings := dropped(fastAckEndings, fastAckEndingDrop)
-	actions := dropped(fastAckLines[Dialogue.ToolDispatchTechnique], fastAckActionDrop)
+	actions := dropped(fastAckLines[Dialogue.ToolCreativeWork], fastAckActionDrop)
 
 	// 期望值分别约为 180 / 220 / 60，取宽松下界避免偶发抖动
 	if openings < 120 || endings < 160 {

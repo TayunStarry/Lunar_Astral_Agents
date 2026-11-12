@@ -84,6 +84,7 @@ func confirmLibraryStoryboard(taskID, title string, shots []server.LibraryStoryb
 			Act:       shot.Act,
 			Scene:     shot.Scene,
 			Narration: shot.Narration,
+			Original:  shot.Original,
 			Prompt:    shot.Prompt,
 			Ratio:     shot.Ratio,
 		})
@@ -145,16 +146,21 @@ func toLibraryStoryboardShots(source []storyboard.ShotView) []server.LibraryStor
 	out := make([]server.LibraryStoryboardShot, 0, len(source))
 	for _, shot := range source {
 		out = append(out, server.LibraryStoryboardShot{
-			Index:     shot.Index,
-			Act:       shot.Act,
-			Scene:     shot.Scene,
-			Narration: shot.Narration,
-			Prompt:    shot.Prompt,
-			Ratio:     shot.Ratio,
-			Status:    shot.Status,
-			Handle:    shot.Handle,
-			File:      shot.File,
-			Error:     shot.Error,
+			Index:           shot.Index,
+			Act:             shot.Act,
+			Scene:           shot.Scene,
+			Narration:       shot.Narration,
+			Original:        shot.Original,
+			Prompt:          shot.Prompt,
+			Ratio:           shot.Ratio,
+			Status:          shot.Status,
+			Handle:          shot.Handle,
+			File:            shot.File,
+			VoiceStatus:     shot.VoiceStatus,
+			VoiceFile:       shot.VoiceFile,
+			VoiceDurationMs: shot.VoiceDurationMs,
+			VoiceError:      shot.VoiceError,
+			Error:           shot.Error,
 		})
 	}
 	return out

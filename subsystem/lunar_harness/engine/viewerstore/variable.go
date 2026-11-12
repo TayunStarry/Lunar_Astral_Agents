@@ -54,3 +54,17 @@ const watchVideoColumns = `bv, title, intro, author_uid, author_name, comments,
 var watchVideoColumnAdds = []columnAdd{
 	{Column: "topics", SQL: `ALTER TABLE watch_video ADD COLUMN topics TEXT NOT NULL DEFAULT ''`},
 }
+
+// ==== 历史 JSON 迁移 ====
+
+const (
+	// inboxSeenJSONFile 旧版消息去重键文件（位于 DataDir）
+	inboxSeenJSONFile = "inbox.json"
+	// seenVideoJSONFile 旧版已看记录文件（位于 DataDir）
+	seenVideoJSONFile = "seen.json"
+	// inboxSeenImportMark / seenVideoImportMark viewer_meta 中的一次性迁移标记
+	inboxSeenImportMark = "migrate:inbox_seen:v1"
+	seenVideoImportMark = "migrate:seen_video:v1"
+	// legacyImportAbsent 源文件不存在时的标记值（避免每次打开都去 stat）
+	legacyImportAbsent = "absent"
+)

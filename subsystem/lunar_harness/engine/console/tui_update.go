@@ -76,18 +76,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.proxy.stopping = false
 		m.setNotice("HTTPS 代理已停止", false)
 		return m, nil
-
-	case handoverTickMsg:
-		// 交接倒计时在顶层处理：无论当前屏为何都必须走完并退出——
-		// tick 链一旦因屏幕切换而断掉，就会卡在「更新器在等待、控制台不退出」的死局
-		if pendingHandover == nil {
-			return m, nil
-		}
-		if m.update.handoverLeft <= 1 {
-			return m, tea.Quit
-		}
-		m.update.handoverLeft--
-		return m, handoverTick()
 	}
 
 	// 刷新滚动度量（窗口尺寸变化、切屏、内容变化后按键才拿得到真实行数）
@@ -113,8 +101,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateProxy(msg)
 	case screenArchive:
 		return m.updateArchive(msg)
-	case screenUpdate:
-		return m.updateUpdate(msg)
 	case screenPorts:
 		return m.updatePorts(msg)
 	case screenDump:
@@ -142,6 +128,12 @@ func (m *appModel) handleGlobalKey(key tea.KeyMsg) (bool, tea.Cmd) {
 	if k == "?" && !m.inputFocused() {
 		m.help = true
 		return true, nil
+	}
+	// x/X 退出（界面显示 X）：除「运行状态」屏外全部在全局处理，避免每个屏各写一份。
+	// 输入框正在接收字符时让位（x 是合法正文）；「运行状态」屏在桌面操纵
+	// 运行时把 x 留给「中断 / 强制结束」，由 updateStats 判断是否退出。
+	if (k == "x" || k == "X") && !m.textEntryActive() && m.screen != screenStats {
+		return true, tea.Quit
 	}
 	// 屏间顺序切换：任何屏都可用，不依赖「先回主菜单再进」。
 	// 文本框聚焦时让位（[ ] 也是合法正文），其余屏一律接管。
@@ -172,13 +164,23 @@ func (m appModel) inputFocused() bool {
 	switch m.screen {
 	case screenArchive:
 		return m.archive.inputMode
-	case screenUpdate:
-		switch m.update.mode {
-		case updateInputTag, updateInputHash, updateInputToken:
-			return true
-		}
 	case screenStats:
 		return m.engine.inputMode
+	}
+	return false
+}
+
+// textEntryActive 当前屏是否有「会接收正文」的输入框（供退出键让位）。
+//
+// 只认自由文本输入：端口/代理屏的数字框虽然常驻聚焦，但 x 不是端口字符，
+// 那里按 x 更可能是想退出，而不是往端口号里塞一个非法字符——与 inputFocused
+// 对 ? / [ ] 的取舍保持一致。
+func (m appModel) textEntryActive() bool {
+	switch m.screen {
+	case screenStats:
+		return m.engine.inputMode
+	case screenArchive:
+		return m.archive.inputMode
 	}
 	return false
 }
@@ -188,8 +190,6 @@ func (m *appModel) applyProgress(percent int) {
 	switch m.screen {
 	case screenArchive:
 		m.archive.progress = percent
-	case screenUpdate:
-		m.update.progress = percent
 	case screenProxy:
 		m.proxy.progress = percent
 	}
@@ -203,14 +203,12 @@ func (m appModel) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch key.String() {
-	case "ctrl+c", "q":
-		return m, tea.Quit
 	case "up", "k":
 		m.menu = listMove(m.menu, -1, len(menuItems), true)
 	case "down", "j":
 		m.menu = listMove(m.menu, 1, len(menuItems), true)
-	// 首尾跳转只保留 Home/End：g 已分配给「退出程序」直达键，
-	// 若同时作为跳转别名，会与直达优先级互相吞掉。
+	// 首尾跳转只保留 Home/End：g/G 留给列表屏的翻页语义，
+	// 主菜单不另设别名，避免同一按键在不同屏含义摇摆。
 	case "home":
 		m.menu = 0
 	case "end":
@@ -261,8 +259,6 @@ func (m *appModel) enterScreen(id screenID) tea.Cmd {
 		return m.proxyEnter()
 	case screenArchive:
 		return m.archiveEnter()
-	case screenUpdate:
-		return m.updateEnter()
 	case screenPorts:
 		m.ports.activated = true
 		m.applyPortsFocus(0)

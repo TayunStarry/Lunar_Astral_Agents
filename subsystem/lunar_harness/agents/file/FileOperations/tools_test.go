@@ -46,6 +46,46 @@ func TestProjectFolderFromChangedPaths(t *testing.T) {
 	}
 }
 
+// TestCatalogHasNoStoryBranch 编辑域只保留文件 / 归档 / 代码 / 回滚四种子任务，故事创作已独立。
+func TestCatalogHasNoStoryBranch(t *testing.T) {
+	defs := definitions()
+	for _, def := range defs {
+		if def.Function.Name == "list_stories" {
+			t.Fatal("编辑域不应再暴露 list_stories")
+		}
+		if def.Function.Name != toolManipulate {
+			continue
+		}
+		operations, ok := def.Function.Parameters["properties"].(map[string]any)["operations"].(map[string]any)
+		if !ok {
+			t.Fatalf("operations 参数声明缺失: %+v", def.Function.Parameters)
+		}
+		items, ok := operations["items"].(map[string]any)
+		if !ok {
+			t.Fatalf("operations.items 声明缺失: %+v", operations)
+		}
+		props, ok := items["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("operations.items.properties 声明缺失: %+v", items)
+		}
+		if _, exists := props["mode"]; exists {
+			t.Fatal("编辑域不应再有 mode 参数")
+		}
+		if _, exists := props["story"]; exists {
+			t.Fatal("编辑域不应再有 story 参数")
+		}
+		kind, ok := props["type"].(map[string]any)
+		if !ok {
+			t.Fatalf("type 声明缺失: %+v", props)
+		}
+		for _, value := range kind["enum"].([]string) {
+			if value == "story" {
+				t.Fatalf("编辑域不应再接受 story 子任务: %v", kind["enum"])
+			}
+		}
+	}
+}
+
 func TestDropFailedStepsKeepsSuccessfulWork(t *testing.T) {
 	c := &collector{changedPaths: []string{"documents/作品/index.html"}}
 	c.steps = []stepResult{

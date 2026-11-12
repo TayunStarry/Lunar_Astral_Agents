@@ -3,14 +3,15 @@ package console
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // 全部屏幕的清单：新增屏幕时请一并加进来，宽度不变式对它们同样生效。
 func allScreens() []screenID {
 	return []screenID{
 		screenMenu, screenAgent, screenStats, screenLogs,
-		screenProxy, screenArchive,
-		screenUpdate, screenPorts, screenDump, screenTools,
+		screenProxy, screenArchive, screenPorts, screenDump, screenTools,
 	}
 }
 
@@ -158,6 +159,96 @@ func TestSectionRuleEmptyTitle(t *testing.T) {
 	}
 	if strings.Contains(out, "──  ") {
 		t.Fatalf("空标题不该产生「──  」前缀: %q", out)
+	}
+}
+
+// 覆盖：窄终端底栏被压缩时，「? 帮助」仍然保留在最前，帮助入口不会随截断消失。
+func TestAgentFooterHelpReachable(t *testing.T) {
+	t.Setenv(colorModeEnv, "")
+	for _, size := range [][2]int{{44, 10}, {80, 24}} {
+		m := newAppModel()
+		m.width, m.height = size[0], size[1]
+		m.screen = screenAgent
+
+		lines := strings.Split(m.View(), "\n")
+		if foot := ansi.Strip(lines[len(lines)-1]); !strings.Contains(foot, "? 帮助") {
+			t.Fatalf("%dx%d 底栏缺少帮助入口: %q", size[0], size[1], foot)
+		}
+	}
+}
+
+// 覆盖：实况屏的分栏阈值——宽屏把状态单独成栏，窄屏退回单栏并把状态放进底栏。
+func TestAgentStatusRailResponsive(t *testing.T) {
+	t.Setenv(colorModeEnv, "")
+	resetTurnStore()
+	defer resetTurnStore()
+	StreamBegin("对话者")
+	StreamDelta("对话者", KindThink, "先看问题，再决定是否调用工具。")
+	StreamTool("对话者", "dispatch_painter", `{"character":"琉璃"}`)
+	StreamDelta("对话者", KindContent, "画好了。")
+	StreamEnd("对话者")
+
+	wide := newAppModel()
+	wide.width, wide.height = 120, 40
+	wide.screen = screenAgent
+	wideOut := wide.View()
+	if !strings.Contains(wideOut, "状态") || !strings.Contains(wideOut, "轮次") {
+		t.Fatal("宽屏实况屏应出现独立的状态栏")
+	}
+
+	narrow := newAppModel()
+	narrow.width, narrow.height = 80, 24
+	narrow.screen = screenAgent
+	narrowLines := strings.Split(narrow.View(), "\n")
+	if strings.Contains(strings.Join(narrowLines, "\n"), "── 状态") {
+		t.Fatal("窄屏不应强行分栏")
+	}
+	foot := ansi.Strip(narrowLines[len(narrowLines)-1])
+	if !strings.Contains(foot, "行") {
+		t.Fatalf("窄屏状态应退回底栏，实得: %q", foot)
+	}
+	// 窄屏是分栏状态栏的紧凑退化形态：用时与步骤仍要在底栏可见
+	if !strings.Contains(foot, "上轮") || !strings.Contains(foot, "等待工具") {
+		t.Fatalf("窄屏底栏应保留用时与步骤，实得: %q", foot)
+	}
+}
+
+// 覆盖：状态栏的「用时 / 步骤」随流式事件推进——
+// 进行中给「本轮」，工具未返回时保持「等待工具」，工具返回后才落到「上轮 / 已结束」。
+func TestAgentStatusRailTracksPhase(t *testing.T) {
+	t.Setenv(colorModeEnv, "")
+	resetTurnStore()
+	defer resetTurnStore()
+
+	StreamBegin("对话者")
+	StreamDelta("对话者", KindThink, "先想想。")
+
+	m := newAppModel()
+	m.width, m.height = 120, 40
+	m.screen = screenAgent
+	out := ansi.Strip(m.View())
+	for _, want := range []string{"用时", "步骤", "本轮", "思考中"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("进行中应显示 %q，实得:\n%s", want, out)
+		}
+	}
+
+	StreamTool("对话者", "dispatch_painter", "{}")
+	if out := ansi.Strip(m.View()); !strings.Contains(out, "等待工具") {
+		t.Fatalf("工具调用后应显示等待工具，实得:\n%s", out)
+	}
+
+	StreamEnd("对话者")
+	if out := ansi.Strip(m.View()); !strings.Contains(out, "等待工具") {
+		t.Fatalf("工具尚未返回时应保持等待工具，实得:\n%s", out)
+	}
+
+	StreamToolResult("对话者", "绘制完成")
+	out = ansi.Strip(m.View())
+	for _, want := range []string{"上轮", "已结束"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("工具返回后应显示 %q，实得:\n%s", want, out)
+		}
 	}
 }
 

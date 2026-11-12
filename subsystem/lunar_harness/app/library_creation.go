@@ -2,9 +2,9 @@ package app
 
 // library_creation.go 资源库创作入口的内存任务表。
 //
-// 旧创作链已移除：资源库提交的创作需求不再走独立链路，而是直接交给
-// 文件操作智能体（agents/FileOperations）完成。HTTP 层只负责受理、
-// 查询与推送任务状态，真正的文件操纵都在智能体内完成。
+// 资源库提交的创作需求不再经过统一调度，而是按领域直接交给专业分支：
+// story → 故事创作（agents/file/StoryWriter）；edit → 文件编辑（agents/file/FileOperations）。
+// HTTP 层只负责受理、查询与推送任务状态，真正的文件操纵都在智能体内完成。
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"LunarSubsystem/LunarHarness/agents/file/FileOperations"
+	"LunarSubsystem/LunarHarness/agents/file/StoryWriter"
 	"LunarSubsystem/LunarHarness/engine/websocket"
 	"LunarSubsystem/LunarHarness/server"
 )
@@ -35,9 +36,14 @@ const (
 	libraryCreationTimeout = 30 * time.Minute
 	// creationTaskKeep 进程内保留的最近任务数，避免长期运行后无限增长。
 	creationTaskKeep = 100
+
+	// creationDomainStory 故事创作领域
+	creationDomainStory = "story"
+	// creationDomainEdit 文件编辑领域
+	creationDomainEdit = "edit"
 )
 
-// submitLibraryCreation 受理资源库创作请求并在后台执行文件操作智能体。
+// submitLibraryCreation 受理资源库创作请求并在后台执行对应领域的智能体。
 func submitLibraryCreation(req server.LibraryCreationRequest) (server.LibraryCreationTask, error) {
 	handles := append([]string(nil), req.Handles...)
 	if strings.TrimSpace(req.Handle) != "" {
@@ -50,25 +56,54 @@ func submitLibraryCreation(req server.LibraryCreationRequest) (server.LibraryCre
 	}
 	if mode == "random" || (instruction == "" && len(handles) == 0) {
 		mode = "random"
-		instruction = defaultCreationInstruction()
+		// 没有句柄但用户写了需求时，按用户需求执行；只有完全空白才回落到随机选题。
+		if instruction == "" {
+			instruction = defaultCreationInstruction()
+		}
 	}
 	if instruction == "" {
 		return server.LibraryCreationTask{}, fmt.Errorf("请填写创作需求描述")
 	}
+	domain := resolveCreationDomain(req.Domain, instruction)
 
 	now := time.Now()
 	task := server.LibraryCreationTask{
 		TaskID:    creationTasks.nextID(now),
 		Mode:      mode,
+		Domain:    domain,
 		Status:    "running",
-		Stage:     "file_operations",
+		Stage:     creationDomainStage(domain),
 		Progress:  10,
 		CreatedAt: now.Format(time.RFC3339),
 		UpdatedAt: now.Format(time.RFC3339),
 	}
 	creationTasks.put(task)
-	go runLibraryCreation(task.TaskID, instruction, handles)
+	go runLibraryCreation(task.TaskID, domain, instruction, handles)
 	return task, nil
+}
+
+// resolveCreationDomain 规整领域；旧客户端不带 domain 时按描述推断。
+func resolveCreationDomain(domain, instruction string) string {
+	switch strings.ToLower(strings.TrimSpace(domain)) {
+	case creationDomainStory:
+		return creationDomainStory
+	case creationDomainEdit:
+		return creationDomainEdit
+	}
+	for _, keyword := range []string{"故事", "小说", "续写", "长篇", "章节", "大纲"} {
+		if strings.Contains(instruction, keyword) {
+			return creationDomainStory
+		}
+	}
+	return creationDomainEdit
+}
+
+// creationDomainStage 领域对应的任务阶段名。
+func creationDomainStage(domain string) string {
+	if domain == creationDomainStory {
+		return "story_writer"
+	}
+	return "file_operations"
 }
 
 // libraryCreationStatus 查询单个创作任务。
@@ -83,15 +118,30 @@ func libraryCreationList(limit int) []server.LibraryCreationTask {
 }
 
 // runLibraryCreation 在后台执行一次创作，并把最终状态写回任务表。
-func runLibraryCreation(taskID, instruction string, handles []string) {
+func runLibraryCreation(taskID, domain, instruction string, handles []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), libraryCreationTimeout)
 	defer cancel()
 
-	result, err := FileOperations.Run(ctx, FileOperations.Request{
-		Instruction:   instruction,
-		Handles:       handles,
-		WorkspaceRoot: "documents",
-	})
+	var (
+		summary string
+		out     []string
+		err     error
+	)
+	if domain == creationDomainStory {
+		result, runErr := StoryWriter.Run(ctx, StoryWriter.Request{
+			Instruction:   instruction,
+			Handles:       handles,
+			WorkspaceRoot: "documents",
+		})
+		summary, out, err = result.Summary, result.Handles, runErr
+	} else {
+		result, runErr := FileOperations.Run(ctx, FileOperations.Request{
+			Instruction:   instruction,
+			Handles:       handles,
+			WorkspaceRoot: "documents",
+		})
+		summary, out, err = result.Summary, result.Handles, runErr
+	}
 
 	update := func(task server.LibraryCreationTask) server.LibraryCreationTask {
 		task.Progress = 100
@@ -101,8 +151,8 @@ func runLibraryCreation(taskID, instruction string, handles []string) {
 			task.Error = err.Error()
 		} else {
 			task.Status = "completed"
-			task.Summary = result.Summary
-			task.Handles = append([]string(nil), result.Handles...)
+			task.Summary = summary
+			task.Handles = append([]string(nil), out...)
 		}
 		creationTasks.put(task)
 		broadcastCreationTask(task)
@@ -116,10 +166,10 @@ func runLibraryCreation(taskID, instruction string, handles []string) {
 	update(task)
 }
 
-// defaultCreationInstruction 随机创作模式下交给文件操作智能体的默认要求。
+// defaultCreationInstruction 随机创作模式下交给文件编辑智能体的默认要求。
 func defaultCreationInstruction() string {
-	return "请随机选择一个短小的创作方向（小说、HTML 小游戏、JavaScript 代码、HTML 小程序、歌词或带插画的故事），" +
-		"在 documents 下新建一个专属目录并完成作品；带插画的故事只负责文字与目录，插画交由演绎系统处理。"
+	return "请随机选择一个短小的创作方向（HTML 小游戏、JavaScript 代码、HTML 小程序或歌词），" +
+		"在 documents 下新建一个专属目录并完成作品；需要插画时只负责文字与目录，插画交由演绎系统处理。"
 }
 
 // broadcastCreationTask 把任务快照推送给资源库前端。

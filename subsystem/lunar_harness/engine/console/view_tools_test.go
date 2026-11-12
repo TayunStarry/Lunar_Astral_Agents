@@ -6,12 +6,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"LunarSubsystem/LunarHarness/protocol/agentinfo"
 )
 
-// TestMenuGroupsAndKeysSequential 主菜单：分组顺序固定，快捷键按显示顺序连续占用 0-9、a-z
+// TestMenuGroupsAndKeysSequential 主菜单：分组顺序固定；功能屏快捷键按显示顺序连续占用 0-9；
+// 退出项是哨兵、不占项号，界面统一显示 X（大小写 x/X 仍都可按）。
 func TestMenuGroupsAndKeysSequential(t *testing.T) {
-	wantGroups := []string{"运行观测", "系统管理", "更新与退出"}
+	wantGroups := []string{"运行观测", "系统管理", "退出"}
 	gotGroups := make([]string, 0, len(wantGroups))
 	for _, item := range menuItems {
 		if len(gotGroups) == 0 || gotGroups[len(gotGroups)-1] != item.group {
@@ -22,17 +25,32 @@ func TestMenuGroupsAndKeysSequential(t *testing.T) {
 		t.Fatalf("分组顺序应为 %v，实际 %v", wantGroups, gotGroups)
 	}
 
-	const keys = "0123456789abcdefghijklmnopqrstuvwxyz"
+	const keys = "0123456789"
+	seq := 0
 	for i, item := range menuItems {
-		if i >= len(keys) {
+		if item.screen == screenMenu {
+			// 退出哨兵：界面标签必须是单个 X，且数字 8 不再命中退出项
+			if item.key != "X" {
+				t.Fatalf("退出项快捷键标签应为 %q，实际 %q", "X", item.key)
+			}
+			if idx := menuHotkeyIndex("8"); idx >= 0 && menuItems[idx].screen == screenMenu {
+				t.Fatal("数字 8 不应再命中退出项")
+			}
+			if idx := menuHotkeyIndex(item.key); idx != i {
+				t.Fatalf("%q 应命中第 %d 项，实际 %d", item.key, i, idx)
+			}
+			continue
+		}
+		if seq >= len(keys) {
 			t.Fatalf("菜单条目超过快捷键容量（%d）", len(keys))
 		}
-		if want := string(keys[i]); item.key != want {
+		if want := string(keys[seq]); item.key != want {
 			t.Fatalf("第 %d 项「%s」的快捷键应为 %q，实际 %q", i, item.title, want, item.key)
 		}
 		if idx := menuHotkeyIndex(item.key); idx != i {
 			t.Fatalf("%q 应命中第 %d 项，实际 %d", item.key, i, idx)
 		}
+		seq++
 	}
 
 	// 工具列表仍在系统管理组内，且按键能正确回到该条目
@@ -49,6 +67,33 @@ func TestMenuGroupsAndKeysSequential(t *testing.T) {
 		return
 	}
 	t.Fatal("菜单里找不到工具列表条目")
+}
+
+// TestMenuQuitItemShowsXKey 退出项在主菜单、侧栏与详情栏都必须显示单个 X，不再显示旧项号 8 或 x/X。
+func TestMenuQuitItemShowsXKey(t *testing.T) {
+	t.Setenv(colorModeEnv, "")
+
+	m := newAppModel()
+	m.width, m.height = 120, 36
+	m.screen = screenMenu
+	m.menu = menuHotkeyIndex("X")
+	out := ansi.Strip(m.View())
+	if !strings.Contains(out, "[X]") || !strings.Contains(out, "退出程序") {
+		t.Fatalf("主菜单退出项应显示 [X] 退出程序:\n%s", out)
+	}
+	if strings.Contains(out, "[8]") || strings.Contains(out, "x/X") {
+		t.Fatalf("主菜单不应再出现旧的退出项号 [8] 或 x/X:\n%s", out)
+	}
+
+	// 侧栏与主菜单同源，退出项同样应显示 [X]
+	m.screen = screenAgent
+	nav := ansi.Strip(strings.Join(m.navLines(24, 24), "\n"))
+	if !strings.Contains(nav, "[X]") {
+		t.Fatalf("侧栏退出项应显示 [X]:\n%s", nav)
+	}
+	if strings.Contains(nav, "[8]") || strings.Contains(nav, "x/X") {
+		t.Fatalf("侧栏不应再出现旧的退出项号 [8] 或 x/X:\n%s", nav)
+	}
 }
 
 func TestToolsScreenRendersCatalog(t *testing.T) {

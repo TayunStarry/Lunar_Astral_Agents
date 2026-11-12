@@ -200,7 +200,7 @@ func TestWatchBranchSharesToolPath(t *testing.T) {
 	mu.Lock()
 	record := state.LastRecord
 	mu.Unlock()
-	if !strings.Contains(record, "看完") {
+	if !strings.Contains(record, "对话者点名的视频") || !strings.Contains(record, "看了") {
 		t.Fatalf("生活记录应来自看视频结果，实际 %q", record)
 	}
 }

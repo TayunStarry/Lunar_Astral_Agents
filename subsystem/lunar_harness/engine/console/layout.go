@@ -29,7 +29,8 @@ var globalKeys = []keyHint{
 	kh("Esc", "返回主菜单"),
 	kh("[ / ]", "按侧栏顺序切上一屏 / 下一屏"),
 	kh("?", "键位帮助"),
-	kh("Ctrl+C", "退出程序"),
+	kh("X", "退出程序（大小写均可，输入框聚焦时让位）"),
+	kh("Ctrl+C", "强制退出程序"),
 }
 
 // 框体尺寸下限：低于此尺寸改用极简提示，避免渲染出破碎的框线与错位的文字
@@ -86,7 +87,7 @@ func (f frame) navBlockWidth() int {
 	return f.navW + 1
 }
 
-// bodySize 内容区尺寸：框线占左右各 1 列、上下各 1 行；宽屏时再让出侧栏
+// bodySize 内容区尺寸：框线占左右各 1 列、上下各 1 行；宽屏时再让出侧栏。
 func (f frame) bodySize() (int, int) {
 	w, h := f.renderWidth()-2-f.navBlockWidth(), f.height-2
 	if w < 1 {
@@ -123,7 +124,7 @@ func (f frame) render(body []string) string {
 	// 侧栏只在整屏渲染时生成一次（syncViewMetrics 之类的热路径只取 bodySize，不付这份成本）
 	var nav []string
 	if f.navW > 0 && f.navFn != nil {
-		nav = f.navFn(f.navW, maxInt(1, f.height-2))
+		nav = f.navFn(f.navW, maxInt(1, h))
 	}
 	border := ruleStyle.Render("│")
 	sep := ruleStyle.Render("│")
@@ -268,8 +269,7 @@ func (m appModel) frameFor(title, context string, keys []keyHint) frame {
 	return f
 }
 
-// footerKeys 底栏键位：补上全局的「? 帮助」，让任何屏都能就地发现帮助页。
-// 各屏自报的键位在前（更贴近当前操作），全局键位在后。
+// footerKeys 底栏键位：把「? 帮助」放在最前，保证窄终端截断时帮助入口仍可见。
 func (m appModel) footerKeys(keys []keyHint) []keyHint {
 	for _, k := range keys {
 		if k.key == "?" {
@@ -277,8 +277,8 @@ func (m appModel) footerKeys(keys []keyHint) []keyHint {
 		}
 	}
 	out := make([]keyHint, 0, len(keys)+1)
-	out = append(out, keys...)
-	return append(out, kh("?", "帮助"))
+	out = append(out, kh("?", "帮助"))
+	return append(out, keys...)
 }
 
 // headerStatus 标题栏右侧的运行指示：进行中的任务优先，
@@ -293,7 +293,8 @@ func (m appModel) headerStatus() string {
 		}
 		return okStyle.Render("✓ " + m.notice)
 	default:
-		return dimStyle.Render(formatDuration(time.Since(startTime)) + " · " + time.Now().Format("15:04:05"))
+		// 时钟只到分钟：秒级跳动对排查无帮助，却持续挤占标题栏宽度
+		return dimStyle.Render(formatDuration(time.Since(startTime)) + " · " + time.Now().Format("15:04"))
 	}
 }
 

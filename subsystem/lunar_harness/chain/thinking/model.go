@@ -90,7 +90,7 @@ func (builder *ModelBuilder) run(appendContext []PostMessage, tools []ToolCall) 
 	rawMessages = append(rawMessages, builder.RuntimeMessages...)
 	rawMessages = append(rawMessages, appendContext...)
 	rawMessages = append(rawMessages, builder.Messages...)
-	// 出站图片闸门：任何非视觉读取产物的图片一律替换为文本占位（见 docs/adr/0008）
+	// 出站图片闸门：任何非视觉读取产物的图片一律替换为文本占位（见 image_guard.go）
 	rawMessages, _ = guardRequestImages(rawMessages)
 
 	extra := map[string]any{

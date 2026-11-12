@@ -40,7 +40,7 @@ func TestEnsureWatchlistSingleFailureDoesNotBlockOthers(t *testing.T) {
 	if segments, _ := viewerstore.LoadSegments(failBV); len(segments) != 0 {
 		t.Fatalf("失败视频不应留下片段: %d", len(segments))
 	}
-	assertWatchSegments(t, okBV, 1, viewerstore.WatchSegmentMax)
+	assertWatchSegments(t, okBV, 1, 1)
 	approved, _, _ := viewerstore.LoadVideo(okBV)
 	if approved.Status != viewerstore.WatchStatusApproved {
 		t.Fatalf("成功视频应为 approved: %+v", approved)
@@ -81,7 +81,7 @@ func TestEnsureWatchlistDownloadFailureRetriesNextRound(t *testing.T) {
 	if approved.Status != viewerstore.WatchStatusApproved {
 		t.Fatalf("重试成功后应置为 approved: %+v", approved)
 	}
-	assertWatchSegments(t, bv, 1, viewerstore.WatchSegmentMax)
+	assertWatchSegments(t, bv, 1, 1)
 }
 
 // TestEnsureWatchlistApprovedWriteFailureSelfHeals 片段已落盘但置 approved 失败时，
@@ -143,7 +143,7 @@ func TestEnsureWatchlistApprovedWriteFailureSelfHeals(t *testing.T) {
 	if approved.Status != viewerstore.WatchStatusApproved {
 		t.Fatalf("重试成功后应置为 approved: %+v", approved)
 	}
-	assertWatchSegments(t, bv, 1, watchSliceMax)
+	assertWatchSegments(t, bv, 1, 1)
 }
 
 // TestEnsureWatchlistPendingWithSegmentsRetries 置 approved 与回退写 rejected 都失败时，行停在 pending；
@@ -189,32 +189,6 @@ func TestEnsureWatchlistPendingWithSegmentsRetries(t *testing.T) {
 	}
 }
 
-// TestEnsureWatchlistUsesReviewSliceCount 审核给出的切片数必须生效；越界时钳制到 1~5。
-func TestEnsureWatchlistUsesReviewSliceCount(t *testing.T) {
-	isolateViewerDB(t)
-	links := watchTestLinks(2)
-	normalBV := bvidOf(links[0].Href)
-	overBV := bvidOf(links[1].Href)
-	deps := newWatchlistTestDeps(&fakeWatchSession{links: links}, &fakeWatchDownloader{})
-	deps.want = 2
-	deps.review = func(_ context.Context, video *videoRecord) videoReview {
-		if video.Info.Bvid == overBV {
-			return videoReview{Pass: true, Slices: watchSliceMax + 4}
-		}
-		return videoReview{Pass: true, Slices: 3}
-	}
-
-	result, err := ensureWatchlist(context.Background(), true, deps)
-	if err != nil {
-		t.Fatalf("管线执行失败: %v", err)
-	}
-	if result.Downloaded != 2 {
-		t.Fatalf("两个视频都应可播放: %+v", result)
-	}
-	assertWatchSegments(t, normalBV, 3, 3)
-	assertWatchSegments(t, overBV, watchSliceMax, watchSliceMax)
-}
-
 // TestPersistWatchItemsIdempotent 过审入库按 BV 幂等，重复执行不新增行。
 func TestPersistWatchItemsIdempotent(t *testing.T) {
 	isolateViewerDB(t)
@@ -237,22 +211,39 @@ func TestPersistWatchItemsIdempotent(t *testing.T) {
 	}
 }
 
-// TestPlanWatchSegments 片段数量 1~5、互不重叠且不越界。
-func TestPlanWatchSegments(t *testing.T) {
-	for _, duration := range []int{600, 300, 40, 5} {
-		for count := 1; count <= 5; count++ {
-			segments := planWatchSegments(duration, count, func(int) int { return 0 })
-			if len(segments) < 1 || len(segments) > 5 {
-				t.Fatalf("时长 %d 请求 %d 段，实际 %d 段", duration, count, len(segments))
-			}
-			for index, segment := range segments {
-				if segment.StartSec < 0 || segment.EndSec <= segment.StartSec || segment.EndSec > duration {
-					t.Fatalf("时长 %d 片段越界: %+v", duration, segment)
-				}
-				if index > 0 && segment.StartSec < segments[index-1].EndSec {
-					t.Fatalf("时长 %d 片段重叠: %+v", duration, segments)
-				}
-			}
+// TestPlanWatchSegment 一个视频只产一个片段：60 秒或全片，起点在允许范围内随机且不越界。
+func TestPlanWatchSegment(t *testing.T) {
+	// 长视频：随机起点在 [0, duration-60] 内，长度固定 60 秒。
+	segments := planWatchSegment(600, func(n int) int {
+		if n != 541 {
+			t.Fatalf("随机范围应为 [0, duration-60] 共 541 个位置，实际 %d", n)
 		}
+		return 300
+	})
+	if len(segments) != 1 {
+		t.Fatalf("一个视频只应产 1 个片段，实际 %d 个", len(segments))
+	}
+	if segments[0].StartSec != 300 || segments[0].EndSec != 360 {
+		t.Fatalf("片段区间不符: %+v", segments[0])
+	}
+
+	// 起点取上界时恰好贴住视频末尾，不越界。
+	segments = planWatchSegment(600, func(n int) int { return n - 1 })
+	if segments[0].StartSec != 540 || segments[0].EndSec != 600 {
+		t.Fatalf("起点上界应贴近末尾且不越界: %+v", segments[0])
+	}
+
+	// 不足 1 分钟取全片；起点只能是 0，不应消耗随机数。
+	got := planWatchSegment(40, func(int) int {
+		t.Fatal("全片处理不应调用随机数")
+		return 0
+	})
+	if len(got) != 1 || got[0].StartSec != 0 || got[0].EndSec != 40 {
+		t.Fatalf("不足 1 分钟应取全片: %+v", got)
+	}
+
+	// 时长未知时返回 nil，由调用方按失败处理。
+	if got := planWatchSegment(0, nil); got != nil {
+		t.Fatalf("时长未知应返回 nil，实际 %+v", got)
 	}
 }

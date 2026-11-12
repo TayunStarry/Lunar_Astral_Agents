@@ -46,6 +46,7 @@ const (
 	ToolRename  = "file_rename"
 	ToolSearch  = "file_search"
 	ToolReplace = "file_replace_at"
+	ToolAppend  = "file_append"
 	ToolInfo    = "file_info"
 	ToolRunProj = "run_project"
 )

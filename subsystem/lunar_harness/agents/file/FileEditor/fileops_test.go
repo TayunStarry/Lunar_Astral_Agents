@@ -5,6 +5,7 @@ package FileEditor
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -93,6 +94,44 @@ func TestFileEditorFileLifecycle(t *testing.T) {
 	deleted := DeleteFile("archive/a.md")
 	if !deleted.OK {
 		t.Fatalf("删除失败: %s", deleted.Summary)
+	}
+}
+
+// TestAppendTextKeepsContentAndReportsIncrement 追加只做增量写入：
+// 保留原内容、补齐缺失的末尾换行，并返回追加片段的起始行。
+func TestAppendTextKeepsContentAndReportsIncrement(t *testing.T) {
+	withTempLocalDir(t)
+
+	cases := []struct {
+		name      string
+		initial   string
+		addition  string
+		want      string
+		wantStart int64
+	}{
+		{name: "缺少末尾换行", initial: "a\nb", addition: "c", want: "a\nb\nc\n", wantStart: 3},
+		{name: "已有末尾换行", initial: "a\n", addition: "c", want: "a\nc\n", wantStart: 2},
+		{name: "空文件", initial: "", addition: "c", want: "c\n", wantStart: 1},
+	}
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rel := fmt.Sprintf("notes/append-%d.md", index)
+			if created := CreateFile(rel, tc.initial); !created.OK {
+				t.Fatalf("创建失败: %s", created.Summary)
+			}
+			appended := AppendText(rel, tc.addition)
+			if !appended.OK {
+				t.Fatalf("追加失败: %s", appended.Summary)
+			}
+			assertStructured(t, appended, ToolAppend)
+			if got := toInt64(appended.Detail["start_line"]); got != tc.wantStart {
+				t.Fatalf("起始行 = %d，期望 %d", got, tc.wantStart)
+			}
+			text, err := ReadText(rel)
+			if err != nil || text != tc.want {
+				t.Fatalf("追加后内容 = %q，期望 %q（%v）", text, tc.want, err)
+			}
+		})
 	}
 }
 

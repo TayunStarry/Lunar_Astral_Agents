@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -103,6 +104,39 @@ func Assemble() {
 				fmt.Errorf("图片绘制未产出资源句柄：%s", clipPaintReason(result.Summary))
 		}
 		return storyboard.PaintResult{Summary: result.Summary, Handles: result.Handles}, nil
+	}
+	// 演绎链逐镜配音复用统一播报链路：朗读的是本镜故事原文，返回 WAV 字节。
+	storyboard.VoiceHook = func(ctx context.Context, req storyboard.VoiceRequest) (storyboard.VoiceResult, error) {
+		type outcome struct {
+			audio string
+			err   error
+		}
+		done := make(chan outcome, 1)
+		go func() {
+			encoded, err := broadcaster.SynthesizeBase64(broadcaster.TTSRequest{
+				Text:              req.Text,
+				Temperature:       0.8,
+				TopK:              50,
+				TopP:              0.9,
+				MaxTokens:         2048,
+				RepetitionPenalty: 1.1,
+				Threads:           4,
+			})
+			done <- outcome{audio: encoded, err: err}
+		}()
+		select {
+		case <-ctx.Done():
+			return storyboard.VoiceResult{}, ctx.Err()
+		case result := <-done:
+			if result.err != nil {
+				return storyboard.VoiceResult{}, result.err
+			}
+			audio, err := base64.StdEncoding.DecodeString(result.audio)
+			if err != nil {
+				return storyboard.VoiceResult{}, fmt.Errorf("配音音频解码失败：%w", err)
+			}
+			return storyboard.VoiceResult{Audio: audio}, nil
+		}
 	}
 	// 演绎链的资料准备阶段复用现有网络搜索能力。
 	storyboard.WebSearchHook = func(query string) (string, error) {

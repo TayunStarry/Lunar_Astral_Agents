@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/dbopen"
 )
 
@@ -67,6 +68,10 @@ func openStore() (*sql.DB, error) {
 	if err := createTables(db); err != nil {
 		_ = db.Close()
 		return nil, err
+	}
+	// 旧版 JSON 只在首次打开时导入一次；失败不阻断库使用，下次打开会重试。
+	if err := importLegacyJSON(db); err != nil {
+		logger.Warn("BilibiliViewer", "历史 JSON 迁移失败（本次跳过，下次打开重试）: %v", err)
 	}
 	storeDB = db
 	return storeDB, nil
@@ -131,6 +136,24 @@ func createTables(db *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_watch_segment_pending
 			ON watch_segment(watched, bv, seg_index)`,
+		// 消息中心去重键：键本身就是业务唯一键（msg:/source:/历史 reply:），
+		// seen_at 用于 30 天 TTL 与条数截断。
+		`CREATE TABLE IF NOT EXISTS inbox_seen (
+			key      TEXT PRIMARY KEY,
+			seen_at  INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_inbox_seen_time ON inbox_seen(seen_at)`,
+		// 已看视频：一个 BV 一条，watched_at 是最近一次观看时间（不是复合键）。
+		`CREATE TABLE IF NOT EXISTS seen_video (
+			bv          TEXT PRIMARY KEY,
+			watched_at  INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_seen_video_time ON seen_video(watched_at)`,
+		// 迁移标记：保证旧版 JSON 只导一次，避免 TTL 清空后把陈年数据重新灌回来。
+		`CREATE TABLE IF NOT EXISTS viewer_meta (
+			key    TEXT PRIMARY KEY,
+			value  TEXT NOT NULL DEFAULT ''
+		)`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(statement); err != nil {

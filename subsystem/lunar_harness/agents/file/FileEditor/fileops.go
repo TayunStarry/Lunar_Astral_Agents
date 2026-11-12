@@ -5,7 +5,9 @@ package FileEditor
 // 绝对路径、.. 穿越与非法字符一律拒绝；每次操作后向资源库状态中心上报。
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -264,6 +266,78 @@ func writeDocument(rel, content string, mustCreate bool) (string, string, error)
 	}
 	resourcehub.Invalidate()
 	return localRel, registerHandle(localRel), nil
+}
+
+// appendDocument 在文件末尾追加内容，返回追加内容的起始行（1 起）。
+//
+// 只做一次 O_APPEND 写入并顺序扫描换行，不把整份文件读入内存，
+// 因此不受单次读取上限约束；原有「缺末尾换行时先补一行」的行为保持不变。
+func appendDocument(rel, addition string) (string, int, error) {
+	full, localRel, err := documentPath(rel)
+	if err != nil {
+		return "", 0, err
+	}
+	info, statErr := os.Stat(full)
+	if statErr != nil {
+		return "", 0, fmt.Errorf("文件不存在: %w", statErr)
+	}
+	if info.IsDir() {
+		return "", 0, fmt.Errorf("目标是一个目录，请用 file_list")
+	}
+	startLine, prefix, err := appendPosition(full)
+	if err != nil {
+		return "", 0, err
+	}
+	file, err := os.OpenFile(full, os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return "", 0, fmt.Errorf("打开文件失败: %w", err)
+	}
+	if _, err := file.WriteString(prefix + addition + "\n"); err != nil {
+		file.Close()
+		return "", 0, fmt.Errorf("追加文件失败: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return "", 0, fmt.Errorf("追加文件失败: %w", err)
+	}
+	resourcehub.Invalidate()
+	return localRel, startLine, nil
+}
+
+// appendPosition 计算追加内容落到的行号，并给出补齐换行的前缀。
+// 只统计换行与末字节，不保留文件内容，避免大文件占用内存。
+func appendPosition(full string) (int, string, error) {
+	file, err := os.Open(full)
+	if err != nil {
+		return 0, "", fmt.Errorf("打开文件失败: %w", err)
+	}
+	defer file.Close()
+	buf := make([]byte, 32<<10)
+	newlines := 0
+	var last byte
+	seen := false
+	for {
+		n, readErr := file.Read(buf)
+		if n > 0 {
+			seen = true
+			newlines += bytes.Count(buf[:n], []byte{'\n'})
+			last = buf[n-1]
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return 0, "", fmt.Errorf("读取文件失败: %w", readErr)
+		}
+	}
+	if !seen {
+		return 1, "", nil
+	}
+	lines := newlines
+	if last != '\n' {
+		lines++
+		return lines + 1, "\n", nil
+	}
+	return lines + 1, "", nil
 }
 
 // deleteDocument 删除文件并清理句柄。

@@ -8,7 +8,7 @@ package viewer
 //  3. B 站账号已登录；
 //  4. 待看视频列表为空。
 //
-// 五步严格按序执行：筛候选（24 个）→ 抽视频印象 → 全部审核 → 过审入队 → 切片下载。
+// 五步严格按序执行：筛候选（24 个）→ 采集元信息 → 全部审核 → 过审入队 → 切片下载。
 // 生活链接线方式（本批次只提供入口，不改 chain/life）：
 //
 //	result, err := viewer.EnsureWatchlist(ctx)
@@ -79,7 +79,7 @@ func ensureWatchlist(ctx context.Context, lifeTriggered bool, deps watchlistDeps
 	}
 	result.Candidates = len(links)
 
-	// 第二步：逐一打开候选，抽取标题、简介、作者 UID/昵称与评论，组成视频印象。
+	// 第二步：逐一打开候选，采集标题、简介、作者 UID/昵称、评论与标签。
 	// 采集只用总预算的 2/3，剩余留给审核与下载；到点即停，未采集的候选不产生任何写入。
 	items := make([]*watchItem, 0, len(links))
 	for index, link := range links {
@@ -91,7 +91,8 @@ func ensureWatchlist(ctx context.Context, lifeTriggered bool, deps watchlistDeps
 			break
 		}
 		itemCtx, cancel := budget.itemContext(ctx)
-		item, err := collectWatchItem(itemCtx, session, link, deps)
+		var _ context.Context = itemCtx
+		item, err := collectWatchItem(session, link, deps)
 		cancel()
 		if err != nil {
 			if budget.collectExpired() {
@@ -104,9 +105,9 @@ func ensureWatchlist(ctx context.Context, lifeTriggered bool, deps watchlistDeps
 			continue
 		}
 		items = append(items, item)
-		result.Impressions++
+		result.Collected++
 	}
-	logger.Info("BilibiliViewer", "待看列表：视频印象完成 %d/%d", result.Impressions, result.Candidates)
+	logger.Info("BilibiliViewer", "待看列表：元信息采集完成 %d/%d", result.Collected, result.Candidates)
 
 	// 第三步：先完成全部审核，再进入任何写库动作；预算耗尽的候选直接放弃，不留半条记录。
 	reviewed := 0
@@ -139,10 +140,10 @@ func ensureWatchlist(ctx context.Context, lifeTriggered bool, deps watchlistDeps
 	}
 	result.Enqueued = inserted
 
-	// 第五步：按审核给出的切片数切 1~5 个不重叠片段并下载；预算到点后未下载的顺延到下一轮。
+	// 第五步：每个视频切 1 个随机位置的 1 分钟片段并下载；预算到点后未下载的顺延到下一轮。
 	downloadWatchItems(ctx, items, deps, &result, budget)
-	logger.Info("BilibiliViewer", "待看列表：补齐完成，候选 %d｜印象 %d｜过审 %d｜入队 %d｜可播放 %d｜失败 %d｜预算耗尽 %v｜顺延 %d",
-		result.Candidates, result.Impressions, result.Approved, result.Enqueued, result.Downloaded,
+	logger.Info("BilibiliViewer", "待看列表：补齐完成，候选 %d｜采集 %d｜过审 %d｜入队 %d｜可播放 %d｜失败 %d｜预算耗尽 %v｜顺延 %d",
+		result.Candidates, result.Collected, result.Approved, result.Enqueued, result.Downloaded,
 		result.Failed, result.BudgetExhausted, result.Skipped)
 	// 观影列表变更接入心愿链路：后续心情偏移与愿望结算共用同一条状态。
 	wishchain.NoteLink(wishchain.LinkViewerWatchlist,
@@ -225,8 +226,10 @@ func retryableWatchVideo(video viewerstore.WatchVideo) bool {
 	return false
 }
 
-// collectWatchItem 打开一个候选视频页并抽取完整「视频印象」。
-func collectWatchItem(ctx context.Context, session watchSession, link videoLink, deps watchlistDeps) (*watchItem, error) {
+// collectWatchItem 打开一个候选视频页并采集元信息（标题/简介/作者/评论/标签）。
+//
+// 标签在观看期同时充当视频印象里的「视频标签」与偏好池主题词，采集一次即可。
+func collectWatchItem(session watchSession, link videoLink, deps watchlistDeps) (*watchItem, error) {
 	bv := bvidOf(link.Href)
 	if bv == "" {
 		return nil, fmt.Errorf("候选链接缺少 BV 号")
@@ -247,16 +250,20 @@ func collectWatchItem(ctx context.Context, session watchSession, link videoLink,
 		Info:     info,
 		Comments: readCommentPages(session, info.Aid, watchlistCommentLimit),
 	}
-	record.Impression = deps.impress(ctx, record)
+	if deps.fetchTags != nil {
+		if tags, tagErr := deps.fetchTags(bv); tagErr == nil {
+			record.Tags = tags
+		} else {
+			logger.Warn("BilibiliViewer", "待看列表：读取视频标签失败（继续采集）: %v", tagErr)
+		}
+	}
 	return &watchItem{record: record}, nil
 }
 
 // reviewWatchItem 用独立审核智能体给出通过/不通过与原因；模型调用发生在智能体内部。
-// 审核给出的切片数一并留在 item 上，下载阶段直接沿用，不再自行随机。
 func reviewWatchItem(ctx context.Context, item *watchItem, deps watchlistDeps) {
 	review := deps.review(ctx, item.record)
 	item.approved = review.Pass
-	item.slices = review.Slices
 	item.rejectReason = strings.TrimSpace(review.Reason)
 	if item.approved {
 		item.rejectReason = ""

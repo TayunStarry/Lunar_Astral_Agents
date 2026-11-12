@@ -1,6 +1,7 @@
 package viewer
 
-// watch_branch_test.go 看视频分支：取片段顺序、概率评论、收束评论 @、降级、状态更新、8 视频里程碑去重。
+// watch_branch_test.go 看视频分支：单切片理解的执行顺序、1-2 条评论、@ 人数取舍、
+// 降级路径、状态更新与 8 视频里程碑去重。
 
 import (
 	"context"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"LunarSubsystem/LunarHarness/agents/viewer/ViewerRemark"
 	"LunarSubsystem/LunarHarness/engine/config"
 	"LunarSubsystem/LunarHarness/engine/viewerstore"
 )
@@ -16,7 +18,11 @@ import (
 // newWatchTestDeps 构造全部外设都走桩的依赖，记录调用顺序与参数。
 func newWatchTestDeps(t *testing.T) (watchDeps, *watchTestLog) {
 	t.Helper()
-	log := &watchTestLog{removedIndex: -1}
+	log := &watchTestLog{
+		removedIndex:   -1,
+		impressionText: "《测试视频》的整体印象：轻松日常",
+		comments:       []string{"橘猫那一下太可爱了"},
+	}
 	deps := watchDeps{
 		pause: func() bool { return false },
 		now:   func() time.Time { return time.Unix(1_800_000_000, 0) },
@@ -27,7 +33,8 @@ func newWatchTestDeps(t *testing.T) (watchDeps, *watchTestLog) {
 		loadVideo: func(string) (viewerstore.WatchVideo, bool, error) {
 			return viewerstore.WatchVideo{
 				BV: "BV1test", Title: "测试视频", AuthorName: "某UP", AuthorUID: "12345",
-				Intro: "这是一个简介", Comments: []string{"好看"},
+				Intro: "这是一个简介", Comments: []string{"好看"}, DurationSec: 600,
+				Topics: []string{"测试"},
 			}, true, nil
 		},
 		loadSegments: func(string) ([]viewerstore.WatchSegment, error) {
@@ -37,29 +44,49 @@ func newWatchTestDeps(t *testing.T) (watchDeps, *watchTestLog) {
 			}
 			return out, nil
 		},
-		understand: func(_ context.Context, _ viewerstore.WatchSegment, _ viewerstore.WatchVideo, _ int) (string, string, error) {
+		understand: func(_ context.Context, _ viewerstore.WatchSegment, _ viewerstore.WatchVideo) (string, string, error) {
 			log.order = append(log.order, "understand")
 			if log.understandErr != nil {
 				return "", "", log.understandErr
 			}
 			return "画面里一只橘猫趴在窗台上", "", nil
 		},
-		remark: func(_ context.Context, _ viewerstore.WatchVideo, material string) (string, error) {
+		media: func(_ viewerstore.WatchVideo) watchMedia {
+			log.order = append(log.order, "media")
+			return watchMedia{Aid: 100, Danmaku: []string{"这段好治愈"}}
+		},
+		impression: func(_ context.Context, _ viewerstore.WatchVideo, _ watchMedia, visual string) (string, string) {
+			log.order = append(log.order, "impression")
+			log.visual = visual
+			if log.impressionEmpty {
+				return "", "视频印象材料为空"
+			}
+			return log.impressionText, ""
+		},
+		remark: func(_ context.Context, _ viewerstore.WatchVideo, material string, candidates []ViewerRemark.MentionCandidate) (ViewerRemark.Remark, error) {
 			log.order = append(log.order, "remark")
 			log.material = material
-			return "橘猫那一下太可爱了", nil
-		},
-		postComment: func(_ viewerstore.WatchVideo, message string, closing bool) (bool, bool, error) {
-			log.order = append(log.order, "post")
-			log.posted, log.closingAsked = message, closing
-			if log.postFailed {
-				return false, false, nil
+			log.candidatesSeen = candidates
+			if log.remarkErr != nil {
+				return ViewerRemark.Remark{}, log.remarkErr
 			}
-			return true, closing, nil
+			if log.plan != nil {
+				return ViewerRemark.Remark{Comments: log.plan}, nil
+			}
+			comments := make([]ViewerRemark.RemarkComment, 0, len(log.comments))
+			for _, text := range log.comments {
+				comments = append(comments, ViewerRemark.RemarkComment{
+					Text: text, Mention: log.mention, At: log.at,
+				})
+			}
+			return ViewerRemark.Remark{Comments: comments}, nil
 		},
-		rollRemark: func() bool {
-			log.rolled++
-			return log.remarkHit
+		openMention: func() (mentionSession, error) {
+			log.order = append(log.order, "open")
+			if log.openMentionErr != nil {
+				return nil, log.openMentionErr
+			}
+			return &fakeMentionSession{log: log}, nil
 		},
 		markWatched: func(_ string, index int, _ int64) (viewerstore.SegmentWatchResult, error) {
 			log.order = append(log.order, "mark")
@@ -67,7 +94,7 @@ func newWatchTestDeps(t *testing.T) (watchDeps, *watchTestLog) {
 			if log.markErr != nil {
 				return viewerstore.SegmentWatchResult{}, log.markErr
 			}
-			return viewerstore.SegmentWatchResult{VideoCompleted: index+1 == log.segmentTotal, CompletedVideos: log.completedVideos}, nil
+			return viewerstore.SegmentWatchResult{VideoCompleted: true, CompletedVideos: log.completedVideos}, nil
 		},
 		removeClip: func(seg viewerstore.WatchSegment) error {
 			log.order = append(log.order, "remove")
@@ -93,134 +120,361 @@ type watchTestLog struct {
 	segmentTotal    int
 	completedVideos int
 	understandErr   error
+	impressionText  string
+	impressionEmpty bool
+	visual          string
 	material        string
-	posted          string
-	remarkHit       bool
-	rolled          int
-	closingAsked    bool
-	postFailed      bool
-	markIndex       int
-	markErr         error
-	removedIndex    int
-	removeErr       error
-	activity        string
-	milestoneCount  int
+	candidates      []MentionTarget
+	candidatesSeen  []ViewerRemark.MentionCandidate
+	comments        []string
+	mention         int
+	at              []string
+	// plan 非空时直接作为模型输出，用于逐条给不同 @ 决策。
+	plan           []ViewerRemark.RemarkComment
+	remarkErr      error
+	postedComments []mentionComment
+	postedTargets  []MentionTarget
+	postedAid      int64
+	postFailed     bool
+	postErr        error
+	openMentionErr error
+	markIndex      int
+	markErr        error
+	removedIndex   int
+	removeErr      error
+	activity       string
+	milestoneCount int
 }
 
-func TestWatchSegmentPublishesCommentAndUpdatesActivity(t *testing.T) {
+// fakeMentionSession 假评论会话：候选来自日志，发布结果写回日志。
+type fakeMentionSession struct {
+	log    *watchTestLog
+	closed bool
+}
+
+func (s *fakeMentionSession) Candidates() []MentionTarget { return s.log.candidates }
+
+func (s *fakeMentionSession) Post(_ viewerstore.WatchVideo, comments []mentionComment, aid int64) (int, bool, error) {
+	s.log.order = append(s.log.order, "post")
+	s.log.postedComments = comments
+	s.log.postedAid = aid
+	targets := make([]MentionTarget, 0)
+	mentioned := false
+	for _, comment := range comments {
+		targets = append(targets, comment.Targets...)
+		if len(comment.Targets) > 0 {
+			mentioned = true
+		}
+	}
+	s.log.postedTargets = targets
+	if s.log.postFailed {
+		return 0, false, s.log.postErr
+	}
+	return len(comments), mentioned, nil
+}
+
+func (s *fakeMentionSession) Close() { s.closed = true }
+
+// postedTexts 取出假会话收到的评论正文。
+func postedTexts(comments []mentionComment) []string {
+	out := make([]string, 0, len(comments))
+	for _, comment := range comments {
+		out = append(out, comment.Text)
+	}
+	return out
+}
+
+// TestWatchSegmentPublishesCommentsAndUpdatesActivity 单切片 → 一次理解 → 视频印象 → 1-2 条评论。
+func TestWatchSegmentPublishesCommentsAndUpdatesActivity(t *testing.T) {
 	deps, log := newWatchTestDeps(t)
-	log.segmentIndex, log.segmentTotal = 0, 3
-	log.remarkHit = true
+	log.segmentTotal = 1
+	log.comments = []string{"橘猫那一下太可爱了", "窗台的光影真好看"}
 
 	out, err := watchWithDeps(context.Background(), "", deps)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !out.Triggered || out.SegmentIndex != 1 || out.SegmentTotal != 3 || out.LastSegment {
+	if !out.Triggered || out.SegmentIndex != 1 || out.SegmentTotal != 1 || !out.LastSegment {
 		t.Fatalf("片段定位不符: %+v", out)
 	}
-	if !out.CommentPosted || out.Mentioned {
-		t.Fatalf("非最后一段命中概率后应发评论且不 @：%+v", out)
+	if out.VisualSource != "frames" || !strings.Contains(log.visual, "橘猫") {
+		t.Fatalf("应把这一段的画面理解交给视频印象，实际来源=%s 画面=%q", out.VisualSource, log.visual)
 	}
-	if log.closingAsked {
-		t.Fatal("非最后一段不应按收束评论处理")
+	if !out.CommentPosted || out.Mentioned || out.CommentCount != 2 {
+		t.Fatalf("应发布 2 条评论且默认不 @：%+v", out)
 	}
-	if !strings.Contains(log.material, "橘猫") || !strings.Contains(log.material, "测试视频") {
-		t.Fatalf("评论材料应同时包含画面理解与视频印象，实际 %q", log.material)
+	if len(log.postedTargets) != 0 {
+		t.Fatalf("模型给 0 时不应 @，实际 %+v", log.postedTargets)
 	}
-	if log.posted != "橘猫那一下太可爱了" {
-		t.Fatalf("评论正文未传达到发布环节: %q", log.posted)
+	if log.postedAid != 100 {
+		t.Fatalf("发布应带上 aid，实际 %d", log.postedAid)
 	}
-	if log.markIndex != 0 {
-		t.Fatalf("应标记同一个片段已看，实际 %d", log.markIndex)
+	if strings.Join(postedTexts(log.postedComments), "|") != "橘猫那一下太可爱了|窗台的光影真好看" {
+		t.Fatalf("评论正文未按顺序传达: %v", log.postedComments)
 	}
-	if !strings.Contains(log.activity, "第 1/3 段") {
-		t.Fatalf("看完片段应立即更新状态，实际 %q", log.activity)
+	if !strings.Contains(log.material, "整体印象") {
+		t.Fatalf("评论材料应来自视频印象，实际 %q", log.material)
 	}
-	// 顺序：取片段 → 理解画面 → 立刻更新状态 → 生成评论 → 发布 → 标记已看 → 清理本地文件。
-	want := []string{"next", "understand", "activity", "remark", "post", "mark", "remove"}
+	if log.markIndex != 0 || log.removedIndex != 0 {
+		t.Fatalf("应标记并清理同一个片段，mark=%d remove=%d", log.markIndex, log.removedIndex)
+	}
+	if !strings.Contains(log.activity, "刚看了哔哩哔哩上的《测试视频》") {
+		t.Fatalf("看完应立即更新状态，实际 %q", log.activity)
+	}
+	if strings.Contains(log.activity, "一分钟") || strings.Contains(log.activity, "片段") {
+		t.Fatalf("运行状态不应向人格声明只看了一小段，实际 %q", log.activity)
+	}
+	// 顺序：取片段 → 理解画面 → 补取播放信息 → 合成印象 → 更新状态 → 打开评论会话 → 生成评论 → 发布 → 标记已看 → 清理本地文件。
+	want := []string{"next", "understand", "media", "impression", "activity", "open", "remark", "post", "mark", "remove"}
 	if strings.Join(log.order, ",") != strings.Join(want, ",") {
 		t.Fatalf("执行顺序不符：want %v，实际 %v", want, log.order)
 	}
 }
 
-// TestWatchLastSegmentAlwaysPostsClosing 收束评论不受概率影响：未命中概率也必发，并 @ 特别关注。
-func TestWatchLastSegmentAlwaysPostsClosing(t *testing.T) {
+// TestWatchClampsCommentsAndMention 评论最多 2 条且去重；@ 人数钳制到 0-3。
+func TestWatchClampsCommentsAndMention(t *testing.T) {
 	deps, log := newWatchTestDeps(t)
-	log.segmentIndex, log.segmentTotal = 2, 3
-	log.remarkHit = false
+	log.candidates = followPool(6)
+	log.comments = []string{"一", "一", "二", "三"}
+	log.mention = 9
 
 	out, err := watchWithDeps(context.Background(), "", deps)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !out.LastSegment {
-		t.Fatal("最后一个片段应被识别")
+	if out.CommentCount != 2 {
+		t.Fatalf("最多只应发布 2 条评论，实际 %d", out.CommentCount)
 	}
-	if log.rolled != 0 {
-		t.Fatalf("最后一个片段不应经过概率判定，实际掷了 %d 次", log.rolled)
+	if strings.Join(postedTexts(log.postedComments), "|") != "一|二" {
+		t.Fatalf("应去重后按序取前 2 条，实际 %v", log.postedComments)
 	}
-	if !out.CommentPosted || !log.closingAsked || !out.Mentioned {
-		t.Fatalf("收束评论必发并 @，实际 posted=%v closing=%v mentioned=%v",
-			out.CommentPosted, log.closingAsked, out.Mentioned)
+	if !out.Mentioned {
+		t.Fatal("点名合法时应标记已 @")
 	}
-	if !strings.Contains(log.activity, "最后一个片段") {
-		t.Fatalf("最后一段的状态文案不符: %q", log.activity)
+	for index, comment := range log.postedComments {
+		if len(comment.Targets) != closingMentionMax {
+			t.Fatalf("第 %d 条评论的 @ 人数应钳制到 %d，实际 %+v",
+				index+1, closingMentionMax, comment.Targets)
+		}
 	}
 }
 
-// TestWatchSegmentSkipsCommentWhenChanceMisses 未命中概率：不发评论，但状态照常推进、片段照常清理。
-func TestWatchSegmentSkipsCommentWhenChanceMisses(t *testing.T) {
+// TestWatchMentionsPerComment 两条评论各自 @ 不同的人，互不影响。
+func TestWatchMentionsPerComment(t *testing.T) {
 	deps, log := newWatchTestDeps(t)
-	log.segmentIndex, log.segmentTotal = 1, 4
-	log.remarkHit = false
+	pool := followPool(5)
+	log.candidates = pool
+	log.plan = []ViewerRemark.RemarkComment{
+		{Text: "橘猫那一下太可爱了", Mention: 1, At: []string{"关注A"}},
+		{Text: "窗台的光影真好看", Mention: 1, At: []string{"关注C"}},
+	}
 
 	out, err := watchWithDeps(context.Background(), "", deps)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.CommentPosted || out.Comment != "" {
-		t.Fatalf("未命中概率不应生成或发布评论：%+v", out)
+	if len(log.postedComments) != 2 {
+		t.Fatalf("应发布 2 条评论，实际 %+v", log.postedComments)
 	}
-	if log.rolled != 1 {
-		t.Fatalf("普通片段应经过一次概率判定，实际 %d", log.rolled)
+	if len(log.postedComments[0].Targets) != 1 || log.postedComments[0].Targets[0].UID != pool[0].UID {
+		t.Fatalf("第一条应 @ 关注A，实际 %+v", log.postedComments[0].Targets)
 	}
-	want := []string{"next", "understand", "activity", "mark", "remove"}
-	if strings.Join(log.order, ",") != strings.Join(want, ",") {
-		t.Fatalf("未命中评论时仍应更新状态并清理片段：want %v，实际 %v", want, log.order)
+	if len(log.postedComments[1].Targets) != 1 || log.postedComments[1].Targets[0].UID != pool[2].UID {
+		t.Fatalf("第二条应 @ 关注C，实际 %+v", log.postedComments[1].Targets)
 	}
-	if log.markIndex != 1 || log.removedIndex != 1 {
-		t.Fatalf("应标记并清理同一个片段，mark=%d remove=%d", log.markIndex, log.removedIndex)
+	if !out.Mentioned {
+		t.Fatal("任一条 @ 到人都应标记已 @")
+	}
+}
+
+// TestWatchOneCommentMentionsOneNot 一条评论 @ 人、另一条不 @，互不影响。
+func TestWatchOneCommentMentionsOneNot(t *testing.T) {
+	deps, log := newWatchTestDeps(t)
+	pool := followPool(5)
+	log.candidates = pool
+	log.plan = []ViewerRemark.RemarkComment{
+		{Text: "橘猫那一下太可爱了", Mention: 0},
+		{Text: "窗台的光影真好看", Mention: 2, At: []string{"关注B", "关注D"}},
+	}
+
+	out, err := watchWithDeps(context.Background(), "", deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(log.postedComments) != 2 {
+		t.Fatalf("应发布 2 条评论，实际 %+v", log.postedComments)
+	}
+	if len(log.postedComments[0].Targets) != 0 {
+		t.Fatalf("第一条不 @ 时不应带目标: %+v", log.postedComments[0].Targets)
+	}
+	if len(log.postedComments[1].Targets) != 2 {
+		t.Fatalf("第二条应 @ 2 人，实际 %+v", log.postedComments[1].Targets)
+	}
+	if !out.Mentioned {
+		t.Fatal("第二条 @ 到人时应标记已 @")
+	}
+}
+
+// TestWatchInvalidNameFallsBackOnlyThatComment 某条评论认不出名字时只回退该条，另一条不受影响。
+func TestWatchInvalidNameFallsBackOnlyThatComment(t *testing.T) {
+	deps, log := newWatchTestDeps(t)
+	log.candidates = followPool(6)
+	log.plan = []ViewerRemark.RemarkComment{
+		{Text: "橘猫那一下太可爱了", Mention: 2, At: []string{"幽灵用户"}},
+		{Text: "窗台的光影真好看", Mention: 1, At: []string{"关注E"}},
+	}
+
+	_, err := watchWithDeps(context.Background(), "", deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(log.postedComments) != 2 {
+		t.Fatalf("应发布 2 条评论，实际 %+v", log.postedComments)
+	}
+	if got := len(log.postedComments[0].Targets); got != 2 {
+		t.Fatalf("认不出名字时应按该条人数随机挑 2 人，实际 %d 人", got)
+	}
+	for _, target := range log.postedComments[0].Targets {
+		if target.Name == "幽灵用户" {
+			t.Fatalf("不允许把模型编造的名字当成 @ 目标: %+v", log.postedComments[0].Targets)
+		}
+	}
+	if len(log.postedComments[1].Targets) != 1 || log.postedComments[1].Targets[0].Name != "关注E" {
+		t.Fatalf("另一条应保持模型点名，实际 %+v", log.postedComments[1].Targets)
+	}
+}
+
+// TestWatchZeroMentionOverridesOwnNames 某条评论 mention=0 时，即使带名字也不 @。
+func TestWatchZeroMentionOverridesOwnNames(t *testing.T) {
+	deps, log := newWatchTestDeps(t)
+	log.candidates = followPool(5)
+	log.plan = []ViewerRemark.RemarkComment{
+		{Text: "橘猫那一下太可爱了", Mention: 0, At: []string{"关注A"}},
+		{Text: "窗台的光影真好看", Mention: 1, At: []string{"关注B"}},
+	}
+
+	out, err := watchWithDeps(context.Background(), "", deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(log.postedComments[0].Targets) != 0 {
+		t.Fatalf("mention=0 应压过名字，实际 %+v", log.postedComments[0].Targets)
+	}
+	if len(log.postedComments[1].Targets) != 1 || log.postedComments[1].Targets[0].Name != "关注B" {
+		t.Fatalf("另一条仍应正常 @，实际 %+v", log.postedComments[1].Targets)
+	}
+	if !out.Mentioned {
+		t.Fatal("第二条 @ 到人时应标记已 @")
+	}
+}
+
+// TestWatchMentionsModelNamedUser 模型在候选清单里点名时，按名单原样 @ 该用户。
+func TestWatchMentionsModelNamedUser(t *testing.T) {
+	deps, log := newWatchTestDeps(t)
+	pool := followPool(5)
+	log.candidates = pool
+	log.mention = 1
+	log.at = []string{"关注C"}
+
+	out, err := watchWithDeps(context.Background(), "", deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(log.postedTargets) != 1 || log.postedTargets[0].UID != pool[2].UID {
+		t.Fatalf("应 @ 模型点名的用户 %+v，实际 %+v", pool[2], log.postedTargets)
+	}
+	if !out.Mentioned {
+		t.Fatal("点名合法时应标记已 @")
+	}
+	// 候选清单交给模型时只含序号与展示名，不含 UID。
+	if len(log.candidatesSeen) != len(pool) || log.candidatesSeen[2].Name != "关注C" || log.candidatesSeen[2].Index != 3 {
+		t.Fatalf("候选清单应以序号+展示名传给模型: %+v", log.candidatesSeen)
+	}
+}
+
+// TestWatchNoMentionWhenModelSaysZero 模型给 0 时不 @ 特别关注。
+func TestWatchNoMentionWhenModelSaysZero(t *testing.T) {
+	deps, log := newWatchTestDeps(t)
+	log.mention = 0
+
+	out, err := watchWithDeps(context.Background(), "", deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Mentioned || len(log.postedTargets) != 0 {
+		t.Fatalf("模型给 0 时不应 @：out=%+v targets=%+v", out, log.postedTargets)
 	}
 }
 
 func TestWatchDegradesWhenClipUndecodable(t *testing.T) {
 	deps, log := newWatchTestDeps(t)
-	log.segmentIndex, log.segmentTotal = 0, 2
 	log.understandErr = errors.New("ffmpeg 解码失败")
-	log.remarkHit = true
 
 	out, err := watchWithDeps(context.Background(), "对话者想看猫", deps)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.VisualSource != "impression" {
-		t.Fatalf("解码失败时应降级为视频印象，实际 %q", out.VisualSource)
+	if out.VisualSource != "material" {
+		t.Fatalf("解码失败时应降级为纯采集材料，实际 %q", out.VisualSource)
 	}
 	if !strings.Contains(out.Note, "无法解码") {
 		t.Fatalf("降级需要在结果里说明，实际 %q", out.Note)
 	}
-	if !strings.Contains(log.material, "拿不到画面") || !strings.Contains(log.material, "对话者想看猫") {
-		t.Fatalf("降级材料应说明拿不到画面并带上对话者要求，实际 %q", log.material)
+	if !strings.Contains(log.material, "对话者想看猫") {
+		t.Fatalf("降级材料仍应带上对话者要求，实际 %q", log.material)
 	}
 	if !out.CommentPosted || log.markIndex != 0 {
 		t.Fatal("降级也必须走完评论与标记，不能中断")
 	}
 }
 
+// TestWatchSkipsCommentWhenImpressionEmpty 视频印象为空时不硬编评论，但观看流程照常完成。
+func TestWatchSkipsCommentWhenImpressionEmpty(t *testing.T) {
+	deps, log := newWatchTestDeps(t)
+	log.impressionEmpty = true
+
+	out, err := watchWithDeps(context.Background(), "", deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.CommentPosted || out.CommentCount != 0 || out.Comment != "" {
+		t.Fatalf("印象为空不应生成或发布评论：%+v", out)
+	}
+	if !strings.Contains(out.Note, "视频印象为空") {
+		t.Fatalf("跳过评论需要在结果里说明，实际 %q", out.Note)
+	}
+	if log.markIndex != 0 || log.removedIndex != 0 {
+		t.Fatalf("跳过评论仍应标记并清理片段，mark=%d remove=%d", log.markIndex, log.removedIndex)
+	}
+	for _, step := range log.order {
+		if step == "remark" || step == "post" {
+			t.Fatalf("印象为空不应调用评论生成或发布：%v", log.order)
+		}
+	}
+}
+
+// TestWatchCommentFailureStillCompletes 评论生成失败只记录说明，不阻断标记与清理。
+func TestWatchCommentFailureStillCompletes(t *testing.T) {
+	deps, log := newWatchTestDeps(t)
+	log.remarkErr = errors.New("模型超时")
+
+	out, err := watchWithDeps(context.Background(), "", deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.CommentPosted || !strings.Contains(out.Note, "视频评论生成失败") {
+		t.Fatalf("评论失败应记录说明：%+v", out)
+	}
+	if log.markIndex != 0 || log.removedIndex != 0 {
+		t.Fatalf("评论失败也应完成观看，mark=%d remove=%d", log.markIndex, log.removedIndex)
+	}
+}
+
 func TestWatchStopsWhenNothingToWatch(t *testing.T) {
 	deps, _ := newWatchTestDeps(t)
-	deps.nextSegment = func() (viewerstore.WatchSegment, bool, error) { return viewerstore.WatchSegment{}, false, nil }
+	deps.nextSegment = func() (viewerstore.WatchSegment, bool, error) {
+		return viewerstore.WatchSegment{}, false, nil
+	}
 
 	out, err := watchWithDeps(context.Background(), "", deps)
 	if err != nil {
@@ -280,7 +534,7 @@ func TestMilestoneRollbackAllowsRetry(t *testing.T) {
 
 func TestMilestoneCountsWholeVideosNotSegments(t *testing.T) {
 	deps, log := newWatchTestDeps(t)
-	log.segmentIndex, log.segmentTotal = 0, 2
+	log.segmentTotal = 1
 	log.completedVideos = 7
 
 	out, err := watchWithDeps(context.Background(), "", deps)

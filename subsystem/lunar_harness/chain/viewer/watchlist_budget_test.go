@@ -47,13 +47,13 @@ func newBudgetTestDeps(links []videoLink, clock *fakeBudgetClock, downloadCost t
 	deps.want = len(links)
 	deps.now = clock.Now
 	deps.budget = watchlistBudget{total: 90 * time.Second, perItem: 60 * time.Second}
-	deps.impress = func(_ context.Context, video *videoRecord) videoImpression {
+	deps.fetchTags = func(string) ([]string, error) {
 		clock.Advance(20 * time.Second)
-		return videoImpression{Summary: "摘要 " + video.Info.Title}
+		return []string{"测试"}, nil
 	}
 	deps.review = func(_ context.Context, _ *videoRecord) videoReview {
 		clock.Advance(5 * time.Second)
-		return videoReview{Pass: true, Slices: 2}
+		return videoReview{Pass: true}
 	}
 	return deps, downloader
 }
@@ -72,7 +72,7 @@ func TestEnsureWatchlistBudgetStopsCollectKeepsProgress(t *testing.T) {
 	if !result.BudgetExhausted {
 		t.Fatalf("应标记预算耗尽: %+v", result)
 	}
-	if result.Candidates != 6 || result.Impressions != 3 || result.Skipped != 3 {
+	if result.Candidates != 6 || result.Collected != 3 || result.Skipped != 3 {
 		t.Fatalf("应只采集 3 个并放弃其余 3 个: %+v", result)
 	}
 	if result.Approved != 3 || result.Enqueued != 3 || result.Downloaded != 3 || result.Failed != 0 {
@@ -88,7 +88,7 @@ func TestEnsureWatchlistBudgetStopsCollectKeepsProgress(t *testing.T) {
 		if !ok || approved.Status != viewerstore.WatchStatusApproved {
 			t.Fatalf("已完成的候选应可播放: bv=%s %+v", bv, approved)
 		}
-		assertWatchSegments(t, bv, 2, 2)
+		assertWatchSegments(t, bv, 1, 1)
 	}
 }
 
@@ -110,7 +110,7 @@ func TestEnsureWatchlistBudgetDefersRemainingDownloads(t *testing.T) {
 	if approved.Status != viewerstore.WatchStatusApproved {
 		t.Fatalf("已下载的应保留为 approved: %+v", approved)
 	}
-	assertWatchSegments(t, bvidOf(links[0].Href), 2, 2)
+	assertWatchSegments(t, bvidOf(links[0].Href), 1, 1)
 	for index := 1; index < 3; index++ {
 		bv := bvidOf(links[index].Href)
 		deferred, ok, _ := viewerstore.LoadVideo(bv)

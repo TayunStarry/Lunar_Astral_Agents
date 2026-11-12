@@ -5,7 +5,7 @@ package life
 // 每轮只做一件事：取当前全部待合并组（Pending + 伙伴），逐组处理。
 // 流程：pending → partner 连边 + 嵌入相似度聚类分组（只留含 Pending 且 ≥2 条的组）
 // → 推理模型合并改写（输出一条或多条事实条目）→ 嵌入双向校验（新结果不跑偏、
-// 旧事实不丢失）→ 归档旧条目 → ReplaceTexts 事务替换。
+// 旧事实不丢失）→ 写意图日志 → ReplaceTexts 事务替换。
 //
 // 没有任何待合并组时整轮不动作、不消耗额度；组内条目不会因为「够旧/够多」被挑选。
 // 整理失败不是唯一出口：同一批条目连续失败达到上限、或待处理状态超过隐身时长后，
@@ -214,7 +214,7 @@ func removeMemoryPlan() {
 
 // processMemoryBatch 整理一个待合并组。
 //
-// 保守处理：模型失败/空结果/向量校验不通过/归档失败/替换失败时都只跳过本组，
+// 保守处理：模型失败/空结果/向量校验不通过/替换失败时都只跳过本组，
 // 绝不删除旧条目；该组保持待处理状态等待下一轮重试。
 // 重试不是无限隐身：失败次数与隐身时长由 recordBatchFailure 记账，
 // 达到上限或超时后由引擎解除待处理标记，让完整旧记忆重新对检索可见。
@@ -247,12 +247,6 @@ func processMemoryBatch(ctx context.Context, planID string, index int, batch mem
 	if verifyErr := verifyHook(ctx, oldIDs, newTexts, memoryVerifyThreshold); verifyErr != nil {
 		logger.Warn(Module, "[记忆整理] 批次 %s 向量校验未通过，保留原 %d 条记忆不动: %v", batchID, len(batch.Items), verifyErr)
 		recordBatchFailure(ctx, batchID, batch, "向量校验未通过")
-		return nil
-	}
-	// 先归档旧条目再替换：归档失败就不删旧，避免淘汰后无法追溯。
-	if archiveErr := archiveMemoryBatch(batchID, batch); archiveErr != nil {
-		logger.Warn(Module, "[记忆整理] 批次 %s 归档旧条目失败，保留原记忆不动: %v", batchID, archiveErr)
-		recordBatchFailure(ctx, batchID, batch, "归档旧条目失败")
 		return nil
 	}
 	journal := memoryJournal{
@@ -388,9 +382,22 @@ func loadJournal(path string) (*memoryJournal, error) {
 }
 
 func deleteJournal(batchID string) {
-	path := filepath.Join(config.LocalDir, filepath.FromSlash(journalPath(batchID)))
+	removeJournalFile(filepath.Join(config.LocalDir, filepath.FromSlash(journalPath(batchID))))
+}
+
+func removeJournalFile(path string) {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		logger.Warn(Module, "[记忆整理] 删除批次日志 %s 失败: %v", batchID, err)
+		logger.Warn(Module, "[记忆整理] 删除批次日志 %s 失败: %v", path, err)
+	}
+}
+
+// discardCorruptJournal 删除无法解析的意图日志。
+// 损坏日志不能重放，留在目录里只会每轮重复告警，并让当前批次一直恢复失败；
+// 计划文件仍在，清理后本批会重新走正常合并流程，ReplaceTexts 对缺失的旧条目幂等。
+func discardCorruptJournal(path string, cause error) {
+	logger.Warn(Module, "[记忆整理] 丢弃损坏的批次日志 %s（无法重放，本批将在下一轮重新整理）: %v", path, cause)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		logger.Warn(Module, "[记忆整理] 删除损坏日志 %s 失败: %v", path, err)
 	}
 }
 
@@ -406,7 +413,9 @@ func recoverBatch(ctx context.Context, planID string, index int) (bool, error) {
 	}
 	journal, err := loadJournal(path)
 	if err != nil {
-		return false, err
+		// 损坏日志无法重放：直接清理，按「没有日志」处理，让本批重新走正常合并流程。
+		discardCorruptJournal(path, err)
+		return false, nil
 	}
 	if journal.Status == "done" {
 		deleteJournal(batchID)
@@ -450,11 +459,11 @@ func recoverJournals(ctx context.Context) error {
 		path := filepath.Join(dir, entry.Name())
 		journal, err := loadJournal(path)
 		if err != nil {
-			logger.Warn(Module, "[记忆整理] 读取批次日志 %s 失败，已跳过: %v", entry.Name(), err)
+			discardCorruptJournal(path, err)
 			continue
 		}
 		if journal.Status == "done" {
-			deleteJournal(journal.BatchID)
+			removeJournalFile(path)
 			continue
 		}
 		logger.Info(Module, "[记忆整理] 恢复批次 %s（状态=%s）", journal.BatchID, journal.Status)
@@ -462,7 +471,7 @@ func recoverJournals(ctx context.Context) error {
 			logger.Warn(Module, "[记忆整理] 恢复批次 %s 失败（旧记忆保持不动）: %v", journal.BatchID, err)
 			continue
 		}
-		deleteJournal(journal.BatchID)
+		removeJournalFile(path)
 	}
 	return nil
 }

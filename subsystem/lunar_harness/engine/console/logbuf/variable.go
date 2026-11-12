@@ -37,7 +37,7 @@ const (
 	SourceLife
 	// SourceLogistics 后勤：月华-后勤系统（Tick 调度 / 通用应答 / 智能修复）日志
 	SourceLogistics
-	// SourceTask 功能任务回显（代理/打包/端口释放/更新包）
+	// SourceTask 功能任务回显（代理/端口释放/工具列表）
 	SourceTask
 	// SourceCount 来源总数（环形缓冲数组长度）
 	SourceCount
@@ -58,6 +58,19 @@ const (
 	KindBegin StreamKind = "begin"
 	// KindEnd 轮次结束
 	KindEnd StreamKind = "end"
+)
+
+// ==== 轮次步骤阶段 ====
+
+const (
+	// PhaseThinking 模型正在思考（已发起调用，尚无正文输出）
+	PhaseThinking = "思考中"
+	// PhaseOutput 模型正在输出正文
+	PhaseOutput = "输出中"
+	// PhaseTool 已请求工具、正在等待或执行工具
+	PhaseTool = "等待工具"
+	// PhaseDone 本轮已结束，且没有待执行的工具
+	PhaseDone = "已结束"
 )
 
 // ==== 日志环形缓冲状态 ====

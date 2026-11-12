@@ -18,8 +18,6 @@ import (
 )
 
 const (
-	// ToolDispatchTechnique 技法创作聚合工具名
-	ToolDispatchTechnique = "dispatch_technique"
 	// ToolFetchResources 统一资源工具名
 	ToolFetchResources = "fetch_resources"
 	// ToolNetworkExplore 联网探索聚合工具名
@@ -34,33 +32,37 @@ const (
 func init() {
 	toolreg.Register("dialogue",
 		toolreg.Schema{
-			Name:        ToolDispatchTechnique,
-			Description: "使用自然语言去调度专用子智能体进行技法创作",
-			Parameters: agentdispatch.Schema(
-				"painter=绘画创作、musician=音乐创作、screenshoter=屏幕截图",
-				[]string{"painter", "musician", "screenshoter"},
-				"例如: 画一张赛博朋克风格的自画像；创作一段安静的钢琴曲；截取当前屏幕上弹出的对话框",
-				"painter 分支可传入图生图基座图句柄（如 @I.003）；其他分支按任务需要传入目标句柄。",
-			),
-		},
-		toolreg.Schema{
 			Name:        ToolFetchResources,
 			Description: resourcehub.ToolDescription(),
 			Parameters:  resourcehub.ToolSchema(),
 		},
 		toolreg.Schema{
 			Name:        ToolLifePlanning,
-			Description: "生活规划：愿望管理、演绎、文件操作、观影与互助论坛",
+			Description: "生活规划：愿望管理、观影与互助论坛",
 			Parameters: agentdispatch.Schema(
 				"write_wish=用自然语言描述你的愿望或什么时候想去做什么事；"+
 					"wish_complete=用自然语言描述你的什么愿望已达成；"+
-					"storyboard=演绎创作（把故事拆成分镜并逐镜绘制）；"+
-					"file_operations=文件操作（读写、整理、压缩包、脚本运行与多步骤任务编排）；"+
 					"bilibili_viewer=哔哩观影；mutual_forum=互助论坛",
 				lifeTypeOrder,
-				"storyboard 提交故事正文或故事文件句柄；file_operations 传入任务涉及的资源句柄；"+
-					"bilibili_viewer / mutual_forum 用自然语言说明想看或想聊什么；愿望类指令不使用资源句柄。",
-				"愿望类 handle 传空数组；演绎 / 文件操作把真实句柄放进 handle；观影与论坛没有目标时传空数组。",
+				"bilibili_viewer / mutual_forum 用自然语言说明想看或想聊什么；愿望类指令不使用资源句柄。",
+				"愿望类 handle 传空数组；观影与论坛没有目标时传空数组。",
+			),
+		},
+		toolreg.Schema{
+			Name:        ToolCreativeWork,
+			Description: "创作任务：故事、文件编辑、演绎、绘画、音乐或截图，用 type 选择分支",
+			Parameters: agentdispatch.Schema(
+				"story=故事创作（新建故事或续写下一章）；"+
+					"files=文件编辑（读写、整理、压缩包、脚本运行、内容回滚）；"+
+					"storyboard=演绎（把故事拆成分镜并逐镜绘制）；"+
+					"painter=绘画创作；musician=音乐创作；screenshoter=屏幕截图",
+				creativeTypeOrder,
+				"例如：story 写一个新故事，题材是……；files 把 documents/说明.md 的错别字改掉；"+
+					"storyboard 把《雨港灯塔》第一章演绎成分镜；painter 画一张赛博朋克自画像；"+
+					"musician 创作一段安静的钢琴曲；screenshoter 截取当前屏幕",
+				"story 传故事正文或参考资料句柄；files 传任务涉及的文件句柄；"+
+					"storyboard 传故事正文文件句柄；painter 可传参考图句柄（如 @I.003）；"+
+					"musician / screenshoter 没有目标时传空数组。",
 			),
 		},
 	)
@@ -71,14 +73,14 @@ func init() {
 
 // registerExecutors 把工具执行器注册进全局注册表（同名后写覆盖先写）。
 func registerExecutors() {
-	toolreg.RegisterExecutor(ToolDispatchTechnique, func(_ context.Context, args map[string]any) (any, error) {
-		return ExecuteDispatchTechnique(args), nil
-	})
 	toolreg.RegisterExecutor(ToolFetchResources, func(_ context.Context, args map[string]any) (any, error) {
 		return ExecuteFetchResources(args), nil
 	})
 	toolreg.RegisterExecutor(ToolLifePlanning, func(_ context.Context, args map[string]any) (any, error) {
 		return ExecuteLifePlanning(args), nil
+	})
+	toolreg.RegisterExecutor(ToolCreativeWork, func(_ context.Context, args map[string]any) (any, error) {
+		return ExecuteCreativeWork(args), nil
 	})
 	toolreg.RegisterExecutor(ToolNetworkExplore, func(_ context.Context, args map[string]any) (any, error) {
 		return ExecuteNetworkExplore(args), nil

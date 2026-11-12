@@ -38,11 +38,25 @@ func (m appModel) updateStats(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.frontendRelaunch("crystal")
 		case "3":
 			return m.frontendRelaunch("library")
-		case "i", "I", "x", "X":
+		case "i", "I":
+			return m.updateEngine(msg)
+		case "x", "X":
+			// 桌面操纵运行时 x 是本地「中断 / 强制结束」；空闲时与其他屏一致退出，
+			// 否则这里会变成一个按了只提示「未运行」的死键。
+			if m.xQuitsOnStats() {
+				return m, tea.Quit
+			}
 			return m.updateEngine(msg)
 		}
 	}
 	return m, nil
+}
+
+// xQuitsOnStats 运行状态屏的 x 是否应走全局退出：
+// 只有宿主已接入且桌面操纵确实在运行时，才保留本地中断语义。
+func (m appModel) xQuitsOnStats() bool {
+	status, wired := getDesktopOperatorStatus()
+	return !wired || !status.Running
 }
 
 // viewStats 运行状态屏：运行环境 / 模型计量 + 前端窗口 + 桌面操纵入口。

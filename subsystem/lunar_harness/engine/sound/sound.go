@@ -24,7 +24,7 @@ func FailureBlocking() {
 	playFile(fileNameOf(KindFailure), true)
 }
 
-// Notify 异步播放资源产出完成提示音（图像生成、上传、打包归档）
+// Notify 异步播放资源产出完成提示音（图像生成、上传）
 func Notify() {
 	trigger(KindNotify)
 }

@@ -103,7 +103,7 @@ func streamPlan(
 		if err := json.Unmarshal([]byte(body), &raw); err != nil {
 			return false
 		}
-		if raw.Scene == "" && raw.Prompt == "" && raw.Narration == "" {
+		if raw.Scene == "" && raw.Prompt == "" && raw.Narration == "" && raw.Original == "" {
 			if name := strings.TrimSpace(raw.Title); name != "" && title == "" {
 				title = name
 			}
@@ -113,6 +113,7 @@ func streamPlan(
 			Act:        strings.TrimSpace(raw.Act),
 			Scene:      strings.TrimSpace(raw.Scene),
 			Narration:  strings.TrimSpace(raw.Narration),
+			Original:   strings.TrimSpace(raw.Original),
 			Continuity: strings.TrimSpace(raw.Continuity),
 			Prompt:     strings.TrimSpace(raw.Prompt),
 			Ratio:      strings.TrimSpace(raw.Ratio),
@@ -208,18 +209,28 @@ func normalizeShot(shot Shot, index int, style, ratio string) Shot {
 func ComposePrompt(shot Shot) string {
 	var b strings.Builder
 	if shot.Act != "" {
-		b.WriteString("【幕】" + shot.Act + "\n")
+		b.WriteString("【幕】")
+		b.WriteString(shot.Act)
+		b.WriteString("\n")
 	}
 	if shot.Scene != "" {
-		b.WriteString("【镜次】" + shot.Scene + "\n")
+		b.WriteString("【镜次】")
+		b.WriteString(shot.Scene)
+		b.WriteString("\n")
 	}
 	if shot.Narration != "" {
-		b.WriteString("【本镜叙事】" + shot.Narration + "\n")
+		b.WriteString("【本镜叙事】")
+		b.WriteString(shot.Narration)
+		b.WriteString("\n")
 	}
 	if shot.Continuity != "" {
-		b.WriteString("【镜头衔接】" + shot.Continuity + "\n")
+		b.WriteString("【镜头衔接】")
+		b.WriteString(shot.Continuity)
+		b.WriteString("\n")
 	}
-	b.WriteString("【画面要求】" + shot.Prompt + "\n")
+	b.WriteString("【画面要求】")
+	b.WriteString(shot.Prompt)
+	b.WriteString("\n")
 	return textutil.TruncateRunes(b.String(), maxPaintPromptRunes)
 }
 

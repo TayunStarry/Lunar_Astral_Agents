@@ -71,8 +71,10 @@ const (
 	NameCodeExecution = "代码执行"
 	// NameContentRollback 内容回滚
 	NameContentRollback = "内容回滚"
-	// NameFileOperations 文件操作
-	NameFileOperations = "文件操作"
+	// NameFileOperations 文件编辑
+	NameFileOperations = "文件编辑"
+	// NameStoryWriter 故事创作
+	NameStoryWriter = "故事创作"
 	// NameMemoryTagger 记忆标签
 	NameMemoryTagger = "记忆标签"
 	// NameMemoryFuser 记忆融合
@@ -117,6 +119,7 @@ var DisplayNames = map[string]string{
 	"code_execution":     NameCodeExecution,
 	"content_rollback":   NameContentRollback,
 	"file_operations":    NameFileOperations,
+	"story_writer":       NameStoryWriter,
 
 	"memory_tagger":     NameMemoryTagger,
 	"memory_fuser":      NameMemoryFuser,

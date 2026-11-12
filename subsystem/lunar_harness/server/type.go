@@ -133,6 +133,8 @@ type AgentResult struct {
 type LibraryCreationRequest struct {
 	// Mode assigned（默认，需要 description）或 random（随机目标池自主选题）
 	Mode string `json:"mode"`
+	// Domain 创作领域：story（故事创作）/ edit（文件编辑）；为空时按描述推断
+	Domain string `json:"domain"`
 	// Description 自然语言描述
 	Description string `json:"description"`
 	// Handle 单个目标资源句柄
@@ -145,6 +147,7 @@ type LibraryCreationRequest struct {
 type LibraryCreationTask struct {
 	TaskID    string   `json:"task_id"`
 	Mode      string   `json:"mode"`
+	Domain    string   `json:"domain,omitempty"`
 	Status    string   `json:"status"`
 	Stage     string   `json:"stage,omitempty"`
 	Progress  int      `json:"progress"`
@@ -189,12 +192,22 @@ type LibraryStoryboardShot struct {
 	Act       string `json:"act,omitempty"`
 	Scene     string `json:"scene"`
 	Narration string `json:"narration"`
-	Prompt    string `json:"prompt"`
-	Ratio     string `json:"ratio,omitempty"`
-	Status    string `json:"status"`
-	Handle    string `json:"handle,omitempty"`
-	File      string `json:"file,omitempty"`
-	Error     string `json:"error,omitempty"`
+	// Original 本镜对应的故事原文（配音朗读文本）
+	Original string `json:"original,omitempty"`
+	Prompt   string `json:"prompt"`
+	Ratio    string `json:"ratio,omitempty"`
+	Status   string `json:"status"`
+	Handle   string `json:"handle,omitempty"`
+	File     string `json:"file,omitempty"`
+	// VoiceStatus 配音状态 pending / voicing / ready / failed
+	VoiceStatus string `json:"voice_status,omitempty"`
+	// VoiceFile 配音 WAV 相对 LocalDir 的路径
+	VoiceFile string `json:"voice_file,omitempty"`
+	// VoiceDurationMs 配音时长（毫秒）：幻灯片展示时长以它为准
+	VoiceDurationMs int `json:"voice_duration_ms,omitempty"`
+	// VoiceError 配音失败原因
+	VoiceError string `json:"voice_error,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 // LibraryStoryboardShotInput 审查稿中的单镜输入（确认接口回传）。
@@ -207,6 +220,8 @@ type LibraryStoryboardShotInput struct {
 	Scene string `json:"scene,omitempty"`
 	// Narration 本镜叙事
 	Narration string `json:"narration,omitempty"`
+	// Original 本镜对应的故事原文（配音朗读文本；为空时继承原稿）
+	Original string `json:"original,omitempty"`
 	// Prompt 画面描述（为空时按叙事重新拼装）
 	Prompt string `json:"prompt,omitempty"`
 	// Ratio 单镜画幅（为空时用任务默认画幅）

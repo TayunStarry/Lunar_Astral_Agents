@@ -123,21 +123,14 @@ func appendContent(args map[string]any, c *collector) file.Outcome {
 	if err != nil {
 		return file.Failure(toolAppend, err)
 	}
-	if _, err := FileSupport.BackupWithOp(rel, "append"); err != nil {
-		return file.Failure(toolAppend, fmt.Errorf("保存版本失败：%w", err))
-	}
-	existing, readErr := FileEditor.ReadText(rel)
-	if readErr != nil {
-		return file.Failure(toolAppend, readErr)
-	}
 	addition := file.StringArg(args, "content")
 	if strings.TrimSpace(addition) == "" {
 		return file.Failure(toolAppend, fmt.Errorf("追加内容不能为空"))
 	}
-	if existing != "" && !strings.HasSuffix(existing, "\n") {
-		existing += "\n"
+	if _, err := FileSupport.BackupWithOp(rel, "append"); err != nil {
+		return file.Failure(toolAppend, fmt.Errorf("保存版本失败：%w", err))
 	}
-	result := FileEditor.WriteFile(rel, existing+addition+"\n")
+	result := FileEditor.AppendText(rel, addition)
 	evidence := fmt.Sprintf("向 %s 末尾追加：\n%s", rel, clip(addition, maxEvidenceRunes))
 	return mutated(c, rel, result, evidence)
 }

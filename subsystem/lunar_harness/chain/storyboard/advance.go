@@ -7,8 +7,8 @@ package storyboard
 //  2. researching → 调用「分镜规划-资料」生成检索意图，每 Tick 执行一条网络搜索；
 //  3. planning    → 调用「分镜规划-拆解」推演故事并逐镜拆分；
 //  4. reviewing   → 仅手动提交的作品等待用户审查确认（不占用 Tick）；
-//  5. painting    → 每次只绘制一镜，镜头之间立即让出 Tick；
-//  6. writing     → 写出分镜文档并收尾；
+//  5. painting    → 逐镜合成：同一镜先出画面再配音，各占一个原子步骤；
+//  6. writing     → 把全部画面与配音按模板拼接成幻灯片 HTML 并收尾；
 //  7. done        → 任务结束，不再参与调度。
 //
 // 生活系统自动触发与月华命令触发的演绎跳过审查，规划完成即进入绘制。
@@ -341,7 +341,9 @@ func advancePlanning(ctx context.Context, taskID string) {
 	commitSnapshotLocked(state)
 }
 
-// advancePainting 绘制单镜：先推送开镜事件，再执行绘制，最后推送结果事件。
+// advancePainting 逐镜合成：同一镜先合成画面，再合成语音，各占一个原子步骤。
+//
+// 画面完成前不进入配音；画面已就绪而配音未完成时只补配音，不重画。
 func advancePainting(ctx context.Context, taskID string) {
 	taskMu.Lock()
 	state, ok := tasks[taskID]
@@ -354,7 +356,7 @@ func advancePainting(ctx context.Context, taskID string) {
 		state.stage = stageWriting
 		applyEventLocked(state, ProgressEvent{
 			Status:   statusWriting,
-			Stage:    "正在生成分镜文档",
+			Stage:    "正在把分镜与配音拼接成幻灯片",
 			Progress: 90,
 			Event:    eventWriting,
 			Shots:    cloneShots(state.shots),
@@ -362,12 +364,36 @@ func advancePainting(ctx context.Context, taskID string) {
 		commitLocked(state)
 		return
 	}
-
 	index := state.nextShot
+	needPaint := index >= len(state.shots) || state.shots[index].Status != shotPainted
+	taskMu.Unlock()
+	if needPaint {
+		advancePaintShot(ctx, taskID)
+		return
+	}
+	advanceVoiceShot(ctx, taskID)
+}
+
+// advancePaintShot 绘制当前镜的画面；成功后由下一步为它配音。
+func advancePaintShot(ctx context.Context, taskID string) {
+	taskMu.Lock()
+	state, ok := tasks[taskID]
+	if !ok || state.stage != stagePainting || state.paused || state.canceled {
+		taskMu.Unlock()
+		return
+	}
+	index := state.nextShot
+	total := len(state.plan.Shots)
+	if index >= total || index >= len(state.shots) {
+		taskMu.Unlock()
+		return
+	}
 	shot := state.plan.Shots[index]
 	outputFolder := state.outputFolder
 	state.shots[index].Status = shotDrawing
 	state.shots[index].Error = ""
+	state.shots[index].VoiceStatus = voicePending
+	state.shots[index].VoiceError = ""
 	applyEventLocked(state, ProgressEvent{
 		Status:    statusPainting,
 		Stage:     fmt.Sprintf("正在绘制第 %d / %d 镜（%s）", index+1, total, shot.Scene),
@@ -397,50 +423,131 @@ func advancePainting(ctx context.Context, taskID string) {
 		if paintErr == nil && len(result.Handles) > 0 {
 			state.shots[index].Status = shotPainted
 			state.shots[index].Handle = result.Handles[0]
+			state.shots[index].VoiceStatus = voicePending
 			state.view.Shots = cloneShots(state.shots)
 			persistTasksLocked()
 		}
 		taskMu.Unlock()
 		return
 	}
-	// 暂停：成功的镜头照常保留，失败/被取消的镜头回到待绘制，续跑时重画这一镜。
+	// 暂停：画面成功就保留，续跑时只补配音；失败/被取消的镜头回到待绘制。
 	if state.paused {
 		if paintErr == nil && len(result.Handles) > 0 {
 			state.shots[index].Status = shotPainted
 			state.shots[index].Handle = result.Handles[0]
-			state.nextShot = index + 1
-			applyEventLocked(state, ProgressEvent{
-				Status:    statusPaused,
-				Progress:  paintingPercent(index+1, total),
-				Event:     eventShotCompleted,
-				ShotIndex: index + 1,
-				Shots:     cloneShots(state.shots),
-			})
+			state.shots[index].VoiceStatus = voicePending
+			state.shots[index].VoiceError = ""
 		} else {
 			state.shots[index].Status = shotPlanned
 			state.shots[index].Error = ""
-			state.view.Shots = cloneShots(state.shots)
 		}
+		state.view.Shots = cloneShots(state.shots)
 		commitVolatileLocked(state)
 		return
 	}
 
 	event := ProgressEvent{
 		Status:    statusPainting,
-		Progress:  paintingPercent(index+1, total),
+		Progress:  paintingPercent(index, total),
 		ShotIndex: index + 1,
 	}
 	if paintErr != nil {
 		state.shots[index].Status = shotFailed
 		state.shots[index].Error = textutil.TruncateRunes(paintErr.Error(), maxErrorRunes)
+		state.nextShot = index + 1
 		event.Stage = fmt.Sprintf("第 %d / %d 镜绘制失败（%s）", index+1, total, shot.Scene)
 		event.Summary = state.shots[index].Error
 		event.Event = eventShotFailed
 	} else {
 		state.shots[index].Status = shotPainted
 		state.shots[index].Handle = result.Handles[0]
-		event.Stage = fmt.Sprintf("已完成第 %d / %d 镜（%s）", index+1, total, shot.Scene)
-		event.Event = eventShotCompleted
+		state.shots[index].VoiceStatus = voicePending
+		event.Stage = fmt.Sprintf("第 %d / %d 镜画面已完成，准备配音（%s）", index+1, total, shot.Scene)
+		event.Event = eventShotPainted
+	}
+	event.Shots = cloneShots(state.shots)
+	applyEventLocked(state, event)
+	commitVolatileLocked(state)
+}
+
+// advanceVoiceShot 为当前镜合成旁白：朗读本镜的故事原文，落盘 WAV 并记录时长。
+func advanceVoiceShot(ctx context.Context, taskID string) {
+	taskMu.Lock()
+	state, ok := tasks[taskID]
+	if !ok || state.stage != stagePainting || state.paused || state.canceled {
+		taskMu.Unlock()
+		return
+	}
+	index := state.nextShot
+	total := len(state.plan.Shots)
+	if index >= total || index >= len(state.shots) {
+		taskMu.Unlock()
+		return
+	}
+	shot := state.plan.Shots[index]
+	outputFolder := state.outputFolder
+	// 已配过音（重启恢复或上一轮已失败）：不重复合成，直接前移。
+	if status := state.shots[index].VoiceStatus; status == voiceReady || status == voiceFailed {
+		state.nextShot = index + 1
+		taskMu.Unlock()
+		return
+	}
+	state.shots[index].VoiceStatus = voiceRunning
+	state.shots[index].VoiceError = ""
+	applyEventLocked(state, ProgressEvent{
+		Status:    statusPainting,
+		Stage:     fmt.Sprintf("正在为第 %d / %d 镜配音（朗读原文）", index+1, total),
+		Progress:  paintingPercent(index, total),
+		Event:     eventVoiceStarted,
+		ShotIndex: index + 1,
+		Shots:     cloneShots(state.shots),
+	})
+	stepCtx, cancel := taskStepContext(ctx, state, stageVoiceTimeout())
+	state.cancel = cancel
+	schedulePushLocked(state)
+	taskMu.Unlock()
+	defer cancel()
+
+	result, voiceErr := synthesizeShotVoice(stepCtx, shot, outputFolder)
+
+	taskMu.Lock()
+	state, ok = tasks[taskID]
+	if !ok || state.stage != stagePainting || state.nextShot != index {
+		taskMu.Unlock()
+		return
+	}
+	state.cancel = nil
+	if state.canceled {
+		state.shots[index].VoiceStatus = voicePending
+		state.view.Shots = cloneShots(state.shots)
+		persistTasksLocked()
+		taskMu.Unlock()
+		return
+	}
+	if state.paused {
+		state.shots[index].VoiceStatus = voicePending
+		state.shots[index].VoiceError = ""
+		state.view.Shots = cloneShots(state.shots)
+		commitVolatileLocked(state)
+		return
+	}
+	event := ProgressEvent{
+		Status:    statusPainting,
+		Progress:  paintingPercent(index+1, total),
+		ShotIndex: index + 1,
+		Event:     eventShotCompleted,
+	}
+	if voiceErr != nil {
+		state.shots[index].VoiceStatus = voiceFailed
+		state.shots[index].VoiceError = textutil.TruncateRunes(voiceErr.Error(), maxErrorRunes)
+		event.Stage = fmt.Sprintf("第 %d / %d 镜配音失败（%s），幻灯片将按估算时长推进", index+1, total, shot.Scene)
+		event.Summary = state.shots[index].VoiceError
+	} else {
+		state.shots[index].VoiceStatus = voiceReady
+		state.shots[index].VoiceFile = result.FilePath
+		state.shots[index].VoiceHandle = result.Handle
+		state.shots[index].VoiceDurationMs = result.DurationMs
+		event.Stage = fmt.Sprintf("已完成第 %d / %d 镜（%s）的画面与配音", index+1, total, shot.Scene)
 	}
 	state.nextShot = index + 1
 	event.Shots = cloneShots(state.shots)
@@ -448,7 +555,7 @@ func advancePainting(ctx context.Context, taskID string) {
 	commitVolatileLocked(state)
 }
 
-// advanceWriting 生成分镜文档并收尾。
+// advanceWriting 把全部画面与配音拼接成幻灯片 HTML 并收尾。
 func advanceWriting(taskID string) {
 	taskMu.Lock()
 	state, ok := tasks[taskID]
@@ -463,7 +570,7 @@ func advanceWriting(taskID string) {
 	taskMu.Unlock()
 	defer stopGuard()
 
-	doc, updated, err := writeStoryboardDoc(plan, shots, outputFolder)
+	doc, updated, err := writeStoryboardSlide(plan, shots, outputFolder)
 	if err != nil {
 		if isPausedOrCanceled(taskID) {
 			return
@@ -472,16 +579,25 @@ func advanceWriting(taskID string) {
 		return
 	}
 	success, failed := countShots(updated)
-	handles := make([]string, 0, success+1)
+	voiced := 0
+	handles := make([]string, 0, success*2+1)
 	for _, shot := range updated {
-		if shot.Status == shotPainted && shot.Handle != "" {
-			handles = append(handles, shot.Handle)
+		if shot.Status != shotPainted || shot.Handle == "" {
+			continue
+		}
+		handles = append(handles, shot.Handle)
+		if shot.VoiceStatus == voiceReady {
+			voiced++
+			if shot.VoiceHandle != "" {
+				handles = append(handles, shot.VoiceHandle)
+			}
 		}
 	}
 	if doc.Handle != "" {
 		handles = append(handles, doc.Handle)
 	}
-	summary := fmt.Sprintf("分镜 %d 镜：成功 %d，失败 %d；文档 %s", len(updated), success, failed, doc.Path)
+	summary := fmt.Sprintf("幻灯片 %d 镜：画面成功 %d，配音完成 %d，失败 %d；文件 %s",
+		len(updated), success, voiced, failed, doc.Path)
 
 	status := statusCompleted
 	stage := "演绎完成"
@@ -489,13 +605,12 @@ func advanceWriting(taskID string) {
 	failure := ""
 	if success == 0 {
 		status = statusFailed
-		stage = "全部镜头绘制失败"
+		stage = "全部镜头画面合成失败"
 		event = eventFailed
 		failure = summary
 	} else {
-		// 全部分镜合成完成：把标题与句柄写入月华的「刚刚在做什么」运行时消息。
-		activity.Set(fmt.Sprintf("刚演绎完《%s》，分镜与图片句柄：%s",
-			plan.Title, strings.Join(handles, "、")))
+		// 全部分镜与配音合成完成：把标题与产物写入月华的「刚刚在做什么」运行时消息。
+		activity.Set(fmt.Sprintf("刚演绎完《%s》，幻灯片：%s", plan.Title, doc.Path))
 	}
 
 	taskMu.Lock()

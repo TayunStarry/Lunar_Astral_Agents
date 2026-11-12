@@ -1,18 +1,14 @@
 package viewer
 
-// preselect.go 候选视频的印象材料：采集信息标准化排版后交给阅片智能体归纳。
+// preselect.go 候选去重与观看期「视频印象」的材料排版。
 //
-// 待看列表补齐管线（watchlist*.go）复用这里的印象生成：排版材料、调用轻量模型、
-// 模型不可用时用标题/标签/简介兜底。
+// 观看阶段把采集到的标题、评论、标签、简介、UP 主，加上观看时补取的弹幕与
+// 这一分钟的画面理解，统一排版成一份材料，交给阅片智能体合成视频印象。
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
-
-	"LunarSubsystem/LunarHarness/agents/viewer/ViewerScreening"
-	"LunarSubsystem/LunarHarness/engine/console/logger"
 )
 
 // dedupeLinks 按视频 URL 去重，保留首次出现。
@@ -30,43 +26,16 @@ func dedupeLinks(links []videoLink) []videoLink {
 	return out
 }
 
-// buildOneImpression 单条视频印象：材料标准化排版后交给阅片智能体归纳。
-func buildOneImpression(video *videoRecord) videoImpression {
-	material := impressionMaterial(video)
-	impression, err := ViewerScreening.Impress(context.Background(), material, modelLight)
-	if err != nil {
-		logger.Warn("BilibiliViewer", "《%s》印象生成失败，改用采集信息兜底: %v", video.Info.Title, err)
-		return fallbackImpression(video)
-	}
-	return videoImpression{
-		Summary:    impression.Summary,
-		Topics:     impression.Topics,
-		Tone:       impression.Tone,
-		Risky:      impression.Risky,
-		RiskReason: impression.RiskReason,
-	}
-}
-
-// fallbackImpression 模型不可用时的印象兜底：标题 + 标签 + 简介摘要。
-func fallbackImpression(video *videoRecord) videoImpression {
-	summary := fmt.Sprintf("《%s》，UP主 %s。%s", video.Info.Title, video.Info.Owner,
-		truncate(strings.TrimSpace(video.Info.Desc), 120))
-	return videoImpression{
-		Summary: strings.TrimSpace(summary),
-		Topics:  append([]string{}, video.Tags...),
-		Tone:    "未知",
-	}
-}
-
-// impressionMaterial 标准化排版后的采集材料。
-func impressionMaterial(video *videoRecord) string {
+// impressionMaterial 把视频元信息、评论、弹幕与随机一分钟的画面理解排成视频印象材料。
+func impressionMaterial(video *videoRecord, visual string) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "《%s》\n", video.Info.Title)
-	fmt.Fprintf(&builder, "UP主：%s\n", video.Info.Owner)
-	if video.Info.OwnerMid > 0 {
-		fmt.Fprintf(&builder, "UP主UID：%d\n", video.Info.OwnerMid)
+	if owner := strings.TrimSpace(video.Info.Owner); owner != "" {
+		fmt.Fprintf(&builder, "UP主：%s\n", owner)
 	}
-	fmt.Fprintf(&builder, "时长：%d 秒\n", video.Info.Duration)
+	if video.Info.Duration > 0 {
+		fmt.Fprintf(&builder, "时长：%s\n", formatDuration(video.Info.Duration))
+	}
 	if video.Info.PublishTime > 0 {
 		fmt.Fprintf(&builder, "发布时间：%s\n", time.Unix(video.Info.PublishTime, 0).Format("2006-01-02"))
 	}
@@ -74,25 +43,50 @@ func impressionMaterial(video *videoRecord) string {
 		fmt.Fprintf(&builder, "标签：%s\n", strings.Join(video.Tags, "、"))
 	}
 	if desc := strings.TrimSpace(video.Info.Desc); desc != "" {
-		fmt.Fprintf(&builder, "简介：%s\n", truncate(desc, 600))
+		fmt.Fprintf(&builder, "简介：%s\n", truncate(desc, watchImpressionIntroRunes))
 	}
-	fmt.Fprintf(&builder, "播放：%d｜点赞：%d｜收藏：%d｜评论：%d｜弹幕：%d\n",
-		video.Info.View, video.Info.Like, video.Info.Favorite, video.Info.ReplyNum, video.Info.Danmaku)
+	if video.Info.View > 0 || video.Info.Like > 0 || video.Info.Favorite > 0 || video.Info.ReplyNum > 0 || video.Info.Danmaku > 0 {
+		fmt.Fprintf(&builder, "播放：%d｜点赞：%d｜收藏：%d｜评论：%d｜弹幕：%d\n",
+			video.Info.View, video.Info.Like, video.Info.Favorite, video.Info.ReplyNum, video.Info.Danmaku)
+	}
 	if len(video.Comments) > 0 {
 		builder.WriteString("评论：\n")
 		for index, comment := range video.Comments {
-			if index >= collectCommentLimit {
+			if index >= watchImpressionCommentRows {
 				break
 			}
-			fmt.Fprintf(&builder, "- %s：%s\n", comment.User, comment.Content)
+			if user := strings.TrimSpace(comment.User); user != "" {
+				fmt.Fprintf(&builder, "- %s：%s\n", user, comment.Content)
+			} else {
+				fmt.Fprintf(&builder, "- %s\n", comment.Content)
+			}
 		}
 	}
 	if len(video.Danmaku) > 0 {
 		sample := video.Danmaku
-		if len(sample) > collectDanmakuLimit {
-			sample = sample[:collectDanmakuLimit]
+		if len(sample) > watchImpressionDanmakuRows {
+			sample = sample[:watchImpressionDanmakuRows]
 		}
 		fmt.Fprintf(&builder, "弹幕：%s\n", strings.Join(sample, " / "))
 	}
+	if visual = strings.TrimSpace(visual); visual != "" {
+		fmt.Fprintf(&builder, "随机一分钟画面：%s\n", truncate(visual, watchImpressionVisualRunes))
+	}
 	return strings.TrimSpace(builder.String())
+}
+
+// formatDuration 把秒数格式化成「x分y秒」，不足一分钟只显示秒。
+func formatDuration(seconds int) string {
+	if seconds <= 0 {
+		return "未知"
+	}
+	if seconds < 60 {
+		return fmt.Sprintf("%d 秒", seconds)
+	}
+	minutes := seconds / 60
+	rest := seconds % 60
+	if rest == 0 {
+		return fmt.Sprintf("%d 分钟", minutes)
+	}
+	return fmt.Sprintf("%d 分 %d 秒", minutes, rest)
 }

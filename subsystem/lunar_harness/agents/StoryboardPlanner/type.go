@@ -9,6 +9,8 @@ type Shot struct {
 	Act       string `json:"act"`
 	Scene     string `json:"scene"`
 	Narration string `json:"narration"`
+	// Original 本镜对应的故事原文片段（逐字摘录），配音朗读用它而不是分镜叙事
+	Original string `json:"original"`
 	// Continuity 本镜与上一镜的画面衔接
 	Continuity string `json:"continuity"`
 	Prompt     string `json:"prompt"`
@@ -49,6 +51,7 @@ type plannedLine struct {
 	Act        string `json:"act"`
 	Scene      string `json:"scene"`
 	Narration  string `json:"narration"`
+	Original   string `json:"original"`
 	Continuity string `json:"continuity"`
 	Prompt     string `json:"prompt"`
 	Ratio      string `json:"ratio"`

@@ -2,7 +2,6 @@ package resource
 
 // type.go 资源句柄系统（资源目录 + 句柄文法 + 取回 / 入库 / 同步）的类型定义
 //
-// 设计依据：docs/adr/0001-统一资源寻址与三层存储.md
 // 三层职责：
 //   资源目录（store.go，SQLite handles.db）：句柄、元数据、段落结构
 //   内容仓库（admit.go，文件系统 multimedia/ / audios/ / documents/）：资源原始字节
@@ -127,7 +126,7 @@ type ReadResult struct {
 	// Base64 二进制内容（图片 / 视频 / 音频本体）
 	//
 	// 图片走思维链时**不是**原图：lunarloop 的资源取回适配器会把 KindImage 换成
-	// 视觉读取副本（≤ vision_max_side）再填这里，原图字节不出 Go 侧（见 docs/adr/0008）
+	// 视觉读取副本（≤ vision_max_side）再填这里，原图字节不出 Go 侧
 	Base64 string `json:"base64,omitempty"`
 	// MIME 规范 MIME
 	MIME string `json:"mime"`

@@ -7,10 +7,29 @@ package viewer
 // 待看列表与记忆的持久化由 engine/viewerstore 负责，
 // B 站接口协议与响应字段映射由 engine/bilibili 负责。
 
-import "LunarSubsystem/LunarHarness/engine/bilibili"
+import (
+	"LunarSubsystem/LunarHarness/engine/bilibili"
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
+)
 
 // MentionTarget 分享时 @ 的目标：来自当前账号的特别关注列表。
 type MentionTarget = bilibili.MentionTarget
+
+// mentionComment 一条待发布评论与它自己的 @ 目标。
+type mentionComment struct {
+	Text    string
+	Targets []MentionTarget
+}
+
+// mentionSession 一次评论发布会话：同一次浏览器会话里先读特别关注候选，再发布评论。
+type mentionSession interface {
+	// Candidates 特别关注候选（读取失败时为空，评论降级为不 @）。
+	Candidates() []MentionTarget
+	// Post 逐条发布评论，每条只挂自己的 @ 目标，返回（成功条数、是否真的 @ 到、错误）。
+	Post(video viewerstore.WatchVideo, comments []mentionComment, aid int64) (int, bool, error)
+	// Close 关闭浏览器会话。
+	Close()
+}
 
 // Config 哔哩观影的长期配置（local_data/config/bilibili.json）。
 //
@@ -43,35 +62,32 @@ type videoInfo = bilibili.Video
 // commentItem 一条评论（视频印象与风险复核共用）。
 type commentItem = bilibili.Comment
 
-// videoImpression 结构化「视频印象」：由轻量模型依据视频可采集信息整理。
-type videoImpression struct {
-	// Summary 侧面对视频内容的整体理解（一两句话）
-	Summary string `json:"summary"`
-	// Topics 视频主题/关键词，供嵌入匹配与动态写作使用
-	Topics []string `json:"topics"`
-	// Tone 观众情绪/氛围（如「轻松吐槽」「硬核讲解」）
-	Tone string `json:"tone"`
-	// Risky 轻量模型认为有合规风险时置 true，交给主模型复核
-	Risky      bool   `json:"risky,omitempty"`
-	RiskReason string `json:"risk_reason,omitempty"`
-}
-
-// videoRecord 一个候选视频的采集结果（记忆注入与审核共用）。
+// videoRecord 一个候选视频的采集结果（审核材料与观看期视频印象共用）。
 type videoRecord struct {
-	Info       videoInfo
-	Tags       []string        `json:"tags,omitempty"`
-	Impression videoImpression `json:"impression,omitempty"`
-
+	Info     videoInfo     `json:"info"`
+	Tags     []string      `json:"tags,omitempty"`
 	Comments []commentItem `json:"comments,omitempty"`
 	Danmaku  []string      `json:"danmaku,omitempty"`
 }
 
-// videoReview 主模型审核 + 评价 + 切片数的一次性结构化输出。
+// videoReview 主模型审核结果：只回答「是否适合公开讨论」。
 type videoReview struct {
-	Pass       bool   `json:"pass"`
-	Reason     string `json:"reason"`
-	Evaluation string `json:"evaluation"`
-	Slices     int    `json:"slices"`
+	Pass   bool   `json:"pass"`
+	Reason string `json:"reason"`
+}
+
+// watchMedia 观看期补充的播放信息：评论发布所需的 aid 与实时弹幕。
+//
+// 读取失败不阻断观看，只在 Note 里说明并降级为无弹幕，评论发布时再尝试一次。
+type watchMedia struct {
+	Aid     int64    `json:"aid,omitempty"`
+	Danmaku []string `json:"danmaku,omitempty"`
+	Note    string   `json:"note,omitempty"`
+}
+
+// inboxSeenStore 已处理消息去重键的快照（键 → 最后处理时间）。
+type inboxSeenStore struct {
+	Keys map[string]int64
 }
 
 // notifyCategory 被动消息的分类（只处理 @ 与追评两类）。

@@ -16,7 +16,7 @@ import (
 	"LunarSubsystem/LunarHarness/internal/textutil"
 )
 
-// ==== 模型请求的出站图片闸门（docs/adr/0008） ====
+// ==== 模型请求的出站图片闸门 ====
 //
 // 思维链里图片只允许一种形态：视觉读取管线产出的副本（/file/miniature/ 端点，
 // 或 base64 形态下同管线的 data URI）。其余来源一律视为原图：

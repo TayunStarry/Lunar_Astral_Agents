@@ -96,8 +96,8 @@ type ModelConfig struct {
 		// 引擎闲置卸载阈值（分钟）：无合成调用超过该时长即卸载模型释放占用
 		IdleUnloadMinutes *int `json:"idle_unload_minutes,omitempty"`
 	} `json:"tts"`
-	// Gitee Release 发布通道不出现在 general.json：
-	// 唯一来源是独立文件 local_data/config/release.json（含令牌，已 gitignore）。
+	// Gitee Release 发布通道不出现在 general.json，也不由主程序读取：
+	// 它属于独立更新器，配置在 local_data/config/release.json（含令牌，已 gitignore）。
 }
 
 // init 加载配置文件
@@ -158,16 +158,6 @@ func init() {
 	} else {
 		log.Printf("[Config][ERROR] -> 未找到 local_data/config/%s，绘图配置保持默认值", PainterConfigFile)
 	}
-
-	// ==== 发布通道：唯一来源 local_data/config/release.json（不再兼容 general.json 的 release 节） ====
-	// 该文件含 Gitee 私人令牌，已被 .gitignore 排除。
-	if fileCfg, ok, rerr := LoadReleaseConfigFile(filepath.Join(exeDir, LocalDir, "config")); rerr != nil {
-		log.Printf("[Config][WARN] -> 解析 %s 失败，发布通道保持未配置: %v", ReleaseConfigFile, rerr)
-	} else if ok {
-		applyReleaseConfig(fileCfg)
-	} else {
-		log.Printf("[Config][INFO] -> 未找到 local_data/config/%s，发布通道未配置", ReleaseConfigFile)
-	}
 }
 
 // applyConfig 把解析结果写入全局配置。
@@ -186,7 +176,7 @@ func applyConfig(parameter *ModelConfig) {
 	AgentAppendSettings = append([]string(nil), parameter.Agent.AppendSettings...)
 	// ==== 静态图思维链形态（agent.image_input / agent.vision_max_side） ====
 	// url=视觉读取端点（默认）；base64=视觉读取管线直出的副本（供无法回取本机 URL 的云端模型）。
-	// 两种形态都是 ≤ vision_max_side 的副本，原图永远不进入思维链（见 docs/adr/0008）。
+	// 两种形态都是 ≤ vision_max_side 的副本，原图永远不进入思维链。
 	switch parameter.Agent.ImageInput {
 	case "url":
 		ImageInputMode = "url"

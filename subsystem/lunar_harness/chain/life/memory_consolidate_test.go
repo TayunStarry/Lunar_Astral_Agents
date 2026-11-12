@@ -21,7 +21,7 @@ import (
 	"LunarSubsystem/LunarHarness/engine/memory"
 )
 
-// setupConsolidateTest 准备隔离的归档/日志目录，并在用例结束后还原全部注入点。
+// setupConsolidateTest 准备隔离的日志目录，并在用例结束后还原全部注入点。
 func setupConsolidateTest(t *testing.T) {
 	t.Helper()
 	resetLifeForTest(t)
@@ -171,7 +171,7 @@ func TestProcessMemoryBatchKeepsOriginalWhenModelReturnsNothing(t *testing.T) {
 					t.Fatalf("失败应记账一次用于重试/超时兜底，实得 %d 次", failureCount)
 				}
 			}
-			// 旧条目仍在归档之外的原位，且待处理组完整保留
+			// 旧条目仍在原位，且待处理组完整保留
 			if len(batch.Items) != 2 {
 				t.Fatalf("原批次条目不应被改动，实得 %d", len(batch.Items))
 			}
@@ -228,6 +228,38 @@ func TestProcessMemoryBatchKeepsOriginalWhenReplaceFails(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), `"failed"`) {
 		t.Fatalf("意图日志应记录失败状态: %s", raw)
+	}
+}
+
+// TestCorruptJournalIsDiscarded 损坏的意图日志无法重放，必须清理而不是每轮重复告警、
+// 也不是让当前批次永久恢复失败；清理后按「没有日志」走正常整理流程。
+func TestCorruptJournalIsDiscarded(t *testing.T) {
+	setupConsolidateTest(t)
+	dir := filepath.Join(config.LocalDir, filepath.FromSlash(memoryJournalDir))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("创建日志目录失败: %v", err)
+	}
+	batchPath := filepath.Join(dir, "mem-bad-000.json")
+	if err := os.WriteFile(batchPath, []byte("{not json"), 0o644); err != nil {
+		t.Fatalf("写入损坏日志失败: %v", err)
+	}
+	recovered, err := recoverBatch(context.Background(), "mem-bad", 0)
+	if err != nil || recovered {
+		t.Fatalf("损坏日志应按无日志处理，recovered=%v err=%v", recovered, err)
+	}
+	if _, err := os.Stat(batchPath); !os.IsNotExist(err) {
+		t.Fatalf("损坏日志应被清理，stat err=%v", err)
+	}
+
+	orphanPath := filepath.Join(dir, "mem-orphan-000.json")
+	if err := os.WriteFile(orphanPath, []byte("null"), 0o644); err != nil {
+		t.Fatalf("写入孤儿日志失败: %v", err)
+	}
+	if err := recoverJournals(context.Background()); err != nil {
+		t.Fatalf("损坏日志不应让恢复整体失败: %v", err)
+	}
+	if _, err := os.Stat(orphanPath); !os.IsNotExist(err) {
+		t.Fatalf("无法恢复的孤儿日志应被清理，stat err=%v", err)
 	}
 }
 

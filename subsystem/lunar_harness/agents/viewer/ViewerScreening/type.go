@@ -4,11 +4,9 @@ package ViewerScreening
 
 // Impression 结构化「视频印象」：只看可采集的公开信息与画面，不做合规判定。
 type Impression struct {
-	Summary    string   `json:"summary"`
-	Topics     []string `json:"topics"`
-	Tone       string   `json:"tone"`
-	Risky      bool     `json:"risky,omitempty"`
-	RiskReason string   `json:"risk_reason,omitempty"`
+	Summary string   `json:"summary"`
+	Topics  []string `json:"topics"`
+	Tone    string   `json:"tone"`
 }
 
 // KeywordInput 本轮选片关键词的输入。

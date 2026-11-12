@@ -15,6 +15,12 @@ const (
 	personaFile = "lifeRole.md"
 	// attempts 观感评论的尝试次数：失败可重试，避免一条评论都留不下
 	attempts = 3
+	// maxComments 一次最多生成 2 条评论
+	maxComments = 2
+	// commentMaxRunes 单条评论的长度上限
+	commentMaxRunes = 120
+	// mentionMax 一次最多 @ 3 个特别关注
+	mentionMax = 3
 	// taskBlock 人设与任务的分隔格式
 	taskBlock = "\n\n## 本次任务\n\n"
 )

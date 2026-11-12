@@ -1,10 +1,9 @@
 package Dialogue
 
-// tool_technique.go 技法创作聚合工具执行器：绘制 / 音乐 / 截图 / 文件操作。
+// tool_technique.go 技法创作分支：绘制 / 音乐 / 截图。
 //
-// 输入严格使用统一原语 {type, instruction, handle, details}，输出统一为 {result, handle, error}。
-// 子智能体（Painter / Musician / Screenshoter）由本包直接调用；
-// 文件操作编排与宿主推送能力经注入面回调，避免反向依赖 chain。
+// 这些分支已并入创作聚合工具 creative_work，本文件只保留子智能体调用与宿主能力注入。
+// 输入仍严格使用统一原语 {type, instruction, handle, details}，输出统一为 {result, handle, error}。
 
 import (
 	"context"
@@ -27,37 +26,6 @@ const (
 	// TechniqueScreenshoter 截图子工具
 	TechniqueScreenshoter = "screenshoter"
 )
-
-// ExecuteDispatchTechnique 技法创作聚合工具：按 type 分派给对应子智能体。
-func ExecuteDispatchTechnique(args map[string]any) ToolResult {
-	call, err := agentdispatch.Parse(args)
-	if err != nil {
-		return toolJSON(agentdispatch.Failure(err.Error(), nil))
-	}
-	kind := strings.ToLower(call.Type)
-	if call.Details {
-		if text, ok := techniqueScope(kind); ok {
-			return toolJSON(agentdispatch.Success(text, nil))
-		}
-		return toolJSON(agentdispatch.Failure("type 只能取 painter / musician / screenshoter", nil))
-	}
-	if call.Instruction == "" {
-		return toolJSON(agentdispatch.Failure("instruction 不能为空，请用自然语言说明要做什么", nil))
-	}
-	switch kind {
-	case TechniquePainter:
-		return toolJSON(dispatchPainter(call.Instruction, call.Handle))
-	case TechniqueMusician:
-		return toolJSON(dispatchMusician(call.Instruction))
-	case TechniqueScreenshoter:
-		result, image := dispatchScreenshoter(call.Instruction)
-		outcome := toolJSON(result)
-		outcome.Image = image
-		return outcome
-	default:
-		return toolJSON(agentdispatch.Failure("type 只能取 painter / musician / screenshoter", nil))
-	}
-}
 
 // dispatchPainter 把绘画需求交给绘制者子智能体。
 func dispatchPainter(instruction string, handles []string) agentdispatch.Result {

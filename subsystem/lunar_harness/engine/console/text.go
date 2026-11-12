@@ -169,6 +169,22 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm%02ds", m, sec)
 }
 
+// elapsedText 紧凑用时：秒级保留一位小数，超过 1 分钟只到秒，超过 1 小时只到分。
+// 用于轮次状态（每秒刷新），比 formatDuration 的「0m03s」更易扫读。
+func elapsedText(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	case d < time.Hour:
+		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+	default:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	}
+}
+
 // firstLine 取文本首行
 func firstLine(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")

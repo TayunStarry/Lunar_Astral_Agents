@@ -95,7 +95,7 @@ func (c *collector) failureText() string {
 			return step.Error
 		}
 	}
-	return "文件操作失败"
+	return "文件编辑失败"
 }
 
 func (c *collector) operationsText() string {

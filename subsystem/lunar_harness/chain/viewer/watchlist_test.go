@@ -83,9 +83,7 @@ func newWatchlistTestDeps(session watchSession, downloader watchDownloader) watc
 			Owner: "UP主" + bv, OwnerMid: 42, Duration: 600,
 		}, nil
 	}
-	deps.impress = func(_ context.Context, video *videoRecord) videoImpression {
-		return videoImpression{Summary: "摘要 " + video.Info.Title, Topics: []string{"测试"}}
-	}
+	deps.fetchTags = func(string) ([]string, error) { return []string{"测试"}, nil }
 	deps.review = func(_ context.Context, _ *videoRecord) videoReview {
 		return videoReview{Pass: true}
 	}
@@ -191,18 +189,18 @@ func TestEnsureWatchlistTriggerConditions(t *testing.T) {
 	t.Run("账号未登录", func(t *testing.T) {
 		isolateViewerDB(t)
 		session := &fakeWatchSession{links: watchTestLinks(30), loginErr: errors.New("未登录")}
-		impressions := 0
+		tagCalls := 0
 		deps := newWatchlistTestDeps(session, &fakeWatchDownloader{})
-		deps.impress = func(_ context.Context, video *videoRecord) videoImpression {
-			impressions++
-			return videoImpression{Summary: video.Info.Title}
+		deps.fetchTags = func(string) ([]string, error) {
+			tagCalls++
+			return []string{"测试"}, nil
 		}
 		result, err := ensureWatchlist(context.Background(), true, deps)
 		if err != nil {
 			t.Fatalf("不应返回错误: %v", err)
 		}
-		if result.Triggered || result.Reason != "B站账号未登录" || impressions != 0 || !session.closed {
-			t.Fatalf("不应采集: %+v impressions=%d closed=%v", result, impressions, session.closed)
+		if result.Triggered || result.Reason != "B站账号未登录" || tagCalls != 0 || !session.closed {
+			t.Fatalf("不应采集: %+v tagCalls=%d closed=%v", result, tagCalls, session.closed)
 		}
 	})
 }
@@ -228,11 +226,11 @@ func TestEnsureWatchlistCollectsAndDownloads(t *testing.T) {
 	downloader := &fakeWatchDownloader{}
 	deps := newWatchlistTestDeps(session, downloader)
 
-	var impressions []*videoRecord
+	tagCalls := 0
 	reviewed := make(map[string]bool)
-	deps.impress = func(_ context.Context, video *videoRecord) videoImpression {
-		impressions = append(impressions, video)
-		return videoImpression{Summary: "摘要 " + video.Info.Title}
+	deps.fetchTags = func(string) ([]string, error) {
+		tagCalls++
+		return []string{"测试"}, nil
 	}
 	deps.review = func(_ context.Context, video *videoRecord) videoReview {
 		if count, countErr := viewerstore.CountRows("watch_video"); countErr != nil || count != baseline {
@@ -246,8 +244,8 @@ func TestEnsureWatchlistCollectsAndDownloads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("管线执行失败: %v", err)
 	}
-	if !result.Triggered || result.Candidates != 24 || result.Impressions != 24 {
-		t.Fatalf("候选/印象数量不符: %+v", result)
+	if !result.Triggered || result.Candidates != 24 || result.Collected != 24 {
+		t.Fatalf("候选/采集数量不符: %+v", result)
 	}
 	if result.Approved != 24 || result.Downloaded != 24 || result.Failed != 0 {
 		t.Fatalf("审核与下载结果不符: %+v", result)
@@ -262,27 +260,36 @@ func TestEnsureWatchlistCollectsAndDownloads(t *testing.T) {
 	if !reviewed[pendingBV] {
 		t.Fatalf("pending 记录应重新进入审核并被推到可播放")
 	}
-	if len(impressions) != 24 {
-		t.Fatalf("抽取印象数量=%d", len(impressions))
+	if tagCalls != 24 {
+		t.Fatalf("采集标签次数=%d", tagCalls)
 	}
-	first := impressions[0]
-	if first.Info.Title == "" || first.Info.Desc == "" || first.Info.Owner == "" ||
-		first.Info.OwnerMid <= 0 || len(first.Comments) == 0 {
-		t.Fatalf("视频印象结构不完整: %+v comments=%d", first.Info, len(first.Comments))
+	// 抽查一条落库记录：标题/简介/作者/评论/标签都应齐备。
+	var sample viewerstore.WatchVideo
+	for bv := range reviewed {
+		video, ok, loadErr := viewerstore.LoadVideo(bv)
+		if loadErr != nil || !ok {
+			t.Fatalf("读取采集结果失败 %s: ok=%v err=%v", bv, ok, loadErr)
+		}
+		sample = video
+		break
+	}
+	if sample.Title == "" || sample.Intro == "" || sample.AuthorName == "" ||
+		sample.AuthorUID == "" || len(sample.Comments) == 0 || len(sample.Topics) == 0 {
+		t.Fatalf("采集结构不完整: %+v comments=%d topics=%d", sample, len(sample.Comments), len(sample.Topics))
 	}
 	for bv := range reviewed {
-		assertWatchSegments(t, bv, 1, viewerstore.WatchSegmentMax)
+		assertWatchSegments(t, bv, 1, 1)
 	}
 }
 
-// TestEnsureWatchlistPersistsImpressionTopics 印象主题词随入队写入 watch_video；未看完不入偏好池。
+// TestEnsureWatchlistPersistsImpressionTopics 标签随入队写入 watch_video 并作为偏好池主题词；未看完不入偏好池。
 func TestEnsureWatchlistPersistsImpressionTopics(t *testing.T) {
 	isolateViewerDB(t)
 	session := &fakeWatchSession{links: watchTestLinks(30)}
 	deps := newWatchlistTestDeps(session, &fakeWatchDownloader{})
 	deps.want = 1
-	deps.impress = func(_ context.Context, _ *videoRecord) videoImpression {
-		return videoImpression{Summary: "摘要", Topics: []string{"主题甲", "主题乙"}}
+	deps.fetchTags = func(string) ([]string, error) {
+		return []string{"主题甲", "主题乙"}, nil
 	}
 	result, err := ensureWatchlist(context.Background(), true, deps)
 	if err != nil {

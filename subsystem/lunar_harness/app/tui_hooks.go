@@ -78,11 +78,11 @@ func WireTUIFrontendHooks() {
 	)
 }
 
-// WireTUIMaintenanceHook 把「打包期间暂停思维链」注入打包归档 / 更新包发布：
+// WireTUIMaintenanceHook 把「打包期间暂停思维链」注入打包归档：
 //
-// 7z 压缩会长时间占用 CPU 与磁盘，若 Tick 同时推进生活链/思维链，会突然拉起
+// 7z 压缩会长时间占用 CPU 与磁盘，若 Tick 同时推进思维链，会突然拉起
 // primary_reasoning / light_reasoning / text_embedding。这里在压缩前后暂停 Tick 并卸载模型，
-// 压缩完成后再恢复调度。
+// 压缩完成后再恢复调度。这是归档与主程序运行状态的必要联动，更新器不参与。
 func WireTUIMaintenanceHook() {
 	archive.SetMaintenanceHook(func(fn func() error) error {
 		resume := thinking.BeginMaintenance()
@@ -189,6 +189,7 @@ var roleAgentIDs = map[string]string{
 	agentinfo.NameCodeExecution:      "code_execution",
 	agentinfo.NameContentRollback:    "content_rollback",
 	agentinfo.NameFileOperations:     "file_operations",
+	agentinfo.NameStoryWriter:        "story_writer",
 	agentinfo.NameLifeMemorizer:      "life_memorizer",
 	"生活记忆整理者":                        "life_memorizer",
 	agentinfo.NamePainter:            "painter",
@@ -250,7 +251,7 @@ func agentIDByRole(role string) string {
 	case "vision", "document_reader", "archive_reader",
 		"creative", "life_memorizer", "painter", "screenshoter",
 		"manipulate_files", "manipulate_archive", "code_execution", "content_rollback",
-		"file_operations",
+		"file_operations", "story_writer",
 		"desktop", "desktop_operator", "bilibili",
 		"web_search", "search_planner", "search_summarizer", "sql_writer", "mutual_forum", "dialogue_bridging",
 		"storyboard_research", "storyboard_planner",

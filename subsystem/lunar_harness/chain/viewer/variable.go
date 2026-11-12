@@ -5,62 +5,53 @@ package viewer
 // 数量类机制（候选几个、切片几段、记忆多长）都在这里定标；
 // 个人偏好放在 local_data/config/bilibili.json，不在代码里硬编码。
 
-import (
-	"time"
-
-	"LunarSubsystem/LunarHarness/engine/viewerstore"
-)
+import "time"
 
 // ==== 候选与采集参数 ====
 
 const (
-	// collectCommentLimit 每个候选采集的评论条数上限
-	collectCommentLimit = 30
 	// collectCommentMaxRunes 单条评论超过该长度直接硬截断
 	collectCommentMaxRunes = 512
-	// collectDanmakuLimit 每个候选采集的实时弹幕条数上限
-	collectDanmakuLimit = 30
-	// collectPageCount 候选详情页评论翻页数（凑够 collectCommentLimit 条）
+	// collectPageCount 候选详情页评论翻页数（凑够 watchlistCommentLimit 条）
 	collectPageCount = 2
 	// collectPageSize 单页评论条数
 	collectPageSize = 20
 )
 
 // ==== 观看切片参数 ====
-
+//
+// 一个视频只随机抽一个 1 分钟片段（不足 1 分钟取全片），做一次视频理解。
 const (
-	// watchSliceMin / watchSliceMax 单个视频切片数的硬边界。
-	// 需求只要求 1~5 段，上限直接复用存储层的 WatchSegmentMax，避免审核与下载两套口径。
-	watchSliceMin = 1
-	watchSliceMax = viewerstore.WatchSegmentMax
-	// watchSliceDefault 模型未给出可用切片数时的默认值
-	watchSliceDefault = 5
+	// watchSegmentSeconds 单次观看片段的固定时长（秒）。
+	watchSegmentSeconds = 60
 	// inboxMaxAge 只处理最近 7 天的未读，避免首次启用时把陈年消息全回一遍
 	inboxMaxAge = 7 * 24 * time.Hour
 	// dynamicMaxRunes 动态正文长度上限
 	dynamicMaxRunes = 512
 )
 
-// ==== 评论触发参数 ====
+// ==== 视频印象与评论参数 ====
 
 const (
-	// segmentRemarkChance 普通片段的评论触发概率。
-	//
-	// 每片都发太密集；取 1/4 后，一个 4 段视频平均只有 1 条过程评论，
-	// 加上每支视频必发的收束评论，密度接近「真人边看边偶尔说两句」。
-	segmentRemarkChance = 0.25
-)
-
-// ==== 动态评论区参数 ====
-
-const (
-	// dynamicCommentMaxRunes 单条动态评论里评价正文的长度上限
+	// watchImpressionCommentRows 视频印象里纳入的评论条数。
+	watchImpressionCommentRows = 12
+	// watchImpressionDanmakuRows 视频印象里纳入的弹幕条数。
+	watchImpressionDanmakuRows = 20
+	// watchImpressionIntroRunes 视频印象里简介的长度上限。
+	watchImpressionIntroRunes = 400
+	// watchImpressionVisualRunes 视频印象里画面理解的长度上限。
+	watchImpressionVisualRunes = 800
+	// watchRemarkMaxRunes 单条发布评论的长度上限（宁可短，也要是完整的一句话）。
+	watchRemarkMaxRunes = 80
+	// watchRemarkMaxComments 一次观看最多发布的评论条数。
+	watchRemarkMaxComments = 2
+	// dynamicCommentMaxRunes 被动消息回应（追评/@）的长度上限。
 	dynamicCommentMaxRunes = 512
 )
 
 // ==== 待看列表补齐的时间预算 ====
 //
-// 24 个候选串行：每个都要开页、翻评论、跑印象与审核模型，再下载 1~5 段。
+// 24 个候选串行：每个都要开页、翻评论、取标签、跑审核模型，再下载 1 段。
 // 首次无缓存时一轮可能拖很久，与对话回合争抢资源，因此整阶段必须有上限。
 
 const (
@@ -88,7 +79,7 @@ const (
 
 // ==== 观影主题词偏好池 ====
 //
-// 每看完整一个视频，就用它印象里的主题词给偏好池加一次权重；
+// 每看完整一个视频，就用它的标签给偏好池加一次权重；
 // 选片时按时间衰减后的权重取高频词，形成「看过 → 主题词 → 下次加权」的闭环。
 // viewer.db 的 watch_topic 表只负责行级读写，池上限、衰减与淘汰策略全在这里定标。
 const (

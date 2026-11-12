@@ -1,8 +1,6 @@
 package viewer
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -153,23 +151,16 @@ func TestFilterUnreadInbox(t *testing.T) {
 	}
 }
 
-// TestInboxSeenRoundTrip 钉住去重记录能落盘并读回。
+// TestInboxSeenRoundTrip 钉住去重记录能落库并读回。
 func TestInboxSeenRoundTrip(t *testing.T) {
-	tmp := t.TempDir()
-	orig := inboxSeenFile
-	inboxSeenFile = func() string { return filepath.Join(tmp, "inbox.json") }
-	t.Cleanup(func() { inboxSeenFile = orig })
+	isolateViewerDB(t)
 
 	item := inboxItem{Type: 1, Oid: "1", SourceID: "11", MessageID: "m1"}
 	markInboxSeen(item)
 
-	raw, err := os.ReadFile(inboxSeenFile())
-	if err != nil {
-		t.Fatalf("去重记录未落盘: %v", err)
-	}
 	store := loadInboxSeen()
 	if !store.has(item.keys()) {
-		t.Fatalf("读回后仍有未记录键，文件内容: %s", raw)
+		t.Fatalf("读回后仍有未记录键: %+v", store.Keys)
 	}
 	if got := filterUnreadInbox([]inboxItem{item}, store, time.Now()); len(got) != 0 {
 		t.Fatalf("已处理消息不应再次进入未读队列: %+v", got)

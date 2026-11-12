@@ -7,7 +7,6 @@ import (
 
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/prompts"
-	"LunarSubsystem/LunarHarness/protocol/agentbase"
 )
 
 // loadPrompt 读取提示词文本（读取失败返回空串）
@@ -18,9 +17,4 @@ func loadPrompt(name string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
-}
-
-// renderPrompt 单次替换提示词中的 {占位符}（pairs 为「占位符, 值」成对传入）
-func renderPrompt(template string, pairs ...string) string {
-	return agentbase.RenderPrompt(template, pairs...)
 }

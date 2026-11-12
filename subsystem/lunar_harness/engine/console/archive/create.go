@@ -143,6 +143,11 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 	logf("  使用7z工具: %s", sevenZPath)
 
 	out7z := outputPath + ".7z"
+	if dir := filepath.Dir(out7z); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("无法创建输出目录 %s: %v", dir, err)
+		}
+	}
 	cmdArgs := []string{
 		"a",
 		fmt.Sprintf("-v%dm", partSizeMB),

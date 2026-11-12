@@ -16,7 +16,7 @@
 // 需要模型能力时调用本目录的智能体，引擎侧只能声明函数钩子由装配层注入。
 //
 // 本文件不再维护逐条目录清单，权威来源是：
-//   - 智能体分层与职责：docs/code-wiki/09-调度与智能体分层.md
+//   - 智能体分层与职责：local_data/references/09-调度与智能体分层.md
 //   - 智能体 ID 与显示名：protocol/agentinfo
 //   - 边界自查命令与新增智能体清单：.trae/rules/agent-chain-boundary.md
 //

@@ -2,7 +2,7 @@ package console
 
 // ==== 颜色能力与渲染器 ====
 //
-// 界面「一片纯白」的根因就在这里，务必读完再改（详见 docs/adr/0002-*）。
+// 界面「一片纯白」的根因就在这里，务必读完再改。
 //
 // lipgloss 的 Style 是**结构体值**，在 `lipgloss.NewStyle()` 那一刻就把当时的渲染器
 // 指针记进了 `Style.r`（见 lipgloss/style.go 的 `if s.r == nil { s.r = renderer }`）。

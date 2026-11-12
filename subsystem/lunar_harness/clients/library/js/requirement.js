@@ -40,7 +40,8 @@ export function bindRequirementPush() {
 }
 
 // prepareRequirement 校验并规整输入：有句柄走 assigned，留空走 random。
-export function prepareRequirement(handle, description) {
+// domain 取 story / edit，留空由后端按描述推断。
+export function prepareRequirement(handle, description, domain = '') {
     const mode = String(handle || '').trim() ? 'assigned' : 'random';
     const cleanHandle = String(handle || '').trim();
     const cleanDescription = String(description || '').trim();
@@ -50,12 +51,12 @@ export function prepareRequirement(handle, description) {
     if (mode === 'assigned' && !cleanDescription) {
         throw new RequirementError('指定资源句柄时请填写需求描述');
     }
-    return { mode, handle: cleanHandle, description: cleanDescription };
+    return { mode, handle: cleanHandle, description: cleanDescription, domain: normalizeDomain(domain) };
 }
 
 // submitRequirement 提交任务并返回已受理的任务视图。
 export async function submitRequirement(input) {
-    const body = prepareRequirement(input.handle, input.description);
+    const body = prepareRequirement(input.handle, input.description, input.domain);
     const result = await socketRequest('creation.submit', buildRequestBody(body));
     const task = unwrapTask(result, '创作系统未返回任务信息');
     activeTask = task;
@@ -65,11 +66,17 @@ export async function submitRequirement(input) {
 // ==== 内部：请求与字段对齐 ====
 
 // buildRequestBody 只发后端声明的字段（DisallowUnknownFields）。
-function buildRequestBody({ mode, handle, description }) {
+function buildRequestBody({ mode, handle, description, domain }) {
     const body = { mode };
     if (description) body.description = description;
     if (handle) body.handle = handle;
+    if (domain) body.domain = domain;
     return body;
+}
+
+function normalizeDomain(value) {
+    const domain = String(value || '').trim().toLowerCase();
+    return domain === 'story' || domain === 'edit' ? domain : '';
 }
 
 // restoreRequirement 重连后接住最近未结束的创作任务。

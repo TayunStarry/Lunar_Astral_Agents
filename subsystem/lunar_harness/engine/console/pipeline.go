@@ -222,7 +222,7 @@ func classifyEngineLevel(line string) string {
 	}
 }
 
-// PushTaskLog 功能子包（代理/打包/端口释放/更新包）日志统一出口：
+// PushTaskLog 功能子包（代理/端口释放/工具列表）日志统一出口：
 // 同时并入原始日志视图与功能任务回显缓冲。
 func PushTaskLog(msg string) {
 	for _, text := range scrubLogText(msg) {

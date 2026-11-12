@@ -44,7 +44,7 @@ func TestEngineScreenDesktopOperatorManualStart(t *testing.T) {
 	}
 }
 
-// 覆盖：运行中按 x 请求中断；未运行时不应误触中断。
+// 覆盖：运行中按 x 请求中断；桌面操纵空闲时 x 与其他屏一致退出。
 func TestEngineScreenDesktopOperatorInterrupt(t *testing.T) {
 	stopped := 0
 	running := true
@@ -57,20 +57,77 @@ func TestEngineScreenDesktopOperatorInterrupt(t *testing.T) {
 	m.width, m.height = 120, 40
 	m.screen = screenStats
 
-	model, _ := m.updateEngine(keyMsg("x"))
+	model, cmd := m.updateStats(keyMsg("x"))
 	m = model.(appModel)
 	if stopped != 1 {
 		t.Fatalf("运行中按 x 应调用中断钩子，实得 %d", stopped)
 	}
+	if isQuitCmd(cmd) {
+		t.Fatal("运行中按 x 应保留中断语义，不应退出程序")
+	}
 
 	running = false
-	model, _ = m.updateEngine(keyMsg("x"))
-	m = model.(appModel)
-	if stopped != 1 {
-		t.Fatalf("未运行时不应再次中断，实得 %d", stopped)
+	if _, cmd := m.updateStats(keyMsg("x")); !isQuitCmd(cmd) {
+		t.Fatal("桌面操纵空闲时按 x 应退出程序")
 	}
-	if !strings.Contains(m.engine.msg, "未运行") {
-		t.Fatalf("未运行时应明确提示，实得 %q", m.engine.msg)
+}
+
+// isQuitCmd 判断命令是否为 tea.Quit。
+func isQuitCmd(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, ok := cmd().(tea.QuitMsg)
+	return ok
+}
+
+// 覆盖：x/X（界面显示 X）在所有非输入态屏幕都能退出程序（不再只有主菜单生效）。
+func TestQuitKeyAcrossScreens(t *testing.T) {
+	// 未接入桌面操纵钩子：运行状态屏没有本地 x 语义，应与其他屏一致退出
+	SetDesktopOperatorHooks(nil, nil, nil)
+	defer SetDesktopOperatorHooks(nil, nil, nil)
+
+	for _, id := range []screenID{screenMenu, screenAgent, screenStats, screenLogs, screenArchive, screenDump, screenTools} {
+		for _, k := range []string{"x", "X"} {
+			m := newAppModel()
+			m.width, m.height = 120, 40
+			m.screen = id
+			if _, cmd := m.Update(keyMsg(k)); !isQuitCmd(cmd) {
+				t.Fatalf("屏幕 %d 按 %q 应退出程序", id, k)
+			}
+		}
+	}
+}
+
+// 覆盖：输入框正在接收字符时 x 让位，不触发退出。
+func TestQuitKeyYieldsToTextEntry(t *testing.T) {
+	t.Setenv(colorModeEnv, "")
+	SetDesktopOperatorHooks(nil, nil, nil)
+	defer SetDesktopOperatorHooks(nil, nil, nil)
+
+	stats := newAppModel()
+	stats.width, stats.height = 120, 40
+	stats.screen = screenStats
+	stats.engine.inputMode = true
+	if _, cmd := stats.Update(keyMsg("x")); isQuitCmd(cmd) {
+		t.Fatal("运行状态输入态按 x 应作为输入，不应退出")
+	}
+
+	archive := newAppModel()
+	archive.width, archive.height = 120, 40
+	archive.screen = screenArchive
+	archive.archive.inputMode = true
+	if _, cmd := archive.Update(keyMsg("x")); isQuitCmd(cmd) {
+		t.Fatal("打包归档输入态按 x 应作为输入，不应退出")
+	}
+
+	for _, id := range []screenID{screenPorts, screenProxy} {
+		m := newAppModel()
+		m.width, m.height = 120, 40
+		m.screen = id
+		if _, cmd := m.Update(keyMsg("x")); !isQuitCmd(cmd) {
+			t.Fatalf("屏幕 %d 的数字输入框不应吞掉退出键 x", id)
+		}
 	}
 }
 

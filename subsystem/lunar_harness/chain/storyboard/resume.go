@@ -73,7 +73,9 @@ func restoreTaskState(record persistedTask, now time.Time) *taskState {
 		shots = shotsFromPlan(plan, shotPlanned)
 	}
 	next := record.NextShot
-	for next < len(shots) && shots[next].Status == shotPainted {
+	// 只有「画面与配音都已完成」或「画面已判定失败」的镜头才算合成结束；
+	// 画面已完成但配音未完成的镜头，恢复后继续补配音。
+	for next < len(shots) && shotComposed(shots[next]) {
 		next++
 	}
 
@@ -158,6 +160,7 @@ func snapshotPlan(plan storyboardPlan) persistedPlan {
 			Act:        shot.Act,
 			Scene:      shot.Scene,
 			Narration:  shot.Narration,
+			Original:   shot.Original,
 			Continuity: shot.Continuity,
 			Prompt:     shot.Prompt,
 			Ratio:      shot.Ratio,
@@ -179,6 +182,7 @@ func restorePlan(stored persistedPlan) storyboardPlan {
 			Act:        shot.Act,
 			Scene:      shot.Scene,
 			Narration:  shot.Narration,
+			Original:   shot.Original,
 			Continuity: shot.Continuity,
 			Prompt:     shot.Prompt,
 			Ratio:      shot.Ratio,

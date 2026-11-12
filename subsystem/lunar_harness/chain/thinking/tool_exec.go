@@ -25,7 +25,10 @@ func (role *DialogueRole) executeToolCall(call agentbase.ToolCall) (string, bool
 	if err != nil {
 		args = map[string]any{}
 	}
-	maybeSendFastAck(name)
+	// details=true 只是查询复合工具的职能描述，不执行长任务，不推快速应答。
+	if details, _ := args["details"].(bool); !details {
+		maybeSendFastAck(name)
+	}
 	result, err := runToolHandler(handler, args)
 	if err != nil {
 		return "", false, fmt.Errorf("工具执行失败（%s）: %w", name, err)

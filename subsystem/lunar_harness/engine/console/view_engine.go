@@ -35,9 +35,12 @@ func engineKeys(s engineState) []keyHint {
 	if s.inputMode {
 		return []keyHint{kh("Enter", "启动"+agentinfo.NameDesktopOperator), kh("Esc", "取消输入")}
 	}
-	xLabel := "中断"
-	if status, wired := getDesktopOperatorStatus(); wired && status.Running && status.Stopping {
-		xLabel = "强制结束"
+	xLabel := "退出"
+	if status, wired := getDesktopOperatorStatus(); wired && status.Running {
+		xLabel = "中断"
+		if status.Stopping {
+			xLabel = "强制结束"
+		}
 	}
 	return []keyHint{
 		kh("1/2", "重启前端"),

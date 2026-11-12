@@ -41,8 +41,13 @@ type AgentTurn struct {
 	Content    string    `json:"content"`    // 输出累计文本
 	Tools      []string  `json:"tools"`      // 工具调用记录
 	Active     bool      `json:"active"`     // 是否进行中
+	Phase      string    `json:"phase"`      // 当前步骤（思考中 / 输出中 / 等待工具 / 已结束）
 	StartedAt  time.Time `json:"started_at"` // 开始时刻
 	FinishedAt time.Time `json:"finished_at"`
+
+	// pendingTools 本轮已上报调用、尚未收到结果的工具数。
+	// 仅用于判断「轮次结束后是否仍在等工具」，不导出。
+	pendingTools int
 }
 
 // TurnStoreInfo 实况轮次缓冲的容量与淘汰情况（数据导出写进元信息用）

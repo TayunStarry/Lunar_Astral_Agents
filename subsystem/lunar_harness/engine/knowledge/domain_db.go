@@ -2,7 +2,7 @@ package knowledge
 
 // domain_db.go 领域数据库 —— 一个领域一个 SQLite 文件、一个连接句柄。
 //
-// 分域规则（见 docs/adr/0009-数据库按领域分文件.md）：
+// 分域规则：
 //
 //	text.db       文本内容索引   file_mapping（文件 → 分块集合）
 //	character.db  自定义角色库   painter_characters

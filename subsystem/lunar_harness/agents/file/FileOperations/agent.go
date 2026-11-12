@@ -28,7 +28,7 @@ func Run(ctx context.Context, req Request) (Result, error) {
 		summary, err := file.Run(ctx, file.Request{
 			AgentID:          AgentID,
 			Role:             Role,
-			SystemPrompt:     prompts.ReadOr(promptFile, "你是文件操作智能体，负责拆解任务并派发子智能体。"),
+			SystemPrompt:     prompts.ReadOr(promptFile, "你是文件编辑智能体，负责拆解任务并派发子智能体。"),
 			Instruction:      instruction,
 			Tools:            definitions(),
 			Handler:          toolHandler(ctx, collector, req),
@@ -66,7 +66,7 @@ func successResult(summary string, c *collector) Result {
 		summary = strings.TrimSpace(c.operationsText())
 	}
 	if summary == "" {
-		summary = "文件操作已完成"
+		summary = "文件编辑已完成"
 	}
 	return Result{
 		Summary: summary,
@@ -80,7 +80,7 @@ func successResult(summary string, c *collector) Result {
 func failedResult(c *collector) Result {
 	summary := strings.TrimSpace(c.operationsText())
 	if summary == "" {
-		summary = "文件操作失败"
+		summary = "文件编辑失败"
 	}
 	return Result{
 		Summary: summary,

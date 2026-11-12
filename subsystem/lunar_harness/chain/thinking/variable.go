@@ -217,8 +217,8 @@ var fastAckEndings = []string{
 // 触发粒度是工具名而非分支参数：只要本轮请求了对应复合工具，就从该工具
 // 的候选池随机取一条；每个工具至少两条，文案集中在这里便于后续调整。
 var fastAckLines = map[string][]string{
-	// dispatch_technique 技法创作（绘制 / 音乐 / 截图 / 文件操作共用一套口吻）
-	Dialogue.ToolDispatchTechnique: {
+	// creative_work 创作聚合（故事 / 文件 / 演绎 / 绘画 / 音乐 / 截图共用一套口吻）
+	Dialogue.ToolCreativeWork: {
 		"这就动手", "我这就弄", "给我点时间搞一下", "我上手试试", "这就给你整",
 		"先弄起来", "我这就开工", "我摸摸看", "这就开整", "我这就去做",
 	},

@@ -16,10 +16,11 @@ func StreamBegin(role string) {
 	// 上一轮未正常收尾则先落历史
 	if currentTurn != nil && currentTurn.Active {
 		currentTurn.Active = false
+		currentTurn.Phase = PhaseDone
 		currentTurn.FinishedAt = time.Now()
 		archiveTurnLocked()
 	}
-	currentTurn = &AgentTurn{Role: role, Active: true, StartedAt: time.Now()}
+	currentTurn = &AgentTurn{Role: role, Active: true, Phase: PhaseThinking, StartedAt: time.Now()}
 	emitStream(StreamEvent{Role: role, Kind: KindBegin})
 }
 
@@ -36,8 +37,10 @@ func StreamDelta(role string, kind StreamKind, text string) {
 		switch kind {
 		case KindThink:
 			turn.Thinking = appendTurnText(turn.Thinking, text)
+			turn.Phase = PhaseThinking
 		case KindContent:
 			turn.Content = appendTurnText(turn.Content, text)
+			turn.Phase = PhaseOutput
 		}
 	}
 	emitStream(StreamEvent{Role: role, Kind: kind, Text: text})
@@ -54,6 +57,8 @@ func StreamTool(role, name, args string) {
 	}
 	if turn := attachTurnLocked(role); turn != nil {
 		turn.Tools = append(turn.Tools, entry)
+		turn.pendingTools++
+		turn.Phase = PhaseTool
 	}
 	emitStream(StreamEvent{Role: role, Kind: KindTool, Text: entry})
 }
@@ -90,8 +95,20 @@ func attachTurnLocked(role string) *AgentTurn {
 	return nil
 }
 
-// StreamToolResult 记录工具返回摘要
+// StreamToolResult 记录工具返回摘要。
+// 收到结果说明该工具已执行完，未结束的轮次据此退出「等待工具」。
 func StreamToolResult(role, summary string) {
+	streamMu.Lock()
+	defer streamMu.Unlock()
+
+	if turn := attachTurnLocked(role); turn != nil {
+		if turn.pendingTools > 0 {
+			turn.pendingTools--
+		}
+		if !turn.Active && turn.pendingTools == 0 {
+			turn.Phase = PhaseDone
+		}
+	}
 	emitStream(StreamEvent{Role: role, Kind: KindToolResult, Text: summary})
 }
 
@@ -104,6 +121,13 @@ func StreamEnd(role string) {
 	defer streamMu.Unlock()
 	if currentTurn != nil && (role == "" || currentTurn.Role == role) {
 		currentTurn.Active = false
+		// 有工具还没返回时保留「等待工具」：工具在轮次结束后才真正执行，
+		// 若这里直接写「已结束」，实况屏会在长时间工具等待期间显示错误的完成态。
+		if currentTurn.pendingTools > 0 {
+			currentTurn.Phase = PhaseTool
+		} else {
+			currentTurn.Phase = PhaseDone
+		}
 		currentTurn.FinishedAt = time.Now()
 		archiveTurnLocked()
 		currentTurn = nil

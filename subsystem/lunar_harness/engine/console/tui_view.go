@@ -24,8 +24,6 @@ func (m appModel) View() string {
 		return m.viewProxy()
 	case screenArchive:
 		return m.viewArchive()
-	case screenUpdate:
-		return m.viewUpdate()
 	case screenPorts:
 		return m.viewPorts()
 	case screenDump:
@@ -51,8 +49,6 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 		return "HTTPS 代理", proxyContext(m.proxy), proxyKeys(m.proxy)
 	case screenArchive:
 		return "打包归档", archiveContext(m.archive), archiveKeys(m.archive)
-	case screenUpdate:
-		return "更新包", updateContext(m.update), updateKeys(m.update)
 	case screenPorts:
 		return "端口释放", "", portsKeys()
 	case screenDump:
@@ -68,9 +64,9 @@ func menuKeys() []keyHint {
 	return []keyHint{
 		kh("↑/↓", "选择"),
 		kh("Enter/→", "进入"),
-		kh("0-9 a", "直达"),
+		kh("0-7", "直达"),
 		kh("?", "帮助"),
-		kh("q", "退出"),
+		kh("X", "退出"),
 	}
 }
 
@@ -137,15 +133,21 @@ func (m appModel) viewMenu() string {
 			title = selectStyle.Render(it.title)
 		}
 		b = append(b, listRow(rowW, sel, cursor, title, keyTag))
-		if !twoPane {
-			b = append(b, newRow(rowW, sel).
-				L("     ", dimStyle.Render(truncTo(it.desc, maxInt(4, rowW-6)))).
-				String())
-		}
 		blocks[i] = b
 	}
 
-	lines, info := m.menuPl.layoutView(blocks, m.menu, listW, h)
+	// 窄屏不再给每个条目挂一行说明（列表与详情混排，行数还翻倍），
+	// 改为列表下方固定一条「说明」条：只展示当前选中项，宽屏则仍用右侧详情栏。
+	detailH := 0
+	if !twoPane {
+		switch {
+		case h >= 8:
+			detailH = 3
+		case h >= 6:
+			detailH = 2
+		}
+	}
+	lines, info := m.menuPl.layoutView(blocks, m.menu, listW, maxInt(1, h-detailH))
 	body := lines
 	if twoPane {
 		detail := m.menuDetail(m.menu, detailW, h)
@@ -153,6 +155,18 @@ func (m appModel) viewMenu() string {
 		for i := 0; i < h; i++ {
 			body[i] = lines[i] + ruleStyle.Render(" │ ") + detail[i] + " "
 		}
+	} else if detailH > 0 {
+		body = append(body, sectionRule("说明", w))
+		desc := wrapPlain(menuItems[m.menu].desc, maxInt(8, w-4))
+		if len(desc) > detailH-1 {
+			// 说明被截断时补省略号，避免看起来像写完了
+			desc = desc[:detailH-1]
+			desc[detailH-2] = truncTo(desc[detailH-2], maxInt(1, w-6)) + "…"
+		}
+		for _, l := range desc {
+			body = append(body, "  "+dimStyle.Render(l))
+		}
+		body = fitLines(body, h)
 	}
 
 	f.status = dimStyle.Render(info.positionText() + " 项")

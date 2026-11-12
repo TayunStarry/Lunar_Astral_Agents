@@ -54,6 +54,11 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 			scene = fmt.Sprintf("镜 %d", index+1)
 		}
 		narration := strings.TrimSpace(item.Narration)
+		// 原文默认继承规划稿同序号镜头：审查稿未回传 original 时也不会丢掉朗读文本。
+		original := strings.TrimSpace(item.Original)
+		if original == "" {
+			original = inheritedOriginal(state.plan, item.Index)
+		}
 		shotRatio := strings.TrimSpace(item.Ratio)
 		if shotRatio == "" {
 			shotRatio = ratio
@@ -65,6 +70,7 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 			Act:       act,
 			Scene:     scene,
 			Narration: narration,
+			Original:  original,
 			Prompt:    prompt,
 			Ratio:     shotRatio,
 			Status:    shotPlanned,
@@ -74,6 +80,7 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 			Act:       act,
 			Scene:     scene,
 			Narration: narration,
+			Original:  original,
 			Prompt:    prompt,
 			Ratio:     shotRatio,
 			Style:     style,
@@ -96,9 +103,9 @@ func ConfirmTask(taskID, title string, input []ReviewShot) (TaskView, error) {
 	releaseRestLocked(state)
 	applyEventLocked(state, ProgressEvent{
 		Status:   statusPainting,
-		Stage:    "审查已确认，开始逐镜绘制",
+		Stage:    "审查已确认，开始逐镜合成画面与配音",
 		Progress: 12,
-		Summary:  "分镜审查完成，直接进入逐镜绘制",
+		Summary:  "分镜审查完成，进入逐镜画面与配音合成",
 		Title:    viewTitle,
 		Event:    eventReviewConfirmed,
 		Shots:    cloneShots(shots),
@@ -143,11 +150,15 @@ func PauseTask(taskID string) (TaskView, error) {
 	if state.restedAt.IsZero() {
 		state.restedAt = time.Now()
 	}
-	// 当前正在绘制的镜头回退为待绘制，续跑时从这一镜继续。
+	// 正在绘制 / 配音的镜头回退为待合成，续跑时从这一镜继续。
 	for index := range state.shots {
 		if state.shots[index].Status == shotDrawing {
 			state.shots[index].Status = shotPlanned
 			state.shots[index].Error = ""
+		}
+		if state.shots[index].VoiceStatus == voiceRunning {
+			state.shots[index].VoiceStatus = voicePending
+			state.shots[index].VoiceError = ""
 		}
 	}
 	if state.stage == stagePlanning {
@@ -208,7 +219,8 @@ func ResumeTask(taskID string) (TaskView, error) {
 		state.shots = nil
 		state.nextShot = 0
 	case stagePainting:
-		event.Stage = fmt.Sprintf("继续绘制第 %d / %d 镜", state.nextShot+1, len(state.plan.Shots))
+		event.Stage = fmt.Sprintf("继续合成第 %d / %d 镜（画面 %s）", state.nextShot+1,
+			len(state.plan.Shots), paintingStepText(state))
 	}
 	applyEventLocked(state, event)
 	view := takeViewLocked(state)
@@ -243,6 +255,9 @@ func CancelTask(taskID, reason string) (TaskView, error) {
 	for index := range state.shots {
 		if state.shots[index].Status == shotDrawing {
 			state.shots[index].Status = shotPlanned
+		}
+		if state.shots[index].VoiceStatus == voiceRunning {
+			state.shots[index].VoiceStatus = voicePending
 		}
 	}
 	applyEventLocked(state, ProgressEvent{
@@ -284,6 +299,31 @@ func releaseRestLocked(state *taskState) {
 	}
 	state.lastBeat = now
 	state.restedAt = time.Time{}
+}
+
+// inheritedOriginal 按原稿镜头序号取回原文片段；找不到时返回空串。
+func inheritedOriginal(plan storyboardPlan, index int) string {
+	if index <= 0 {
+		return ""
+	}
+	for _, shot := range plan.Shots {
+		if shot.Index == index {
+			return strings.TrimSpace(shot.Original)
+		}
+	}
+	return ""
+}
+
+// paintingStepText 说明当前镜处于画面的哪个阶段。
+func paintingStepText(state *taskState) string {
+	index := state.nextShot
+	if index < 0 || index >= len(state.shots) {
+		return "待绘制"
+	}
+	if state.shots[index].Status == shotPainted {
+		return "已完成，待配音"
+	}
+	return "待绘制"
 }
 
 // stageStatus 把内部阶段映射为对外状态。

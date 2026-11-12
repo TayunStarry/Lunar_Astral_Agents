@@ -75,7 +75,7 @@ func (r *watchRun) ActivityText() string {
 	if r.outcome.Triggered {
 		return r.outcome.Activity
 	}
-	return "想看点视频，" + emptyAs(r.outcome.Reason, "但没有可看的片段")
+	return "想看点视频，" + emptyAs(r.outcome.Reason, "但没有可看的视频")
 }
 
 func (r *watchRun) Snapshot() json.RawMessage {
@@ -93,7 +93,7 @@ func (r *watchRun) Restore(raw json.RawMessage) error {
 // watchDetail 把一次观看的关键结果压成一行，便于观测。
 func watchDetail(outcome viewer.WatchOutcome) string {
 	if !outcome.Triggered {
-		return emptyAs(outcome.Reason, "没有看片段")
+		return emptyAs(outcome.Reason, "没有看视频")
 	}
 	parts := []string{
 		fmt.Sprintf("%s 第 %d/%d 段", outcome.BV, outcome.SegmentIndex, outcome.SegmentTotal),

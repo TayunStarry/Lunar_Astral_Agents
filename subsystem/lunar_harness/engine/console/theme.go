@@ -89,8 +89,7 @@ var (
 // 为什么必须显式重绑：lipgloss 的 `Style` 是值类型，`NewStyle()` 当场把渲染器指针存进
 // `Style.r`；此后 `SetDefaultRenderer` 只替换包级变量，**已建样式仍指向旧渲染器**。
 // 而旧渲染器的输出正是被 Install() 接到日志管道上的 `os.Stdout`——它的 isatty 判定为假，
-// 颜色档位退化为 Ascii，整套配色被丢弃，界面于是「一片纯白」。详见 renderer.go 与
-// docs/adr/0002-控制台渲染器的颜色档位与样式绑定.md。
+// 颜色档位退化为 Ascii，整套配色被丢弃，界面于是「一片纯白」。详见 renderer.go。
 //
 // 因此：**任何新增样式都必须写进本函数**，不要在包级做 `lipgloss.NewStyle()` 初始化；
 // 单测 `TestBindThemeRebindsAllStyles` 会拦住漏绑。

@@ -63,7 +63,6 @@ func init() {
 		toolreg.Schema{Name: "pick_keywords", Description: "综合指令、偏好、心情与记忆决定本轮选片关键词。"},
 		toolreg.Schema{Name: "screen_video", Description: "依据标题 / 标签 / 简介 / 评论 / 弹幕生成结构化视频印象。"},
 		toolreg.Schema{Name: "watch_slice", Description: "理解一个 60 秒切片（抽帧后的图文混排）。"},
-		toolreg.Schema{Name: "watch_merge", Description: "把切片理解合成为第一人称观后感受。"},
 	)
 }
 
@@ -71,7 +70,7 @@ func init() {
 func ToolCatalog() []agentinfo.Agent {
 	return []agentinfo.Agent{{
 		ID: AgentID, Name: Role,
-		Note:  "观影者之一：只看画面与公开信息，产出视频印象、切片理解与观后感受。",
+		Note:  "观影者之一：只看画面与公开信息，产出视频印象与单切片理解。",
 		Tools: agentinfo.ToolsFromRegistry(AgentID),
 	}}
 }

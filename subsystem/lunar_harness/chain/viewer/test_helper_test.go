@@ -3,9 +3,6 @@ package viewer
 // test_helper_test.go 单元测试共用的隔离环境。
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -31,15 +28,7 @@ func isolateViewerDB(t *testing.T) {
 // writeSeenRecord 写入一条历史已看记录，供选片去重用例构造前置状态。
 func writeSeenRecord(t *testing.T, bvid string) {
 	t.Helper()
-	path := seenFile()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("创建已看记录目录失败: %v", err)
-	}
-	raw, err := json.Marshal(seenStore{Videos: map[string]int64{bvid: time.Now().Unix()}})
-	if err != nil {
-		t.Fatalf("编码已看记录失败: %v", err)
-	}
-	if err := os.WriteFile(path, raw, 0o644); err != nil {
+	if err := viewerstore.RecordSeenVideos(map[string]int64{bvid: time.Now().Unix()}); err != nil {
 		t.Fatalf("写入已看记录失败: %v", err)
 	}
 }

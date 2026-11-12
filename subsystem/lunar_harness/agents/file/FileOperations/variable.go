@@ -4,8 +4,8 @@ package FileOperations
 
 const (
 	AgentID     = "file_operations"
-	Role        = "文件操作"
-	DisplayName = "文件操作"
+	Role        = "文件编辑"
+	DisplayName = "文件编辑"
 	promptFile  = "fileOperations.md"
 	// maxRounds 创作工具循环轮次上限
 	maxRounds = 32
