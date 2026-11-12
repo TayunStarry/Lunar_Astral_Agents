@@ -30,7 +30,13 @@ func main() {
 	if *logPath == "" {
 		*logPath = filepath.Join(root, "local_data", "logs", "update_apply.log")
 	}
-	openLog(*logPath)
+	if err := openLog(*logPath); err != nil {
+		// 日志落盘失败不能静默：界面日志屏与标准错误都要给出完整原因
+		logInitErr = err
+		fmt.Fprintln(os.Stderr, "[ERROR] "+err.Error())
+	} else {
+		logf("日志文件 %s", logFilePath)
+	}
 
 	release, ok := acquireApplyLock(root)
 	if !ok {

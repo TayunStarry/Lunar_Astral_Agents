@@ -43,11 +43,13 @@ func (m *uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	case msgTick:
-		// 每秒重新判定主程序存活：主程序退出后状态在一个刷新周期内回到「未运行」
+		// 每秒重新判定主程序存活：主程序退出后状态在一个刷新周期内回到「未运行」；
+		// 同时补读日志环形缓冲，接住通道拥塞时被丢弃的日志唤醒。
 		m.refreshProgramState()
+		m.drainLogs()
 		return m, tickCmd()
 	case msgLog:
-		m.appendLog(msg.Line)
+		m.drainLogs()
 		rearm = true
 	case msgReleases:
 		m.relLoading = false
@@ -108,23 +110,35 @@ func (m *uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p := msg.Progress
 		m.publish.Stage = p.Phase
 		m.publish.Detail = p.Message
-		m.publish.Percent = p.Percent
+		m.publish.Percent = clampInt(p.Percent, 0, 100)
+		if p.State != "" {
+			m.applyVolumeProgress(p)
+		}
 		rearm = true
 	case msgPublishDone:
 		m.publish.Busy = false
 		m.publish.Err = msg.Err
 		m.publish.Result = msg.Result
+		m.syncVolumes(msg.Result, msg.Err)
 		if msg.Err == nil && msg.Result != nil {
 			m.publish.Stage = "done"
 			m.publish.Percent = 100
-			m.publish.Detail = fmt.Sprintf("已产出 %d 个分卷", len(msg.Result.Volumes))
+			if publishMode() {
+				m.publish.Detail = fmt.Sprintf("已上传 %d 个分卷", len(msg.Result.Volumes))
+			} else {
+				m.publish.Detail = fmt.Sprintf("已产出 %d 个分卷（未上传）", len(msg.Result.Volumes))
+			}
 			m.setNotice("打包上传完成", false)
 			cmds = append(cmds, m.refreshReleases())
 		} else if msg.Err == nil {
 			m.publish.Stage = "failed"
 			m.publish.Err = fmt.Errorf("打包结果为空")
+			m.publish.ErrStage = "pack"
 			m.setNotice("打包上传失败", true)
 		} else {
+			if m.publish.ErrStage == "" {
+				m.publish.ErrStage = m.publish.Stage
+			}
 			m.publish.Stage = "failed"
 			m.setNotice("打包上传失败", true)
 		}
@@ -435,6 +449,86 @@ func (m *uiModel) appendLog(line string) {
 	m.logs = append(m.logs, uiLogLine{At: time.Now(), Text: line})
 	if len(m.logs) > uiLogLimit {
 		m.logs = m.logs[len(m.logs)-uiLogLimit:]
+	}
+}
+
+// drainLogs 把内存环形缓冲里尚未显示的行补进界面日志。
+// 与日志文件同源：即使 events 通道拥塞丢了唤醒信号，下一轮 tick 也会补齐。
+func (m *uiModel) drainLogs() {
+	entries, last := readLogRing(m.logSeq)
+	for _, e := range entries {
+		m.appendLog(e.Line)
+	}
+	m.logSeq = last
+}
+
+// applyVolumeProgress 用进度消息更新单卷状态（逐卷上传结果）
+func (m *uiModel) applyVolumeProgress(p Progress) {
+	total := p.Total
+	if total <= 0 {
+		total = p.Item + 1
+	}
+	for len(m.publish.Volumes) < total {
+		m.publish.Volumes = append(m.publish.Volumes, uiUploadVolume{State: "pending"})
+	}
+	if p.Item < 0 || p.Item >= len(m.publish.Volumes) {
+		return
+	}
+	v := &m.publish.Volumes[p.Item]
+	if p.Message != "" && v.Name == "" {
+		v.Name = p.Message
+	}
+	if p.ItemSize > 0 {
+		v.Size = p.ItemSize
+	}
+	if p.State != "" {
+		v.State = p.State
+	}
+	if p.Detail != "" {
+		v.Detail = p.Detail
+	}
+}
+
+// syncVolumes 打包结束后用产物补齐卷名，并把未回送状态（进度帧被丢弃）补成确定值
+func (m *uiModel) syncVolumes(res *PackResult, err error) {
+	if res != nil {
+		for len(m.publish.Volumes) < len(res.Volumes) {
+			m.publish.Volumes = append(m.publish.Volumes, uiUploadVolume{State: "pending"})
+		}
+		for i, vol := range res.Volumes {
+			if i >= len(m.publish.Volumes) {
+				break
+			}
+			if m.publish.Volumes[i].Name == "" {
+				m.publish.Volumes[i].Name = baseName(vol)
+			}
+		}
+	}
+	if err != nil {
+		// 没有明确失败卷时，按顺序把第一个未完成卷标成失败（上传是串行的）
+		marked := false
+		for i := range m.publish.Volumes {
+			if m.publish.Volumes[i].State == "failed" {
+				marked = true
+			}
+		}
+		if !marked {
+			for i := range m.publish.Volumes {
+				if m.publish.Volumes[i].State == "uploading" || m.publish.Volumes[i].State == "pending" {
+					m.publish.Volumes[i].State = "failed"
+					if m.publish.Volumes[i].Detail == "" {
+						m.publish.Volumes[i].Detail = truncTo(err.Error(), 80)
+					}
+					break
+				}
+			}
+		}
+		return
+	}
+	for i := range m.publish.Volumes {
+		if m.publish.Volumes[i].State != "failed" {
+			m.publish.Volumes[i].State = "done"
+		}
 	}
 }
 

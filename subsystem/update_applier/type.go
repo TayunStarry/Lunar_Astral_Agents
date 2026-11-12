@@ -52,12 +52,17 @@ type InstallPlan struct {
 }
 
 // Progress 事务进度（阶段名 + 已完成/总数 + 百分比 + 说明）。
+// Item / State / Detail / ItemSize 只在分卷上传阶段使用，其余阶段为零值。
 type Progress struct {
-	Phase   string
-	Done    int
-	Total   int
-	Percent int
-	Message string
+	Phase    string
+	Done     int
+	Total    int
+	Percent  int
+	Message  string
+	Item     int    // 分卷下标（0 起）
+	State    string // 分卷状态：uploading / done / failed
+	Detail   string // 分卷附加说明（已传 / 总量、HTTP 状态、错误摘要）
+	ItemSize int64  // 分卷字节数
 }
 
 // Manifest 更新包内的文件清单（包根目录 .lunar_update_manifest.json）。
@@ -196,6 +201,14 @@ type uiInstallState struct {
 	PendingReason string // 二次确认原因
 }
 
+// uiUploadVolume 打包上传屏的单个分卷状态
+type uiUploadVolume struct {
+	Name   string
+	Size   int64
+	State  string // pending / uploading / done / failed
+	Detail string // 已传 / 总量、HTTP 状态或错误摘要
+}
+
 // uiPublishState 打包上传屏的状态
 type uiPublishState struct {
 	Version   string
@@ -204,7 +217,9 @@ type uiPublishState struct {
 	Detail    string
 	Percent   int
 	Result    *PackResult
+	Volumes   []uiUploadVolume
 	Err       error
+	ErrStage  string
 	Busy      bool
 	StartedAt time.Time
 }
@@ -234,6 +249,7 @@ type uiModel struct {
 
 	logs      []uiLogLine
 	logFollow bool
+	logSeq    int64 // 已读到的内存日志游标（按 Seq 补读，不依赖通道）
 
 	busy      string
 	notice    string
@@ -297,9 +313,27 @@ type msgPublishDone struct {
 	Err    error
 }
 
-// msgLog TUI 接管的一条日志
-type msgLog struct {
+// msgLog TUI 日志唤醒信号：真正的日志行从内存环形缓冲读取，
+// 通道拥塞时也不会丢掉任何一条。
+type msgLog struct{}
+
+// logEntry 内存日志环形缓冲的一条记录（Seq 单调递增，用于补读）
+type logEntry struct {
+	Seq  int64
 	Line string
+}
+
+// GiteePermission 当前令牌对仓库的权限
+type GiteePermission struct {
+	Push  bool `json:"push"`
+	Admin bool `json:"admin"`
+}
+
+// GiteeRepoInfo 仓库元信息：预检默认分支与推送权限
+type GiteeRepoInfo struct {
+	FullName      string           `json:"full_name"`
+	DefaultBranch string           `json:"default_branch"`
+	Permission    *GiteePermission `json:"permission"`
 }
 
 // msgTick 定时刷新（时钟与提示过期）

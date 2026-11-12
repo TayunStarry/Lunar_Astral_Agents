@@ -1,7 +1,12 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"io"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -123,6 +128,131 @@ func TestPublishChainLightSample(t *testing.T) {
 	for _, f := range files {
 		if strings.HasSuffix(f.Path, "release.json") || strings.HasSuffix(f.Path, "version.json") {
 			t.Fatalf("解压清单包含应排除的配置文件: %s", f.Path)
+		}
+	}
+}
+
+// TestPublishUploadFailureSurfaces 走真实 HTTP（本地服务替身）复现上传失败：
+//   - 预检读仓库默认分支，且创建 Release 必须使用 main 而不是硬编码 master；
+//   - multipart 字段名必须是 file，文件名必须是分卷名；
+//   - 上传失败时错误、HTTP 状态与 Gitee 返回体必须同时进入返回值与日志。
+func TestPublishUploadFailureSurfaces(t *testing.T) {
+	resetLogState(t)
+	defer resetLogState(t)
+
+	sevenZip := repoSevenZip(t)
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "app.exe"), "main-binary")
+	random := make([]byte, 1200*1024)
+	rng := rand.New(rand.NewSource(20261112))
+	if _, err := rng.Read(random); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(root, "local_data", "blob.bin"), string(random))
+
+	cfg := &ReleaseConfig{
+		GiteeOwner:   "owner",
+		GiteeRepo:    "repo",
+		GiteeToken:   "fake-token",
+		Include:      []string{"local_data"},
+		ProgramFiles: []string{"app.exe"},
+		PackSizeMB:   1,
+		PackLevel:    1,
+		SevenZip:     sevenZip,
+	}
+	version := "v2026.11.12-1530"
+
+	var (
+		gotTarget string
+		gotFile   string
+		gotUpload string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v5/repos/owner/repo":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"full_name":"owner/repo","default_branch":"main","permission":{"push":true,"admin":true}}`)
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/releases/tags/"):
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.WriteString(w, `{"message":"404 Not Found"}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/repos/owner/repo/releases":
+			var payload map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			gotTarget, _ = payload["target_commitish"].(string)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"id":7,"tag_name":"`+version+`"}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v5/repos/owner/repo/releases/7/attach_files":
+			if f, hdr, err := r.FormFile("file"); err != nil {
+				gotFile = "字段 file 解析失败：" + err.Error()
+			} else {
+				gotFile = hdr.Filename
+				_, _ = io.Copy(io.Discard, f)
+			}
+			gotUpload = r.URL.Query().Get("access_token")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"message":"目标分支 master 不存在"}`)
+		default:
+			t.Errorf("未预期的请求：%s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	oldBase := giteeAPIBase
+	giteeAPIBase = srv.URL + "/api/v5"
+	defer func() { giteeAPIBase = oldBase }()
+
+	var progresses []Progress
+	res, err := PublishUpdate(context.Background(), root, cfg, version, func(p Progress) {
+		progresses = append(progresses, p)
+	})
+	if err == nil {
+		t.Fatal("上传返回 400 时应失败")
+	}
+	for _, want := range []string{"上传", "HTTP 400", "目标分支 master 不存在"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("错误缺少 %q：%v", want, err)
+		}
+	}
+	if gotTarget != "main" {
+		t.Fatalf("创建 Release 的 target_commitish 应为 main，实际 %q", gotTarget)
+	}
+	if gotFile == "" || strings.Contains(gotFile, "失败") {
+		t.Fatalf("multipart 字段 file 未正确构造：%q", gotFile)
+	}
+	if !strings.HasPrefix(gotFile, "lunar_updatepack_") || !strings.HasSuffix(gotFile, ".7z.001") {
+		t.Fatalf("上传文件名应为第一卷，实际 %q", gotFile)
+	}
+	if gotUpload != "fake-token" {
+		t.Fatalf("上传请求缺少 access_token，实际 %q", gotUpload)
+	}
+	if res == nil || len(res.Volumes) < 2 {
+		t.Fatalf("上传失败也应返回已打包产物（便于界面展示逐卷状态），实际 %+v", res)
+	}
+
+	var failed *Progress
+	for i := range progresses {
+		if progresses[i].State == "failed" {
+			failed = &progresses[i]
+		}
+	}
+	if failed == nil {
+		t.Fatal("应回送一条 failed 分卷进度")
+	}
+	if failed.Item != 0 || !strings.Contains(failed.Detail, "HTTP 400") {
+		t.Fatalf("失败分卷进度不正确：%+v", *failed)
+	}
+
+	entries, _ := readLogRing(0)
+	var logs strings.Builder
+	for _, e := range entries {
+		logs.WriteString(e.Line)
+		logs.WriteString("\n")
+	}
+	for _, want := range []string{"创建 Release", "阶段=upload", "HTTP 400", "目标分支 master 不存在", "默认分支 main"} {
+		if !strings.Contains(logs.String(), want) {
+			t.Fatalf("日志缺少 %q：\n%s", want, logs.String())
 		}
 	}
 }

@@ -14,18 +14,25 @@ import (
 	"time"
 )
 
-// openLog 打开日志文件（追加模式）；失败时静默回退标准输出
-func openLog(path string) {
+// openLog 打开日志文件（追加模式）。
+// 目录创建或文件打开失败必须返回明确原因：静默回退会让「报错但查不到日志」再次发生。
+func openLog(path string) error {
 	if path == "" {
-		return
+		return nil
 	}
-	if dir := filepath.Dir(path); dir != "" {
-		_ = os.MkdirAll(dir, 0755)
+	dir := filepath.Dir(path)
+	if dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("创建日志目录失败（%s）：%w", dir, err)
+		}
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err == nil {
-		logFile = f
+	if err != nil {
+		return fmt.Errorf("打开日志文件失败（%s）：%w", path, err)
 	}
+	logFile = f
+	logFilePath = path
+	return nil
 }
 
 // logf 统一日志出口（时间戳 + logSink：TUI 接管或写标准输出，并落盘日志文件）

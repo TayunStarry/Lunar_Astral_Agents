@@ -320,54 +320,238 @@ func (m *uiModel) verifyLines() []string {
 	return []string{"  " + faintStyle.Render("尚未开始")}
 }
 
-// viewPublish 打包上传
+// viewPublish 打包上传：配置 / 阶段进度 / 逐卷结果 / 失败原因同屏呈现。
+// 排版顺序按重要性：配置 → 阶段与总进度 → 逐卷上传 → 失败原因或结果；
+// 失败原因优先于分卷列表保留，屏幕再矮也不会被挤掉。
 func (m *uiModel) viewPublish() string {
 	f, w, h := m.screenFrame()
+	keyW := clampInt(w/6, 13, 14)
+	inner := maxInt(8, w-2)
 
-	version := m.publish.Version
-	versionText := valueStyle.Render(version)
+	head := []string{""}
+	versionText := valueStyle.Render(m.publish.Version)
 	if m.publish.Editing {
-		versionText = selectStyle.Render(version+"▏") + dimStyle.Render("  Enter 确认 · Esc 取消")
+		versionText = selectStyle.Render(m.publish.Version+"▏") + dimStyle.Render("  Enter 确认 · Esc 取消")
 	}
+	head = append(head, kvRow("版本号", "", keyW)+versionText)
+	head = append(head, kvRow("仓库", repoLabel(m.cfg), keyW))
+	head = append(head, kvRow("令牌", "", keyW)+m.publishTokenText())
+	volMB, level := 0, 0
+	if m.cfg != nil {
+		volMB, level = packSizeMB(m.cfg), packLevel(m.cfg)
+	}
+	head = append(head, kvRow("分卷", fmt.Sprintf("%d MB · 压缩等级 %d", volMB, level), keyW))
+	maxScope := 1
+	if w >= 96 {
+		maxScope = 2
+	}
+	head = append(head, kvWrappedRows("include", m.publishIncludeText(), keyW, w, maxScope)...)
+	head = append(head, kvWrappedRows("program_files", m.publishProgramText(), keyW, w, maxScope)...)
 
-	rows := []string{
-		"",
-		kvRow("版本号", "", 10) + versionText,
-		kvRow("仓库", repoLabel(m.cfg), 10),
-		kvRow("分卷大小", fmt.Sprintf("%d MB · 压缩等级 %d", packSizeMB(m.cfg), packLevel(m.cfg)), 10),
-		kvRow("打包范围", packScopeText(m.cfg), 10),
-		"",
-		sectionRule("进度", w),
-		"",
-	}
+	stage := []string{"", sectionRule("阶段 · 进度", w), ""}
 	if m.publish.Stage == "" {
-		rows = append(rows, "  "+faintStyle.Render("按 Enter 执行：枚举 → 清单 → 哈希 → 7z 分卷 → 发布说明 → 上传"))
+		stage = append(stage, "  "+faintStyle.Render("按 Enter 执行：枚举 → 清单 → 哈希 → 7z 分卷 → 发布说明 → 上传"))
 	} else {
-		rows = append(rows, "  "+progressBar(m.publish.Percent, w-2), "")
-		rows = append(rows, kvRow("阶段", dashIfEmpty(publishStageLabel(m.publish.Stage)), 10))
-		for _, l := range wrapPlain(dashIfEmpty(m.publish.Detail), maxInt(8, w-4)) {
-			rows = append(rows, "  "+dimStyle.Render(l))
+		stage = append(stage, "  "+progressBar(m.publish.Percent, w-2), "")
+		stateText := ""
+		switch {
+		case m.publish.Busy:
+			stateText = dimStyle.Render("进行中")
+		case m.publish.Err != nil:
+			stateText = errStyle.Render("失败")
+		case m.publish.Result != nil:
+			stateText = okStyle.Render("完成")
+		}
+		stage = append(stage, "  "+dimStyle.Render(fitWidth("当前阶段", 8))+"  "+
+			labelStyle.Render(publishStageLabel(m.publish.Stage))+"  "+stateText)
+		detail := strings.TrimSpace(m.publish.Detail)
+		if detail != "" {
+			detailMax := 2
+			if h < 24 {
+				detailMax = 1
+			}
+			for i, l := range wrapPlain(detail, inner-2) {
+				if i >= detailMax {
+					break
+				}
+				stage = append(stage, "  "+dimStyle.Render(l))
+			}
 		}
 	}
 
-	if m.publish.Result != nil {
-		res := m.publish.Result
-		rows = append(rows, "", sectionRule("产物", w), "")
-		rows = append(rows, kvRow("文件数", fmt.Sprintf("%d", res.FileCount), 10))
-		rows = append(rows, kvRow("原始大小", humanSize(res.Bytes), 10))
-		for _, vol := range res.Volumes {
-			name := baseName(vol)
-			rows = append(rows, "  "+labelStyle.Render(name))
-			rows = append(rows, "    "+faintStyle.Render(truncTo(res.SHAs[name], maxInt(8, w-6))))
+	tail := m.publishResultLines(w, inner)
+	volLines, active := m.publishVolumeLines(w)
+
+	// 先压缩配置区：保证阶段、结果/失败原因与「至少一行分卷状态」始终可见
+	reserve := 0
+	if len(volLines) > 0 {
+		reserve = 3 // 空行 + 分卷标题 + 至少一行
+	}
+	for len(head)+len(stage)+len(tail)+reserve > h && len(head) > 3 {
+		head = head[:len(head)-1]
+	}
+
+	body := append(append([]string{}, head...), stage...)
+	if len(volLines) > 0 {
+		title := fmt.Sprintf("分卷上传 · %d 卷", len(m.publish.Volumes))
+		if !publishMode() {
+			title = fmt.Sprintf("分卷产物 · %d 卷", len(m.publish.Volumes))
+		}
+		sec := []string{"", sectionRule(title, w)}
+		avail := h - len(body) - len(tail) - len(sec)
+		if avail >= 1 {
+			if len(volLines) > avail {
+				volLines = windowLineList(volLines, active, avail)
+			}
+			body = append(body, sec...)
+			body = append(body, volLines...)
 		}
 	}
-	if m.publish.Err != nil {
-		rows = append(rows, "", errStyle.Render("✗ "+truncTo(m.publish.Err.Error(), maxInt(8, w-2))))
-		rows = append(rows, dimStyle.Render("  建议：检查 release.json 的 gitee_token 是否具备 Release 读写权限。"))
-	}
+	body = append(body, tail...)
 
 	f.status = dimStyle.Render(m.publish.StageLabel())
-	return f.render(fitLines(rows, h))
+	return f.render(fitLines(body, h))
+}
+
+// publishTokenText 令牌配置状态：缺失时在配置区直接标红，不必等失败
+func (m *uiModel) publishTokenText() string {
+	if m.cfg == nil {
+		return errStyle.Render("未加载 release.json")
+	}
+	if m.cfg.GiteeToken == "" {
+		return errStyle.Render("未配置（发布需要 Release 读写权限）")
+	}
+	return okStyle.Render("已配置")
+}
+
+// publishIncludeText include 摘要
+func (m *uiModel) publishIncludeText() string {
+	if m.cfg == nil {
+		return "—"
+	}
+	if len(m.cfg.Include) == 0 {
+		return "—（不覆盖文件夹）"
+	}
+	return fmt.Sprintf("%d 项 · %s", len(m.cfg.Include), strings.Join(m.cfg.Include, "、"))
+}
+
+// publishProgramText program_files 摘要
+func (m *uiModel) publishProgramText() string {
+	if m.cfg == nil {
+		return "—"
+	}
+	if len(m.cfg.ProgramFiles) == 0 {
+		return "—（仅打包文件夹）"
+	}
+	return fmt.Sprintf("%d 个 · %s", len(m.cfg.ProgramFiles), strings.Join(m.cfg.ProgramFiles, "、"))
+}
+
+// kvWrappedRows 键值行，值超宽时按显示列宽折行并对齐缩进；最多保留 maxLines 行
+func kvWrappedRows(key, value string, keyW, width, maxLines int) []string {
+	if maxLines < 1 {
+		maxLines = 1
+	}
+	inner := maxInt(8, width-keyW)
+	lines := wrapPlain(dashIfEmpty(value), inner)
+	if len(lines) > maxLines {
+		lines = append([]string{}, lines[:maxLines]...)
+		lines[maxLines-1] = truncTo(lines[maxLines-1]+"…", inner)
+	}
+	out := make([]string, 0, len(lines))
+	out = append(out, kvRow(key, "", keyW)+labelStyle.Render(lines[0]))
+	for _, l := range lines[1:] {
+		out = append(out, strings.Repeat(" ", keyW)+labelStyle.Render(l))
+	}
+	return out
+}
+
+// publishResultLines 失败原因（优先）或完成结果
+func (m *uiModel) publishResultLines(w, inner int) []string {
+	if m.publish.Err != nil {
+		lines := []string{"", sectionRule("失败原因", w), ""}
+		if m.publish.ErrStage != "" {
+			lines = append(lines, "  "+errStyle.Render("阶段 "+publishStageLabel(m.publish.ErrStage)))
+		}
+		text := m.publish.Err.Error()
+		wrapped := wrapPlain(text, inner-2)
+		for i, l := range wrapped {
+			if i >= 3 {
+				lines = append(lines, "  "+errStyle.Render("…"))
+				break
+			}
+			lines = append(lines, "  "+errStyle.Render(l))
+		}
+		lines = append(lines, "  "+faintStyle.Render("完整原因见日志屏（5）与日志文件"))
+		return lines
+	}
+	if m.publish.Result == nil {
+		return nil
+	}
+	res := m.publish.Result
+	lines := []string{"", sectionRule("结果", w), ""}
+	lines = append(lines, "  "+okStyle.Render(fmt.Sprintf("✓ %d 个分卷 · %d 个文件 · 原始大小 %s",
+		len(res.Volumes), res.FileCount, humanSize(res.Bytes))))
+	for i, vol := range res.Volumes {
+		if i >= 2 {
+			lines = append(lines, "  "+faintStyle.Render(fmt.Sprintf("… 其余 %d 卷见上方上传列表", len(res.Volumes)-i)))
+			break
+		}
+		name := baseName(vol)
+		sum := res.SHAs[name]
+		lines = append(lines, "  "+labelStyle.Render(truncTo(name, maxInt(8, w-4))))
+		if sum != "" {
+			lines = append(lines, "    "+faintStyle.Render(truncTo(sum, maxInt(8, w-6))))
+		}
+	}
+	return lines
+}
+
+// publishVolumeLines 逐卷上传结果；返回当前活动行下标用于窗口定位
+func (m *uiModel) publishVolumeLines(w int) ([]string, int) {
+	vols := m.publish.Volumes
+	if len(vols) == 0 {
+		return nil, 0
+	}
+	lines := make([]string, 0, len(vols))
+	active := 0
+	for i, v := range vols {
+		name := v.Name
+		if name == "" {
+			name = fmt.Sprintf("第 %d 卷", i+1)
+		}
+		var (
+			icon  string
+			label string
+			right string
+		)
+		switch v.State {
+		case "done":
+			icon, label = "✓", okStyle.Render(truncTo(name, maxInt(8, w-22)))
+			right = humanSize(v.Size) + "  ✓"
+		case "failed":
+			icon, label = "✗", errStyle.Render(truncTo(name, maxInt(8, w-22)))
+			right = "失败"
+		case "uploading":
+			icon, label = "●", selectStyle.Render(truncTo(name, maxInt(8, w-22)))
+			right = dashIfEmpty(v.Detail)
+			active = i
+		default:
+			icon, label = "○", faintStyle.Render(truncTo(name, maxInt(8, w-22)))
+			right = humanSize(v.Size)
+		}
+		if right == "-" {
+			right = "等待"
+		}
+		lines = append(lines, newRow(w, false).
+			L("  "+icon+" ", label).
+			R(dimStyle.Render(truncTo(right, maxInt(8, w/2)))).
+			String())
+		if v.State == "failed" && v.Detail != "" {
+			lines = append(lines, "      "+errStyle.Render(truncTo(v.Detail, maxInt(8, w-8))))
+			active = i
+		}
+	}
+	return lines, active
 }
 
 // viewLogs 日志屏：行级滚动，follow 为真时贴底
@@ -375,7 +559,7 @@ func (m *uiModel) viewLogs() string {
 	f, w, h := m.screenFrame()
 
 	if len(m.logs) == 0 {
-		return f.render(emptyState("暂无日志", "更新器运行过程会实时写入这里，并同时落盘", "执行一次下载安装或打包上传即可看到", w, h))
+		return f.render(emptyState("暂无日志", "运行过程实时写入这里，并同时落盘到 "+logLocationText(), "执行一次下载安装或打包上传即可看到", w, h))
 	}
 
 	lines := m.wrappedLogs(w)
@@ -387,7 +571,7 @@ func (m *uiModel) viewLogs() string {
 	off = clampInt(off, 0, maxOff)
 	body := fitLines(lines[off:minInt(off+h, len(lines))], h)
 
-	f.status = dimStyle.Render(fmt.Sprintf("%d 行", len(m.logs)))
+	f.status = dimStyle.Render(fmt.Sprintf("%d 行 · 写入 %s", len(m.logs), logLocationText()))
 	return f.render(body)
 }
 
@@ -548,19 +732,6 @@ func (m *uiModel) lastResultText() string {
 		return okStyle.Render(text)
 	}
 	return warnStyle.Render(text)
-}
-
-// packScopeText 打包范围摘要
-func packScopeText(cfg *ReleaseConfig) string {
-	if cfg == nil {
-		return "—"
-	}
-	parts := append([]string{}, cfg.ProgramFiles...)
-	parts = append(parts, cfg.Include...)
-	if len(parts) == 0 {
-		return "—"
-	}
-	return strings.Join(parts, "、")
 }
 
 // publishStageLabel 打包阶段中文

@@ -22,42 +22,91 @@ func PublishUpdate(ctx context.Context, root string, cfg *ReleaseConfig, version
 		report = func(Progress) {}
 	}
 	if err := validateRepoConfig(cfg, true); err != nil {
+		logf("[ERROR] 发布预检失败（阶段=config）：%v", err)
+		return nil, fmt.Errorf("发布配置无效：%w", err)
+	}
+
+	// 预检放在打包之前：令牌无效 / 仓库不存在 / 无推送权限要在几秒内报出来，
+	// 而不是等几十分钟打包完才在上传阶段失败。
+	repo, err := fetchRepoInfo(cfg)
+	if err != nil {
+		logf("[ERROR] 发布预检失败（阶段=preflight）：%v", err)
+		return nil, fmt.Errorf("发布预检失败：%w", err)
+	}
+	branch := strings.TrimSpace(repo.DefaultBranch)
+	if repo.Permission != nil && !repo.Permission.Push {
+		err := fmt.Errorf("令牌对仓库 %s 没有推送权限（Gitee 令牌需勾选 projects 范围）", repoLabel(cfg))
+		logf("[ERROR] 发布预检失败（阶段=preflight）：%v", err)
 		return nil, err
 	}
+	logf("[publish] 预检通过：%s · 默认分支 %s · 推送权限 %s", repoLabel(cfg), dashIfEmpty(branch), permText(repo.Permission))
 
 	packDir := filepath.Join(updateRoot(root), "pack", newNonce())
 	result, err := BuildUpdatePackage(root, cfg, version, packDir, report)
 	if err != nil {
-		return nil, err
+		logf("[ERROR] 打包失败（阶段=pack · 版本=%s）：%v", version, err)
+		return nil, fmt.Errorf("打包失败：%w", err)
 	}
 	defer os.RemoveAll(packDir)
 
 	body := buildReleaseBody(cfg, result)
-	report(Progress{Phase: "publish", Message: "创建 Release"})
-	releaseID, err := ensureUpdateRelease(cfg, version, body)
+	report(Progress{Phase: "publish", Message: "创建 Release " + version})
+	releaseID, err := ensureUpdateRelease(cfg, version, body, branch)
 	if err != nil {
-		return nil, err
+		logf("[ERROR] 创建 Release 失败（阶段=publish · tag=%s）：%v", version, err)
+		return result, fmt.Errorf("创建 Release 失败：%w", err)
 	}
 
+	total := len(result.Volumes)
+	var totalBytesAll, sentAll int64
+	for _, vol := range result.Volumes {
+		totalBytesAll += fileSize(vol)
+	}
 	for i, vol := range result.Volumes {
 		name := filepath.Base(vol)
-		report(Progress{Phase: "upload", Done: i, Total: len(result.Volumes), Percent: percent(i, len(result.Volumes)), Message: name})
-		if err := uploadReleaseAsset(ctx, cfg, releaseID, vol, func(done, total int64) {
+		size := fileSize(vol)
+		report(Progress{
+			Phase: "upload", Item: i, Total: total, Percent: percent64(sentAll, totalBytesAll),
+			State: "uploading", Message: name, ItemSize: size, Detail: humanBytes(size),
+		})
+		err := uploadReleaseAsset(ctx, cfg, releaseID, vol, func(done, _ int64) {
 			report(Progress{
-				Phase:   "upload",
-				Done:    i,
-				Total:   len(result.Volumes),
-				Percent: percent(i, len(result.Volumes)),
-				Message: fmt.Sprintf("%s %s / %s", name, humanBytes(done), humanBytes(total)),
+				Phase: "upload", Item: i, Total: total, Percent: percent64(sentAll+done, totalBytesAll),
+				State: "uploading", Message: name, ItemSize: size,
+				Detail: fmt.Sprintf("%s / %s", humanBytes(done), humanBytes(size)),
 			})
-		}); err != nil {
-			return nil, fmt.Errorf("上传 %s 失败: %w", name, err)
+		})
+		if err != nil {
+			report(Progress{
+				Phase: "upload", Item: i, Total: total, Percent: percent64(sentAll, totalBytesAll),
+				State: "failed", Message: name, ItemSize: size, Detail: err.Error(),
+			})
+			logf("[ERROR] 上传失败（阶段=upload · 第 %d/%d 卷 · %s · %s）：%v",
+				i+1, total, name, humanBytes(size), err)
+			return result, fmt.Errorf("上传第 %d/%d 卷 %s 失败：%w", i+1, total, name, err)
 		}
+		sentAll += size
+		report(Progress{
+			Phase: "upload", Item: i, Total: total, Percent: percent64(sentAll, totalBytesAll),
+			State: "done", Message: name, ItemSize: size, Detail: humanBytes(size),
+		})
 	}
-	report(Progress{Phase: "upload", Done: len(result.Volumes), Total: len(result.Volumes), Percent: 100, Message: "上传完成"})
+	report(Progress{Phase: "upload", Done: total, Total: total, Percent: 100, Message: "上传完成"})
+	logf("[publish] 上传完成：%d 个分卷 · 原始大小 %s", total, humanBytes(result.Bytes))
 
 	pruneOldUpdateReleases(cfg, version, 10)
 	return result, nil
+}
+
+// permText 推送权限的可读描述
+func permText(p *GiteePermission) string {
+	if p == nil {
+		return "未知"
+	}
+	if p.Push || p.Admin {
+		return "可推送"
+	}
+	return "只读"
 }
 
 // buildReleaseBody 组装发行说明；「- 名称（大小） / SHA-256」格式与解析端约定一致。
@@ -94,7 +143,9 @@ func buildReleaseBody(cfg *ReleaseConfig, result *PackResult) string {
 }
 
 // ensureUpdateRelease 创建 Release；同名 tag 已存在且属于更新通道时复用。
-func ensureUpdateRelease(cfg *ReleaseConfig, version, body string) (int64, error) {
+// branch 为空时不下发 target_commitish，让 Gitee 使用仓库默认分支——
+// 不能硬编码 master：仓库默认分支可能是 main，分支不存在会导致创建失败。
+func ensureUpdateRelease(cfg *ReleaseConfig, version, body, branch string) (int64, error) {
 	query := url.Values{}
 	if cfg.GiteeToken != "" {
 		query.Set("access_token", cfg.GiteeToken)
@@ -107,50 +158,60 @@ func ensureUpdateRelease(cfg *ReleaseConfig, version, body string) (int64, error
 		}
 		logf("Release %s 已存在，复用 ID=%d", version, existing.ID)
 		return existing.ID, nil
+	} else if err != nil {
+		// 404 属正常路径（首次发布），但把原始响应记入日志，便于区分权限/网络问题
+		logf("[publish] 未查到 Release %s，将新建（查询结果：%v）", version, err)
 	}
 
-	payload, _ := json.Marshal(map[string]string{
-		"access_token":     cfg.GiteeToken,
-		"tag_name":         version,
-		"name":             "更新包 " + version,
-		"body":             body,
-		"target_commitish": defaultBranchName(cfg),
-	})
-	resp, err := giteePostJSON(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), payload)
+	payload := map[string]any{
+		"access_token": cfg.GiteeToken,
+		"tag_name":     version,
+		"name":         "更新包 " + version,
+		"body":         body,
+	}
+	if branch != "" {
+		payload["target_commitish"] = branch
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return 0, fmt.Errorf("构造 Release 请求失败：%w", err)
+	}
+	logf("[publish] 创建 Release：tag=%s · 目标分支=%s", version, dashIfEmpty(branch))
+	resp, err := giteePostJSON(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), raw)
 	if err != nil {
 		return 0, err
 	}
 	var release GiteeRelease
 	if err := json.Unmarshal(resp, &release); err != nil {
-		return 0, fmt.Errorf("解析 Release 响应失败: %w", err)
+		return 0, fmt.Errorf("解析 Release 响应失败：%w（原始响应：%s）", err, truncateText(string(resp), 256))
 	}
 	if release.ID == 0 {
-		return 0, fmt.Errorf("Release 创建异常: %s", truncateText(string(resp), 512))
+		return 0, fmt.Errorf("Release 创建异常：%s", truncateText(string(resp), 512))
 	}
+	logf("[publish] Release 已创建：ID=%d · tag=%s", release.ID, release.TagName)
 	return release.ID, nil
 }
 
-// defaultBranchName 返回创建 Release 使用的目标分支。
-func defaultBranchName(*ReleaseConfig) string {
-	return "master"
-}
-
 // uploadReleaseAsset 以流式 multipart 上传单个分卷。
+// 失败时把 HTTP 状态与 Gitee 返回体原样带回，由调用方写入日志与界面。
 func uploadReleaseAsset(ctx context.Context, cfg *ReleaseConfig, releaseID int64, filePath string, onProgress func(done, total int64)) error {
+	name := filepath.Base(filePath)
 	f, err := os.Open(filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("打开分卷失败：%w", err)
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return err
+		return fmt.Errorf("读取分卷信息失败：%w", err)
 	}
 
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
+	// 服务端提前拒绝（401/413）时取消读取端，避免写协程永久阻塞
+	defer pr.Close()
 	go func() {
-		part, err := mw.CreateFormFile("file", filepath.Base(filePath))
+		part, err := mw.CreateFormFile("file", name)
 		if err == nil {
 			_, err = io.Copy(part, &progressReader{r: f, total: info.Size(), onProgress: onProgress})
 		}
@@ -160,24 +221,40 @@ func uploadReleaseAsset(ctx context.Context, cfg *ReleaseConfig, releaseID int64
 		pw.CloseWithError(err)
 	}()
 
+	logf("[publish] 上传 %s（%s）→ /repos/%s/%s/releases/%d/attach_files",
+		name, humanBytes(info.Size()), cfg.GiteeOwner, cfg.GiteeRepo, releaseID)
+
 	u := uploadAssetURL(cfg, releaseID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, pr)
 	if err != nil {
-		return err
+		return fmt.Errorf("构造上传请求失败：%w", err)
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Accept", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("上传请求未完成：%w", err)
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncateText(string(data), 512))
+	_ = pr.Close()
+	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
+		logf("[publish] 上传成功：%s · HTTP %d", name, resp.StatusCode)
+		return nil
 	}
-	return nil
+	body := truncateText(string(data), 512)
+	switch resp.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return fmt.Errorf("HTTP %d：令牌无效或缺少仓库写权限（检查 gitee_token 的 projects 范围）· Gitee 返回：%s", resp.StatusCode, body)
+	case http.StatusNotFound:
+		return fmt.Errorf("HTTP %d：Release %d 不存在或已被删除 · Gitee 返回：%s", resp.StatusCode, releaseID, body)
+	case http.StatusRequestEntityTooLarge:
+		return fmt.Errorf("HTTP %d：分卷过大（%s）超过 Gitee 单文件上限，请调小 pack_size_mb 后重试 · Gitee 返回：%s", resp.StatusCode, humanBytes(info.Size()), body)
+	default:
+		return fmt.Errorf("HTTP %d：%s", resp.StatusCode, body)
+	}
 }
 
 // uploadAssetURL 构造附件上传地址（令牌放查询参数，Gitee v5 约定）。
@@ -211,17 +288,23 @@ func (p *progressReader) Read(buf []byte) (int, error) {
 // giteePostJSON 执行 JSON POST。
 func giteePostJSON(path string, payload []byte) ([]byte, error) {
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Post(giteeAPIBase+path, "application/json", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, giteeAPIBase+path, bytes.NewReader(payload))
 	if err != nil {
-		return nil, fmt.Errorf("请求失败: %w", err)
+		return nil, fmt.Errorf("构造请求失败（POST %s）：%w", path, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败（POST %s）：%w", path, err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("读取响应失败（POST %s）：%w", path, err)
 	}
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncateText(string(body), 512))
+		return nil, fmt.Errorf("Gitee HTTP %d（POST %s）：%s", resp.StatusCode, path, truncateText(string(body), 512))
 	}
 	return body, nil
 }

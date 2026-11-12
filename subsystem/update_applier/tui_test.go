@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -274,5 +275,67 @@ func TestWaitProgramsExitNotRunning(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("未运行却等待了 %s", elapsed)
+	}
+}
+
+// TestPublishScreenShowsConfigStageVolumesError 打包上传屏必须在同一屏内呈现：
+// 配置（版本 / include / program_files / 分卷大小 / 压缩等级）、当前阶段、总进度、
+// 逐卷上传结果与失败原因；宽屏与窄屏都不依赖滚动。
+func TestPublishScreenShowsConfigStageVolumesError(t *testing.T) {
+	root := t.TempDir()
+	cfg := &ReleaseConfig{
+		GiteeOwner:   "TayunStarry",
+		GiteeRepo:    "Lunar-Astral-Agents",
+		GiteeToken:   "token",
+		Include:      []string{"local_data/audios", "local_data/config"},
+		ProgramFiles: []string{"Lunar_Astral_Agents.exe", "Lunar_Update_Applier.exe"},
+		PackSizeMB:   95,
+		PackLevel:    5,
+	}
+	m := newUIModel(root, cfg)
+	m.screen = screenPublish
+	m.cursor = int(screenPublish)
+
+	names := []string{
+		"lunar_updatepack_v2026.11.12-1530.7z.001",
+		"lunar_updatepack_v2026.11.12-1530.7z.002",
+		"lunar_updatepack_v2026.11.12-1530.7z.003",
+	}
+	m.publish = uiPublishState{
+		Version:  "v2026.11.12-1530",
+		Stage:    "upload",
+		Detail:   "41.2 MB / 95.0 MB",
+		Percent:  66,
+		Busy:     true,
+		ErrStage: "upload",
+		Volumes: []uiUploadVolume{
+			{Name: names[0], Size: 95 << 20, State: "done", Detail: "95.0 MB"},
+			{Name: names[1], Size: 95 << 20, State: "failed", Detail: "HTTP 400：目标分支 master 不存在"},
+			{Name: names[2], State: "pending"},
+		},
+		Err: fmt.Errorf("上传第 2/3 卷 %s 失败：HTTP 400：{\"message\":\"目标分支 master 不存在\"}", names[1]),
+	}
+
+	for _, size := range [][2]int{{120, 32}, {64, 26}} {
+		m.width, m.height = size[0], size[1]
+		out := m.View()
+		for _, want := range []string{
+			"版本号", "v2026.11.12-1530", "仓库", "分卷",
+			"95 MB · 压缩等级 5", "include", "program_files",
+			"阶段 · 进度", "当前阶段", "分卷上传", "失败原因", "HTTP 400",
+		} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("%dx%d 缺少 %q\n%s", size[0], size[1], want, out)
+			}
+		}
+		lines := strings.Split(out, "\n")
+		if len(lines) != m.height {
+			t.Fatalf("%dx%d 行数 = %d，期望 %d", size[0], size[1], len(lines), m.height)
+		}
+		for i, line := range lines {
+			if w := dispWidth(line); w > m.width-1 {
+				t.Fatalf("%dx%d 第 %d 行宽 = %d，超过 %d", size[0], size[1], i, w, m.width-1)
+			}
+		}
 	}
 }

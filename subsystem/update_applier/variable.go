@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -79,6 +80,8 @@ const (
 	uiLogLimit = 500
 	// uiNoticeTTL 标题栏结果提示保留时长
 	uiNoticeTTL = 8 * time.Second
+	// logRingLimit 内存日志缓冲行数（界面补读上限，与界面日志行数一致）
+	logRingLimit = uiLogLimit
 	// uiFrameMinWidth / uiFrameMinHeight 框体可渲染的最小终端尺寸
 	uiFrameMinWidth  = 56
 	uiFrameMinHeight = 14
@@ -193,16 +196,63 @@ var (
 	logFile *os.File
 	// logHook 日志钩子：TUI 运行时接管日志输出，避免 stdout 污染界面
 	logHook func(string)
+	// logFilePath 实际日志文件路径（空表示未落盘）
+	logFilePath string
+	// logInitErr 日志初始化失败原因（目录不可写 / 文件打不开），界面与标准错误都要能看到
+	logInitErr error
+
+	// logRing 内存日志环形缓冲：界面按 Seq 补读，避免通道拥塞时丢日志
+	logRingMu  sync.Mutex
+	logRing    []logEntry
+	logRingSeq int64
 )
 
-// logSink 输出一条已格式化的日志行（文件始终落盘，控制台由 logHook 决定）
+// logSink 输出一条已格式化的日志行（内存缓冲 + 文件始终落盘，控制台由 logHook 决定）
 func logSink(line string) {
+	rememberLog(line)
 	if logHook != nil {
 		logHook(line)
 	} else {
-		os.Stdout.WriteString(line + "\n")
+		_, _ = os.Stdout.WriteString(line + "\n")
 	}
 	if logFile != nil {
-		logFile.WriteString(line + "\n")
+		_, _ = logFile.WriteString(line + "\n")
 	}
+}
+
+// rememberLog 记录一条日志到内存环形缓冲
+func rememberLog(line string) {
+	logRingMu.Lock()
+	defer logRingMu.Unlock()
+	logRingSeq++
+	logRing = append(logRing, logEntry{Seq: logRingSeq, Line: line})
+	if len(logRing) > logRingLimit {
+		logRing = logRing[len(logRing)-logRingLimit:]
+	}
+}
+
+// readLogRing 取出 after 之后的所有日志行，返回新游标
+func readLogRing(after int64) ([]logEntry, int64) {
+	logRingMu.Lock()
+	defer logRingMu.Unlock()
+	out := make([]logEntry, 0, 8)
+	last := after
+	for _, e := range logRing {
+		if e.Seq > after {
+			out = append(out, e)
+			last = e.Seq
+		}
+	}
+	return out, last
+}
+
+// logLocationText 日志落盘位置（界面展示用）
+func logLocationText() string {
+	if logInitErr != nil {
+		return "写入失败：" + logInitErr.Error()
+	}
+	if logFilePath == "" {
+		return "未启用文件日志"
+	}
+	return logFilePath
 }

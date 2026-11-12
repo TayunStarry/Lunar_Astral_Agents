@@ -11,11 +11,26 @@ import (
 	"time"
 )
 
-// giteeAPIBase Gitee OpenAPI 基地址。
-const giteeAPIBase = "https://gitee.com/api/v5"
+// giteeAPIBase Gitee OpenAPI 基地址（变量形式便于本地 HTTP 服务复现真实请求路径）。
+var giteeAPIBase = "https://gitee.com/api/v5"
 
 // giteeHTTP 轻量 HTTP 客户端（列表/详情）。
 var giteeHTTP = &http.Client{Timeout: 60 * time.Second}
+
+// fetchRepoInfo 读取仓库元信息：存在性、默认分支与推送权限。
+// 发布前先查一次，避免「打包半小时才在上传阶段发现令牌没权限」。
+func fetchRepoInfo(cfg *ReleaseConfig) (*GiteeRepoInfo, error) {
+	query := url.Values{}
+	if cfg.GiteeToken != "" {
+		query.Set("access_token", cfg.GiteeToken)
+	}
+	var info GiteeRepoInfo
+	path := fmt.Sprintf("/repos/%s/%s", cfg.GiteeOwner, cfg.GiteeRepo)
+	if err := giteeGet(path, query, &info); err != nil {
+		return nil, fmt.Errorf("无法访问 Gitee 仓库 %s：%w（检查 gitee_owner / gitee_repo 与 gitee_token 权限）", repoLabel(cfg), err)
+	}
+	return &info, nil
+}
 
 // listUpdateReleases 拉取更新通道的发布列表（按创建时间倒序）。
 func listUpdateReleases(cfg *ReleaseConfig) ([]UpdateRelease, error) {
@@ -131,18 +146,18 @@ func giteeGet(path string, query url.Values, out any) error {
 	req.Header.Set("Accept", "application/json")
 	resp, err := giteeHTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("请求 Gitee 失败: %w", err)
+		return fmt.Errorf("请求 Gitee 失败（GET %s）：%w", path, err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("读取 Gitee 响应失败（GET %s）：%w", path, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Gitee HTTP %d: %s", resp.StatusCode, truncateText(string(data), 512))
+		return fmt.Errorf("Gitee HTTP %d（GET %s）：%s", resp.StatusCode, path, truncateText(string(data), 512))
 	}
 	if err := json.Unmarshal(data, out); err != nil {
-		return fmt.Errorf("解析 Gitee 响应失败: %w", err)
+		return fmt.Errorf("解析 Gitee 响应失败（GET %s）：%w", path, err)
 	}
 	return nil
 }

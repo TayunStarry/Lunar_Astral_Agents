@@ -172,26 +172,54 @@ func runInstall(root string, cfg *ReleaseConfig, rel *UpdateRelease, cur string,
 	return "安装完成；未找到主程序文件，请手动启动", nil
 }
 
+// publishMode 当前是否执行「打包并上传」（否则只打包到本地 dist）
+func publishMode() bool {
+	return *publishNow || !*packOnly
+}
+
 // startPublish 打包并上传（或按配置仅打包）
 func (m *uiModel) startPublish() tea.Cmd {
 	root := m.root
 	cfg := m.cfg
 	events := m.events
 	version := m.publish.Version
-	publish := *publishNow || !*packOnly
+	publish := publishMode()
 	m.publish.Busy = true
 	m.publish.Stage = "manifest"
 	m.publish.Detail = "准备中"
 	m.publish.Percent = 0
 	m.publish.Err = nil
+	m.publish.ErrStage = ""
 	m.publish.Result = nil
+	m.publish.Volumes = nil
 	m.publish.StartedAt = time.Now()
+
+	mode := "打包并上传"
+	if !publish {
+		mode = "仅打包（不上传）"
+	}
+	volMB, level := 0, 0
+	if cfg != nil {
+		volMB, level = packSizeMB(cfg), packLevel(cfg)
+	}
+	logf("[publish] 开始%s：版本 %s · 仓库 %s · 分卷 %d MB · 压缩等级 %d",
+		mode, version, repoLabel(cfg), volMB, level)
 
 	return func() tea.Msg {
 		if cfg == nil {
-			return msgPublishDone{Err: errors.New("未找到 release.json")}
+			err := errors.New("未找到 release.json")
+			logf("[ERROR] 打包上传失败（阶段=config）：%v", err)
+			return msgPublishDone{Err: err}
 		}
-		report := func(p Progress) { emit(events, msgPackProgress{Progress: p}) }
+		lastPhase := ""
+		report := func(p Progress) {
+			// 阶段切换落盘一次，逐文件/逐字节进度只回界面，避免日志刷屏
+			if p.Phase != "" && p.Phase != lastPhase {
+				lastPhase = p.Phase
+				logf("[publish] 阶段 %s：%s", p.Phase, p.Message)
+			}
+			emit(events, msgPackProgress{Progress: p})
+		}
 		var (
 			res *PackResult
 			err error
@@ -202,7 +230,12 @@ func (m *uiModel) startPublish() tea.Cmd {
 			outDir := filepath.Join(updateRoot(root), "dist")
 			res, err = BuildUpdatePackage(root, cfg, version, outDir, report)
 		}
-		return msgPublishDone{Result: res, Err: err}
+		if err != nil {
+			logf("[ERROR] %s失败（阶段=%s）：%v", mode, dashIfEmpty(lastPhase), err)
+			return msgPublishDone{Result: res, Err: err}
+		}
+		logf("[publish] %s完成：%d 个文件 · %s · %d 个分卷", mode, res.FileCount, humanBytes(res.Bytes), len(res.Volumes))
+		return msgPublishDone{Result: res, Err: nil}
 	}
 }
 

@@ -34,7 +34,9 @@ func RunTUI(root string, cfg *ReleaseConfig, startupErr error) error {
 	}
 
 	prevHook := logHook
-	logHook = func(line string) { emit(model.events, msgLog{Line: line}) }
+	// 日志行本体写入内存环形缓冲，这里只发唤醒信号：
+	// events 通道拥塞时界面仍能在下一秒补读到全部日志。
+	logHook = func(string) { emit(model.events, msgLog{}) }
 	defer func() { logHook = prevHook }()
 
 	program := tea.NewProgram(
@@ -64,12 +66,18 @@ func newUIModel(root string, cfg *ReleaseConfig) *uiModel {
 		m.state = st
 	}
 	m.publish.Version = defaultTag()
+	if logInitErr != nil {
+		m.appendLog("[ERROR] " + logInitErr.Error())
+	}
 	m.appendLog("更新器已启动 · 目标 " + root)
 	m.appendLog("当前版本 " + versionOrDash(m.curVersion))
 	if cfg != nil {
 		m.appendLog("更新通道 " + repoLabel(cfg) + " · 分卷 " +
 			strconv.Itoa(packSizeMB(cfg)) + "MB · 备份保留 " + strconv.Itoa(backupKeepCount(cfg)) + " 次")
 	}
+	// 启动阶段（openLog / 启动恢复 / 配置加载）产生的日志在钩子安装之前，
+	// 这里从环形缓冲补读，保证界面日志屏与日志文件内容同源。
+	m.drainLogs()
 	m.refreshProgramState()
 	return m
 }
