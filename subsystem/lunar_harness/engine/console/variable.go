@@ -38,6 +38,15 @@ var (
 
 	// intercepted 标记 stdout 是否已被管道接管
 	intercepted bool
+
+	// screenReadyOnce 保证首帧就绪信号只关闭一次
+	screenReadyOnce sync.Once
+	// screenReadyCh 控制台首帧渲染完成信号：关闭表示界面已就绪。
+	// 宿主用它安排「必须等界面起来后才能做」的启动后置任务（如放行恢复的演绎任务）。
+	screenReadyCh = make(chan struct{})
+
+	// autoProxyStart 启动时是否自动用默认参数启动 HTTPS 代理（宿主注入）
+	autoProxyStart bool
 )
 
 // ==== 运行状态采样 ====

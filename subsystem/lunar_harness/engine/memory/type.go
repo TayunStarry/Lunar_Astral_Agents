@@ -39,6 +39,13 @@ type Entry struct {
 	Pending bool `json:"pending,omitempty"`
 	// PendingPartner 形成待合并组时记录的高度相似既有条目 ID
 	PendingPartner string `json:"pending_partner,omitempty"`
+	// Namespace 内部检索分区：private:<会话键> / group:<会话键> / shared。
+	// 仅用于配额分配、去重与隐私边界，任何输出路径都不得渲染；旧数据为空表示未分区。
+	Namespace string `json:"-"`
+	// Channel 分区通道：private / group；旧数据为空。
+	Channel string `json:"-"`
+	// SpeakerKey 发言者内部键（用户 ID，无 ID 时为昵称哈希），永不渲染。
+	SpeakerKey string `json:"-"`
 }
 
 // DocumentEntry 文档条目 — 用于前端分页列表（不含嵌入向量，避免传输开销）
@@ -293,6 +300,15 @@ type Document struct {
 	PendingAttempts int `json:"pending_attempts,omitempty"`
 	// PendingSince 条目首次进入待合并状态的时间（Unix 秒）；用于超时放行，避免无限隐身。
 	PendingSince int64 `json:"pending_since,omitempty"`
+	// Namespace 内部检索分区：private:<会话键> / group:<会话键> / shared。
+	// 仅用于配额分配、去重与隐私边界，永不渲染；旧数据为空表示未分区。
+	Namespace string `json:"namespace,omitempty"`
+	// Channel 分区通道：private / group；旧数据为空。
+	Channel string `json:"channel,omitempty"`
+	// SpeakerKey 发言者内部键（用户 ID，无 ID 时为昵称哈希），仅用于每用户配额与去重，永不渲染。
+	SpeakerKey string `json:"speaker_key,omitempty"`
+	// LegacyPrefix 迁移期保存的原始前缀，仅供还原与回滚；不参与渲染与检索排序，迁移完成后为纯内部记账字段。
+	LegacyPrefix string `json:"legacy_prefix,omitempty"`
 	// Embedding 文档内容嵌入向量，json:"-" 使其不随文档持久化，
 	// 单独存储于 embeddings_NNNN.json 切片文件（见 embeddingRecord）。
 	// 带 tags 写入时该字段是标签向量（检索用），正文向量见 ContentEmbedding。

@@ -3,7 +3,12 @@ package viewer
 // watch_follow_test.go 评论 @ 特别关注：每条评论各自给人数（0-3）与可选名字/序号，
 // 链侧逐条校验、去重、候选不足与空列表降级。
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"LunarSubsystem/LunarHarness/engine/viewerstore"
+)
 
 // followPool 构造 n 个特别关注候选。
 func followPool(n int) []MentionTarget {
@@ -12,6 +17,26 @@ func followPool(n int) []MentionTarget {
 		pool = append(pool, MentionTarget{Name: "关注" + string(rune('A'+i)), UID: int64(i + 1)})
 	}
 	return pool
+}
+
+// TestRandomCommentGapBounds 同一视频下两条评论的间隔落在配置区间内。
+func TestRandomCommentGapBounds(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		gap := randomCommentGap()
+		if gap < commentGapMin || gap >= commentGapMax {
+			t.Fatalf("评论间隔越界: %s", gap)
+		}
+	}
+}
+
+// TestWaitBetweenCommentsUsesInjectedSleep 停顿走注入的 sleep，测试不真的阻塞。
+func TestWaitBetweenCommentsUsesInjectedSleep(t *testing.T) {
+	var got time.Duration
+	session := &browserMentionSession{sleep: func(d time.Duration) { got = d }}
+	session.waitBetweenComments(viewerstore.WatchVideo{BV: "BV1xx", Title: "测试视频"})
+	if got < commentGapMin || got >= commentGapMax {
+		t.Fatalf("注入的间隔越界: %s", got)
+	}
 }
 
 // resolve 固定随机源为 0，便于断言回退挑选的稳定结果。

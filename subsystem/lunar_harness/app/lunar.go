@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 
 	"LunarSubsystem/LunarHarness/agents/DialogueBridging"
+	"LunarSubsystem/LunarHarness/chain/storyboard"
 	"LunarSubsystem/LunarHarness/chain/thinking"
 	"LunarSubsystem/LunarHarness/clients"
 	"LunarSubsystem/LunarHarness/clients/napcat"
 	"LunarSubsystem/LunarHarness/engine/config"
+	"LunarSubsystem/LunarHarness/engine/console"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/mediaobject"
 	"LunarSubsystem/LunarHarness/engine/model/llama"
@@ -52,6 +54,19 @@ func assembleLunar() error {
 // 该循环一经启动即可能消费愿望到期等任务，故必须排在全部服务层与琉璃消费层之后启动。
 func startLunarAgent() error {
 	return thinking.Start()
+}
+
+// StartRecoveredStoryboard 安排重启恢复的演绎任务在控制台首帧渲染完成后放行。
+//
+// 恢复现场在 thinking.Start 内完成（只还原任务表，不推进），推进必须等系统全部
+// 初始化结束：开机初期模型服务、显存与前端都还在初始化，提前推进会让界面卡死。
+func StartRecoveredStoryboard() {
+	go func() {
+		<-console.ScreenReady()
+		if n := storyboard.ActivateRecovered(); n > 0 {
+			logger.Info("LunarHarness", "已放行 %d 个重启恢复的演绎任务", n)
+		}
+	}()
 }
 
 // shutdownLunar 关闭月华人格局持有的资源

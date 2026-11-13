@@ -14,6 +14,9 @@ var AllowLAN = false
 // InsecureTLS 插件沙箱网络是否跳过 TLS 证书校验。
 var InsecureTLS = false
 
+// AutoHTTPSProxy 启动时是否自动用默认参数启动 HTTPS 桥接（system.auto_https_proxy）。
+var AutoHTTPSProxy = false
+
 // 记忆整理（巩固/压缩）不再提供运行开关。
 //
 // 它已收敛为生活回合的固定步骤三（更新心情 → 更新对他人态度 → 记忆待合并），

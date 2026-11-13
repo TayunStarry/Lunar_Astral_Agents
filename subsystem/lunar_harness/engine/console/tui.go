@@ -181,9 +181,16 @@ func newSpinner() spinner.Model {
 	return s
 }
 
-// Init 初始化：启动状态采样 tick 与加载动画
+// Init 初始化：启动状态采样 tick 与加载动画；配置开启时用默认参数自动启动 HTTPS 代理
 func (m appModel) Init() tea.Cmd {
-	return tea.Batch(tickStats(), m.spinner.Tick)
+	cmds := []tea.Cmd{tickStats(), m.spinner.Tick}
+	if autoProxyStart {
+		// 默认参数：端口取代理屏预填值（BasicPort / ProxyPort），绑定首个本机 IP
+		m.proxy.ips = proxy.LocalIPs()
+		m.proxy.ipIdx = 0
+		cmds = append(cmds, autoStartProxyCmd(m.proxy))
+	}
+	return tea.Batch(cmds...)
 }
 
 // tickStats 生成状态刷新命令（同时驱动标题栏时钟与提示超时）

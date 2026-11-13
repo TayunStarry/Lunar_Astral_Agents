@@ -167,8 +167,8 @@ func watchWithDeps(ctx context.Context, instruction string, deps watchDeps) (Wat
 		out.Note = joinNote(out.Note, err.Error())
 	}
 
-	logger.Info("BilibiliViewer", "[看视频] 《%s》完成，画面来源=%s，评论 %d 条（发布=%v，@=%v），累计完整视频=%d",
-		out.Title, out.VisualSource, out.CommentCount, out.CommentPosted, out.Mentioned, out.CompletedVideos)
+	logger.Info("BilibiliViewer", "[看视频] BV%s《%s》完成，画面来源=%s，评论 %d 条（发布=%v，@=%v），累计完整视频=%d",
+		out.BV, out.Title, out.VisualSource, out.CommentCount, out.CommentPosted, out.Mentioned, out.CompletedVideos)
 	return out, nil
 }
 

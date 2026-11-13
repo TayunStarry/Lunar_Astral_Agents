@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"LunarSubsystem/LunarHarness/engine/console/logger"
 	"LunarSubsystem/LunarHarness/engine/console/proxy"
 )
 
@@ -64,6 +65,11 @@ func SetProxyDefaults(backendPort, proxyPort int, reserved map[int]string) {
 		proxyDefaults.Reserved = reserved
 		proxy.SetReservedPorts(reserved)
 	}
+}
+
+// SetAutoProxyStart 设置启动时是否自动用默认参数启动 HTTPS 代理（宿主按 system.auto_https_proxy 注入）
+func SetAutoProxyStart(enabled bool) {
+	autoProxyStart = enabled
 }
 
 // firstFreePort 从 from 起找一个未被保留端口占用的端口（默认值兜底）
@@ -292,6 +298,18 @@ func startProxyCmd(s proxyState) tea.Cmd {
 			return proxyFailMsg{err: err}
 		}
 		return proxyReadyMsg{info: info, token: handle}
+	}
+}
+
+// autoStartProxyCmd 按配置自动启动代理；失败时写日志，避免错误只藏在未打开的代理屏里
+func autoStartProxyCmd(s proxyState) tea.Cmd {
+	start := startProxyCmd(s)
+	return func() tea.Msg {
+		msg := start()
+		if fail, ok := msg.(proxyFailMsg); ok {
+			logger.Error("LunarHarness", "HTTPS 代理自动启动失败: %v", fail.err)
+		}
+		return msg
 	}
 }
 

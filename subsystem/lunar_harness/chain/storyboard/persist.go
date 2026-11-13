@@ -107,6 +107,11 @@ func RecoverInterrupted() {
 			interrupted = append(interrupted, view)
 			continue
 		}
+		// 现场先还原，但不立刻推进：开机初期模型服务、显存与前端仍在初始化，
+		// 此时抢占资源会直接卡死界面。等宿主确认系统就绪后由 ActivateRecovered 放行。
+		if stageActionable(state.stage) && !state.paused {
+			state.held = true
+		}
 		tasks[view.TaskID] = state
 		taskOrder = append(taskOrder, view.TaskID)
 		pushView, _ := buildPushLocked(state, true)
@@ -121,9 +126,47 @@ func RecoverInterrupted() {
 		emitTask(view)
 	}
 	for _, view := range resumed {
-		logger.Info(Module, "演绎任务 %s 已恢复并继续推进: %s", view.TaskID, view.Stage)
+		logger.Info(Module, "演绎任务 %s 已恢复现场，等待系统初始化完成后继续推进: %s", view.TaskID, view.Stage)
 		emitTask(view)
 	}
+}
+
+// ActivateRecovered 放行重启恢复的演绎任务：由宿主在系统完成全部初始化后调用。
+//
+// 放行前这些任务只保留现场，不占用 Tick、不发起任何模型调用；放行时把运行计时
+// 统一改从当前时刻起算，让等待初始化的时间不计入任务运行时长与卡死判定。
+func ActivateRecovered() int {
+	now := time.Now()
+	taskMu.Lock()
+	activated := make([]TaskView, 0)
+	for _, id := range taskOrder {
+		state, ok := tasks[id]
+		if !ok || !state.held {
+			continue
+		}
+		state.held = false
+		// 放行前已被用户暂停或终止的任务只清标记，不重置计时也不推送。
+		if !stageActionable(state.stage) || state.paused || state.canceled {
+			continue
+		}
+		state.startedAt = now
+		state.lastBeat = now
+		state.budgetAt = now.Add(runBudget)
+		state.nextWarn = now.Add(runWarnTimeout)
+		if view, okPush := buildPushLocked(state, true); okPush {
+			activated = append(activated, view)
+		}
+	}
+	if len(activated) > 0 {
+		persistTasksLocked()
+	}
+	taskMu.Unlock()
+
+	for _, view := range activated {
+		logger.Info(Module, "演绎任务 %s 已放行，继续推进: %s", view.TaskID, view.Stage)
+		emitTask(view)
+	}
+	return len(activated)
 }
 
 // markInterruptedLocked 把无法续跑的任务标记为中断；调用方必须持有 taskMu。

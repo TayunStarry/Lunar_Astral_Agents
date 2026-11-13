@@ -20,6 +20,9 @@ type SystemSettings struct {
 	AllowLAN *bool `json:"allow_lan,omitempty"`
 	// 插件沙箱网络是否跳过 TLS 证书校验：未配置默认开启校验；置 true 恢复旧的跳过行为
 	InsecureTLS *bool `json:"insecure_tls,omitempty"`
+	// 启动时是否自动用默认参数启动 HTTPS 桥接（自签证书反向代理，供手机等外部设备接入）。
+	// 未配置默认关闭；开启后后端端口取 BasicPort、代理端口取 ProxyPort、绑定首个本机 IP。
+	AutoHTTPSProxy *bool `json:"auto_https_proxy,omitempty"`
 	// 聊天（LLM）显存守卫：可用显存不足时卸载本地模型释放 KV 缓存
 	ChatVRAMGuard         *bool `json:"chat_vram_guard,omitempty"`          // 守卫开关
 	ChatVRAMGuardMiB      *int  `json:"chat_vram_guard_mib,omitempty"`      // 触发阈值（MiB）
@@ -326,6 +329,10 @@ func applyConfig(parameter *ModelConfig) {
 	}
 	if parameter.System.InsecureTLS != nil {
 		InsecureTLS = *parameter.System.InsecureTLS
+	}
+	// 启动时自动启动 HTTPS 桥接：未配置保持关闭（默认不对外暴露代理端口）
+	if parameter.System.AutoHTTPSProxy != nil {
+		AutoHTTPSProxy = *parameter.System.AutoHTTPSProxy
 	}
 	// ==== 模型重复输出检测（system.loop_*） ====
 	// 只接受合法取值，非法项保持默认（由 loopguard 包兜底），避免把检测关死。

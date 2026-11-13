@@ -56,6 +56,11 @@ func main() {
 		config.ModelPort: "模型服务（llama-server）",
 	})
 
+	// HTTPS 桥接自动启动：由 system.auto_https_proxy 控制（默认关闭）。
+	// 开启后控制台首帧即用默认参数（BasicPort / ProxyPort / 首个本机 IP）启动代理，
+	// 代理屏仍可随时手动停止或改参数重启。
+	console.SetAutoProxyStart(config.AutoHTTPSProxy)
+
 	// 装配各子系统（传输层 / 人格层 / 引擎层 / HTTP 服务；日志经管线进入 TUI 视图）
 	app.Assemble()
 
@@ -78,6 +83,11 @@ func main() {
 	} else {
 		app.OpenFrontendWindows()
 	}
+
+	// 重启恢复的演绎任务：等控制台首帧渲染完成、系统全部初始化结束后再放行推进。
+	// 恢复现场已由装配末段完成（只还原任务表），此时若直接推进，会与开机初期仍在
+	// 加载的模型服务、显存和前端抢资源，导致界面卡死。
+	app.StartRecoveredStoryboard()
 
 	// TUI 全屏控制台：阻塞直至用户退出（主菜单 x / Ctrl+C / 中断信号）
 	if err := console.Run(); err != nil {

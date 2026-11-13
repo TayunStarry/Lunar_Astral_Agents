@@ -1,8 +1,9 @@
 {
 	"system": {
-		"developer": true,
+		"developer": false,
 		"allow_lan": false,
 		"insecure_tls": false,
+		"auto_https_proxy": false,
 		"chat_vram_guard": true,
 		"chat_vram_guard_mib": 1024,
 		"chat_vram_guard_interval": 16,

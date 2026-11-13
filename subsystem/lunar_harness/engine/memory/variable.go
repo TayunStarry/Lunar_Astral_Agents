@@ -60,6 +60,23 @@ const (
 	TypeAudio = "audio" // 音频记忆（语音、音乐、环境声）
 )
 
+// 分区与配额 — S1 仅提供纯函数与默认值，不接入现有读写路径。
+// 零值仍表示旧语义（无分区、无每用户配额），因此不影响现有运行时表现。
+const (
+	// NamespaceShared 不区分聊天对象的共享分区；旧数据读取时按此分区处理。
+	NamespaceShared = "shared"
+	// ChannelPrivate 私聊通道。
+	ChannelPrivate = "private"
+	// ChannelGroup 群聊通道。
+	ChannelGroup = "group"
+	// QuotaTopK 自动上下文补全的默认召回上限。
+	QuotaTopK = 32
+	// QuotaPerUser 每个聊天对象的默认条数上限。
+	QuotaPerUser = 5
+	// QuotaMaxParticipants 参与配额分配的聊天对象上限。
+	QuotaMaxParticipants = 5
+)
+
 // 记忆权重融合（把超高相似度的文本条目合并为一条整合记忆）参数
 const (
 	// FuseDefaultThreshold 默认相似度阈值（余弦）；同簇条目与该簇代表条目需达到此值

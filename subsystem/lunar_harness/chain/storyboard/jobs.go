@@ -122,22 +122,31 @@ func TaskList(limit int) []TaskView {
 // oldestActionableLocked 返回最早创建、当前可推进的任务；调用方必须持有锁。
 //
 // 只有 queued / researching / planning / painting / writing 可推进；
-// reviewing 与 paused 直接跳过，让后续任务和其他链继续运行。
+// reviewing 与 paused 直接跳过，让后续任务和其他链继续运行；
+// held（重启恢复待放行）不推进，等系统初始化完成后由 ActivateRecovered 放行。
 func oldestActionableLocked() *taskState {
 	for _, id := range taskOrder {
 		state, ok := tasks[id]
 		if !ok {
 			continue
 		}
-		if state.stage == stageDone || state.paused || state.canceled {
+		if state.stage == stageDone || state.paused || state.canceled || state.held {
 			continue
 		}
-		switch state.stage {
-		case stageQueued, stageResearching, stagePlanning, stagePainting, stageWriting:
+		if stageActionable(state.stage) {
 			return state
 		}
 	}
 	return nil
+}
+
+// stageActionable 报告该阶段是否会占用 Tick 推进。
+func stageActionable(stage string) bool {
+	switch stage {
+	case stageQueued, stageResearching, stagePlanning, stagePainting, stageWriting:
+		return true
+	}
+	return false
 }
 
 // applyEventLocked 把增量事件合并进任务视图；调用方必须持有锁。

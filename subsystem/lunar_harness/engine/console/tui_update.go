@@ -23,6 +23,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			pushScrubbedLog(SourceRaw, "RAW", "TUI", "", fmt.Sprintf(
 				"首帧尺寸自检: 终端报 %d×%d，框体渲染 %d 行（≤%d 列，末列留空）",
 				msg.Width, msg.Height, msg.Height, maxInt(1, msg.Width-1)))
+			// 首帧已经进入渲染循环：通知宿主控制台界面就绪。
+			markScreenReady()
 		}
 
 	case spinner.TickMsg:

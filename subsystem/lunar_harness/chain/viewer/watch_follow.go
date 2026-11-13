@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	"LunarSubsystem/LunarHarness/engine/bilibili"
 	"LunarSubsystem/LunarHarness/engine/console/logger"
@@ -22,6 +23,10 @@ import (
 const (
 	// closingMentionMax 一次评论最多 @ 的特别关注人数。
 	closingMentionMax = 3
+	// commentGapMin / commentGapMax 同一个视频下多条评论之间的随机间隔：
+	// 连续发布容易被风控，间隔取值在 [min, max) 内随机。
+	commentGapMin = 8 * time.Second
+	commentGapMax = 25 * time.Second
 )
 
 // specialFollows 读取当前账号「特别关注」分组里的用户。
@@ -33,6 +38,8 @@ func (w *webSession) specialFollows() ([]MentionTarget, error) {
 type browserMentionSession struct {
 	w          *webSession
 	candidates []MentionTarget
+	// sleep 同一视频下两条评论之间的停顿；测试可注入空实现。
+	sleep func(time.Duration)
 }
 
 // openMentionSession 打开浏览器并读取特别关注候选；读取候选失败不阻断评论发布。
@@ -45,7 +52,7 @@ func openMentionSession() (mentionSession, error) {
 	if followErr != nil {
 		logger.Warn("BilibiliViewer", "[看视频] 读取特别关注失败，评论降级为不 @: %v", followErr)
 	}
-	return &browserMentionSession{w: w, candidates: pool}, nil
+	return &browserMentionSession{w: w, candidates: pool, sleep: time.Sleep}, nil
 }
 
 func (s *browserMentionSession) Candidates() []MentionTarget { return s.candidates }
@@ -57,7 +64,11 @@ func (s *browserMentionSession) Close() {
 }
 
 // Post 逐条发布评论；每条只挂自己的 @ 目标，互不影响。
+//
+// 日志统一带上 BV 与标题，便于定位这条评论落在了哪个视频下；
+// 同一视频的多条评论之间随机停顿，避免连续发布触发风控。
 func (s *browserMentionSession) Post(video viewerstore.WatchVideo, comments []mentionComment, aid int64) (int, bool, error) {
+	logger.Info("BilibiliViewer", "[看视频] 准备发布评论 → BV%s《%s》：%d 条", video.BV, video.Title, len(comments))
 	if err := s.w.ensureLogin(); err != nil {
 		return 0, false, err
 	}
@@ -74,23 +85,50 @@ func (s *browserMentionSession) Post(video viewerstore.WatchVideo, comments []me
 	oid := strconv.FormatInt(aid, 10)
 	posted, mentionPosted := 0, false
 	var firstErr error
-	for _, comment := range comments {
+	for index, comment := range comments {
 		at := comment.Targets
 		if len(at) > closingMentionMax {
 			at = at[:closingMentionMax]
 		}
+		position := fmt.Sprintf("第 %d/%d 条", index+1, len(comments))
 		if err := s.w.postCommentOnObject(1, oid, comment.Text, at); err != nil {
+			logger.Warn("BilibiliViewer", "[看视频] 评论发布失败 → BV%s《%s》 %s：%v", video.BV, video.Title, position, err)
 			if firstErr == nil {
 				firstErr = err
 			}
-			continue
+		} else {
+			logger.Info("BilibiliViewer", "[看视频] 评论已发布 → BV%s《%s》 %s（@%d 人）：%s",
+				video.BV, video.Title, position, len(at), comment.Text)
+			posted++
+			if len(at) > 0 {
+				mentionPosted = true
+			}
 		}
-		posted++
-		if len(at) > 0 {
-			mentionPosted = true
+		if index+1 < len(comments) {
+			s.waitBetweenComments(video)
 		}
 	}
 	return posted, mentionPosted, firstErr
+}
+
+// waitBetweenComments 同一视频下两条评论之间随机停顿 [commentGapMin, commentGapMax)。
+func (s *browserMentionSession) waitBetweenComments(video viewerstore.WatchVideo) {
+	gap := randomCommentGap()
+	logger.Info("BilibiliViewer", "[看视频] 评论间隔 %s → BV%s《%s》", gap.Round(time.Second), video.BV, video.Title)
+	if s.sleep != nil {
+		s.sleep(gap)
+		return
+	}
+	time.Sleep(gap)
+}
+
+// randomCommentGap 生成两条评论之间的随机间隔。
+func randomCommentGap() time.Duration {
+	span := int64(commentGapMax - commentGapMin)
+	if span <= 0 {
+		return commentGapMin
+	}
+	return commentGapMin + time.Duration(rand.Int63n(span))
 }
 
 // resolveMentions 把一条评论的 @ 意图收束成最终名单。

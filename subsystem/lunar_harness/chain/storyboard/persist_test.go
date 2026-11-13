@@ -100,8 +100,15 @@ func TestRecoverResumesPaintingFromNextShot(t *testing.T) {
 	if state.view.Event != eventResumed {
 		t.Fatalf("恢复推送事件应为 resumed，实际 %s", state.view.Event)
 	}
+	// 恢复后先不放行：避免开机初期与模型服务、显存、前端初始化抢资源。
+	if HasWork() {
+		t.Fatal("恢复后未放行前不应参与调度")
+	}
+	if n := ActivateRecovered(); n != 1 {
+		t.Fatalf("放行数量应为 1，实际 %d", n)
+	}
 	if !HasWork() {
-		t.Fatal("恢复后的任务应可继续推进")
+		t.Fatal("放行后的任务应可继续推进")
 	}
 }
 

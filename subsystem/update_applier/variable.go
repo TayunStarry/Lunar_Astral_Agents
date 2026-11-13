@@ -85,6 +85,8 @@ const (
 	// uiFrameMinWidth / uiFrameMinHeight 框体可渲染的最小终端尺寸
 	uiFrameMinWidth  = 56
 	uiFrameMinHeight = 14
+	// uiSizePollInterval 终端尺寸轮询间隔（Windows 上 bubbletea 不会主动上报缩放）
+	uiSizePollInterval = 250 * time.Millisecond
 )
 
 // 屏索引（同时作为侧栏顺序）

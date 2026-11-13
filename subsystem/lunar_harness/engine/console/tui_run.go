@@ -54,6 +54,12 @@ func ensureTerminal() error {
 	return ErrNoTerminal
 }
 
+// ScreenReady 返回「控制台首帧已渲染」的信号通道：宿主据此安排启动后置任务。
+func ScreenReady() <-chan struct{} { return screenReadyCh }
+
+// markScreenReady 标记控制台首帧已渲染（只关闭一次信号）。
+func markScreenReady() { screenReadyOnce.Do(func() { close(screenReadyCh) }) }
+
 // Run 启动全屏 TUI 应用（阻塞直至用户退出；宿主需已先调用 Install）
 func Run() error {
 	model := newAppModel()

@@ -255,6 +255,9 @@ type taskState struct {
 	paused bool
 	// canceled 用户终止标记
 	canceled bool
+	// held 重启恢复后等待放行：现场已还原但系统尚未完成初始化，
+	// 不占用 Tick、不发起任何模型调用，避免开机即抢占资源导致界面卡死。
+	held bool
 	// cancel 取消当前步骤的上下文；绘制阶段据此立刻停手
 	cancel context.CancelFunc
 }

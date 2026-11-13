@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/term"
 )
 
 // RunTUI 启动更新器界面，阻塞到用户退出。
@@ -45,8 +46,63 @@ func RunTUI(root string, cfg *ReleaseConfig, startupErr error) error {
 		tea.WithOutput(out),
 		tea.WithAltScreen(),
 	)
+
+	// 尺寸轮询：bubbletea 在 Windows 上只在启动时量一次终端尺寸（见 watchTerminalSize 注释）
+	stop := make(chan struct{})
+	defer close(stop)
+	go watchTerminalSize(out, program.Send, stop)
+
 	_, err := program.Run()
 	return err
+}
+
+// watchTerminalSize 轮询终端尺寸，变化时向界面投递 WindowSizeMsg。
+//
+// 为什么必须自己轮询：bubbletea 在 Windows 上没有 SIGWINCH（signals_windows.go 的
+// listenForResize 直接关闭），缩放事件只能从 coninput 事件循环里读到；而该循环只在
+// 输入句柄恰好是 os.Stdin 时才启用（inputreader_windows.go 里按 Fd() 比对）。
+// 本程序为保证按键可用，输入取自自开的 CONIN$ 句柄，于是 coninput 路径被绕过，
+// 尺寸只剩启动时 checkResize 上报的那一次。不补轮询的后果：拖动/最大化窗口后界面
+// 永远停在旧尺寸，窗口改小时整屏高于可视区，备用屏幕放不下便持续上滚且不会恢复。
+func watchTerminalSize(out *os.File, send func(tea.Msg), stop <-chan struct{}) {
+	lastW, lastH, ok := terminalSize(out)
+	if !ok {
+		return
+	}
+	ticker := time.NewTicker(uiSizePollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			w, h, valid := terminalSize(out)
+			if !valid || (w == lastW && h == lastH) {
+				continue
+			}
+			logf("终端尺寸变化：%d×%d → %d×%d，界面按新尺寸重排", lastW, lastH, w, h)
+			lastW, lastH = w, h
+			// 程序已退出时 Send 会阻塞在 msgs 上，先看停止信号再投递
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			send(tea.WindowSizeMsg{Width: w, Height: h})
+		}
+	}
+}
+
+// terminalSize 读取终端可视窗口尺寸（列 × 行）
+func terminalSize(out *os.File) (int, int, bool) {
+	if out == nil || !term.IsTerminal(out.Fd()) {
+		return 0, 0, false
+	}
+	w, h, err := term.GetSize(out.Fd())
+	if err != nil || w <= 0 || h <= 0 {
+		return 0, 0, false
+	}
+	return w, h, true
 }
 
 // newUIModel 构造初始模型（读版本信标与安装状态在启动时完成）
